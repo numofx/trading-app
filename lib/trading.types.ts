@@ -41,6 +41,15 @@ export type ContractTab = {
   label: string;
 };
 
+export type MarketOption = {
+  frontMonth: string;
+  id: string;
+  lastPrice: string;
+  marketType: "Futures" | "Spot";
+  region: "Africa" | "Europe";
+  symbol: string;
+};
+
 export type DeliveryTerm = {
   label: string;
   value: string;

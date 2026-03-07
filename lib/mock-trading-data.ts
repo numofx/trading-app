@@ -13,9 +13,18 @@ import {
   Type,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { ActivityTab, ActivityView, Candle, ChartTool, ContractMarket, ContractTab, TradePrint } from "@/lib/trading.types";
+import type {
+  ActivityTab,
+  ActivityView,
+  Candle,
+  ChartTool,
+  ContractMarket,
+  ContractTab,
+  MarketOption,
+  TradePrint,
+} from "@/lib/trading.types";
 
-const BASE_CANDLES = [
+const BASE_NGN_CANDLES = [
   [1594.8, 1596.4, 1594.1, 1595.9, 220],
   [1595.9, 1597.3, 1595.0, 1596.8, 245],
   [1596.8, 1598.6, 1596.4, 1597.9, 260],
@@ -46,7 +55,38 @@ const BASE_CANDLES = [
   [1605.1, 1606.1, 1604.5, 1605.2, 318],
 ] as const;
 
-const BASE_ASKS = [
+const BASE_EUR_CANDLES = [
+  [1.0812, 1.0818, 1.0809, 1.0815, 180],
+  [1.0815, 1.0824, 1.0811, 1.0820, 192],
+  [1.0820, 1.0829, 1.0816, 1.0825, 201],
+  [1.0825, 1.0833, 1.0821, 1.0828, 205],
+  [1.0828, 1.0831, 1.0820, 1.0823, 188],
+  [1.0823, 1.0830, 1.0819, 1.0826, 183],
+  [1.0826, 1.0834, 1.0822, 1.0831, 208],
+  [1.0831, 1.0839, 1.0826, 1.0835, 219],
+  [1.0835, 1.0842, 1.0830, 1.0839, 224],
+  [1.0839, 1.0848, 1.0834, 1.0844, 237],
+  [1.0844, 1.0851, 1.0840, 1.0848, 249],
+  [1.0848, 1.0856, 1.0844, 1.0851, 258],
+  [1.0851, 1.0859, 1.0847, 1.0855, 267],
+  [1.0855, 1.0862, 1.0851, 1.0858, 274],
+  [1.0858, 1.0866, 1.0853, 1.0861, 283],
+  [1.0861, 1.0865, 1.0854, 1.0857, 278],
+  [1.0857, 1.0860, 1.0850, 1.0854, 270],
+  [1.0854, 1.0857, 1.0848, 1.0850, 261],
+  [1.0850, 1.0855, 1.0845, 1.0848, 255],
+  [1.0848, 1.0853, 1.0844, 1.0850, 248],
+  [1.0850, 1.0854, 1.0846, 1.0852, 242],
+  [1.0852, 1.0857, 1.0848, 1.0850, 239],
+  [1.0850, 1.0853, 1.0845, 1.0847, 233],
+  [1.0847, 1.0851, 1.0842, 1.0845, 228],
+  [1.0845, 1.0850, 1.0840, 1.0848, 225],
+  [1.0848, 1.0854, 1.0844, 1.0851, 231],
+  [1.0851, 1.0857, 1.0847, 1.0850, 229],
+  [1.0850, 1.0856, 1.0846, 1.0852, 235],
+] as const;
+
+const BASE_NGN_ASKS = [
   { price: 1605.6, size: 50_000, total: 1_305_000 },
   { price: 1605.7, size: 75_000, total: 1_255_000 },
   { price: 1605.8, size: 100_000, total: 1_180_000 },
@@ -56,7 +96,7 @@ const BASE_ASKS = [
   { price: 1606.2, size: 220_000, total: 625_000 },
 ] as const;
 
-const BASE_BIDS = [
+const BASE_NGN_BIDS = [
   { price: 1605.1, size: 240_000, total: 240_000 },
   { price: 1605.0, size: 210_000, total: 450_000 },
   { price: 1604.9, size: 180_000, total: 630_000 },
@@ -66,7 +106,27 @@ const BASE_BIDS = [
   { price: 1604.5, size: 70_000, total: 1_060_000 },
 ] as const;
 
-const CONTRACT_META = {
+const BASE_EUR_ASKS = [
+  { price: 1.0853, size: 250_000, total: 2_950_000 },
+  { price: 1.0854, size: 500_000, total: 2_700_000 },
+  { price: 1.0855, size: 750_000, total: 2_200_000 },
+  { price: 1.0856, size: 900_000, total: 1_450_000 },
+  { price: 1.0857, size: 1_100_000, total: 550_000 },
+  { price: 1.0858, size: 1_400_000, total: 450_000 },
+  { price: 1.0859, size: 1_800_000, total: 300_000 },
+] as const;
+
+const BASE_EUR_BIDS = [
+  { price: 1.0852, size: 1_900_000, total: 1_900_000 },
+  { price: 1.0851, size: 1_500_000, total: 3_400_000 },
+  { price: 1.0850, size: 1_200_000, total: 4_600_000 },
+  { price: 1.0849, size: 950_000, total: 5_550_000 },
+  { price: 1.0848, size: 700_000, total: 6_250_000 },
+  { price: 1.0847, size: 550_000, total: 6_800_000 },
+  { price: 1.0846, size: 400_000, total: 7_200_000 },
+] as const;
+
+const NGN_CONTRACT_META = {
   "DEC 2026": {
     basis: "+4.10",
     id: "DEC 2026",
@@ -116,12 +176,99 @@ const CONTRACT_META = {
   }
 >;
 
-export const CONTRACT_TABS = Object.keys(CONTRACT_META).map((label) => ({
+const EUR_CONTRACT_META = {
+  "DEC 2026": {
+    basis: "+0.0032",
+    id: "DEC 2026",
+    index: "1.0849",
+    mark: "1.0881",
+    openInterest: "$91.4M",
+    timeToExpiry: "284d",
+    volume: "$18.6M",
+  },
+  "JUN 2026": {
+    basis: "+0.0011",
+    id: "JUN 2026",
+    index: "1.0841",
+    mark: "1.0852",
+    openInterest: "$128.7M",
+    timeToExpiry: "101d",
+    volume: "$24.9M",
+  },
+  "MAR 2026": {
+    basis: "+0.0004",
+    id: "MAR 2026",
+    index: "1.0839",
+    mark: "1.0843",
+    openInterest: "$74.5M",
+    timeToExpiry: "11d",
+    volume: "$15.2M",
+  },
+  "SEP 2026": {
+    basis: "+0.0019",
+    id: "SEP 2026",
+    index: "1.0844",
+    mark: "1.0863",
+    openInterest: "$109.2M",
+    timeToExpiry: "193d",
+    volume: "$21.1M",
+  },
+} as const satisfies Record<
+  string,
+  {
+    basis: string;
+    id: string;
+    index: string;
+    mark: string;
+    openInterest: string;
+    timeToExpiry: string;
+    volume: string;
+  }
+>;
+
+export const CONTRACT_LABELS = ["MAR 2026", "JUN 2026", "SEP 2026", "DEC 2026"] as const;
+
+export const CONTRACT_TABS = CONTRACT_LABELS.map((label) => ({
   active: label === "JUN 2026",
   label,
 })) satisfies ContractTab[];
 
-function getExpiryLabel(label: keyof typeof CONTRACT_META) {
+export const MARKET_OPTIONS = [
+  {
+    frontMonth: "MAR26",
+    id: "ngn-usd-futures",
+    lastPrice: "1,576.80",
+    marketType: "Futures",
+    region: "Africa",
+    symbol: "NGN/USD",
+  },
+  {
+    frontMonth: "SPOT",
+    id: "ngn-usd-spot",
+    lastPrice: "1,603.90",
+    marketType: "Spot",
+    region: "Africa",
+    symbol: "NGN/USD",
+  },
+  {
+    frontMonth: "JUN26",
+    id: "eur-usd-futures",
+    lastPrice: "1.08520",
+    marketType: "Futures",
+    region: "Europe",
+    symbol: "EUR/USD",
+  },
+  {
+    frontMonth: "SPOT",
+    id: "eur-usd-spot",
+    lastPrice: "1.08410",
+    marketType: "Spot",
+    region: "Europe",
+    symbol: "EUR/USD",
+  },
+] satisfies MarketOption[];
+
+function getExpiryLabel(label: keyof typeof NGN_CONTRACT_META) {
   if (label === "MAR 2026") {
     return "March 18";
   }
@@ -137,7 +284,7 @@ function getExpiryLabel(label: keyof typeof CONTRACT_META) {
   return "December 16";
 }
 
-function getPositionSize(label: keyof typeof CONTRACT_META) {
+function getPositionSize(label: keyof typeof NGN_CONTRACT_META) {
   if (label === "MAR 2026") {
     return "+20,000 USD";
   }
@@ -149,7 +296,7 @@ function getPositionSize(label: keyof typeof CONTRACT_META) {
   return "+50,000 USD";
 }
 
-function getUnrealizedPnl(label: keyof typeof CONTRACT_META) {
+function getUnrealizedPnl(label: keyof typeof NGN_CONTRACT_META) {
   if (label === "DEC 2026") {
     return "+$84";
   }
@@ -165,12 +312,16 @@ function parseNumber(value: string) {
   return Number(value.replaceAll(",", "").replaceAll("$", "").replaceAll("+", ""));
 }
 
-function buildCandles(offset: number) {
-  return BASE_CANDLES.map(([open, high, low, close, volume], index) => ({
-    close: Number((close + offset).toFixed(1)),
-    high: Number((high + offset).toFixed(1)),
-    low: Number((low + offset).toFixed(1)),
-    open: Number((open + offset).toFixed(1)),
+function buildCandles(
+  baseCandles: readonly (readonly [number, number, number, number, number])[],
+  offset: number,
+  digits: number,
+) {
+  return baseCandles.map(([open, high, low, close, volume], index) => ({
+    close: Number((close + offset).toFixed(digits)),
+    high: Number((high + offset).toFixed(digits)),
+    low: Number((low + offset).toFixed(digits)),
+    open: Number((open + offset).toFixed(digits)),
     time: `${String((index + 8) % 24).padStart(2, "0")}:00`,
     volume: volume + Math.round(offset * 8),
   })) satisfies Candle[];
@@ -180,15 +331,16 @@ function buildBook(
   levels: readonly { price: number; size: number; total: number }[],
   priceOffset: number,
   sizeMultiplier: number,
+  digits: number,
 ) {
   return levels.map((level) => ({
-    price: Number((level.price + priceOffset).toFixed(2)),
+    price: Number((level.price + priceOffset).toFixed(digits)),
     size: Math.round(level.size * sizeMultiplier),
     total: Math.round(level.total * sizeMultiplier),
   }));
 }
 
-function buildTrades(mark: string, basis: string) {
+function buildNgnTrades(mark: string, basis: string) {
   const markNumber = parseNumber(mark);
   const basisNumber = parseNumber(basis);
 
@@ -201,14 +353,32 @@ function buildTrades(mark: string, basis: string) {
   ] satisfies TradePrint[];
 }
 
-function buildContractMarket(label: keyof typeof CONTRACT_META, offset: number, sizeMultiplier: number) {
-  const meta = CONTRACT_META[label];
+function buildEurTrades(mark: string, basis: string) {
+  const markNumber = parseNumber(mark);
+  const basisNumber = parseNumber(basis);
+
+  return [
+    { price: Number((markNumber + 0.0001).toFixed(4)), side: "buy", size: 2_000_000, time: "10:08:14" },
+    { price: Number(markNumber.toFixed(4)), side: "sell", size: 1_250_000, time: "10:08:06" },
+    { price: Number((markNumber - 0.0001).toFixed(4)), side: "sell", size: 1_800_000, time: "10:07:53" },
+    { price: Number((markNumber + basisNumber / 8).toFixed(4)), side: "buy", size: 950_000, time: "10:07:41" },
+    { price: Number(markNumber.toFixed(4)), side: "buy", size: 800_000, time: "10:07:17" },
+  ] satisfies TradePrint[];
+}
+
+function buildNgnContractMarket(
+  symbol: string,
+  label: keyof typeof NGN_CONTRACT_META,
+  offset: number,
+  sizeMultiplier: number,
+) {
+  const meta = NGN_CONTRACT_META[label];
 
   return {
     basis: meta.basis,
-    candles: buildCandles(offset),
+    candles: buildCandles(BASE_NGN_CANDLES, offset, 1),
     contractDetails: [
-      { label: "Contract", value: `NGN/USD ${label}` },
+      { label: "Contract", value: `${symbol} ${label}` },
       { label: "Contract Size", value: "10,000 USD" },
       { label: "Tick Size", value: "0.1 NGN" },
       { label: "Tick Value", value: "$0.62 / 1.0 NGN" },
@@ -220,7 +390,7 @@ function buildContractMarket(label: keyof typeof CONTRACT_META, offset: number, 
     id: label,
     index: meta.index,
     infoBar: [
-      { label: "Contract", value: `NGN/USD ${label}` },
+      { label: "Contract", value: `${symbol} ${label}` },
       { label: "Mark", value: meta.mark },
       { label: "Index", value: meta.index },
       { label: "Basis", tone: "accent", value: meta.basis },
@@ -229,27 +399,91 @@ function buildContractMarket(label: keyof typeof CONTRACT_META, offset: number, 
       { label: "Time to Expiry", value: meta.timeToExpiry },
     ],
     mark: meta.mark,
-    orderBookAsks: buildBook(BASE_ASKS, offset, sizeMultiplier),
-    orderBookBids: buildBook(BASE_BIDS, offset, sizeMultiplier),
+    orderBookAsks: buildBook(BASE_NGN_ASKS, offset, sizeMultiplier, 2),
+    orderBookBids: buildBook(BASE_NGN_BIDS, offset, sizeMultiplier, 2),
     positionOverview: [
       { label: "Position (USD)", value: getPositionSize(label) },
       { label: "Entry Price", value: Number(parseNumber(meta.mark) - 5.2).toFixed(1) },
       { label: "Mark Price", value: Number(parseNumber(meta.mark)).toFixed(1) },
       { label: "Unrealized PnL", value: getUnrealizedPnl(label) },
     ],
-    ticker: `NGN/USD ${label}`,
+    ticker: `${symbol} ${label}`,
     timeToExpiry: meta.timeToExpiry,
-    trades: buildTrades(meta.mark, meta.basis),
+    trades: buildNgnTrades(meta.mark, meta.basis),
   } satisfies ContractMarket;
 }
 
-export const CONTRACT_MARKETS = {
-  "DEC 2026": buildContractMarket("DEC 2026", 2.75, 0.72),
-  "JUN 2026": buildContractMarket("JUN 2026", 0, 1),
-  "MAR 2026": buildContractMarket("MAR 2026", -0.8, 0.78),
-  "SEP 2026": buildContractMarket("SEP 2026", 1.3, 0.88),
-} satisfies Record<string, ContractMarket>;
+function buildEurContractMarket(
+  symbol: string,
+  label: keyof typeof EUR_CONTRACT_META,
+  offset: number,
+  sizeMultiplier: number,
+) {
+  const meta = EUR_CONTRACT_META[label];
 
+  return {
+    basis: meta.basis,
+    candles: buildCandles(BASE_EUR_CANDLES, offset, 4),
+    contractDetails: [
+      { label: "Contract", value: `${symbol} ${label}` },
+      { label: "Contract Size", value: "125,000 EUR" },
+      { label: "Tick Size", value: "0.00005 USD" },
+      { label: "Tick Value", value: "$6.25 / tick" },
+      { label: "Expiry", value: `${getExpiryLabel(label)}, 2026, 16:00 UTC` },
+      { label: "Settlement", value: "Physically deliverable FX future" },
+      { label: "Long receives", value: "USD" },
+      { label: "Short receives", value: "EUR" },
+    ],
+    id: label,
+    index: meta.index,
+    infoBar: [
+      { label: "Contract", value: `${symbol} ${label}` },
+      { label: "Mark", value: meta.mark },
+      { label: "Index", value: meta.index },
+      { label: "Basis", tone: "accent", value: meta.basis },
+      { label: "Vol", value: meta.volume },
+      { label: "OI", value: meta.openInterest },
+      { label: "Time to Expiry", value: meta.timeToExpiry },
+    ],
+    mark: meta.mark,
+    orderBookAsks: buildBook(BASE_EUR_ASKS, offset, sizeMultiplier, 4),
+    orderBookBids: buildBook(BASE_EUR_BIDS, offset, sizeMultiplier, 4),
+    positionOverview: [
+      { label: "Position (EUR)", value: "+375,000 EUR" },
+      { label: "Entry Price", value: Number(parseNumber(meta.mark) - 0.0024).toFixed(4) },
+      { label: "Mark Price", value: Number(parseNumber(meta.mark)).toFixed(4) },
+      { label: "Unrealized PnL", value: "+$1,125" },
+    ],
+    ticker: `${symbol} ${label}`,
+    timeToExpiry: meta.timeToExpiry,
+    trades: buildEurTrades(meta.mark, meta.basis),
+  } satisfies ContractMarket;
+}
+
+function buildInstrumentMarkets(symbol: "EUR/USD" | "NGN/USD") {
+  if (symbol === "EUR/USD") {
+    return {
+      "DEC 2026": buildEurContractMarket(symbol, "DEC 2026", 0.0029, 0.92),
+      "JUN 2026": buildEurContractMarket(symbol, "JUN 2026", 0, 1),
+      "MAR 2026": buildEurContractMarket(symbol, "MAR 2026", -0.0009, 0.86),
+      "SEP 2026": buildEurContractMarket(symbol, "SEP 2026", 0.0012, 0.95),
+    } satisfies Record<string, ContractMarket>;
+  }
+
+  return {
+    "DEC 2026": buildNgnContractMarket(symbol, "DEC 2026", 2.75, 0.72),
+    "JUN 2026": buildNgnContractMarket(symbol, "JUN 2026", 0, 1),
+    "MAR 2026": buildNgnContractMarket(symbol, "MAR 2026", -0.8, 0.78),
+    "SEP 2026": buildNgnContractMarket(symbol, "SEP 2026", 1.3, 0.88),
+  } satisfies Record<string, ContractMarket>;
+}
+
+export const INSTRUMENT_MARKETS = {
+  "EUR/USD": buildInstrumentMarkets("EUR/USD"),
+  "NGN/USD": buildInstrumentMarkets("NGN/USD"),
+} satisfies Record<string, Record<string, ContractMarket>>;
+
+export const DEFAULT_SYMBOL = "NGN/USD";
 export const DEFAULT_CONTRACT = "JUN 2026";
 export const DEFAULT_TIMEFRAME = "1h";
 export const DEFAULT_ORDER_TYPE = "Market";

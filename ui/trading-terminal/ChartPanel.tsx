@@ -14,9 +14,17 @@ type Point = {
 };
 
 function formatPrice(value: number) {
+  let digits = 1;
+
+  if (Math.abs(value) < 10) {
+    digits = 4;
+  } else if (value % 1 === 0) {
+    digits = 0;
+  }
+
   return new Intl.NumberFormat("en-US", {
-    maximumFractionDigits: value % 1 === 0 ? 0 : 1,
-    minimumFractionDigits: value % 1 === 0 ? 0 : 1,
+    maximumFractionDigits: digits,
+    minimumFractionDigits: digits,
   }).format(value);
 }
 
@@ -62,11 +70,13 @@ function TradingChart({
   const width = 920;
   const height = 620;
   const volumeHeight = 128;
+  const rightAxisGutter = 96;
+  const plotWidth = width - rightAxisGutter;
   const chartTop = 28;
   const chartBottom = height - volumeHeight - 28;
   const { maxPrice, minPrice } = getPriceDomain(candles);
   const priceRange = maxPrice - minPrice;
-  const stepX = width / candles.length;
+  const stepX = plotWidth / candles.length;
   const candleWidth = Math.max(9, stepX * 0.62);
   const maxVolume = Math.max(...candles.map((candle) => candle.volume));
   const lastCandle = candles.at(-1);
@@ -176,13 +186,20 @@ function TradingChart({
           strokeDasharray="3 5"
           strokeWidth="1"
           x1="0"
-          x2={width}
+          x2={plotWidth}
           y1={currentPriceY}
           y2={currentPriceY}
         />
 
         <g>
-          <rect fill="#1D4ED8" height="22" rx="4" width="64" x={width - 70} y={currentPriceY - 11} />
+          <rect
+            fill="#1D4ED8"
+            height="22"
+            rx="4"
+            width="64"
+            x={width - 70}
+            y={currentPriceY - 11}
+          />
           <text
             fill="#EFF6FF"
             fontSize="12"
