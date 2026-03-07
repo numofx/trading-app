@@ -19,6 +19,13 @@ export type OrderBookLevel = {
   total: number;
 };
 
+export type TradePrint = {
+  price: number;
+  side: "buy" | "sell";
+  size: number;
+  time: string;
+};
+
 export type ActivityTab = {
   id: string;
   label: string;
@@ -37,4 +44,30 @@ export type ContractTab = {
 export type DeliveryTerm = {
   label: string;
   value: string;
+};
+
+export type ContractMarket = {
+  basis: string;
+  candles: Candle[];
+  contractDetails: DeliveryTerm[];
+  id: string;
+  index: string;
+  infoBar: MarketStat[];
+  mark: string;
+  orderBookAsks: OrderBookLevel[];
+  orderBookBids: OrderBookLevel[];
+  positionOverview: DeliveryTerm[];
+  ticker: string;
+  timeToExpiry: string;
+  trades: TradePrint[];
+};
+
+export type ActivityRow = {
+  cells: string[];
+  positiveCellIndexes?: number[];
+};
+
+export type ActivityView = {
+  columns: string[];
+  rows: ActivityRow[];
 };

@@ -1,6 +1,6 @@
 import { ChevronDown, Info } from "lucide-react";
+import type { DeliveryTerm } from "@/lib/trading.types";
 import { cn } from "@/lib/cn";
-import { CONTRACT_DETAILS, POSITION_OVERVIEW } from "@/lib/mock-trading-data";
 
 function LabelValueRow({ label, value }: { label: string; value: string }) {
   return (
@@ -18,18 +18,55 @@ function LabelValueRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function TradePanel() {
+export function TradePanel({
+  allocation,
+  atExpiryDeliver,
+  contractDetails,
+  contractLabel,
+  lastAction,
+  orderType,
+  positionOverview,
+  postOnly,
+  size,
+  tradeSide,
+  onAllocationChange,
+  onAtExpiryDeliverToggle,
+  onOrderTypeChange,
+  onPostOnlyToggle,
+  onSideChange,
+  onSizeChange,
+  onSubmit,
+}: {
+  allocation: number;
+  atExpiryDeliver: boolean;
+  contractDetails: DeliveryTerm[];
+  contractLabel: string;
+  lastAction: string;
+  orderType: "Limit" | "Market" | "Stop";
+  positionOverview: DeliveryTerm[];
+  postOnly: boolean;
+  size: string;
+  tradeSide: "buy" | "sell";
+  onAllocationChange: (value: number) => void;
+  onAtExpiryDeliverToggle: () => void;
+  onOrderTypeChange: (type: "Limit" | "Market" | "Stop") => void;
+  onPostOnlyToggle: () => void;
+  onSideChange: (side: "buy" | "sell") => void;
+  onSizeChange: (value: string) => void;
+  onSubmit: (side: "buy" | "sell") => void;
+}) {
   return (
     <section className="flex h-full min-h-[420px] flex-col overflow-hidden rounded-md border border-[#1B2430] bg-[#0F1720] xl:min-h-0">
-      <div className="space-y-2 overflow-hidden p-2.5 text-[11px]">
+      <div className="space-y-2 overflow-y-auto p-2.5 text-[11px]">
         <div className="grid grid-cols-3 gap-1 rounded-sm bg-[#11161D] p-1">
           {["Market", "Limit", "Stop"].map((tab) => (
             <button
               className={cn(
                 "rounded-sm px-2 py-1.5 font-medium text-[11px] transition-colors",
-                tab === "Market" ? "bg-[#151B23] text-[#D1D5DB]" : "text-[#6B7280]",
+                orderType === tab ? "bg-[#151B23] text-[#D1D5DB]" : "text-[#6B7280]",
               )}
               key={tab}
+              onClick={() => onOrderTypeChange(tab as "Limit" | "Market" | "Stop")}
               type="button"
             >
               {tab}
@@ -38,17 +75,32 @@ export function TradePanel() {
         </div>
 
         <div className="grid grid-cols-2 gap-1">
-          <button className="rounded-sm bg-[#123524] px-3 py-2 text-left" type="button">
+          <button
+            className={cn(
+              "rounded-sm px-3 py-2 text-left",
+              tradeSide === "buy" ? "bg-[#123524]" : "bg-[#101820]",
+            )}
+            onClick={() => onSideChange("buy")}
+            type="button"
+          >
             <span className="block font-semibold text-[#D1FAE5] text-sm">Buy USD</span>
             <span className="mt-0.5 block text-[#8CC9A3] text-[11px]">Long USD / Short NGN</span>
           </button>
-          <button className="rounded-sm bg-[#4D1717] px-3 py-2 text-left" type="button">
+          <button
+            className={cn(
+              "rounded-sm px-3 py-2 text-left",
+              tradeSide === "sell" ? "bg-[#4D1717]" : "bg-[#101820]",
+            )}
+            onClick={() => onSideChange("sell")}
+            type="button"
+          >
             <span className="block font-semibold text-[#FDE2E2] text-sm">Sell USD</span>
             <span className="mt-0.5 block text-[#D59C9C] text-[11px]">Short USD / Long NGN</span>
           </button>
         </div>
 
         <div className="space-y-1 rounded-sm border border-[#1B2430] bg-[#11161D] p-2">
+          <LabelValueRow label="Contract" value={contractLabel} />
           <LabelValueRow label="Available to Deliver" value="250,000 USDC" />
           <LabelValueRow label="Settlement Wallet" value="USDC / cNGN" />
         </div>
@@ -61,9 +113,9 @@ export function TradePanel() {
             <input
               className="h-10 flex-1 bg-transparent px-3 text-[#D1D5DB] text-sm outline-none placeholder:text-[#6B7280]"
               id="trade-size"
+              onChange={(event) => onSizeChange(event.target.value.replace(/[^\d]/g, ""))}
               placeholder="50,000"
-              readOnly
-              value=""
+              value={size}
             />
             <button
               className="flex h-10 items-center gap-1 border-[#1B2430] border-l px-3 text-[#D1D5DB] text-sm"
@@ -75,32 +127,67 @@ export function TradePanel() {
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="relative h-1.5 flex-1 rounded-full bg-[#1F2937]">
-              <div className="absolute top-0 left-0 h-1.5 w-[20%] rounded-full bg-[#3B82F6]" />
-              <div className="-translate-1/2 absolute top-1/2 left-[20%] size-3 rounded-full border border-[#60A5FA] bg-[#0F1720]" />
-            </div>
+            <input
+              className="h-1.5 flex-1 accent-[#3B82F6]"
+              max="100"
+              min="0"
+              onChange={(event) => onAllocationChange(Number(event.target.value))}
+              type="range"
+              value={allocation}
+            />
             <div className="rounded-sm border border-[#1B2430] bg-[#11161D] px-2 py-1 text-[#D1D5DB] text-[11px]">
-              20 %
+              {allocation} %
             </div>
           </div>
         </div>
 
         <div className="space-y-1.5 text-[11px]">
-          {["Post Only", "At Expiry Deliver"].map((option) => (
-            <div className="flex items-center justify-between gap-3" key={option}>
-              <span className="text-[#D1D5DB]">{option}</span>
-              <button
-                aria-label={option}
-                className="flex size-4 items-center justify-center rounded-sm border border-[#1B2430] bg-[#11161D]"
-                type="button"
-              />
-            </div>
-          ))}
+          <button
+            className="flex w-full items-center justify-between rounded-sm border border-[#1B2430] bg-[#11161D] px-2 py-1.5"
+            onClick={onPostOnlyToggle}
+            type="button"
+          >
+            <span className="text-[#D1D5DB]">Post Only</span>
+            <span className={cn("text-[#6B7280]", postOnly && "text-[#BFDBFE]")}>
+              {postOnly ? "On" : "Off"}
+            </span>
+          </button>
+          <button
+            className="flex w-full items-center justify-between rounded-sm border border-[#1B2430] bg-[#11161D] px-2 py-1.5"
+            onClick={onAtExpiryDeliverToggle}
+            type="button"
+          >
+            <span className="text-[#D1D5DB]">At Expiry Deliver</span>
+            <span className={cn("text-[#6B7280]", atExpiryDeliver && "text-[#BFDBFE]")}>
+              {atExpiryDeliver ? "On" : "Off"}
+            </span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-1">
+          <button
+            className="flex h-9 items-center justify-center rounded-sm border border-[#14532D] bg-[#123524] font-medium text-[#86EFAC] text-sm transition-colors hover:bg-[#17412c]"
+            onClick={() => onSubmit("buy")}
+            type="button"
+          >
+            Buy USD
+          </button>
+          <button
+            className="flex h-9 items-center justify-center rounded-sm border border-[#7F1D1D] bg-[#4D1717] font-medium text-[#D59C9C] text-sm transition-colors hover:bg-[#5b1b1b]"
+            onClick={() => onSubmit("sell")}
+            type="button"
+          >
+            Sell USD
+          </button>
+        </div>
+
+        <div className="rounded-sm border border-[#1B2430] bg-[#11161D] px-2 py-1.5 text-[#9CA3AF] text-[11px]">
+          {lastAction}
         </div>
 
         <div className="space-y-1 rounded-sm border border-[#1B2430] bg-[#11161D] p-2">
           <div className="text-[#6B7280] text-[10px] uppercase tracking-[0.14em]">Position Summary</div>
-          {POSITION_OVERVIEW.map((item) => (
+          {positionOverview.map((item) => (
             <LabelValueRow key={item.label} label={item.label} value={item.value} />
           ))}
         </div>
@@ -121,7 +208,7 @@ export function TradePanel() {
 
         <div className="space-y-1 rounded-sm border border-[#1B2430] bg-[#11161D] p-2">
           <div className="text-[#6B7280] text-[10px] uppercase tracking-[0.14em]">Delivery Terms</div>
-          {CONTRACT_DETAILS.map((item) => (
+          {contractDetails.map((item) => (
             <LabelValueRow key={item.label} label={item.label} value={item.value} />
           ))}
         </div>

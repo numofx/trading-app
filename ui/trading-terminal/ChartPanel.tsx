@@ -1,4 +1,6 @@
-import { CHART_CANDLES, CHART_CONTEXT_TABS, CHART_RANGE_BUTTONS } from "@/lib/mock-trading-data";
+import type { Candle } from "@/lib/trading.types";
+import type { TIMEFRAME_OPTIONS } from "@/lib/mock-trading-data";
+import { CHART_CONTEXT_TABS, CHART_RANGE_BUTTONS } from "@/lib/mock-trading-data";
 import { cn } from "@/lib/cn";
 import { ChartToolbar } from "@/ui/trading-terminal/ChartToolbar";
 
@@ -18,25 +20,31 @@ function formatPrice(value: number) {
   }).format(value);
 }
 
-function TradingChart() {
+function TradingChart({
+  candles,
+  ticker,
+}: {
+  candles: Candle[];
+  ticker: string;
+}) {
   const width = 920;
   const height = 620;
   const volumeHeight = 128;
   const chartTop = 28;
   const chartBottom = height - volumeHeight - 28;
-  const minPrice = Math.min(...CHART_CANDLES.map((candle) => candle.low)) - 60;
-  const maxPrice = Math.max(...CHART_CANDLES.map((candle) => candle.high)) + 60;
+  const minPrice = Math.min(...candles.map((candle) => candle.low)) - 60;
+  const maxPrice = Math.max(...candles.map((candle) => candle.high)) + 60;
   const priceRange = maxPrice - minPrice;
-  const stepX = width / CHART_CANDLES.length;
+  const stepX = width / candles.length;
   const candleWidth = Math.max(9, stepX * 0.62);
-  const maxVolume = Math.max(...CHART_CANDLES.map((candle) => candle.volume));
-  const lastCandle = CHART_CANDLES.at(-1);
+  const maxVolume = Math.max(...candles.map((candle) => candle.volume));
+  const lastCandle = candles.at(-1);
 
   if (!lastCandle) {
     return null;
   }
 
-  const points = CHART_CANDLES.map((candle, index) => {
+  const points = candles.map((candle, index) => {
     const x = index * stepX + stepX / 2;
     const highY = chartTop + ((maxPrice - candle.high) / priceRange) * (chartBottom - chartTop);
     const lowY = chartTop + ((maxPrice - candle.low) / priceRange) * (chartBottom - chartTop);
@@ -60,15 +68,15 @@ function TradingChart() {
   return (
     <div className="relative flex-1 overflow-hidden">
       <div className="absolute inset-x-0 top-0 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-[11px]">
-        <span className="font-semibold text-[#E5E7EB]">USD/NGN JUN 2026 · 1h · Central Limit Order Book</span>
+        <span className="font-semibold text-[#E5E7EB]">{ticker} · 1h · Central Limit Order Book</span>
         <span className="text-[#6B7280]">
-          O1,604.9 H1,606.1 L1,604.5 C1,605.2
-          <span className="ml-2 text-[#6FBF86]">+0.3 (+0.02%)</span>
+          O{formatPrice(lastCandle.open)} H{formatPrice(lastCandle.high)} L{formatPrice(lastCandle.low)} C{formatPrice(lastCandle.close)}
+          <span className="ml-2 text-[#8CC9A3]">+0.3 (+0.02%)</span>
         </span>
       </div>
 
       <svg
-        aria-label="Mock USD/NGN futures candlestick chart"
+        aria-label="Mock NGN/USD futures candlestick chart"
         className="size-full"
         preserveAspectRatio="none"
         role="img"
@@ -96,7 +104,7 @@ function TradingChart() {
         })}
 
         {points.map((point, index) => {
-          const candle = CHART_CANDLES[index];
+          const candle = candles[index];
           const isBullish = candle.close >= candle.open;
           const bodyTop = Math.min(point.openY, point.closeY);
           const bodyHeight = Math.max(Math.abs(point.closeY - point.openY), 3);
@@ -146,11 +154,11 @@ function TradingChart() {
             x={width - 38}
             y={currentPriceY + 4}
           >
-            1,605.2
+            {formatPrice(lastCandle.close)}
           </text>
         </g>
 
-        {CHART_CANDLES.filter((_, index) => index % 4 === 0).map((candle, index) => {
+        {candles.filter((_, index) => index % 4 === 0).map((candle, index) => {
           const sourceIndex = index * 4;
           const x = sourceIndex * stepX + stepX / 2;
 
@@ -172,14 +180,63 @@ function TradingChart() {
   );
 }
 
-export function ChartPanel() {
+export function ChartPanel({
+  candles,
+  chartContext,
+  expandedChart,
+  indicatorsEnabled,
+  selectedRange,
+  selectedTimeframe,
+  selectedTool,
+  ticker,
+  onChartContextChange,
+  onExpandedToggle,
+  onIndicatorsToggle,
+  onRangeChange,
+  onTimeframeChange,
+  onToolSelect,
+}: {
+  candles: Candle[];
+  chartContext: (typeof CHART_CONTEXT_TABS)[number];
+  expandedChart: boolean;
+  indicatorsEnabled: boolean;
+  selectedRange: (typeof CHART_RANGE_BUTTONS)[number];
+  selectedTimeframe: (typeof TIMEFRAME_OPTIONS)[number];
+  selectedTool: string;
+  ticker: string;
+  onChartContextChange: (context: (typeof CHART_CONTEXT_TABS)[number]) => void;
+  onExpandedToggle: () => void;
+  onIndicatorsToggle: () => void;
+  onRangeChange: (range: (typeof CHART_RANGE_BUTTONS)[number]) => void;
+  onTimeframeChange: (timeframe: (typeof TIMEFRAME_OPTIONS)[number]) => void;
+  onToolSelect: (toolId: string) => void;
+}) {
   return (
     <section className="flex h-full min-h-[540px] flex-col overflow-hidden rounded-md border border-[#1B2430] bg-[#0F1720] xl:min-h-0">
-      <ChartToolbar />
+      <ChartToolbar
+        expandedChart={expandedChart}
+        indicatorsEnabled={indicatorsEnabled}
+        selectedTimeframe={selectedTimeframe}
+        selectedTool={selectedTool}
+        onExpandedToggle={onExpandedToggle}
+        onIndicatorsToggle={onIndicatorsToggle}
+        onTimeframeChange={onTimeframeChange}
+        onToolSelect={onToolSelect}
+      />
 
       <div className="flex min-h-0 flex-1">
         <div className="hidden xl:block">
-          <ChartToolbar mode="side" />
+          <ChartToolbar
+            expandedChart={expandedChart}
+            indicatorsEnabled={indicatorsEnabled}
+            mode="side"
+            selectedTimeframe={selectedTimeframe}
+            selectedTool={selectedTool}
+            onExpandedToggle={onExpandedToggle}
+            onIndicatorsToggle={onIndicatorsToggle}
+            onTimeframeChange={onTimeframeChange}
+            onToolSelect={onToolSelect}
+          />
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col">
@@ -189,19 +246,22 @@ export function ChartPanel() {
                 <button
                   className={cn(
                     "rounded-sm px-2 py-1 font-medium text-[#6B7280] text-[11px] transition-colors hover:bg-[#11161D] hover:text-[#D1D5DB]",
-                    tab === "Futures" && "bg-[#11161D] text-[#BFDBFE]",
+                    chartContext === tab && "bg-[#11161D] text-[#BFDBFE]",
                   )}
                   key={tab}
+                  onClick={() => onChartContextChange(tab)}
                   type="button"
                 >
                   {tab}
                 </button>
               ))}
             </div>
-            <div className="text-[#6B7280] text-[11px]">Price in NGN per 1 USD</div>
+            <div className="text-[#6B7280] text-[11px]">
+              {chartContext === "Basis" ? "Mark minus spot in NGN" : "Price in NGN per 1 USD"}
+            </div>
           </div>
 
-          <TradingChart />
+          <TradingChart candles={candles} ticker={ticker} />
 
           <div className="flex items-center justify-between border-[#1B2430] border-t bg-[#0F1720] px-2.5 py-1 text-[11px]">
             <div className="flex flex-wrap items-center gap-1">
@@ -209,9 +269,10 @@ export function ChartPanel() {
                 <button
                   className={cn(
                     "rounded-sm px-2 py-1 text-[#6B7280] transition-colors hover:bg-[#11161D] hover:text-[#D1D5DB]",
-                    range === "1d" && "bg-[#11161D] text-[#BFDBFE]",
+                    selectedRange === range && "bg-[#11161D] text-[#BFDBFE]",
                   )}
                   key={range}
+                  onClick={() => onRangeChange(range)}
                   type="button"
                 >
                   {range}
@@ -220,7 +281,7 @@ export function ChartPanel() {
             </div>
 
             <div className="flex items-center gap-3 text-[#6B7280]">
-              <span>13:37:35 (UTC-5)</span>
+              <span>{indicatorsEnabled ? "Indicators On" : "Indicators Off"}</span>
               <button type="button">%</button>
               <button type="button">log</button>
               <button className="text-[#D1D5DB]" type="button">
