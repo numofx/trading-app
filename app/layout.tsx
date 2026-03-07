@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  description: "A modern Next.js template for building production-ready web applications.",
-  title: "Next.js Template",
+  description: "A dark trading terminal interface mockup built with Next.js.",
+  title: "Trading Terminal",
 };
 
 export default function RootLayout({

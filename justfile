@@ -1,15 +1,3 @@
-# See https://github.com/sablier-labs/devkit/blob/main/just/base.just
-import "./node_modules/@sablier/devkit/just/base.just"
-
-# ---------------------------------------------------------------------------- #
-#                                 DEPENDENCIES                                 #
-# ---------------------------------------------------------------------------- #
-
-# Ni: https://github.com/antfu-collective/ni
-na := require("na")
-ni := require("ni")
-nlx := require("nlx")
-
 # ---------------------------------------------------------------------------- #
 #                                   COMMANDS                                   #
 # ---------------------------------------------------------------------------- #
@@ -20,7 +8,7 @@ default:
 
 # Clean the .next directory
 clean:
-    nlx del-cli .next
+    bunx del-cli .next
 
 # Deploy website to Vercel
 deploy environment="production":
@@ -62,14 +50,14 @@ alias ew := eslint-write
 # Start the Next.js app
 [group("app")]
 @build:
-    na next build
+    bunx next build
 
 # Start the Next.js app in dev mode on a random port
 [group("app")]
 @dev *args:
-    na next dev {{ args }}
+    bunx next dev --port 0 --turbopack {{ args }}
 
 # Build and start the Next.js app
 [group("app")]
 start: build
-    na next start
+    bunx next start
