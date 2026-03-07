@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChevronDown, Dot, Search, Star, X } from "lucide-react";
 import type { ContractTab, MarketOption, MarketStat } from "@/lib/trading.types";
 import { cn } from "@/lib/cn";
+import { SmartImage } from "@/ui/SmartImage";
 
 export function MarketHeader({
   contractTabs,
@@ -65,6 +66,14 @@ export function MarketHeader({
       <div className="flex flex-col gap-1.5 px-3 py-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
+            <SmartImage<string>
+              alt="Numo"
+              className="ml-3 h-6 w-24 shrink-0 sm:h-7 sm:w-28"
+              imgClassName="object-left"
+              priority
+              src="/numo_logo_white.png"
+            />
+
             <button
               className={cn(
                 "flex size-7 items-center justify-center rounded-sm border border-[#1B2430] bg-[#11161D] text-[#6B7280] transition-colors hover:text-[#D1D5DB]",
