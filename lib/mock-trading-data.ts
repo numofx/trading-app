@@ -171,7 +171,7 @@ function buildCandles(offset: number) {
     high: Number((high + offset).toFixed(1)),
     low: Number((low + offset).toFixed(1)),
     open: Number((open + offset).toFixed(1)),
-    time: `${String(index + 8).padStart(2, "0")}:00`,
+    time: `${String((index + 8) % 24).padStart(2, "0")}:00`,
     volume: volume + Math.round(offset * 8),
   })) satisfies Candle[];
 }

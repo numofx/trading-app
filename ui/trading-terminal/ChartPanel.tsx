@@ -20,11 +20,43 @@ function formatPrice(value: number) {
   }).format(value);
 }
 
+function getPriceDomain(candles: Candle[]) {
+  const low = Math.min(...candles.map((candle) => candle.low));
+  const high = Math.max(...candles.map((candle) => candle.high));
+  const range = Math.max(high - low, 0.5);
+  const padding = Math.max(range * 0.22, 0.8);
+
+  return {
+    maxPrice: high + padding,
+    minPrice: low - padding,
+  };
+}
+
+function getChangeLabel(candles: Candle[]) {
+  const firstCandle = candles[0];
+  const lastCandle = candles.at(-1);
+
+  if (!firstCandle || !lastCandle) {
+    return { delta: "0.0", percent: "0.00%", positive: true };
+  }
+
+  const delta = lastCandle.close - firstCandle.open;
+  const percent = firstCandle.open === 0 ? 0 : (delta / firstCandle.open) * 100;
+
+  return {
+    delta: `${delta >= 0 ? "+" : ""}${formatPrice(delta)}`,
+    percent: `${percent >= 0 ? "+" : ""}${percent.toFixed(2)}%`,
+    positive: delta >= 0,
+  };
+}
+
 function TradingChart({
   candles,
+  timeframe,
   ticker,
 }: {
   candles: Candle[];
+  timeframe: (typeof TIMEFRAME_OPTIONS)[number];
   ticker: string;
 }) {
   const width = 920;
@@ -32,13 +64,13 @@ function TradingChart({
   const volumeHeight = 128;
   const chartTop = 28;
   const chartBottom = height - volumeHeight - 28;
-  const minPrice = Math.min(...candles.map((candle) => candle.low)) - 60;
-  const maxPrice = Math.max(...candles.map((candle) => candle.high)) + 60;
+  const { maxPrice, minPrice } = getPriceDomain(candles);
   const priceRange = maxPrice - minPrice;
   const stepX = width / candles.length;
   const candleWidth = Math.max(9, stepX * 0.62);
   const maxVolume = Math.max(...candles.map((candle) => candle.volume));
   const lastCandle = candles.at(-1);
+  const changeLabel = getChangeLabel(candles);
 
   if (!lastCandle) {
     return null;
@@ -68,15 +100,20 @@ function TradingChart({
   return (
     <div className="relative flex-1 overflow-hidden">
       <div className="absolute inset-x-0 top-0 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-[11px]">
-        <span className="font-semibold text-[#E5E7EB]">{ticker} · 1h · Central Limit Order Book</span>
+        <span className="font-semibold text-[#E5E7EB]">
+          {ticker} · {timeframe} · Central Limit Order Book
+        </span>
         <span className="text-[#6B7280]">
-          O{formatPrice(lastCandle.open)} H{formatPrice(lastCandle.high)} L{formatPrice(lastCandle.low)} C{formatPrice(lastCandle.close)}
-          <span className="ml-2 text-[#8CC9A3]">+0.3 (+0.02%)</span>
+          O{formatPrice(lastCandle.open)} H{formatPrice(lastCandle.high)} L
+          {formatPrice(lastCandle.low)} C{formatPrice(lastCandle.close)}
+          <span className={cn("ml-2", changeLabel.positive ? "text-[#8CC9A3]" : "text-[#F0A0A0]")}>
+            {changeLabel.delta} ({changeLabel.percent})
+          </span>
         </span>
       </div>
 
       <svg
-        aria-label="Mock NGN/USD futures candlestick chart"
+        aria-label="Mock NGN/USD candlestick chart"
         className="size-full"
         preserveAspectRatio="none"
         role="img"
@@ -112,7 +149,7 @@ function TradingChart({
           const volumeY = height - point.volumeHeight - 18;
 
           return (
-            <g key={candle.time}>
+            <g key={`${candle.time}-${index}`}>
               <line stroke={color} strokeWidth="1.5" x1={point.x} x2={point.x} y1={point.highY} y2={point.lowY} />
               <rect
                 fill={color}
@@ -166,7 +203,7 @@ function TradingChart({
             <text
               fill="#6B7280"
               fontSize="11"
-              key={candle.time}
+              key={`${candle.time}-${sourceIndex}`}
               textAnchor="middle"
               x={x}
               y={height - 4}
@@ -261,7 +298,7 @@ export function ChartPanel({
             </div>
           </div>
 
-          <TradingChart candles={candles} ticker={ticker} />
+          <TradingChart candles={candles} ticker={ticker} timeframe={selectedTimeframe} />
 
           <div className="flex items-center justify-between border-[#1B2430] border-t bg-[#0F1720] px-2.5 py-1 text-[11px]">
             <div className="flex flex-wrap items-center gap-1">
