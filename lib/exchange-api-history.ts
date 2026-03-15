@@ -1,5 +1,7 @@
 import "server-only";
 
+import { unstable_cache } from "next/cache";
+
 import type { Candle } from "@/lib/trading.types";
 
 const API_VERSION = "v1";
@@ -20,6 +22,13 @@ function formatDate(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
+function getLastCompletedUtcDay() {
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  today.setUTCDate(today.getUTCDate() - 1);
+  return today;
+}
+
 async function fetchExchangeRate(date: string, base: string, quote: string) {
   const path = `${API_VERSION}/currencies/${base}.json`;
   const primaryUrl = `${CDN_BASE_URL}@${date}/${path}`;
@@ -28,6 +37,7 @@ async function fetchExchangeRate(date: string, base: string, quote: string) {
   for (const url of [primaryUrl, fallbackUrl]) {
     try {
       const response = await fetch(url, {
+        cache: "force-cache",
         next: {
           revalidate: 86_400,
         },
@@ -78,10 +88,10 @@ async function getHistoricalSeries(pair: "EUR/USD" | "NGN/USD") {
       ? { base: "usd", quote: "ngn" }
       : { base: "eur", quote: "usd" };
 
-  const today = new Date();
+  const lastCompletedUtcDay = getLastCompletedUtcDay();
   const dates = Array.from({ length: SPOT_HISTORY_DAYS }, (_, index) => {
-    const date = new Date(today);
-    date.setUTCDate(today.getUTCDate() - (SPOT_HISTORY_DAYS - 1 - index));
+    const date = new Date(lastCompletedUtcDay);
+    date.setUTCDate(lastCompletedUtcDay.getUTCDate() - (SPOT_HISTORY_DAYS - 1 - index));
     return formatDate(date);
   });
 
@@ -103,14 +113,24 @@ async function getHistoricalSeries(pair: "EUR/USD" | "NGN/USD") {
   } satisfies SpotHistorySnapshot;
 }
 
-export async function getSpotHistorySnapshots() {
-  const [eurUsd, ngnUsd] = await Promise.all([
-    getHistoricalSeries("EUR/USD"),
-    getHistoricalSeries("NGN/USD"),
-  ]);
+const getCachedSpotHistorySnapshots = unstable_cache(
+  async () => {
+    const [eurUsd, ngnUsd] = await Promise.all([
+      getHistoricalSeries("EUR/USD"),
+      getHistoricalSeries("NGN/USD"),
+    ]);
 
-  return {
-    "EUR/USD": eurUsd,
-    "NGN/USD": ngnUsd,
-  } satisfies Record<SpotHistorySnapshot["pair"], SpotHistorySnapshot>;
+    return {
+      "EUR/USD": eurUsd,
+      "NGN/USD": ngnUsd,
+    } satisfies Record<SpotHistorySnapshot["pair"], SpotHistorySnapshot>;
+  },
+  ["spot-history-snapshots"],
+  {
+    revalidate: 86_400,
+  },
+);
+
+export function getSpotHistorySnapshots() {
+  return getCachedSpotHistorySnapshots();
 }

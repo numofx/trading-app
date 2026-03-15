@@ -31,6 +31,7 @@ async function callBaseRpc(data: string) {
       "content-type": "application/json",
     },
     method: "POST",
+    cache: "force-cache",
     next: {
       revalidate: 30,
     },
