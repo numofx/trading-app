@@ -3,9 +3,16 @@
 import { startTransition, useEffect, useState } from "react";
 import type { ChainlinkSpotSnapshot } from "@/lib/chainlink-ngn-usd";
 import type { SpotHistorySnapshot } from "@/lib/exchange-api-history";
+import {
+  calculateAnnualizedBasisPercent,
+  calculateBasis,
+  formatAnnualizedBasis,
+  formatBasis,
+  formatMarketPrice,
+} from "@/lib/market-formatting";
 import type { CHART_CONTEXT_TABS, CHART_RANGE_BUTTONS, TIMEFRAME_OPTIONS } from "@/lib/mock-trading-data";
 import type { CONTRACT_LABELS } from "@/lib/mock-trading-data";
-import type { Candle, MarketOption, MarketStat } from "@/lib/trading.types";
+import type { Candle, MarketDefinition, MarketId, MarketStat } from "@/lib/trading.types";
 import {
   ACTIVITY_VIEWS,
   CHART_TOOLS,
@@ -14,12 +21,13 @@ import {
   DEFAULT_CHART_CONTEXT,
   DEFAULT_CONTRACT,
   DEFAULT_FILTER,
+  DEFAULT_MARKET_ID,
   DEFAULT_ORDER_TYPE,
   DEFAULT_SYMBOL,
   DEFAULT_TIMEFRAME,
   FILTER_OPTIONS,
-  INSTRUMENT_MARKETS,
-  MARKET_OPTIONS,
+  MARKET_DATA,
+  MARKET_DEFINITIONS,
 } from "@/lib/mock-trading-data";
 import { BottomTabs } from "@/ui/trading-terminal/BottomTabs";
 import { ChartPanel } from "@/ui/trading-terminal/ChartPanel";
@@ -28,19 +36,26 @@ import { MarketHeader } from "@/ui/trading-terminal/MarketHeader";
 import { OrderBook } from "@/ui/trading-terminal/OrderBook";
 import { TradePanel } from "@/ui/trading-terminal/TradePanel";
 
-function formatPrice(value: number, digits = 2) {
-  return new Intl.NumberFormat("en-US", {
-    maximumFractionDigits: digits,
-    minimumFractionDigits: digits,
-  }).format(value);
-}
-
 function parseNumericString(value: string) {
   return Number(value.replaceAll(",", "").replaceAll("$", "").replaceAll("+", ""));
 }
 
+function getCompatibleSpotPrice(candidatePrice: number | null, referencePrice: number) {
+  if (candidatePrice === null || !Number.isFinite(candidatePrice) || candidatePrice <= 0) {
+    return referencePrice;
+  }
+
+  const deviation = Math.abs(candidatePrice - referencePrice) / referencePrice;
+
+  if (deviation > 0.08) {
+    return referencePrice;
+  }
+
+  return candidatePrice;
+}
+
 function shiftCandles(
-  candles: (typeof INSTRUMENT_MARKETS)[keyof typeof INSTRUMENT_MARKETS][keyof (typeof INSTRUMENT_MARKETS)[keyof typeof INSTRUMENT_MARKETS]]["candles"],
+  candles: (typeof MARKET_DATA)[keyof typeof MARKET_DATA]["candles"],
   targetClose: number,
 ) {
   const currentClose = candles.at(-1)?.close ?? targetClose;
@@ -75,16 +90,40 @@ function buildActivityViews(ticker: string, positionValue: string, entryPrice: s
   };
 }
 
-function getIndexDigits(symbol: string) {
-  return symbol === "NGN/USD" ? 2 : 5;
+function getDisplayTicker(marketDefinition: MarketDefinition, ticker: string) {
+  if (marketDefinition.type === "spot") {
+    return `${marketDefinition.pair} Spot`;
+  }
+
+  return ticker;
 }
 
-function getDisplayTicker(symbol: string, marketType: "Futures" | "Spot", ticker: string) {
-  return marketType === "Spot" ? `${symbol} Spot` : ticker;
+function getDefaultContractForMarket(marketId: string) {
+  if (marketId === "cngn-usdc-spot") {
+    return DEFAULT_CONTRACT;
+  }
+
+  if (marketId === "cngn-usdc-mar-2026-futures") {
+    return "MAR 2026";
+  }
+
+  return DEFAULT_CONTRACT;
 }
 
-function getPricePrecision(symbol: string) {
-  return symbol === "NGN/USD" ? 2 : 5;
+function getContractTabsForSymbol() {
+  return CONTRACT_TABS.filter((tab) => tab.label === "MAR 2026" || tab.label === "JUN 2026");
+}
+
+function getMarketIdForContract(contract: SelectedContract) {
+  if (contract === "MAR 2026") {
+    return "cngn-usdc-mar-2026-futures";
+  }
+
+  if (contract === "JUN 2026") {
+    return "cngn-usdc-jun-2026-futures";
+  }
+
+  return DEFAULT_MARKET_ID;
 }
 
 function getChartUpdateInterval(timeframe: (typeof TIMEFRAME_OPTIONS)[number]) {
@@ -104,10 +143,10 @@ function getDisplayCandles(
   liveBasis: number,
   liveIndex: number,
   marketCandles: Candle[],
-  marketType: "Futures" | "Spot",
+  marketType: MarketDefinition["type"],
   selectedSpotHistory: SpotHistorySnapshot | null,
 ) {
-  if (marketType === "Spot" && selectedSpotHistory?.series) {
+  if (marketType === "spot" && selectedSpotHistory?.series) {
     return selectedSpotHistory.series;
   }
 
@@ -141,7 +180,6 @@ function getNextCandleTimeLabel(currentLabel: string) {
 
 function simulateLiveCandles(
   candles: Candle[],
-  symbol: string,
   timeframe: (typeof TIMEFRAME_OPTIONS)[number],
 ) {
   const lastCandle = candles.at(-1);
@@ -150,7 +188,7 @@ function simulateLiveCandles(
     return candles;
   }
 
-  const precision = getPricePrecision(symbol);
+  const precision = 2;
   let timeframeScale = 1;
 
   if (timeframe === "5m") {
@@ -159,8 +197,8 @@ function simulateLiveCandles(
     timeframeScale = 1.8;
   }
 
-  const drift = (symbol === "NGN/USD" ? 0.28 : 0.000_28) * timeframeScale;
-  const volatility = (symbol === "NGN/USD" ? 0.42 : 0.000_36) * timeframeScale;
+  const drift = 0.28 * timeframeScale;
+  const volatility = 0.42 * timeframeScale;
   const directionalBias = Math.random() > 0.5 ? drift : -drift;
   const delta = directionalBias + (Math.random() - 0.5) * volatility;
   const nextClose = Number((lastCandle.close + delta).toFixed(precision));
@@ -204,32 +242,31 @@ function simulateLiveCandles(
 
 function buildLiveInfoBar(
   infoBar: MarketStat[],
-  marketType: "Futures" | "Spot",
-  symbol: string,
-  liveBasis: number,
-  liveIndex: number,
+  marketDefinition: MarketDefinition,
+  liveBasis: number | null,
+  liveSpotPrice: number,
 ) {
-  const indexDigits = getIndexDigits(symbol);
+  const marketPrice =
+    marketDefinition.type === "spot"
+      ? liveSpotPrice
+      : parseNumericString(MARKET_DATA[marketDefinition.id as MarketId].mark);
+  const liveAnnualizedBasis = calculateAnnualizedBasisPercent(
+    marketPrice,
+    liveSpotPrice,
+    marketDefinition.type === "future" ? marketDefinition.expiryDays : null,
+  );
 
   return infoBar.map((item: MarketStat) => {
-    if (item.label === "Contract" && marketType === "Spot") {
-      return { ...item, value: `${symbol} Spot` };
-    }
-
-    if (item.label === "Mark" && marketType === "Spot") {
-      return { ...item, value: formatPrice(liveIndex, indexDigits) };
-    }
-
-    if (item.label === "Index") {
-      return { ...item, value: formatPrice(liveIndex, indexDigits) };
-    }
-
-    if (item.label === "Basis" && marketType === "Spot") {
-      return { ...item, value: "0.00" };
+    if (item.label === "Price") {
+      return { ...item, value: formatMarketPrice(marketPrice) };
     }
 
     if (item.label === "Basis") {
-      return { ...item, value: `${liveBasis >= 0 ? "+" : ""}${formatPrice(liveBasis, 2)}` };
+      return { ...item, value: formatBasis(liveBasis) };
+    }
+
+    if (item.label === "Basis %") {
+      return { ...item, value: formatAnnualizedBasis(liveAnnualizedBasis) };
     }
 
     return item;
@@ -245,9 +282,7 @@ export function TradingTerminal({
   chainlinkSpot: ChainlinkSpotSnapshot | null;
   spotHistory: Record<SpotHistorySnapshot["pair"], SpotHistorySnapshot> | null;
 }) {
-  const [selectedMarketId, setSelectedMarketId] = useState("ngn-usd-futures");
-  const [selectedSymbol, setSelectedSymbol] =
-    useState<keyof typeof INSTRUMENT_MARKETS>(DEFAULT_SYMBOL);
+  const [selectedMarketId, setSelectedMarketId] = useState<MarketId>(DEFAULT_MARKET_ID);
   const [selectedContract, setSelectedContract] = useState<SelectedContract>(DEFAULT_CONTRACT);
   const [timeframe, setTimeframe] = useState<(typeof TIMEFRAME_OPTIONS)[number]>(DEFAULT_TIMEFRAME);
   const [chartContext, setChartContext] = useState<(typeof CHART_CONTEXT_TABS)[number]>(
@@ -271,38 +306,65 @@ export function TradingTerminal({
   const [lastAction, setLastAction] = useState("Ready");
 
   const selectedMarket =
-    MARKET_OPTIONS.find((marketOption) => marketOption.id === selectedMarketId) ??
-    MARKET_OPTIONS[0];
-  const market = INSTRUMENT_MARKETS[selectedSymbol][selectedContract];
+    MARKET_DEFINITIONS.find((marketOption) => marketOption.id === selectedMarketId) ??
+    MARKET_DEFINITIONS[0];
+  const market = MARKET_DATA[selectedMarketId];
+  const referenceSpotPrice = parseNumericString(MARKET_DATA["cngn-usdc-spot"].mark);
+  const liveSpotPrice = getCompatibleSpotPrice(
+    spotHistory?.["NGN/USD"]?.latestPrice ?? chainlinkSpot?.priceNgnPerUsd ?? null,
+    referenceSpotPrice,
+  );
   const selectedSpotHistory =
-    selectedMarket.marketType === "Spot"
-      ? (spotHistory?.[selectedSymbol as SpotHistorySnapshot["pair"]] ?? null)
+    selectedMarket.type === "spot"
+      ? (spotHistory?.["NGN/USD"] ?? null)
       : null;
-  const liveIndex =
-    selectedSpotHistory?.latestPrice ??
-    (selectedSymbol === "NGN/USD"
-      ? (chainlinkSpot?.priceNgnPerUsd ?? parseNumericString(market.index))
-      : parseNumericString(market.index));
-  const liveMark = parseNumericString(market.mark);
-  const liveBasis = liveMark - liveIndex;
-  const dynamicMarketOptions = MARKET_OPTIONS.map((marketOption) => {
-    const latestSpotPrice =
-      spotHistory?.[marketOption.symbol as SpotHistorySnapshot["pair"]]?.latestPrice;
+  const livePrice =
+    selectedMarket.type === "spot"
+      ? liveSpotPrice
+      : parseNumericString(market.mark);
+  const liveBasis =
+    selectedMarket.type === "spot" || selectedMarket.type === "option"
+      ? null
+      : calculateBasis(livePrice, liveSpotPrice);
+  const selectorLastByMarketId = Object.fromEntries(
+    MARKET_DEFINITIONS.map((marketDefinition) => [
+      marketDefinition.id,
+      marketDefinition.type === "spot" ? liveSpotPrice : null,
+    ]),
+  ) satisfies Record<string, number | null>;
+  const selectorBasisByMarketId = Object.fromEntries(
+    MARKET_DEFINITIONS.map((marketDefinition) => {
+      if (marketDefinition.type === "spot") {
+        return [marketDefinition.id, null];
+      }
 
-    if (marketOption.marketType !== "Spot" || !latestSpotPrice) {
-      return marketOption;
-    }
+      if (marketDefinition.type === "option") {
+        return [marketDefinition.id, null];
+      }
 
-    return {
-      ...marketOption,
-      lastPrice:
-        marketOption.symbol === "NGN/USD"
-          ? formatPrice(latestSpotPrice, 2)
-          : latestSpotPrice.toFixed(5),
-    } satisfies MarketOption;
-  });
+      const futuresPrice = parseNumericString(MARKET_DATA[marketDefinition.id as MarketId].mark);
+      return [marketDefinition.id, calculateBasis(futuresPrice, liveSpotPrice)];
+    }),
+  ) satisfies Record<string, number | null>;
+  const selectorAnnualizedBasisByMarketId = Object.fromEntries(
+    MARKET_DEFINITIONS.map((marketDefinition) => {
+      if (marketDefinition.type === "spot") {
+        return [marketDefinition.id, null];
+      }
+
+      if (marketDefinition.type === "option") {
+        return [marketDefinition.id, null];
+      }
+
+      const futuresPrice = parseNumericString(MARKET_DATA[marketDefinition.id as MarketId].mark);
+      return [
+        marketDefinition.id,
+        calculateAnnualizedBasisPercent(futuresPrice, liveSpotPrice, marketDefinition.expiryDays),
+      ];
+    }),
+  ) satisfies Record<string, number | null>;
   const dynamicActivityViews = buildActivityViews(
-    getDisplayTicker(selectedSymbol, selectedMarket.marketType, market.ticker),
+    getDisplayTicker(selectedMarket, market.ticker),
     market.positionOverview[0]?.value ?? "",
     market.positionOverview[1]?.value ?? "",
     market.positionOverview[2]?.value ?? "",
@@ -310,19 +372,18 @@ export function TradingTerminal({
   );
   const displayCandles = getDisplayCandles(
     chartContext,
-    liveBasis,
-    liveIndex,
+    liveBasis ?? 0,
+    liveSpotPrice,
     market.candles,
-    selectedMarket.marketType,
+    selectedMarket.type,
     selectedSpotHistory,
   );
 
   const liveInfoBar = buildLiveInfoBar(
     market.infoBar,
-    selectedMarket.marketType,
-    selectedSymbol,
+    selectedMarket,
     liveBasis,
-    liveIndex,
+    liveSpotPrice,
   );
   const [liveCandles, setLiveCandles] = useState<Candle[]>(displayCandles);
 
@@ -330,54 +391,61 @@ export function TradingTerminal({
     setLiveCandles(
       getDisplayCandles(
         chartContext,
-        liveBasis,
-        liveIndex,
+        liveBasis ?? 0,
+        liveSpotPrice,
         market.candles,
-        selectedMarket.marketType,
+        selectedMarket.type,
         selectedSpotHistory,
       ),
     );
   }, [
     chartContext,
     liveBasis,
-    liveIndex,
+    liveSpotPrice,
     market.candles,
     selectedContract,
-    selectedMarket.marketType,
+    selectedMarket.type,
     selectedMarketId,
     selectedSpotHistory,
-    selectedSymbol,
     timeframe,
   ]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
-      setLiveCandles((currentCandles) => simulateLiveCandles(currentCandles, selectedSymbol, timeframe));
+      setLiveCandles((currentCandles) => simulateLiveCandles(currentCandles, timeframe));
     }, getChartUpdateInterval(timeframe));
 
     return () => window.clearInterval(intervalId);
-  }, [selectedSymbol, selectedMarketId, timeframe, chartContext]);
+  }, [selectedMarketId, timeframe, chartContext]);
 
   function handleContractSelect(contract: string) {
     startTransition(() => {
-      setSelectedContract(contract as SelectedContract);
-      setLastAction(`Switched to ${selectedSymbol} ${contract}`);
+      const nextContract = contract as SelectedContract;
+      const nextMarketId = getMarketIdForContract(nextContract);
+
+      setSelectedContract(nextContract);
+      setSelectedMarketId(nextMarketId);
+      setChartContext(DEFAULT_CHART_CONTEXT);
+      setLastAction(`Switched to ${DEFAULT_SYMBOL} ${contract}`);
     });
   }
 
   function handleMarketSelect(marketId: string) {
-    const nextMarket = MARKET_OPTIONS.find((marketOption) => marketOption.id === marketId);
+    const nextMarket = MARKET_DEFINITIONS.find((marketOption) => marketOption.id === marketId);
 
     if (!nextMarket) {
       return;
     }
 
     startTransition(() => {
-      setSelectedMarketId(marketId);
-      setSelectedSymbol(nextMarket.symbol as keyof typeof INSTRUMENT_MARKETS);
-      setSelectedContract(DEFAULT_CONTRACT);
-      setChartContext(nextMarket.marketType === "Spot" ? "Spot" : DEFAULT_CHART_CONTEXT);
-      setLastAction(`Switched to ${nextMarket.symbol} ${nextMarket.marketType}`);
+      setSelectedMarketId(marketId as MarketId);
+      if (nextMarket.contractLabel) {
+        setSelectedContract(nextMarket.contractLabel as SelectedContract);
+      } else {
+        setSelectedContract(getDefaultContractForMarket(marketId) as SelectedContract);
+      }
+      setChartContext(nextMarket.type === "spot" ? "Spot" : DEFAULT_CHART_CONTEXT);
+      setLastAction(`Switched to ${getDisplayTicker(nextMarket, MARKET_DATA[nextMarket.id as MarketId].ticker)}`);
     });
   }
 
@@ -396,16 +464,19 @@ export function TradingTerminal({
 
   return (
     <main className="min-h-screen bg-[#0B1118] text-[#D1D5DB] xl:h-screen xl:overflow-hidden">
-      <LiveTabTitle pair={selectedSymbol} price={liveCandles.at(-1)?.close ?? null} />
+      <LiveTabTitle pair={selectedMarket.pair} price={liveCandles.at(-1)?.close ?? null} />
 
       <div className="mx-auto flex min-h-screen w-full max-w-none flex-col p-2 xl:h-screen xl:overflow-hidden">
         <MarketHeader
-          contractTabs={CONTRACT_TABS}
+          annualizedBasisByMarketId={selectorAnnualizedBasisByMarketId}
+          basisByMarketId={selectorBasisByMarketId}
+          contractTabs={getContractTabsForSymbol()}
           currentContract={selectedContract}
           currentMarketId={selectedMarketId}
-          currentSymbol={selectedSymbol}
+          currentSymbol={selectedMarket.pair}
           infoBar={liveInfoBar}
-          marketOptions={dynamicMarketOptions}
+          lastByMarketId={selectorLastByMarketId}
+          marketOptions={MARKET_DEFINITIONS}
           onContractSelect={handleContractSelect}
           onMarketSelect={handleMarketSelect}
         />
@@ -420,7 +491,7 @@ export function TradingTerminal({
               selectedRange={selectedRange}
               selectedTimeframe={timeframe}
               selectedTool={selectedTool}
-              ticker={getDisplayTicker(selectedSymbol, selectedMarket.marketType, market.ticker)}
+              ticker={getDisplayTicker(selectedMarket, market.ticker)}
               onChartContextChange={setChartContext}
               onExpandedToggle={() => setExpandedChart((current) => !current)}
               onIndicatorsToggle={() => setIndicatorsEnabled((current) => !current)}
@@ -434,7 +505,7 @@ export function TradingTerminal({
             <OrderBook
               asks={market.orderBookAsks}
               bids={market.orderBookBids}
-              contractLabel={selectedContract.replace(" ", " ").replace("2026", "26")}
+              contractLabel={selectedMarket.expiryLabel ?? "Spot"}
               trades={market.trades}
               view={orderBookView}
               onViewChange={setOrderBookView}
@@ -446,7 +517,7 @@ export function TradingTerminal({
               allocation={allocation}
               atExpiryDeliver={atExpiryDeliver}
               contractDetails={market.contractDetails}
-              contractLabel={getDisplayTicker(selectedSymbol, selectedMarket.marketType, market.ticker)}
+              contractLabel={getDisplayTicker(selectedMarket, market.ticker)}
               lastAction={lastAction}
               orderType={orderType}
               positionOverview={market.positionOverview}

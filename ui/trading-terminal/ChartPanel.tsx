@@ -123,7 +123,7 @@ function TradingChart({
       </div>
 
       <svg
-        aria-label="Mock NGN/USD candlestick chart"
+        aria-label="Mock cNGN/USDC candlestick chart"
         className="size-full"
         preserveAspectRatio="none"
         role="img"
@@ -311,7 +311,7 @@ export function ChartPanel({
               ))}
             </div>
             <div className="text-[#6B7280] text-[11px]">
-              {chartContext === "Basis" ? "Mark minus spot in NGN" : "Price in NGN per 1 USD"}
+              {chartContext === "Basis" ? "Mark minus spot in cNGN" : "Price in cNGN per 1 USDC"}
             </div>
           </div>
 

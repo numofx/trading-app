@@ -10,7 +10,7 @@ const SPOT_HISTORY_DAYS = 30;
 
 export type SpotHistorySnapshot = {
   latestPrice: number;
-  pair: "EUR/USD" | "NGN/USD";
+  pair: "NGN/USD";
   series: Candle[];
 };
 
@@ -82,12 +82,7 @@ function buildCandlesFromDailyRates(rates: { date: string; rate: number }[]) {
   });
 }
 
-async function getHistoricalSeries(pair: "EUR/USD" | "NGN/USD") {
-  const config =
-    pair === "NGN/USD"
-      ? { base: "usd", quote: "ngn" }
-      : { base: "eur", quote: "usd" };
-
+async function getHistoricalSeries(pair: "NGN/USD") {
   const lastCompletedUtcDay = getLastCompletedUtcDay();
   const dates = Array.from({ length: SPOT_HISTORY_DAYS }, (_, index) => {
     const date = new Date(lastCompletedUtcDay);
@@ -96,7 +91,7 @@ async function getHistoricalSeries(pair: "EUR/USD" | "NGN/USD") {
   });
 
   const responses = await Promise.all(
-    dates.map((date) => fetchExchangeRate(date, config.base, config.quote)),
+    dates.map((date) => fetchExchangeRate(date, "usd", "ngn")),
   );
   const rates = responses.filter(
     (response): response is { date: string; rate: number } => response !== null,
@@ -115,14 +110,8 @@ async function getHistoricalSeries(pair: "EUR/USD" | "NGN/USD") {
 
 const getCachedSpotHistorySnapshots = unstable_cache(
   async () => {
-    const [eurUsd, ngnUsd] = await Promise.all([
-      getHistoricalSeries("EUR/USD"),
-      getHistoricalSeries("NGN/USD"),
-    ]);
-
     return {
-      "EUR/USD": eurUsd,
-      "NGN/USD": ngnUsd,
+      "NGN/USD": await getHistoricalSeries("NGN/USD"),
     } satisfies Record<SpotHistorySnapshot["pair"], SpotHistorySnapshot>;
   },
   ["spot-history-snapshots"],

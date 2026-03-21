@@ -41,13 +41,25 @@ export type ContractTab = {
   label: string;
 };
 
-export type MarketOption = {
-  frontMonth: string;
-  id: string;
-  lastPrice: string;
-  marketType: "Futures" | "Spot";
-  region: "Africa" | "Europe";
-  symbol: string;
+export type MarketType = "spot" | "future" | "option" | "perp";
+
+export type MarketId =
+  | "cngn-usdc-spot"
+  | "cngn-usdc-mar-2026-futures"
+  | "cngn-usdc-jun-2026-futures"
+  | "cngn-usdc-mar-2026-options"
+  | "cngn-usdc-jun-2026-options";
+
+export type MarketDefinition = {
+  contractLabel: string | null;
+  expiryDays: number | null;
+  expiryLabel: string | null;
+  flagSrc: string;
+  id: MarketId;
+  type: MarketType;
+  pair: "cNGN/USDC";
+  region: "Africa";
+  sortOrder: number;
 };
 
 export type DeliveryTerm = {
@@ -56,16 +68,15 @@ export type DeliveryTerm = {
 };
 
 export type ContractMarket = {
-  basis: string;
   candles: Candle[];
   contractDetails: DeliveryTerm[];
   id: string;
-  index: string;
   infoBar: MarketStat[];
   mark: string;
   orderBookAsks: OrderBookLevel[];
   orderBookBids: OrderBookLevel[];
   positionOverview: DeliveryTerm[];
+  referencePrice: string;
   ticker: string;
   timeToExpiry: string;
   trades: TradePrint[];

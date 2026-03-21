@@ -2,30 +2,47 @@
 
 import { useState } from "react";
 import { ChevronDown, Dot, Search, X } from "lucide-react";
-import type { ContractTab, MarketOption, MarketStat } from "@/lib/trading.types";
 import { cn } from "@/lib/cn";
+import type { ContractTab, MarketDefinition, MarketStat } from "@/lib/trading.types";
 import { SmartImage } from "@/ui/SmartImage";
+import { MarketListRow } from "@/ui/trading-terminal/MarketListRow";
+
+function formatContractLabel(label: string) {
+  const [month, year] = label.split(" ");
+
+  if (!month || !year) {
+    return label;
+  }
+
+  return `${month[0]}${month.slice(1).toLowerCase()} ${year}`;
+}
 
 export function MarketHeader({
+  annualizedBasisByMarketId,
+  basisByMarketId,
   contractTabs,
   currentContract,
   currentMarketId,
   currentSymbol,
+  lastByMarketId,
   infoBar,
   marketOptions,
   onContractSelect,
   onMarketSelect,
 }: {
+  annualizedBasisByMarketId: Record<string, number | null>;
+  basisByMarketId: Record<string, number | null>;
   contractTabs: ContractTab[];
   currentContract: string;
   currentMarketId: string;
   currentSymbol: string;
   infoBar: MarketStat[];
-  marketOptions: MarketOption[];
+  lastByMarketId: Record<string, number | null>;
+  marketOptions: MarketDefinition[];
   onContractSelect: (contract: string) => void;
   onMarketSelect: (marketId: string) => void;
 }) {
-  const primaryTabs = ["All", "Spot", "Futures"] as const;
+  const primaryTabs = ["All", "spot", "future", "option"] as const;
   const [marketSearchOpen, setMarketSearchOpen] = useState(false);
   const [marketSearch, setMarketSearch] = useState("");
   const [selectedPrimaryTab, setSelectedPrimaryTab] =
@@ -34,7 +51,7 @@ export function MarketHeader({
   const filteredMarkets = marketOptions.filter((market) => {
     const matchesPrimary =
       selectedPrimaryTab === "All" ||
-      market.marketType === selectedPrimaryTab;
+      market.type === selectedPrimaryTab;
 
     if (!matchesPrimary) {
       return false;
@@ -45,9 +62,9 @@ export function MarketHeader({
     }
 
     return (
-      market.symbol.toLowerCase().includes(normalizedSearch) ||
-      market.frontMonth.toLowerCase().includes(normalizedSearch) ||
-      market.lastPrice.toLowerCase().includes(normalizedSearch)
+      market.pair.toLowerCase().includes(normalizedSearch) ||
+      market.type.toLowerCase().includes(normalizedSearch) ||
+      market.expiryLabel?.toLowerCase().includes(normalizedSearch) === true
     );
   });
 
@@ -83,7 +100,7 @@ export function MarketHeader({
               </button>
 
               {marketSearchOpen ? (
-                <div className="absolute top-[calc(100%+8px)] left-0 z-30 w-[min(420px,calc(100vw-32px))] rounded-md border border-[#1B2430] bg-[#101720] shadow-2xl shadow-black/30">
+                <div className="absolute top-[calc(100%+8px)] left-0 z-30 w-[min(720px,calc(100vw-32px))] rounded-md border border-[#1B2430] bg-[#101720] shadow-2xl shadow-black/30">
                   <div className="border-[#1B2430] border-b p-3">
                     <div className="flex h-10 items-center gap-2 rounded-sm border border-[#324051] bg-[#11161D] px-3">
                       <Search className="size-4 text-[#6B7280]" />
@@ -118,47 +135,32 @@ export function MarketHeader({
                           onClick={() => setSelectedPrimaryTab(tab)}
                           type="button"
                         >
-                          {tab}
+                          {tab === "All" ? "All" : tab[0]?.toUpperCase() + tab.slice(1)}
                         </button>
                       ))}
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-[1fr_auto_auto] gap-3 border-[#1B2430] border-b px-3 py-2 text-[#9CA3AF] text-[11px] uppercase tracking-[0.12em]">
-                    <span>Symbol</span>
-                    <span>Contract</span>
-                    <span>Last Price</span>
+                  <div className="grid grid-cols-[minmax(260px,2.5fr)_92px_92px_92px_84px] gap-4 border-[#1B2430] border-b px-4 py-2 text-[#9CA3AF] text-[11px] uppercase tracking-[0.12em]">
+                    <span>Market</span>
+                    <span className="text-right">Last</span>
+                    <span className="text-right">Basis</span>
+                    <span className="text-right">Basis %</span>
+                    <span className="text-right">Expiry</span>
                   </div>
 
                   <div className="max-h-72 overflow-y-auto">
                     {filteredMarkets.length ? (
                       filteredMarkets.map((market) => (
-                        <button
-                          className={cn(
-                            "grid w-full grid-cols-[1fr_auto_auto] items-center gap-3 border-[#1B2430] border-b px-3 py-2.5 text-left transition-colors hover:bg-[#151B23]/40",
-                            currentMarketId === market.id && "bg-[#172554]/20",
-                          )}
+                        <MarketListRow
+                          annualizedBasis={annualizedBasisByMarketId[market.id] ?? null}
+                          basis={basisByMarketId[market.id] ?? null}
+                          isSelected={currentMarketId === market.id}
                           key={market.id}
-                          onClick={() => handleMarketPick(market.id)}
-                          type="button"
-                        >
-                          <span className="font-semibold text-[#E5E7EB] text-sm">
-                            {market.symbol}
-                          </span>
-
-                          <div
-                            className={cn(
-                              "font-medium text-[11px]",
-                              currentMarketId === market.id ? "text-[#BFDBFE]" : "text-[#9CA3AF]",
-                            )}
-                          >
-                            {market.frontMonth}
-                          </div>
-
-                          <span className="font-semibold text-[#D1D5DB] text-[11px]">
-                            {market.lastPrice}
-                          </span>
-                        </button>
+                          last={lastByMarketId[market.id] ?? null}
+                          market={market}
+                          onSelect={() => handleMarketPick(market.id)}
+                        />
                       ))
                     ) : (
                       <div className="px-3 py-8 text-center text-[#6B7280] text-sm">
@@ -182,7 +184,7 @@ export function MarketHeader({
                 onClick={() => onContractSelect(tab.label)}
                 type="button"
               >
-                {tab.label}
+                {formatContractLabel(tab.label)}
               </button>
             ))}
           </div>
