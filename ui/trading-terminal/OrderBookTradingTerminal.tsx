@@ -25,12 +25,10 @@ import {
   DEFAULT_BOTTOM_TAB,
   DEFAULT_CHART_CONTEXT,
   DEFAULT_CONTRACT,
-  DEFAULT_FILTER,
   DEFAULT_MARKET_ID,
   DEFAULT_ORDER_TYPE,
   DEFAULT_SYMBOL,
   DEFAULT_TIMEFRAME,
-  FILTER_OPTIONS,
   MARKET_DATA,
   MARKET_DEFINITIONS,
 } from "@/lib/mock-orderbook-terminal-data";
@@ -433,7 +431,6 @@ export function OrderBookTradingTerminal({
   const [atExpiryDeliver, setAtExpiryDeliver] = useState(true);
   const [selectedBottomTab, setSelectedBottomTab] =
     useState<keyof typeof ACTIVITY_VIEWS>(DEFAULT_BOTTOM_TAB);
-  const [filter, setFilter] = useState<(typeof FILTER_OPTIONS)[number]>(DEFAULT_FILTER);
   const [lastAction, setLastAction] = useState("Ready");
 
   const selectedMarket =
@@ -564,12 +561,6 @@ export function OrderBookTradingTerminal({
     });
   }
 
-  function handleFilterCycle() {
-    const currentIndex = FILTER_OPTIONS.indexOf(filter);
-    const next = FILTER_OPTIONS[(currentIndex + 1) % FILTER_OPTIONS.length];
-    setFilter(next);
-  }
-
   function handleSubmit(side: "buy" | "sell") {
     setTradeSide(side);
     setLastAction(
@@ -581,7 +572,7 @@ export function OrderBookTradingTerminal({
     <main className="min-h-screen bg-transparent text-[#D7DEE8] xl:h-[100dvh] xl:overflow-hidden">
       <MarketDocumentTitle pair={formatFxDisplayPair(selectedMarket.pair)} price={liveCandles.at(-1)?.close ?? null} />
 
-      <div className="mx-auto flex min-h-screen w-full max-w-none flex-col px-3 py-4 xl:h-[100dvh] xl:overflow-hidden xl:px-5">
+      <div className="mx-auto flex min-h-screen w-full max-w-none flex-col px-2.5 py-3 xl:h-[100dvh] xl:overflow-hidden xl:px-4">
         <TradingMarketHeader
           atmIvByMarketId={optionAtmIvByMarketId}
           annualizedBasisByMarketId={selectorAnnualizedBasisByMarketId}
@@ -599,8 +590,8 @@ export function OrderBookTradingTerminal({
           spotChangeByMarketId={spotChangeByMarketId}
         />
 
-        <section className="mt-4 grid flex-1 grid-cols-1 gap-4 xl:min-h-0 xl:grid-cols-[minmax(0,1.82fr)_minmax(290px,0.78fr)_minmax(340px,0.92fr)] xl:overflow-hidden 2xl:grid-cols-[minmax(0,1.9fr)_minmax(320px,0.8fr)_minmax(360px,0.95fr)]">
-          <div className="min-h-[520px] xl:min-h-0 xl:overflow-hidden">
+        <section className="mt-3 grid grid-cols-1 gap-3 xl:h-[500px] xl:flex-none xl:min-h-0 xl:grid-cols-[minmax(0,1.9fr)_minmax(270px,0.72fr)_minmax(320px,0.86fr)] xl:overflow-hidden 2xl:h-[560px] 2xl:grid-cols-[minmax(0,1.95fr)_minmax(290px,0.76fr)_minmax(340px,0.9fr)]">
+          <div className="min-h-[340px] xl:min-h-0 xl:overflow-hidden">
             <TradingChartPanel
               candles={liveCandles}
               chartContext={chartContext}
@@ -621,7 +612,7 @@ export function OrderBookTradingTerminal({
             />
           </div>
 
-          <div className="min-h-[420px] xl:min-h-0 xl:overflow-hidden">
+          <div className="min-h-[320px] xl:min-h-0 xl:overflow-hidden">
             <OrderBookPanel
               asks={market.orderBookAsks}
               bids={market.orderBookBids}
@@ -632,7 +623,7 @@ export function OrderBookTradingTerminal({
             />
           </div>
 
-          <div className="min-h-[420px] xl:min-h-0 xl:overflow-hidden">
+          <div className="min-h-[320px] xl:min-h-0 xl:overflow-hidden">
             <OrderEntryPanel
               allocation={allocation}
               atExpiryDeliver={atExpiryDeliver}
@@ -668,10 +659,9 @@ export function OrderBookTradingTerminal({
           </div>
         </section>
 
-        <div className="mt-4 xl:h-[210px] xl:min-h-0 xl:shrink-0">
+        <div className="mt-3 min-h-[220px] flex-1 xl:min-h-[260px] xl:shrink-0">
           <TradingActivityPanel
             activityView={dynamicActivityViews[selectedBottomTab]}
-            filter={filter}
             footerLinks={[]}
             selectedTab={selectedBottomTab}
             tabs={[
@@ -679,7 +669,6 @@ export function OrderBookTradingTerminal({
               { id: "open-orders", label: "Open Orders" },
               { id: "trade-history", label: "Trade History" },
             ]}
-            onFilterClick={handleFilterCycle}
             onTabSelect={(tabId) => setSelectedBottomTab(tabId as keyof typeof ACTIVITY_VIEWS)}
           />
         </div>

@@ -77,12 +77,12 @@ function TradingChart({
   ticker: string;
 }) {
   const width = 920;
-  const height = 620;
-  const volumeHeight = 128;
+  const height = 430;
+  const volumeHeight = 88;
   const rightAxisGutter = 96;
   const plotWidth = width - rightAxisGutter;
-  const chartTop = 28;
-  const chartBottom = height - volumeHeight - 28;
+  const chartTop = 22;
+  const chartBottom = height - volumeHeight - 20;
   const { maxPrice, minPrice } = getPriceDomain(candles);
   const priceRange = maxPrice - minPrice;
   const stepX = plotWidth / candles.length;
@@ -128,7 +128,7 @@ function TradingChart({
 
   return (
     <div className="relative flex-1 overflow-hidden">
-      <div className="absolute inset-x-0 top-0 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-3 text-[11px]">
+      <div className="absolute inset-x-0 top-0 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-[10px]">
         <span className="font-semibold text-[#E2E8F0]">
           {ticker} · {timeframe} · Central Limit Order Book
         </span>
@@ -162,7 +162,7 @@ function TradingChart({
           return (
             <g key={value}>
               <line stroke="#14202D" strokeDasharray="4 8" x1="0" x2={width} y1={y} y2={y} />
-              <text fill="#5F6D80" fontSize="11" textAnchor="end" x={width - 8} y={y - 6}>
+              <text fill="#5F6D80" fontSize="10" textAnchor="end" x={width - 8} y={y - 6}>
                 {formatPrice(value)}
               </text>
             </g>
@@ -213,7 +213,7 @@ function TradingChart({
         {markPriceY !== null ? (
           <g>
             <line stroke="#2BA064" strokeDasharray="6 6" strokeWidth="1" x1="0" x2={plotWidth} y1={markPriceY} y2={markPriceY} />
-            <text fill="#7DBD94" fontSize="11" fontWeight="700" x="10" y={markPriceY - 6}>
+            <text fill="#7DBD94" fontSize="10" fontWeight="700" x="10" y={markPriceY - 6}>
               Mark
             </text>
           </g>
@@ -222,7 +222,7 @@ function TradingChart({
         {entryPriceY !== null ? (
           <g>
             <line stroke="#C98A2B" strokeDasharray="6 6" strokeWidth="1" x1="0" x2={plotWidth} y1={entryPriceY} y2={entryPriceY} />
-            <text fill="#D9B36B" fontSize="11" fontWeight="700" x="10" y={entryPriceY - 6}>
+            <text fill="#D9B36B" fontSize="10" fontWeight="700" x="10" y={entryPriceY - 6}>
               Entry
             </text>
           </g>
@@ -239,7 +239,7 @@ function TradingChart({
           />
           <text
             fill="#F5F8FF"
-            fontSize="12"
+            fontSize="11"
             fontWeight="700"
             textAnchor="middle"
             x={width - 38}
@@ -256,7 +256,7 @@ function TradingChart({
           return (
             <text
               fill="#5F6D80"
-              fontSize="11"
+              fontSize="10"
               key={`${candle.time}-${sourceIndex}`}
               textAnchor="middle"
               x={x}
@@ -307,7 +307,7 @@ export function TradingChartPanel({
   onToolSelect: (toolId: string) => void;
 }) {
   return (
-    <section className="flex h-full min-h-[520px] flex-col overflow-hidden rounded-[28px] bg-[#0C141E]/95 shadow-[0_18px_60px_rgba(0,0,0,0.28)] ring-1 ring-white/6 xl:min-h-0">
+    <section className="flex h-full min-h-[340px] flex-col overflow-hidden rounded-[24px] bg-[#0C141E]/95 shadow-[0_18px_60px_rgba(0,0,0,0.28)] ring-1 ring-white/6 xl:min-h-0">
       <TradingChartToolbar
         expandedChart={expandedChart}
         indicatorsEnabled={indicatorsEnabled}
@@ -335,12 +335,12 @@ export function TradingChartPanel({
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="flex items-center justify-between border-white/6 border-b px-5 py-3">
+          <div className="flex items-center justify-between border-white/6 border-b px-4 py-2.5">
             <div className="flex items-center gap-2">
               {CHART_CONTEXT_TABS.map((tab) => (
                 <button
                   className={cn(
-                    "rounded-xl px-3 py-1.5 font-medium text-[#748195] text-[11px] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]",
+                    "rounded-xl px-2.5 py-1.5 font-medium text-[#748195] text-[11px] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]",
                     chartContext === tab && "bg-white/6 text-[#E5ECF5]",
                   )}
                   key={tab}
@@ -351,19 +351,19 @@ export function TradingChartPanel({
                 </button>
               ))}
             </div>
-            <div className="text-[#5F6D80] text-[11px]">
+            <div className="text-[#5F6D80] text-[10px]">
               {chartContext === "Basis" ? "Basis view: mark minus spot in cNGN" : "Price view: cNGN per USDC"}
             </div>
           </div>
 
           <TradingChart candles={candles} entryPrice={entryPrice} markPrice={markPrice} ticker={ticker} timeframe={selectedTimeframe} />
 
-          <div className="flex items-center justify-between border-white/6 border-t px-5 py-3 text-[11px]">
+          <div className="flex items-center justify-between border-white/6 border-t px-4 py-2.5 text-[10px]">
             <div className="flex flex-wrap items-center gap-2">
               {CHART_RANGE_BUTTONS.map((range) => (
                 <button
                   className={cn(
-                    "rounded-xl px-3 py-1.5 text-[#748195] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]",
+                    "rounded-xl px-2.5 py-1.5 text-[#748195] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]",
                     selectedRange === range && "bg-white/6 text-[#E5ECF5]",
                   )}
                   key={range}

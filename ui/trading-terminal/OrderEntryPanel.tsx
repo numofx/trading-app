@@ -90,14 +90,14 @@ export function OrderEntryPanel({
     : "Sell cNGN / buy USDC";
 
   return (
-    <section className="flex h-full min-h-[420px] flex-col overflow-hidden rounded-[28px] bg-[#0D141E]/96 shadow-[0_20px_70px_rgba(0,0,0,0.32)] ring-1 ring-white/6 xl:min-h-0">
-      <div className="space-y-4 overflow-y-auto p-4 text-[11px] lg:p-5">
+    <section className="flex h-full min-h-[320px] flex-col overflow-hidden rounded-[24px] bg-[#0D141E]/96 shadow-[0_20px_70px_rgba(0,0,0,0.32)] ring-1 ring-white/6 xl:min-h-0">
+      <div className="space-y-3 overflow-y-auto p-3.5 text-[10px] lg:p-4">
         <section className="space-y-3">
           <div className="text-[#6C798B] text-[10px] uppercase tracking-[0.18em]">Direction</div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2.5">
             <button
               className={cn(
-                "rounded-2xl px-4 py-4 text-left transition-colors",
+                "rounded-2xl px-3.5 py-3.5 text-left transition-colors",
                 isLong
                   ? "bg-[#153425] text-[#EAF7EF] ring-1 ring-[#21583E]"
                   : "bg-white/[0.035] text-[#D7DEE8] ring-1 ring-white/6",
@@ -105,12 +105,12 @@ export function OrderEntryPanel({
               onClick={() => onSideChange("buy")}
               type="button"
             >
-              <span className="block font-semibold text-sm">Long cNGN</span>
+              <span className="block font-semibold text-[13px]">Long cNGN</span>
               <span className={cn("mt-1 block text-[10px]", isLong ? "text-[#9CC7A9]" : "text-[#768397]")}>Buy cNGN / sell USDC</span>
             </button>
             <button
               className={cn(
-                "rounded-2xl px-4 py-4 text-left transition-colors",
+                "rounded-2xl px-3.5 py-3.5 text-left transition-colors",
                 isLong
                   ? "bg-white/[0.035] text-[#D7DEE8] ring-1 ring-white/6"
                   : "bg-[#401C1F] text-[#FFF0F0] ring-1 ring-[#683235]",
@@ -118,7 +118,7 @@ export function OrderEntryPanel({
               onClick={() => onSideChange("sell")}
               type="button"
             >
-              <span className="block font-semibold text-sm">Short cNGN</span>
+              <span className="block font-semibold text-[13px]">Short cNGN</span>
               <span className={cn("mt-1 block text-[10px]", isLong ? "text-[#768397]" : "text-[#D0A0A0]")}>Sell cNGN / buy USDC</span>
             </button>
           </div>
@@ -126,11 +126,11 @@ export function OrderEntryPanel({
 
         <section className="space-y-3">
           <div className="text-[#6C798B] text-[10px] uppercase tracking-[0.18em]">Order Type</div>
-          <div className="grid grid-cols-3 gap-2 rounded-2xl bg-white/[0.035] p-1.5">
+          <div className="grid grid-cols-3 gap-1.5 rounded-2xl bg-white/[0.035] p-1.5">
           {["Market", "Limit", "Stop"].map((tab) => (
             <button
               className={cn(
-                "rounded-xl px-3 py-2 font-medium text-[11px] transition-colors",
+                "rounded-xl px-2.5 py-1.5 font-medium text-[10px] transition-colors",
                 orderType === tab ? "bg-white/8 text-[#E7EDF6]" : "text-[#748195]",
               )}
               key={tab}
@@ -143,22 +143,22 @@ export function OrderEntryPanel({
           </div>
         </section>
 
-        <section className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
+        <section className="space-y-3">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
             <div className="space-y-2">
               <label className="text-[#6C798B] text-[10px] uppercase tracking-[0.18em]" htmlFor="trade-size">
                 Size
               </label>
               <div className="flex items-center overflow-hidden rounded-2xl bg-white/[0.04] ring-1 ring-white/6">
             <input
-              className="h-12 flex-1 bg-transparent px-4 text-[#D7DEE8] text-sm outline-none placeholder:text-[#6C798B]"
+              className="h-11 flex-1 bg-transparent px-3.5 text-[#D7DEE8] text-[13px] outline-none placeholder:text-[#6C798B]"
               id="trade-size"
               onChange={(event) => onSizeChange(event.target.value.replace(/[^\d]/g, ""))}
               placeholder="50,000"
               value={size}
             />
                 <button
-                  className="flex h-12 items-center gap-1 border-white/6 border-l px-4 text-[#C2CCD9] text-sm"
+                  className="flex h-11 items-center gap-1 border-white/6 border-l px-3.5 text-[#C2CCD9] text-[13px]"
               type="button"
             >
               Contracts
@@ -174,13 +174,13 @@ export function OrderEntryPanel({
                 </label>
                 <div className="flex items-center overflow-hidden rounded-2xl bg-white/[0.04] ring-1 ring-white/6">
                   <input
-                    className="h-12 flex-1 bg-transparent px-4 text-[#D7DEE8] text-sm outline-none placeholder:text-[#6C798B]"
+                    className="h-11 flex-1 bg-transparent px-3.5 text-[#D7DEE8] text-[13px] outline-none placeholder:text-[#6C798B]"
                     id="trade-limit-price"
                     onChange={(event) => onLimitPriceChange(event.target.value.replace(/[^\d.]/g, ""))}
                     placeholder="1,605.25"
                     value={limitPrice}
                   />
-                  <div className="flex h-12 items-center border-white/6 border-l px-4 text-[#738095] text-[10px] uppercase tracking-[0.14em]">
+                  <div className="flex h-11 items-center border-white/6 border-l px-3.5 text-[#738095] text-[9px] uppercase tracking-[0.14em]">
                     cNGN / USDC
                   </div>
                 </div>
@@ -197,19 +197,19 @@ export function OrderEntryPanel({
               type="range"
               value={allocation}
             />
-            <div className="rounded-xl bg-white/[0.04] px-3 py-2 text-[#D7DEE8] text-[11px] ring-1 ring-white/6">
+            <div className="rounded-xl bg-white/[0.04] px-3 py-1.5 text-[#D7DEE8] text-[10px] ring-1 ring-white/6">
               {allocation}%
             </div>
           </div>
         </section>
 
-        <section className="space-y-3 rounded-[24px] bg-white/[0.035] p-4 ring-1 ring-white/6">
+        <section className="space-y-2.5 rounded-[22px] bg-white/[0.035] p-3.5 ring-1 ring-white/6">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <div className="font-semibold text-[#E5ECF5] text-sm">{contractLabel}</div>
-              <div className="mt-1 text-[#738095] text-[11px]">{directionCopy}</div>
+              <div className="font-semibold text-[#E5ECF5] text-[13px]">{contractLabel}</div>
+              <div className="mt-1 text-[#738095] text-[10px]">{directionCopy}</div>
             </div>
-            <div className="rounded-xl bg-[#142030] px-3 py-1.5 text-[#A8C4F6] text-[10px]">
+            <div className="rounded-xl bg-[#142030] px-2.5 py-1 text-[#A8C4F6] text-[9px]">
               Physically delivered
             </div>
           </div>
@@ -234,7 +234,7 @@ export function OrderEntryPanel({
 
         <button
           className={cn(
-            "flex h-12 items-center justify-center rounded-2xl font-semibold text-sm transition-colors",
+            "flex h-11 w-full items-center justify-center rounded-2xl font-semibold text-[13px] transition-colors",
             isLong
               ? "bg-[#E9EEF7] text-[#081019] hover:bg-white"
               : "bg-[#E9EEF7] text-[#081019] hover:bg-white",
@@ -245,21 +245,21 @@ export function OrderEntryPanel({
           {isLong ? "Long cNGN" : "Short cNGN"}
         </button>
 
-        <section className="rounded-[24px] bg-white/[0.025] ring-1 ring-white/6">
+        <section className="rounded-[22px] bg-white/[0.025] ring-1 ring-white/6">
           <button
-            className="flex w-full items-center justify-between px-4 py-3 text-left"
+            className="flex w-full items-center justify-between px-3.5 py-2.5 text-left"
             onClick={() => setAdvancedOpen((current) => !current)}
             type="button"
           >
-            <span className="text-[#CBD5E1] text-sm font-medium">Advanced Settings</span>
+            <span className="text-[#CBD5E1] text-[13px] font-medium">Advanced Settings</span>
             {advancedOpen ? <ChevronUp className="size-4 text-[#6C798B]" /> : <ChevronDown className="size-4 text-[#6C798B]" />}
           </button>
 
           {advancedOpen ? (
-            <div className="space-y-3 border-white/6 border-t px-4 py-4">
-              <div className="grid grid-cols-2 gap-2 text-[10px]">
+            <div className="space-y-2.5 border-white/6 border-t px-3.5 py-3.5">
+              <div className="grid grid-cols-2 gap-2 text-[9px]">
                 <button
-                  className="flex items-center justify-between rounded-xl bg-white/[0.04] px-3 py-2.5"
+                  className="flex items-center justify-between rounded-xl bg-white/[0.04] px-3 py-2"
                   onClick={onPostOnlyToggle}
                   type="button"
                 >
@@ -267,7 +267,7 @@ export function OrderEntryPanel({
                   <span className={cn("text-[#738095]", postOnly && "text-[#A8C4F6]")}>{postOnly ? "On" : "Off"}</span>
                 </button>
                 <button
-                  className="flex items-center justify-between rounded-xl bg-white/[0.04] px-3 py-2.5"
+                  className="flex items-center justify-between rounded-xl bg-white/[0.04] px-3 py-2"
                   onClick={onAtExpiryDeliverToggle}
                   type="button"
                 >
@@ -278,17 +278,17 @@ export function OrderEntryPanel({
                 </button>
               </div>
 
-              <div className="rounded-2xl bg-white/[0.03] px-3 py-2.5 text-[#97A3B4] text-[11px]">
+              <div className="rounded-2xl bg-white/[0.03] px-3 py-2 text-[#97A3B4] text-[10px]">
                 {lastAction}
               </div>
             </div>
           ) : null}
         </section>
 
-        <section className="border-white/6 border-t pt-5">
-          <div className="space-y-4">
+        <section className="border-white/6 border-t pt-3.5">
+          <div className="space-y-3">
             <div className="text-[#6C798B] text-[10px] uppercase tracking-[0.18em]">Contract Details</div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2">
               {contractDetails.map((item) => (
                 <LabelValueRow key={item.label} label={item.label} value={item.value} />
               ))}
@@ -296,11 +296,11 @@ export function OrderEntryPanel({
           </div>
         </section>
 
-        <section className="space-y-3 border-white/6 border-t pt-5">
+        <section className="space-y-2.5 border-white/6 border-t pt-3.5">
           <div className="text-[#6C798B] text-[10px] uppercase tracking-[0.18em]">Position Summary</div>
-          <div className="rounded-[24px] bg-white/[0.035] p-4 ring-1 ring-white/6">
+          <div className="rounded-[22px] bg-white/[0.035] p-3.5 ring-1 ring-white/6">
             <div className="text-[#6C798B] text-[10px] uppercase tracking-[0.18em]">Unrealized PnL</div>
-            <div className="mt-2 font-semibold text-[#8AB899] text-2xl">{pnl}</div>
+            <div className="mt-2 font-semibold text-[#8AB899] text-[22px]">{pnl}</div>
             <div className="mt-2 flex items-center justify-between text-[11px]">
               <span className="text-[#97A3B4]">{positionValue}</span>
               <span className="font-medium text-[#8AB899]">{returnPercent}</span>
@@ -312,7 +312,7 @@ export function OrderEntryPanel({
           <div className="grid grid-cols-2 gap-2 pt-1">
             {["Close Position", "Reduce 25%", "Reduce 50%", "Close All"].map((action) => (
               <button
-                className="h-9 rounded-xl bg-white/[0.04] text-[#738095] text-[10px] transition-colors"
+                className="h-8 rounded-xl bg-white/[0.04] text-[#738095] text-[9px] transition-colors"
                 disabled
                 key={action}
                 type="button"

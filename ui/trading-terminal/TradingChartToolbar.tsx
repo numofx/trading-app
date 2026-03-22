@@ -17,7 +17,7 @@ function ToolbarButton({
   return (
     <button
       className={cn(
-        "inline-flex h-9 items-center gap-1.5 rounded-xl px-3 font-medium text-[#8391A7] text-xs transition-colors hover:bg-white/5 hover:text-[#D7DEE8]",
+        "inline-flex h-8 items-center gap-1.5 rounded-xl px-2.5 font-medium text-[#8391A7] text-[11px] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]",
         active && "bg-[#16233A] text-[#D7E7FF]",
         className,
       )}
@@ -52,14 +52,14 @@ export function TradingChartToolbar({
 }) {
   if (mode === "side") {
     return (
-      <div className="flex w-12 shrink-0 flex-col items-center gap-2 border-white/6 border-r px-2 py-4">
+      <div className="flex w-11 shrink-0 flex-col items-center gap-1.5 border-white/6 border-r px-1.5 py-3">
         {CHART_TOOLS.map((tool) => {
           const Icon = CHART_TOOL_ICONS[tool.id];
 
           return (
             <button
               className={cn(
-                "flex size-8 items-center justify-center rounded-xl text-[#6F7C90] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]",
+                "flex size-7 items-center justify-center rounded-xl text-[#6F7C90] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]",
                 selectedTool === tool.id && "bg-white/7 text-[#D7E7FF]",
               )}
               key={tool.id}
@@ -67,7 +67,7 @@ export function TradingChartToolbar({
               title={tool.label}
               type="button"
             >
-              <Icon className="size-4" />
+              <Icon className="size-3.5" />
             </button>
           );
         })}
@@ -76,7 +76,7 @@ export function TradingChartToolbar({
   }
 
   return (
-    <div className="flex items-center justify-between border-white/6 border-b px-4 py-3">
+    <div className="flex items-center justify-between border-white/6 border-b px-3.5 py-2.5">
       <div className="flex flex-wrap items-center gap-2">
         {TIMEFRAME_OPTIONS.map((range) => (
           <ToolbarButton

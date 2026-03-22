@@ -325,9 +325,9 @@ export function TradingMarketHeader({
   }
 
   return (
-    <header className="rounded-[28px] bg-[#0C141E]/94 px-5 py-4 shadow-[0_18px_60px_rgba(0,0,0,0.24)] ring-1 ring-white/6">
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+    <header className="rounded-[24px] bg-[#0C141E]/94 px-4 py-3 shadow-[0_18px_60px_rgba(0,0,0,0.24)] ring-1 ring-white/6">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex min-w-0 items-center gap-2">
             <SmartImage<string>
               alt="Numo"
@@ -341,7 +341,7 @@ export function TradingMarketHeader({
               <button
                 aria-expanded={marketSearchOpen}
                 aria-haspopup="dialog"
-                className="inline-flex h-12 items-center gap-3 rounded-2xl bg-white/[0.04] px-4 font-semibold text-[#E5ECF5] text-[15px] leading-none ring-1 ring-white/6"
+                className="inline-flex h-11 items-center gap-3 rounded-2xl bg-white/[0.04] px-4 font-semibold text-[#E5ECF5] text-[14px] leading-none ring-1 ring-white/6"
                 onClick={() => setMarketSearchOpen(true)}
                 type="button"
               >
@@ -351,7 +351,7 @@ export function TradingMarketHeader({
                   imgClassName="object-cover"
                   src="/flags/ng.svg"
                 />
-                <span className="min-w-0 truncate font-semibold text-[#E5ECF5] text-[15px] leading-none">
+                <span className="min-w-0 truncate font-semibold text-[#E5ECF5] text-[14px] leading-none">
                   {selectedInstrument.label}
                 </span>
                 <span className="hidden items-center gap-1 rounded-full bg-white/[0.05] px-2.5 py-1 font-medium text-[#6F7C90] text-[11px] sm:inline-flex">
@@ -363,11 +363,11 @@ export function TradingMarketHeader({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             {contractTabs.map((tab) => (
               <button
                 className={cn(
-                  "rounded-xl px-3 py-2 font-medium text-[#738095] text-[11px] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]",
+                  "rounded-xl px-3 py-1.5 font-medium text-[#738095] text-[11px] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]",
                   currentContract === tab.label && "bg-white/7 text-[#E5ECF5]",
                 )}
                 key={tab.label}
@@ -379,7 +379,7 @@ export function TradingMarketHeader({
             ))}
 
             <button
-              className="inline-flex h-11 items-center gap-2 rounded-2xl bg-[#19356C] px-4 font-medium text-[#EEF4FF] text-[12px] transition-colors hover:bg-[#214180]"
+              className="inline-flex h-10 items-center gap-2 rounded-2xl bg-[#19356C] px-3.5 font-medium text-[#EEF4FF] text-[12px] transition-colors hover:bg-[#214180]"
               type="button"
             >
               <Wallet className="size-3.5" />
@@ -388,7 +388,7 @@ export function TradingMarketHeader({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-white/6 border-t pt-3 text-[11px]">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-white/6 border-t pt-2.5 text-[10px]">
           {infoBar.map((stat, index) => (
             <div className="flex items-center gap-2" key={stat.label}>
               {index > 0 ? <Dot className="size-3 text-[#324050]" /> : null}
