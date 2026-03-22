@@ -28,6 +28,11 @@ function formatPrice(value: number) {
   }).format(value);
 }
 
+function parsePriceValue(value: string) {
+  const parsed = Number(value.replaceAll(",", "").split(" ")[0]);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function getPriceDomain(candles: Candle[]) {
   const low = Math.min(...candles.map((candle) => candle.low));
   const high = Math.max(...candles.map((candle) => candle.high));
@@ -60,10 +65,14 @@ function getChangeLabel(candles: Candle[]) {
 
 function TradingChart({
   candles,
+  entryPrice,
+  markPrice,
   timeframe,
   ticker,
 }: {
   candles: Candle[];
+  entryPrice: string;
+  markPrice: string;
   timeframe: (typeof TIMEFRAME_OPTIONS)[number];
   ticker: string;
 }) {
@@ -105,6 +114,16 @@ function TradingChart({
 
   const currentPriceY =
     chartTop + ((maxPrice - lastCandle.close) / priceRange) * (chartBottom - chartTop);
+  const entryPriceValue = parsePriceValue(entryPrice);
+  const markPriceValue = parsePriceValue(markPrice);
+  const entryPriceY =
+    entryPriceValue === null
+      ? null
+      : chartTop + ((maxPrice - entryPriceValue) / priceRange) * (chartBottom - chartTop);
+  const markPriceY =
+    markPriceValue === null
+      ? null
+      : chartTop + ((maxPrice - markPriceValue) / priceRange) * (chartBottom - chartTop);
   const axisValues = Array.from({ length: 6 }, (_, index) => maxPrice - (priceRange / 5) * index);
 
   return (
@@ -191,6 +210,24 @@ function TradingChart({
           y2={currentPriceY}
         />
 
+        {markPriceY !== null ? (
+          <g>
+            <line stroke="#22C55E" strokeDasharray="6 6" strokeWidth="1" x1="0" x2={plotWidth} y1={markPriceY} y2={markPriceY} />
+            <text fill="#86EFAC" fontSize="11" fontWeight="700" x="10" y={markPriceY - 6}>
+              Mark
+            </text>
+          </g>
+        ) : null}
+
+        {entryPriceY !== null ? (
+          <g>
+            <line stroke="#F59E0B" strokeDasharray="6 6" strokeWidth="1" x1="0" x2={plotWidth} y1={entryPriceY} y2={entryPriceY} />
+            <text fill="#FCD34D" fontSize="11" fontWeight="700" x="10" y={entryPriceY - 6}>
+              Entry
+            </text>
+          </g>
+        ) : null}
+
         <g>
           <rect
             fill="#1D4ED8"
@@ -237,8 +274,10 @@ function TradingChart({
 export function ChartPanel({
   candles,
   chartContext,
+  entryPrice,
   expandedChart,
   indicatorsEnabled,
+  markPrice,
   selectedRange,
   selectedTimeframe,
   selectedTool,
@@ -252,8 +291,10 @@ export function ChartPanel({
 }: {
   candles: Candle[];
   chartContext: (typeof CHART_CONTEXT_TABS)[number];
+  entryPrice: string;
   expandedChart: boolean;
   indicatorsEnabled: boolean;
+  markPrice: string;
   selectedRange: (typeof CHART_RANGE_BUTTONS)[number];
   selectedTimeframe: (typeof TIMEFRAME_OPTIONS)[number];
   selectedTool: string;
@@ -299,7 +340,7 @@ export function ChartPanel({
               {CHART_CONTEXT_TABS.map((tab) => (
                 <button
                   className={cn(
-                    "rounded-sm px-2 py-1 font-medium text-[#6B7280] text-[11px] transition-colors hover:bg-[#11161D] hover:text-[#D1D5DB]",
+                    "rounded-sm px-2.5 py-1.5 font-semibold text-[#6B7280] text-[11px] transition-colors hover:bg-[#11161D] hover:text-[#D1D5DB]",
                     chartContext === tab && "bg-[#11161D] text-[#BFDBFE]",
                   )}
                   key={tab}
@@ -311,11 +352,11 @@ export function ChartPanel({
               ))}
             </div>
             <div className="text-[#6B7280] text-[11px]">
-              {chartContext === "Basis" ? "Mark minus spot in cNGN" : "Price in cNGN per 1 USDC"}
+              {chartContext === "Basis" ? "Basis view: mark minus spot in cNGN" : "Price view: cNGN per USDC"}
             </div>
           </div>
 
-          <TradingChart candles={candles} ticker={ticker} timeframe={selectedTimeframe} />
+          <TradingChart candles={candles} entryPrice={entryPrice} markPrice={markPrice} ticker={ticker} timeframe={selectedTimeframe} />
 
           <div className="flex items-center justify-between border-[#1B2430] border-t bg-[#0F1720] px-2.5 py-1 text-[11px]">
             <div className="flex flex-wrap items-center gap-1">

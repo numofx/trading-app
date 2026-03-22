@@ -17,7 +17,7 @@ function ToolbarButton({
   return (
     <button
       className={cn(
-        "inline-flex h-8 items-center gap-1 rounded-sm border border-[#1B2430] bg-[#11161D] px-2.5 font-medium text-[#6B7280] text-xs transition-colors hover:border-[#334155] hover:text-[#D1D5DB]",
+        "inline-flex h-8 items-center gap-1 rounded-sm border border-[#1B2430] bg-[#11161D] px-3 font-semibold text-[#6B7280] text-xs transition-colors hover:border-[#334155] hover:text-[#D1D5DB]",
         active && "border-[#2563EB] bg-[#172554]/40 text-[#BFDBFE]",
         className,
       )}

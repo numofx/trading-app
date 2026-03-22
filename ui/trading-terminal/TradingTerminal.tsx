@@ -45,6 +45,15 @@ function parseNumericString(value: string) {
   return Number(value.replaceAll(",", "").replaceAll("$", "").replaceAll("+", ""));
 }
 
+function formatPriceDisplay(value: number | string) {
+  const numericValue = typeof value === "number" ? value : parseNumericString(value);
+  return `${formatMarketPrice(numericValue)} cNGN per USDC`;
+}
+
+function getDirectionalLabel(side: "buy" | "sell") {
+  return side === "buy" ? "Long cNGN" : "Short cNGN";
+}
+
 function getCompatibleSpotPrice(candidatePrice: number | null, referencePrice: number) {
   if (candidatePrice === null || !Number.isFinite(candidatePrice) || candidatePrice <= 0) {
     return referencePrice;
@@ -75,21 +84,28 @@ function shiftCandles(
   }));
 }
 
-function buildActivityViews(ticker: string, positionValue: string, entryPrice: string, markPrice: string, pnl: string) {
+function buildActivityViews(
+  ticker: string,
+  positionValue: string,
+  entryPrice: string,
+  markPrice: string,
+  pnl: string,
+  returnValue: string,
+) {
   return {
     "open-orders": {
       ...ACTIVITY_VIEWS["open-orders"],
-      rows: [{ cells: [ticker, "Buy USD", "Limit", "25,000", entryPrice] }],
+      rows: [{ cells: [ticker, "Long cNGN", "Limit", "25,000 contracts", entryPrice] }],
     },
     positions: {
       ...ACTIVITY_VIEWS.positions,
-      rows: [{ cells: [ticker, positionValue, entryPrice, markPrice, pnl], positiveCellIndexes: [4] }],
+      rows: [{ cells: [ticker, positionValue, entryPrice, markPrice, pnl, returnValue], positiveCellIndexes: [4, 5] }],
     },
     "trade-history": {
       ...ACTIVITY_VIEWS["trade-history"],
       rows: [
-        { cells: ["10:08:14", ticker, "Buy USD", "50,000", markPrice] },
-        { cells: ["10:08:06", ticker, "Sell USD", "35,000", entryPrice] },
+        { cells: ["10:08:14", ticker, "Long cNGN", "50,000 contracts", markPrice] },
+        { cells: ["10:08:06", ticker, "Short cNGN", "35,000 contracts", entryPrice] },
       ],
     },
   };
@@ -256,10 +272,18 @@ function buildLiveInfoBar(
     liveSpotPrice,
     marketDefinition.type === "future" ? marketDefinition.expiryDays : null,
   );
+  const liveBasisPercent =
+    marketDefinition.type === "future" && liveBasis !== null && liveSpotPrice > 0
+      ? (liveBasis / liveSpotPrice) * 100
+      : null;
 
   return infoBar.map((item: MarketStat) => {
-    if (item.label === "Price") {
-      return { ...item, value: formatMarketPrice(marketPrice) };
+    if (item.label === "Mark Price") {
+      return { ...item, value: formatPriceDisplay(marketPrice) };
+    }
+
+    if (item.label === "Spot") {
+      return { ...item, value: formatPriceDisplay(liveSpotPrice) };
     }
 
     if (item.label === "Basis") {
@@ -267,6 +291,10 @@ function buildLiveInfoBar(
     }
 
     if (item.label === "Basis %") {
+      return { ...item, value: liveBasisPercent === null ? "—" : `${liveBasisPercent.toFixed(2)}%` };
+    }
+
+    if (item.label === "Implied Carry") {
       return { ...item, value: formatAnnualizedBasis(liveAnnualizedBasis) };
     }
 
@@ -274,59 +302,7 @@ function buildLiveInfoBar(
   });
 }
 
-type SelectedContract = (typeof CONTRACT_LABELS)[number];
-
-export function TradingTerminal({
-  chainlinkSpot,
-  spotHistory,
-}: {
-  chainlinkSpot: ChainlinkSpotSnapshot | null;
-  spotHistory: Record<SpotHistorySnapshot["pair"], SpotHistorySnapshot> | null;
-}) {
-  const [selectedMarketId, setSelectedMarketId] = useState<MarketId>(DEFAULT_MARKET_ID);
-  const [selectedContract, setSelectedContract] = useState<SelectedContract>(DEFAULT_CONTRACT);
-  const [timeframe, setTimeframe] = useState<(typeof TIMEFRAME_OPTIONS)[number]>(DEFAULT_TIMEFRAME);
-  const [chartContext, setChartContext] = useState<(typeof CHART_CONTEXT_TABS)[number]>(
-    DEFAULT_CHART_CONTEXT,
-  );
-  const [selectedRange, setSelectedRange] =
-    useState<(typeof CHART_RANGE_BUTTONS)[number]>("1d");
-  const [selectedTool, setSelectedTool] = useState(CHART_TOOLS[0]?.id ?? "crosshair");
-  const [indicatorsEnabled, setIndicatorsEnabled] = useState(false);
-  const [expandedChart, setExpandedChart] = useState(false);
-  const [orderBookView, setOrderBookView] = useState<"Order Book" | "Trades">("Order Book");
-  const [orderType, setOrderType] = useState<"Limit" | "Market" | "Stop">(DEFAULT_ORDER_TYPE);
-  const [tradeSide, setTradeSide] = useState<"buy" | "sell">("buy");
-  const [size, setSize] = useState("50000");
-  const [allocation, setAllocation] = useState(20);
-  const [postOnly, setPostOnly] = useState(false);
-  const [atExpiryDeliver, setAtExpiryDeliver] = useState(true);
-  const [selectedBottomTab, setSelectedBottomTab] =
-    useState<keyof typeof ACTIVITY_VIEWS>(DEFAULT_BOTTOM_TAB);
-  const [filter, setFilter] = useState<(typeof FILTER_OPTIONS)[number]>(DEFAULT_FILTER);
-  const [lastAction, setLastAction] = useState("Ready");
-
-  const selectedMarket =
-    MARKET_DEFINITIONS.find((marketOption) => marketOption.id === selectedMarketId) ??
-    MARKET_DEFINITIONS[0];
-  const market = MARKET_DATA[selectedMarketId];
-  const referenceSpotPrice = parseNumericString(MARKET_DATA["cngn-usdc-spot"].mark);
-  const liveSpotPrice = getCompatibleSpotPrice(
-    spotHistory?.["NGN/USD"]?.latestPrice ?? chainlinkSpot?.priceNgnPerUsd ?? null,
-    referenceSpotPrice,
-  );
-  const selectedSpotHistory =
-    selectedMarket.type === "spot"
-      ? (spotHistory?.["NGN/USD"] ?? null)
-      : null;
-  const livePrice =
-    selectedMarket.type === "spot"
-      ? liveSpotPrice
-      : parseNumericString(market.mark);
-  const liveBasis =
-    selectedMarket.type === "spot" || selectedMarket.type === "option"
-      ? null
-      : calculateBasis(livePrice, liveSpotPrice);
+function buildSelectorMetrics(liveSpotPrice: number) {
   const spotChangeByMarketId = {
     "cngn-usdc-jun-2026-futures": null,
     "cngn-usdc-jun-2026-options": null,
@@ -358,11 +334,7 @@ export function TradingTerminal({
   ) satisfies Record<string, number | null>;
   const selectorBasisByMarketId = Object.fromEntries(
     MARKET_DEFINITIONS.map((marketDefinition) => {
-      if (marketDefinition.type === "spot") {
-        return [marketDefinition.id, null];
-      }
-
-      if (marketDefinition.type === "option") {
+      if (marketDefinition.type !== "future") {
         return [marketDefinition.id, null];
       }
 
@@ -372,11 +344,7 @@ export function TradingTerminal({
   ) satisfies Record<string, number | null>;
   const selectorAnnualizedBasisByMarketId = Object.fromEntries(
     MARKET_DEFINITIONS.map((marketDefinition) => {
-      if (marketDefinition.type === "spot") {
-        return [marketDefinition.id, null];
-      }
-
-      if (marketDefinition.type === "option") {
+      if (marketDefinition.type !== "future") {
         return [marketDefinition.id, null];
       }
 
@@ -387,12 +355,123 @@ export function TradingTerminal({
       ];
     }),
   ) satisfies Record<string, number | null>;
+
+  return {
+    optionAtmIvByMarketId,
+    optionOpenInterestByMarketId,
+    selectorAnnualizedBasisByMarketId,
+    selectorBasisByMarketId,
+    selectorLastByMarketId,
+    spotChangeByMarketId,
+  };
+}
+
+function getPositionMetrics(marketId: MarketId, livePrice: number) {
+  const activePosition = MARKET_DATA[marketId].positionOverview;
+
+  return {
+    entryPrice: activePosition.find((item) => item.label === "Entry Price")?.value ?? "—",
+    markPrice: activePosition.find((item) => item.label === "Mark Price")?.value ?? formatPriceDisplay(livePrice),
+    pnl: activePosition.find((item) => item.label === "Unrealized PnL")?.value ?? "—",
+    positionOverview: activePosition,
+    positionValue: activePosition.find((item) => item.label === "Position")?.value ?? "—",
+    returnPercent: activePosition.find((item) => item.label === "Return %")?.value ?? "—",
+  };
+}
+
+function getOrderMetrics(
+  limitPrice: string,
+  marketMark: string,
+  orderType: "Limit" | "Market" | "Stop",
+  size: string,
+  livePrice: number,
+  tradeSide: "buy" | "sell",
+) {
+  const sizeNumber = Number(size || "0");
+  const limitPriceNumber = parseNumericString(limitPrice || marketMark);
+  const orderValue = sizeNumber * limitPriceNumber;
+  const estimatedFill = orderType === "Market" ? livePrice + (tradeSide === "buy" ? 0.12 : -0.12) : limitPriceNumber;
+  const averageExecution = orderType === "Market" ? estimatedFill + (tradeSide === "buy" ? 0.05 : -0.05) : limitPriceNumber;
+
+  return {
+    averageExecution,
+    estimatedFill,
+    fees: orderValue * 0.0002,
+    initialMargin: orderValue * 0.05,
+    liquidationPrice: tradeSide === "buy" ? limitPriceNumber - 62.4 : limitPriceNumber + 62.4,
+    orderValue,
+  };
+}
+
+type SelectedContract = (typeof CONTRACT_LABELS)[number];
+
+export function TradingTerminal({
+  chainlinkSpot,
+  spotHistory,
+}: {
+  chainlinkSpot: ChainlinkSpotSnapshot | null;
+  spotHistory: Record<SpotHistorySnapshot["pair"], SpotHistorySnapshot> | null;
+}) {
+  const [selectedMarketId, setSelectedMarketId] = useState<MarketId>(DEFAULT_MARKET_ID);
+  const [selectedContract, setSelectedContract] = useState<SelectedContract>(DEFAULT_CONTRACT);
+  const [timeframe, setTimeframe] = useState<(typeof TIMEFRAME_OPTIONS)[number]>(DEFAULT_TIMEFRAME);
+  const [chartContext, setChartContext] = useState<(typeof CHART_CONTEXT_TABS)[number]>(
+    DEFAULT_CHART_CONTEXT,
+  );
+  const [selectedRange, setSelectedRange] =
+    useState<(typeof CHART_RANGE_BUTTONS)[number]>("1d");
+  const [selectedTool, setSelectedTool] = useState(CHART_TOOLS[0]?.id ?? "crosshair");
+  const [indicatorsEnabled, setIndicatorsEnabled] = useState(false);
+  const [expandedChart, setExpandedChart] = useState(false);
+  const [orderBookView, setOrderBookView] = useState<"Order Book" | "Trades">("Order Book");
+  const [orderType, setOrderType] = useState<"Limit" | "Market" | "Stop">(DEFAULT_ORDER_TYPE);
+  const [tradeSide, setTradeSide] = useState<"buy" | "sell">("buy");
+  const [size, setSize] = useState("50000");
+  const [limitPrice, setLimitPrice] = useState("1605.25");
+  const [allocation, setAllocation] = useState(20);
+  const [postOnly, setPostOnly] = useState(false);
+  const [atExpiryDeliver, setAtExpiryDeliver] = useState(true);
+  const [selectedBottomTab, setSelectedBottomTab] =
+    useState<keyof typeof ACTIVITY_VIEWS>(DEFAULT_BOTTOM_TAB);
+  const [filter, setFilter] = useState<(typeof FILTER_OPTIONS)[number]>(DEFAULT_FILTER);
+  const [lastAction, setLastAction] = useState("Ready");
+
+  const selectedMarket =
+    MARKET_DEFINITIONS.find((marketOption) => marketOption.id === selectedMarketId) ??
+    MARKET_DEFINITIONS[0];
+  const market = MARKET_DATA[selectedMarketId];
+  const referenceSpotPrice = parseNumericString(MARKET_DATA["cngn-usdc-spot"].mark);
+  const liveSpotPrice = getCompatibleSpotPrice(
+    spotHistory?.["NGN/USD"]?.latestPrice ?? chainlinkSpot?.priceNgnPerUsd ?? null,
+    referenceSpotPrice,
+  );
+  const selectedSpotHistory =
+    selectedMarket.type === "spot"
+      ? (spotHistory?.["NGN/USD"] ?? null)
+      : null;
+  const livePrice =
+    selectedMarket.type === "spot"
+      ? liveSpotPrice
+      : parseNumericString(market.mark);
+  const liveBasis =
+    selectedMarket.type === "spot" || selectedMarket.type === "option"
+      ? null
+      : calculateBasis(livePrice, liveSpotPrice);
+  const {
+    optionAtmIvByMarketId,
+    optionOpenInterestByMarketId,
+    selectorAnnualizedBasisByMarketId,
+    selectorBasisByMarketId,
+    selectorLastByMarketId,
+    spotChangeByMarketId,
+  } = buildSelectorMetrics(liveSpotPrice);
   const dynamicActivityViews = buildActivityViews(
     getDisplayTicker(selectedMarket),
     market.positionOverview[0]?.value ?? "",
     market.positionOverview[1]?.value ?? "",
     market.positionOverview[2]?.value ?? "",
     market.positionOverview[3]?.value ?? "",
+    market.positionOverview[4]?.value ?? "",
   );
   const displayCandles = getDisplayCandles(
     chartContext,
@@ -408,6 +487,16 @@ export function TradingTerminal({
     selectedMarket,
     liveBasis,
     liveSpotPrice,
+  );
+  const { entryPrice, markPrice, pnl: unrealizedPnl, positionOverview, positionValue, returnPercent } =
+    getPositionMetrics(selectedMarketId, livePrice);
+  const { averageExecution, estimatedFill, fees, initialMargin, liquidationPrice, orderValue } = getOrderMetrics(
+    limitPrice,
+    market.mark,
+    orderType,
+    size,
+    livePrice,
+    tradeSide,
   );
   const [liveCandles, setLiveCandles] = useState<Candle[]>(displayCandles);
 
@@ -450,6 +539,7 @@ export function TradingTerminal({
       setSelectedContract(nextContract);
       setSelectedMarketId(nextMarketId);
       setChartContext(DEFAULT_CHART_CONTEXT);
+      setLimitPrice(MARKET_DATA[nextMarketId].mark.replaceAll(",", ""));
       setLastAction(`Switched to ${formatFxDisplayPair(DEFAULT_SYMBOL)} ${getProductDisplayName(selectedMarket.type)} ${contract}`);
     });
   }
@@ -469,6 +559,7 @@ export function TradingTerminal({
         setSelectedContract(getDefaultContractForMarket(nextMarket) as SelectedContract);
       }
       setChartContext(nextMarket.type === "spot" ? "Spot" : DEFAULT_CHART_CONTEXT);
+      setLimitPrice(MARKET_DATA[marketId as MarketId].mark.replaceAll(",", ""));
       setLastAction(`Switched to ${getDisplayTicker(nextMarket)}`);
     });
   }
@@ -482,7 +573,7 @@ export function TradingTerminal({
   function handleSubmit(side: "buy" | "sell") {
     setTradeSide(side);
     setLastAction(
-      `${side === "buy" ? "Buy USD" : "Sell USD"} ${Number(size || "0").toLocaleString("en-US")} on ${market.ticker}`,
+      `${getDirectionalLabel(side)} ${Number(size || "0").toLocaleString("en-US")} contracts on ${market.ticker}`,
     );
   }
 
@@ -513,8 +604,10 @@ export function TradingTerminal({
             <ChartPanel
               candles={liveCandles}
               chartContext={chartContext}
+              entryPrice={entryPrice}
               expandedChart={expandedChart}
               indicatorsEnabled={indicatorsEnabled}
+              markPrice={markPrice}
               selectedRange={selectedRange}
               selectedTimeframe={timeframe}
               selectedTool={selectedTool}
@@ -543,16 +636,29 @@ export function TradingTerminal({
             <TradePanel
               allocation={allocation}
               atExpiryDeliver={atExpiryDeliver}
+              buyingPower="$250,000"
               contractDetails={market.contractDetails}
               contractLabel={getDisplayTicker(selectedMarket)}
+              estimatedAverageExecution={formatPriceDisplay(averageExecution)}
+              estimatedFillPrice={formatPriceDisplay(estimatedFill)}
+              fees={`$${fees.toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
+              initialMargin={`$${initialMargin.toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
               lastAction={lastAction}
+              limitPrice={limitPrice}
+              liquidationPrice={formatPriceDisplay(liquidationPrice)}
+              orderValue={`${orderValue.toLocaleString("en-US", { maximumFractionDigits: 0 })} cNGN`}
               orderType={orderType}
-              positionOverview={market.positionOverview}
+              pnl={unrealizedPnl}
+              positionOverview={positionOverview}
+              positionValue={positionValue}
               postOnly={postOnly}
+              returnPercent={returnPercent}
               size={size}
+              slippageEstimate="0.01% / max 0.25%"
               tradeSide={tradeSide}
               onAllocationChange={setAllocation}
               onAtExpiryDeliverToggle={() => setAtExpiryDeliver((current) => !current)}
+              onLimitPriceChange={setLimitPrice}
               onOrderTypeChange={setOrderType}
               onPostOnlyToggle={() => setPostOnly((current) => !current)}
               onSideChange={setTradeSide}

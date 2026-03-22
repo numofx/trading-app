@@ -2,7 +2,7 @@
 
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
-import { ChevronDown, Command, Dot, Search, X } from "lucide-react";
+import { ChevronDown, Command, Dot, Search, Wallet, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatFxDisplayPair, getProductDisplayName, getSelectedInstrumentDisplay } from "@/lib/market-display";
 import type { ContractTab, MarketDefinition, MarketId, MarketStat } from "@/lib/trading.types";
@@ -347,7 +347,7 @@ export function MarketHeader({
               >
                 <SmartImage<string>
                   alt="NG"
-                  className="size-5 shrink-0 overflow-hidden rounded-full"
+                  className="h-4 w-6 shrink-0 overflow-hidden rounded-[2px]"
                   imgClassName="object-cover"
                   src="/flags/ng.svg"
                 />
@@ -363,7 +363,7 @@ export function MarketHeader({
             </div>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             {contractTabs.map((tab) => (
               <button
                 className={cn(
@@ -377,6 +377,14 @@ export function MarketHeader({
                 {formatContractLabel(tab.label)}
               </button>
             ))}
+
+            <button
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-[#1F4FD1] bg-[#17316B] px-3 font-medium text-[#E5EDFF] text-[12px] transition-colors hover:bg-[#1A3A81]"
+              type="button"
+            >
+              <Wallet className="size-3.5" />
+              <span>Connect Wallet</span>
+            </button>
           </div>
         </div>
 

@@ -57,20 +57,20 @@ export function BottomTabs({
 
       <div className="min-h-[72px] px-3 py-2">
         <div
-          className="grid gap-3 text-[#6B7280] text-[10px] uppercase tracking-[0.14em]"
+          className="grid gap-2 text-[#6B7280] text-[10px] uppercase tracking-[0.14em]"
           style={{ gridTemplateColumns: `repeat(${activityView.columns.length}, minmax(0, 1fr))` }}
         >
           {activityView.columns.map((column) => (
-            <span className={column === "PnL" ? "text-right" : undefined} key={column}>
+            <span className={column.includes("PnL") || column.includes("%") ? "text-right" : undefined} key={column}>
               {column}
             </span>
           ))}
         </div>
 
-        <div className="mt-2.5 rounded-sm border border-[#1B2430] bg-[#11161D] p-2">
+        <div className="mt-2 rounded-sm border border-[#1B2430] bg-[#11161D] p-2">
           {activityView.rows.map((row, rowIndex) => (
             <div
-              className="grid gap-3 text-sm"
+              className="grid gap-2 text-[13px]"
               key={`${row.cells[0]}-${rowIndex}`}
               style={{ gridTemplateColumns: `repeat(${activityView.columns.length}, minmax(0, 1fr))` }}
             >
@@ -79,7 +79,8 @@ export function BottomTabs({
                   className={cn(
                     "text-[#D1D5DB]",
                     cellIndex === 0 && "font-medium text-[#E5E7EB]",
-                    activityView.columns[cellIndex] === "PnL" && "text-right",
+                    (activityView.columns[cellIndex]?.includes("PnL") || activityView.columns[cellIndex]?.includes("%")) && "text-right",
+                    cell.startsWith("-") && "text-[#F0A0A0]",
                     row.positiveCellIndexes?.includes(cellIndex) && "font-medium text-[#8CC9A3]",
                   )}
                   key={`${cell}-${cellIndex}`}

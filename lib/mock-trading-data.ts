@@ -289,7 +289,7 @@ export const DEFAULT_SYMBOL = "cNGNUSDC";
 export const DEFAULT_CONTRACT = "JUN 2026";
 export const DEFAULT_TIMEFRAME = "1h";
 export const DEFAULT_ORDER_TYPE = "Market";
-export const DEFAULT_CHART_CONTEXT = "Futures";
+export const DEFAULT_CHART_CONTEXT = "Price";
 export const DEFAULT_BOTTOM_TAB = "positions";
 export const DEFAULT_FILTER = "All";
 
@@ -359,21 +359,27 @@ function buildFuturesTrades(mark: string, basis: number) {
   ] satisfies TradePrint[];
 }
 
+function formatPriceWithConvention(value: string) {
+  return `${value} cNGN per USDC`;
+}
+
 function getSpotPositionOverview(mark: string) {
   return [
-    { label: "Position (USDC)", value: "+80,000 USDC" },
-    { label: "Entry Price", value: Number(parseNumber(mark) - 1.2).toFixed(2) },
-    { label: "Mark Price", value: Number(parseNumber(mark)).toFixed(2) },
+    { label: "Position", value: "+80,000 USDC" },
+    { label: "Entry Price", value: formatPriceWithConvention(Number(parseNumber(mark) - 1.2).toFixed(2)) },
+    { label: "Mark Price", value: formatPriceWithConvention(Number(parseNumber(mark)).toFixed(2)) },
     { label: "Unrealized PnL", value: "+$96" },
+    { label: "Return %", value: "+0.12%" },
   ] satisfies DeliveryTerm[];
 }
 
 function getFuturesPositionOverview(label: keyof typeof FUTURES_MARKET_META, mark: string) {
   return [
-    { label: "Position (USD)", value: label === "MAR 2026" ? "+20,000 USD" : "+50,000 USD" },
-    { label: "Entry Price", value: Number(parseNumber(mark) - 5.2).toFixed(2) },
-    { label: "Mark Price", value: Number(parseNumber(mark)).toFixed(2) },
+    { label: "Position", value: label === "MAR 2026" ? "Long cNGN · 20,000 contracts" : "Long cNGN · 50,000 contracts" },
+    { label: "Entry Price", value: formatPriceWithConvention(Number(parseNumber(mark) - 5.2).toFixed(2)) },
+    { label: "Mark Price", value: formatPriceWithConvention(Number(parseNumber(mark)).toFixed(2)) },
     { label: "Unrealized PnL", value: label === "MAR 2026" ? "+$61" : "+$156" },
+    { label: "Return %", value: label === "MAR 2026" ? "+0.38%" : "+0.64%" },
   ] satisfies DeliveryTerm[];
 }
 
@@ -393,15 +399,17 @@ function buildSpotMarket() {
     candles: buildCandles(BASE_SPOT_CANDLES, 0, 2),
     contractDetails: [
       { label: "Market", value: `${displayPair} Spot` },
-      { label: "Price", value: SPOT_MARKET_META.mark },
+      { label: "Quote Convention", value: "cNGN per USDC" },
+      { label: "Price", value: formatPriceWithConvention(SPOT_MARKET_META.mark) },
       { label: "Executable", value: SPOT_MARKET_META.executable },
       { label: "Settlement", value: SPOT_MARKET_META.settlement },
     ],
     id: SPOT_MARKET_META.id,
     infoBar: [
-      { label: "Price", value: SPOT_MARKET_META.mark },
+      { label: "Mark Price", value: formatPriceWithConvention(SPOT_MARKET_META.mark) },
       { label: "Basis", value: "—" },
       { label: "Basis %", value: "—" },
+      { label: "Implied Carry", value: "—" },
       { label: "Expiry", value: "Spot" },
     ],
     mark: SPOT_MARKET_META.mark,
@@ -428,17 +436,21 @@ function buildFuturesMarket(label: keyof typeof FUTURES_MARKET_META, offset: num
   return {
     candles: buildCandles(BASE_FUTURES_CANDLES, offset, 2),
     contractDetails: [
-      { label: "Contract", value: `${displayPair} Futures` },
-      { label: "Price", value: meta.mark },
-      { label: "Basis vs spot", value: formatBasis(basis) },
-      { label: "Days to expiry", value: String(daysToExpiry) },
-      { label: "Settlement", value: meta.settlement },
+      { label: "Contract", value: `${displayPair} Futures · ${displayLabel}` },
+      { label: "Expiry Month", value: displayLabel },
+      { label: "Quote Convention", value: "cNGN per USDC" },
+      { label: "Contract Size", value: "1,000 cNGN / contract" },
+      { label: "Tick Size", value: "0.05 cNGN per USDC" },
+      { label: "Settlement Type", value: "Physically delivered" },
+      { label: "Mark Price", value: formatPriceWithConvention(meta.mark) },
     ],
     id: meta.id,
     infoBar: [
-      { label: "Price", value: meta.mark },
+      { label: "Mark Price", value: formatPriceWithConvention(meta.mark) },
+      { label: "Spot", value: formatPriceWithConvention(SPOT_MARKET_META.mark) },
       { label: "Basis", tone: "accent", value: formatBasis(basis) },
-      { label: "Basis %", tone: "accent", value: formatAnnualizedBasis(annualizedBasis) },
+      { label: "Basis %", tone: "accent", value: `${((basis / spot) * 100).toFixed(2)}%` },
+      { label: "Implied Carry", tone: "accent", value: formatAnnualizedBasis(annualizedBasis) },
       { label: "Expiry", value: displayLabel },
     ],
     mark: meta.mark,
@@ -468,9 +480,10 @@ function buildOptionsMarket(label: keyof typeof OPTIONS_MARKET_META, offset: num
     ],
     id: meta.id,
     infoBar: [
-      { label: "Price", value: meta.mark },
+      { label: "Mark Price", value: meta.mark },
       { label: "Basis", value: "—" },
       { label: "Basis %", value: "—" },
+      { label: "Implied Carry", value: "—" },
       { label: "Expiry", value: displayLabel },
     ],
     mark: meta.mark,
@@ -500,18 +513,23 @@ export const BOTTOM_TABS = [
 
 export const ACTIVITY_VIEWS = {
   "open-orders": {
-    columns: ["Instrument", "Side", "Type", "Size", "Price"],
-    rows: [{ cells: ["cNGN/USDC Futures", "Buy USD", "Limit", "25,000", "1,604.80"] }],
+    columns: ["Instrument", "Direction", "Type", "Size", "Price"],
+    rows: [{ cells: ["cNGN/USDC Futures · Jun 2026", "Long cNGN", "Limit", "25,000 contracts", "1,604.80 cNGN per USDC"] }],
   },
   positions: {
-    columns: ["Instrument", "Position", "Entry Price", "Mark", "PnL"],
-    rows: [{ cells: ["cNGN/USDC Futures", "+50,000 USD", "1,600.0", "1,605.2", "+$156"], positiveCellIndexes: [4] }],
+    columns: ["Instrument", "Position", "Entry Price", "Mark Price", "Unrealized PnL", "Return %"],
+    rows: [
+      {
+        cells: ["cNGN/USDC Futures · Jun 2026", "Long cNGN · 50,000 contracts", "1,600.00 cNGN per USDC", "1,605.20 cNGN per USDC", "+$156", "+0.64%"],
+        positiveCellIndexes: [4, 5],
+      },
+    ],
   },
   "trade-history": {
-    columns: ["Time", "Instrument", "Side", "Size", "Price"],
+    columns: ["Time", "Instrument", "Direction", "Size", "Price"],
     rows: [
-      { cells: ["10:08:14", "cNGN/USDC Futures", "Buy USD", "50,000", "1,605.30"] },
-      { cells: ["10:08:06", "cNGN/USDC Futures", "Sell USD", "35,000", "1,605.20"] },
+      { cells: ["10:08:14", "cNGN/USDC Futures · Jun 2026", "Long cNGN", "50,000 contracts", "1,605.30 cNGN per USDC"] },
+      { cells: ["10:08:06", "cNGN/USDC Futures · Jun 2026", "Short cNGN", "35,000 contracts", "1,605.20 cNGN per USDC"] },
     ],
   },
 } satisfies Record<string, ActivityView>;
@@ -525,7 +543,7 @@ export const FOOTER_LINKS = [
 ] as const;
 
 export const CHART_RANGE_BUTTONS = ["5y", "1y", "6m", "3m", "1m", "5d", "1d"] as const;
-export const CHART_CONTEXT_TABS = ["Futures", "Spot", "Basis"] as const;
+export const CHART_CONTEXT_TABS = ["Price", "Spot", "Basis"] as const;
 export const TIMEFRAME_OPTIONS = ["5m", "1h", "D"] as const;
 
 export const CHART_TOOLS = [

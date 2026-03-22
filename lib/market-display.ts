@@ -45,7 +45,11 @@ export function getInstrumentDetailDisplay(market: MarketDefinition) {
 }
 
 export function getInstrumentDisplayLabel(market: MarketDefinition) {
-  return `${formatFxDisplayPair(market.pair)} ${getInstrumentDetailDisplay(market)}`;
+  if (market.type === "spot") {
+    return `${formatFxDisplayPair(market.pair)} Spot`;
+  }
+
+  return `${formatFxDisplayPair(market.pair)} ${getProductDisplayName(market.type)} · ${market.expiryLabel ?? "—"}`;
 }
 
 export function getSelectedInstrumentDisplay(market: MarketDefinition) {
