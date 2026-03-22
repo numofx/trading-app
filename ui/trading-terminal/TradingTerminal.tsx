@@ -4,6 +4,11 @@ import { startTransition, useEffect, useState } from "react";
 import type { ChainlinkSpotSnapshot } from "@/lib/chainlink-ngn-usd";
 import type { SpotHistorySnapshot } from "@/lib/exchange-api-history";
 import {
+  formatFxDisplayPair,
+  getInstrumentDisplayLabel,
+  getProductDisplayName,
+} from "@/lib/market-display";
+import {
   calculateAnnualizedBasisPercent,
   calculateBasis,
   formatAnnualizedBasis,
@@ -90,37 +95,33 @@ function buildActivityViews(ticker: string, positionValue: string, entryPrice: s
   };
 }
 
-function getDisplayTicker(marketDefinition: MarketDefinition, ticker: string) {
-  if (marketDefinition.type === "spot") {
-    return `${marketDefinition.pair} Spot`;
-  }
-
-  return ticker;
+function getDisplayTicker(marketDefinition: MarketDefinition) {
+  return getInstrumentDisplayLabel(marketDefinition);
 }
 
-function getDefaultContractForMarket(marketId: string) {
-  if (marketId === "cngn-usdc-spot") {
-    return DEFAULT_CONTRACT;
-  }
-
-  if (marketId === "cngn-usdc-mar-2026-futures") {
-    return "MAR 2026";
+function getDefaultContractForMarket(market: MarketDefinition) {
+  if (market.contractLabel) {
+    return market.contractLabel;
   }
 
   return DEFAULT_CONTRACT;
 }
 
-function getContractTabsForSymbol() {
-  return CONTRACT_TABS.filter((tab) => tab.label === "MAR 2026" || tab.label === "JUN 2026");
-}
-
-function getMarketIdForContract(contract: SelectedContract) {
-  if (contract === "MAR 2026") {
-    return "cngn-usdc-mar-2026-futures";
+function getContractTabsForProduct(type: MarketDefinition["type"]) {
+  if (type === "future" || type === "option") {
+    return CONTRACT_TABS;
   }
 
-  if (contract === "JUN 2026") {
-    return "cngn-usdc-jun-2026-futures";
+  return [];
+}
+
+function getMarketIdForSelection(type: MarketDefinition["type"], contract: SelectedContract) {
+  if (type === "option") {
+    return contract === "MAR 2026" ? "cngn-usdc-mar-2026-options" : "cngn-usdc-jun-2026-options";
+  }
+
+  if (type === "future") {
+    return contract === "MAR 2026" ? "cngn-usdc-mar-2026-futures" : "cngn-usdc-jun-2026-futures";
   }
 
   return DEFAULT_MARKET_ID;
@@ -326,10 +327,33 @@ export function TradingTerminal({
     selectedMarket.type === "spot" || selectedMarket.type === "option"
       ? null
       : calculateBasis(livePrice, liveSpotPrice);
+  const spotChangeByMarketId = {
+    "cngn-usdc-jun-2026-futures": null,
+    "cngn-usdc-jun-2026-options": null,
+    "cngn-usdc-mar-2026-futures": null,
+    "cngn-usdc-mar-2026-options": null,
+    "cngn-usdc-spot": "+0.18%",
+  } satisfies Record<string, string | null>;
+  const optionAtmIvByMarketId = {
+    "cngn-usdc-jun-2026-futures": null,
+    "cngn-usdc-jun-2026-options": "61.8%",
+    "cngn-usdc-mar-2026-futures": null,
+    "cngn-usdc-mar-2026-options": "54.2%",
+    "cngn-usdc-spot": null,
+  } satisfies Record<string, string | null>;
+  const optionOpenInterestByMarketId = {
+    "cngn-usdc-jun-2026-futures": null,
+    "cngn-usdc-jun-2026-options": "$3.1M",
+    "cngn-usdc-mar-2026-futures": null,
+    "cngn-usdc-mar-2026-options": "$1.4M",
+    "cngn-usdc-spot": null,
+  } satisfies Record<string, string | null>;
   const selectorLastByMarketId = Object.fromEntries(
     MARKET_DEFINITIONS.map((marketDefinition) => [
       marketDefinition.id,
-      marketDefinition.type === "spot" ? liveSpotPrice : null,
+      marketDefinition.type === "spot" || marketDefinition.type === "future"
+        ? parseNumericString(MARKET_DATA[marketDefinition.id as MarketId].mark)
+        : null,
     ]),
   ) satisfies Record<string, number | null>;
   const selectorBasisByMarketId = Object.fromEntries(
@@ -364,7 +388,7 @@ export function TradingTerminal({
     }),
   ) satisfies Record<string, number | null>;
   const dynamicActivityViews = buildActivityViews(
-    getDisplayTicker(selectedMarket, market.ticker),
+    getDisplayTicker(selectedMarket),
     market.positionOverview[0]?.value ?? "",
     market.positionOverview[1]?.value ?? "",
     market.positionOverview[2]?.value ?? "",
@@ -421,12 +445,12 @@ export function TradingTerminal({
   function handleContractSelect(contract: string) {
     startTransition(() => {
       const nextContract = contract as SelectedContract;
-      const nextMarketId = getMarketIdForContract(nextContract);
+      const nextMarketId = getMarketIdForSelection(selectedMarket.type, nextContract);
 
       setSelectedContract(nextContract);
       setSelectedMarketId(nextMarketId);
       setChartContext(DEFAULT_CHART_CONTEXT);
-      setLastAction(`Switched to ${DEFAULT_SYMBOL} ${contract}`);
+      setLastAction(`Switched to ${formatFxDisplayPair(DEFAULT_SYMBOL)} ${getProductDisplayName(selectedMarket.type)} ${contract}`);
     });
   }
 
@@ -442,10 +466,10 @@ export function TradingTerminal({
       if (nextMarket.contractLabel) {
         setSelectedContract(nextMarket.contractLabel as SelectedContract);
       } else {
-        setSelectedContract(getDefaultContractForMarket(marketId) as SelectedContract);
+        setSelectedContract(getDefaultContractForMarket(nextMarket) as SelectedContract);
       }
       setChartContext(nextMarket.type === "spot" ? "Spot" : DEFAULT_CHART_CONTEXT);
-      setLastAction(`Switched to ${getDisplayTicker(nextMarket, MARKET_DATA[nextMarket.id as MarketId].ticker)}`);
+      setLastAction(`Switched to ${getDisplayTicker(nextMarket)}`);
     });
   }
 
@@ -464,21 +488,24 @@ export function TradingTerminal({
 
   return (
     <main className="min-h-screen bg-[#0B1118] text-[#D1D5DB] xl:h-screen xl:overflow-hidden">
-      <LiveTabTitle pair={selectedMarket.pair} price={liveCandles.at(-1)?.close ?? null} />
+      <LiveTabTitle pair={formatFxDisplayPair(selectedMarket.pair)} price={liveCandles.at(-1)?.close ?? null} />
 
       <div className="mx-auto flex min-h-screen w-full max-w-none flex-col p-2 xl:h-screen xl:overflow-hidden">
         <MarketHeader
+          atmIvByMarketId={optionAtmIvByMarketId}
           annualizedBasisByMarketId={selectorAnnualizedBasisByMarketId}
           basisByMarketId={selectorBasisByMarketId}
-          contractTabs={getContractTabsForSymbol()}
+          contractTabs={getContractTabsForProduct(selectedMarket.type)}
           currentContract={selectedContract}
           currentMarketId={selectedMarketId}
-          currentSymbol={selectedMarket.pair}
           infoBar={liveInfoBar}
           lastByMarketId={selectorLastByMarketId}
           marketOptions={MARKET_DEFINITIONS}
+          openInterestByMarketId={optionOpenInterestByMarketId}
           onContractSelect={handleContractSelect}
           onMarketSelect={handleMarketSelect}
+          selectedMarket={selectedMarket}
+          spotChangeByMarketId={spotChangeByMarketId}
         />
 
         <section className="mt-2 grid flex-1 grid-cols-1 gap-2 xl:min-h-0 xl:grid-cols-[minmax(0,65fr)_minmax(280px,20fr)_minmax(250px,15fr)] xl:overflow-hidden">
@@ -491,7 +518,7 @@ export function TradingTerminal({
               selectedRange={selectedRange}
               selectedTimeframe={timeframe}
               selectedTool={selectedTool}
-              ticker={getDisplayTicker(selectedMarket, market.ticker)}
+              ticker={getDisplayTicker(selectedMarket)}
               onChartContextChange={setChartContext}
               onExpandedToggle={() => setExpandedChart((current) => !current)}
               onIndicatorsToggle={() => setIndicatorsEnabled((current) => !current)}
@@ -517,7 +544,7 @@ export function TradingTerminal({
               allocation={allocation}
               atExpiryDeliver={atExpiryDeliver}
               contractDetails={market.contractDetails}
-              contractLabel={getDisplayTicker(selectedMarket, market.ticker)}
+              contractLabel={getDisplayTicker(selectedMarket)}
               lastAction={lastAction}
               orderType={orderType}
               positionOverview={market.positionOverview}

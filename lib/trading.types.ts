@@ -56,8 +56,9 @@ export type MarketDefinition = {
   expiryLabel: string | null;
   flagSrc: string;
   id: MarketId;
+  strikeLabel: string | null;
   type: MarketType;
-  pair: "cNGN/USDC";
+  pair: "cNGNUSDC";
   region: "Africa";
   sortOrder: number;
 };

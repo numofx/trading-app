@@ -13,6 +13,7 @@ import {
   Type,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { formatFxDisplayPair } from "@/lib/market-display";
 import { calculateAnnualizedBasisPercent, formatAnnualizedBasis, formatBasis } from "@/lib/market-formatting";
 import type {
   ActivityTab,
@@ -176,7 +177,7 @@ const SPOT_MARKET_META = {
   executable: "Live on venue",
   id: "cngn-usdc-spot",
   mark: "1,603.90",
-  settlement: "Physical (cNGN/USDC)",
+  settlement: "Physical (cNGNUSDC)",
 } as const;
 
 const FUTURES_MARKET_META = {
@@ -184,7 +185,7 @@ const FUTURES_MARKET_META = {
     id: "cngn-usdc-jun-2026-futures",
     mark: "1,605.25",
     openInterest: "$48.3M",
-    settlement: "Physical (cNGN/USDC)",
+    settlement: "Physical (cNGNUSDC)",
     timeToExpiry: "101d",
     volume: "$6.2M",
   },
@@ -192,7 +193,7 @@ const FUTURES_MARKET_META = {
     id: "cngn-usdc-mar-2026-futures",
     mark: "1,604.45",
     openInterest: "$22.4M",
-    settlement: "Physical (cNGN/USDC)",
+    settlement: "Physical (cNGNUSDC)",
     timeToExpiry: "11d",
     volume: "$3.8M",
   },
@@ -225,10 +226,11 @@ export const MARKET_DEFINITIONS = [
     contractLabel: null,
     expiryDays: null,
     expiryLabel: null,
-    flagSrc: "/flags/ng.cvg.svg",
+    flagSrc: "/flags/ng.svg",
     id: "cngn-usdc-spot",
+    strikeLabel: null,
     type: "spot",
-    pair: "cNGN/USDC",
+    pair: "cNGNUSDC",
     region: "Africa",
     sortOrder: 0,
   },
@@ -236,10 +238,11 @@ export const MARKET_DEFINITIONS = [
     contractLabel: "MAR 2026",
     expiryDays: 11,
     expiryLabel: "Mar 2026",
-    flagSrc: "/flags/ng.cvg.svg",
+    flagSrc: "/flags/ng.svg",
     id: "cngn-usdc-mar-2026-futures",
+    strikeLabel: null,
     type: "future",
-    pair: "cNGN/USDC",
+    pair: "cNGNUSDC",
     region: "Africa",
     sortOrder: 1,
   },
@@ -247,10 +250,11 @@ export const MARKET_DEFINITIONS = [
     contractLabel: "JUN 2026",
     expiryDays: 101,
     expiryLabel: "Jun 2026",
-    flagSrc: "/flags/ng.cvg.svg",
+    flagSrc: "/flags/ng.svg",
     id: "cngn-usdc-jun-2026-futures",
+    strikeLabel: null,
     type: "future",
-    pair: "cNGN/USDC",
+    pair: "cNGNUSDC",
     region: "Africa",
     sortOrder: 2,
   },
@@ -258,10 +262,11 @@ export const MARKET_DEFINITIONS = [
     contractLabel: "MAR 2026",
     expiryDays: 11,
     expiryLabel: "Mar 2026",
-    flagSrc: "/flags/ng.cvg.svg",
+    flagSrc: "/flags/ng.svg",
     id: "cngn-usdc-mar-2026-options",
+    strikeLabel: null,
     type: "option",
-    pair: "cNGN/USDC",
+    pair: "cNGNUSDC",
     region: "Africa",
     sortOrder: 3,
   },
@@ -269,17 +274,18 @@ export const MARKET_DEFINITIONS = [
     contractLabel: "JUN 2026",
     expiryDays: 101,
     expiryLabel: "Jun 2026",
-    flagSrc: "/flags/ng.cvg.svg",
+    flagSrc: "/flags/ng.svg",
     id: "cngn-usdc-jun-2026-options",
+    strikeLabel: null,
     type: "option",
-    pair: "cNGN/USDC",
+    pair: "cNGNUSDC",
     region: "Africa",
     sortOrder: 4,
   },
 ] satisfies MarketDefinition[];
 
 export const DEFAULT_MARKET_ID = "cngn-usdc-jun-2026-futures" satisfies MarketId;
-export const DEFAULT_SYMBOL = "cNGN/USDC";
+export const DEFAULT_SYMBOL = "cNGNUSDC";
 export const DEFAULT_CONTRACT = "JUN 2026";
 export const DEFAULT_TIMEFRAME = "1h";
 export const DEFAULT_ORDER_TYPE = "Market";
@@ -381,10 +387,12 @@ function getOptionsPositionOverview(label: keyof typeof OPTIONS_MARKET_META, mar
 }
 
 function buildSpotMarket() {
+  const displayPair = formatFxDisplayPair("cNGNUSDC");
+
   return {
     candles: buildCandles(BASE_SPOT_CANDLES, 0, 2),
     contractDetails: [
-      { label: "Market", value: "cNGN/USDC Spot" },
+      { label: "Market", value: `${displayPair} Spot` },
       { label: "Price", value: SPOT_MARKET_META.mark },
       { label: "Executable", value: SPOT_MARKET_META.executable },
       { label: "Settlement", value: SPOT_MARKET_META.settlement },
@@ -401,7 +409,7 @@ function buildSpotMarket() {
     orderBookBids: buildBook(BASE_SPOT_BIDS, 0, 1, 2),
     positionOverview: getSpotPositionOverview(SPOT_MARKET_META.mark),
     referencePrice: SPOT_MARKET_META.mark,
-    ticker: "cNGN/USDC Spot",
+    ticker: `${displayPair} Spot`,
     timeToExpiry: "Spot",
     trades: buildSpotTrades(SPOT_MARKET_META.mark),
   } satisfies ContractMarket;
@@ -411,6 +419,7 @@ function buildFuturesMarket(label: keyof typeof FUTURES_MARKET_META, offset: num
   const meta = FUTURES_MARKET_META[label];
   const daysToExpiry = Number(meta.timeToExpiry.replace("d", ""));
   const displayLabel = getContractDisplayLabel(label);
+  const displayPair = formatFxDisplayPair("cNGNUSDC");
   const mark = parseNumber(meta.mark);
   const spot = parseNumber(SPOT_MARKET_META.mark);
   const basis = mark - spot;
@@ -419,7 +428,7 @@ function buildFuturesMarket(label: keyof typeof FUTURES_MARKET_META, offset: num
   return {
     candles: buildCandles(BASE_FUTURES_CANDLES, offset, 2),
     contractDetails: [
-      { label: "Contract", value: `cNGN/USDC ${displayLabel}` },
+      { label: "Contract", value: `${displayPair} Futures` },
       { label: "Price", value: meta.mark },
       { label: "Basis vs spot", value: formatBasis(basis) },
       { label: "Days to expiry", value: String(daysToExpiry) },
@@ -437,7 +446,7 @@ function buildFuturesMarket(label: keyof typeof FUTURES_MARKET_META, offset: num
     orderBookBids: buildBook(BASE_FUTURES_BIDS, offset, sizeMultiplier, 2),
     positionOverview: getFuturesPositionOverview(label, meta.mark),
     referencePrice: SPOT_MARKET_META.mark,
-    ticker: `cNGN/USDC ${displayLabel}`,
+    ticker: `${displayPair} Futures`,
     timeToExpiry: meta.timeToExpiry,
     trades: buildFuturesTrades(meta.mark, basis),
   } satisfies ContractMarket;
@@ -446,11 +455,12 @@ function buildFuturesMarket(label: keyof typeof FUTURES_MARKET_META, offset: num
 function buildOptionsMarket(label: keyof typeof OPTIONS_MARKET_META, offset: number, sizeMultiplier: number) {
   const meta = OPTIONS_MARKET_META[label];
   const displayLabel = getContractDisplayLabel(label);
+  const displayPair = formatFxDisplayPair("cNGNUSDC");
 
   return {
     candles: buildCandles(BASE_OPTIONS_CANDLES, offset, 2),
     contractDetails: [
-      { label: "Contract", value: `cNGN/USDC ${displayLabel} Options` },
+      { label: "Contract", value: `${displayPair} Options` },
       { label: "Premium", value: meta.mark },
       { label: "Style", value: "European" },
       { label: "Days to expiry", value: meta.timeToExpiry.replace("d", "") },
@@ -468,7 +478,7 @@ function buildOptionsMarket(label: keyof typeof OPTIONS_MARKET_META, offset: num
     orderBookBids: buildBook(BASE_OPTIONS_BIDS, offset, sizeMultiplier, 2),
     positionOverview: getOptionsPositionOverview(label, meta.mark),
     referencePrice: SPOT_MARKET_META.mark,
-    ticker: `cNGN/USDC ${displayLabel} Options`,
+    ticker: `${displayPair} Options`,
     timeToExpiry: meta.timeToExpiry,
     trades: buildSpotTrades(meta.mark),
   } satisfies ContractMarket;
@@ -491,17 +501,17 @@ export const BOTTOM_TABS = [
 export const ACTIVITY_VIEWS = {
   "open-orders": {
     columns: ["Instrument", "Side", "Type", "Size", "Price"],
-    rows: [{ cells: ["cNGN/USDC Jun 2026", "Buy USD", "Limit", "25,000", "1,604.80"] }],
+    rows: [{ cells: ["cNGN/USDC Futures", "Buy USD", "Limit", "25,000", "1,604.80"] }],
   },
   positions: {
     columns: ["Instrument", "Position", "Entry Price", "Mark", "PnL"],
-    rows: [{ cells: ["cNGN/USDC Jun 2026", "+50,000 USD", "1,600.0", "1,605.2", "+$156"], positiveCellIndexes: [4] }],
+    rows: [{ cells: ["cNGN/USDC Futures", "+50,000 USD", "1,600.0", "1,605.2", "+$156"], positiveCellIndexes: [4] }],
   },
   "trade-history": {
     columns: ["Time", "Instrument", "Side", "Size", "Price"],
     rows: [
-      { cells: ["10:08:14", "cNGN/USDC Jun 2026", "Buy USD", "50,000", "1,605.30"] },
-      { cells: ["10:08:06", "cNGN/USDC Jun 2026", "Sell USD", "35,000", "1,605.20"] },
+      { cells: ["10:08:14", "cNGN/USDC Futures", "Buy USD", "50,000", "1,605.30"] },
+      { cells: ["10:08:06", "cNGN/USDC Futures", "Sell USD", "35,000", "1,605.20"] },
     ],
   },
 } satisfies Record<string, ActivityView>;
