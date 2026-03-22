@@ -1,8 +1,8 @@
 import type { Candle } from "@/lib/trading.types";
-import type { TIMEFRAME_OPTIONS } from "@/lib/mock-trading-data";
-import { CHART_CONTEXT_TABS, CHART_RANGE_BUTTONS } from "@/lib/mock-trading-data";
+import type { TIMEFRAME_OPTIONS } from "@/lib/mock-orderbook-terminal-data";
+import { CHART_CONTEXT_TABS, CHART_RANGE_BUTTONS } from "@/lib/mock-orderbook-terminal-data";
 import { cn } from "@/lib/cn";
-import { ChartToolbar } from "@/ui/trading-terminal/ChartToolbar";
+import { TradingChartToolbar } from "@/ui/trading-terminal/TradingChartToolbar";
 
 type Point = {
   closeY: number;
@@ -128,14 +128,14 @@ function TradingChart({
 
   return (
     <div className="relative flex-1 overflow-hidden">
-      <div className="absolute inset-x-0 top-0 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-[11px]">
-        <span className="font-semibold text-[#E5E7EB]">
+      <div className="absolute inset-x-0 top-0 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-3 text-[11px]">
+        <span className="font-semibold text-[#E2E8F0]">
           {ticker} · {timeframe} · Central Limit Order Book
         </span>
-        <span className="text-[#6B7280]">
+        <span className="text-[#66758A]">
           O{formatPrice(lastCandle.open)} H{formatPrice(lastCandle.high)} L
           {formatPrice(lastCandle.low)} C{formatPrice(lastCandle.close)}
-          <span className={cn("ml-2", changeLabel.positive ? "text-[#8CC9A3]" : "text-[#F0A0A0]")}>
+          <span className={cn("ml-2", changeLabel.positive ? "text-[#8BB69A]" : "text-[#C89393]")}>
             {changeLabel.delta} ({changeLabel.percent})
           </span>
         </span>
@@ -150,7 +150,7 @@ function TradingChart({
       >
         <defs>
           <pattern height="68" id="gridPattern" patternUnits="userSpaceOnUse" width="92">
-            <path d="M 92 0 L 0 0 0 68" fill="none" stroke="#16202A" strokeWidth="0.7" />
+            <path d="M 92 0 L 0 0 0 68" fill="none" stroke="#14202D" strokeWidth="0.6" />
           </pattern>
         </defs>
 
@@ -161,8 +161,8 @@ function TradingChart({
 
           return (
             <g key={value}>
-              <line stroke="#16202A" strokeDasharray="4 6" x1="0" x2={width} y1={y} y2={y} />
-              <text fill="#6B7280" fontSize="11" textAnchor="end" x={width - 8} y={y - 6}>
+              <line stroke="#14202D" strokeDasharray="4 8" x1="0" x2={width} y1={y} y2={y} />
+              <text fill="#5F6D80" fontSize="11" textAnchor="end" x={width - 8} y={y - 6}>
                 {formatPrice(value)}
               </text>
             </g>
@@ -174,7 +174,7 @@ function TradingChart({
           const isBullish = candle.close >= candle.open;
           const bodyTop = Math.min(point.openY, point.closeY);
           const bodyHeight = Math.max(Math.abs(point.closeY - point.openY), 3);
-          const color = isBullish ? "#15803D" : "#B91C1C";
+          const color = isBullish ? "#16914A" : "#C13A3A";
           const volumeY = height - point.volumeHeight - 18;
 
           return (
@@ -189,9 +189,9 @@ function TradingChart({
                 y={bodyTop}
               />
               <rect
-                fill={isBullish ? "#123524" : "#4D1717"}
+                fill={isBullish ? "#113126" : "#421A1C"}
                 height={point.volumeHeight}
-                opacity="0.72"
+                opacity="0.55"
                 width={Math.max(6, candleWidth)}
                 x={point.x - Math.max(6, candleWidth) / 2}
                 y={volumeY}
@@ -201,7 +201,7 @@ function TradingChart({
         })}
 
         <line
-          stroke="#3B82F6"
+          stroke="#2D6DE0"
           strokeDasharray="3 5"
           strokeWidth="1"
           x1="0"
@@ -212,8 +212,8 @@ function TradingChart({
 
         {markPriceY !== null ? (
           <g>
-            <line stroke="#22C55E" strokeDasharray="6 6" strokeWidth="1" x1="0" x2={plotWidth} y1={markPriceY} y2={markPriceY} />
-            <text fill="#86EFAC" fontSize="11" fontWeight="700" x="10" y={markPriceY - 6}>
+            <line stroke="#2BA064" strokeDasharray="6 6" strokeWidth="1" x1="0" x2={plotWidth} y1={markPriceY} y2={markPriceY} />
+            <text fill="#7DBD94" fontSize="11" fontWeight="700" x="10" y={markPriceY - 6}>
               Mark
             </text>
           </g>
@@ -221,8 +221,8 @@ function TradingChart({
 
         {entryPriceY !== null ? (
           <g>
-            <line stroke="#F59E0B" strokeDasharray="6 6" strokeWidth="1" x1="0" x2={plotWidth} y1={entryPriceY} y2={entryPriceY} />
-            <text fill="#FCD34D" fontSize="11" fontWeight="700" x="10" y={entryPriceY - 6}>
+            <line stroke="#C98A2B" strokeDasharray="6 6" strokeWidth="1" x1="0" x2={plotWidth} y1={entryPriceY} y2={entryPriceY} />
+            <text fill="#D9B36B" fontSize="11" fontWeight="700" x="10" y={entryPriceY - 6}>
               Entry
             </text>
           </g>
@@ -230,7 +230,7 @@ function TradingChart({
 
         <g>
           <rect
-            fill="#1D4ED8"
+            fill="#275BD0"
             height="22"
             rx="4"
             width="64"
@@ -238,7 +238,7 @@ function TradingChart({
             y={currentPriceY - 11}
           />
           <text
-            fill="#EFF6FF"
+            fill="#F5F8FF"
             fontSize="12"
             fontWeight="700"
             textAnchor="middle"
@@ -255,7 +255,7 @@ function TradingChart({
 
           return (
             <text
-              fill="#6B7280"
+              fill="#5F6D80"
               fontSize="11"
               key={`${candle.time}-${sourceIndex}`}
               textAnchor="middle"
@@ -271,7 +271,7 @@ function TradingChart({
   );
 }
 
-export function ChartPanel({
+export function TradingChartPanel({
   candles,
   chartContext,
   entryPrice,
@@ -307,8 +307,8 @@ export function ChartPanel({
   onToolSelect: (toolId: string) => void;
 }) {
   return (
-    <section className="flex h-full min-h-[540px] flex-col overflow-hidden rounded-md border border-[#1B2430] bg-[#0F1720] xl:min-h-0">
-      <ChartToolbar
+    <section className="flex h-full min-h-[520px] flex-col overflow-hidden rounded-[28px] bg-[#0C141E]/95 shadow-[0_18px_60px_rgba(0,0,0,0.28)] ring-1 ring-white/6 xl:min-h-0">
+      <TradingChartToolbar
         expandedChart={expandedChart}
         indicatorsEnabled={indicatorsEnabled}
         selectedTimeframe={selectedTimeframe}
@@ -321,7 +321,7 @@ export function ChartPanel({
 
       <div className="flex min-h-0 flex-1">
         <div className="hidden xl:block">
-          <ChartToolbar
+          <TradingChartToolbar
             expandedChart={expandedChart}
             indicatorsEnabled={indicatorsEnabled}
             mode="side"
@@ -335,13 +335,13 @@ export function ChartPanel({
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="flex items-center justify-between border-[#1B2430] border-b bg-[#0F1720] px-2.5 py-1">
-            <div className="flex items-center gap-1">
+          <div className="flex items-center justify-between border-white/6 border-b px-5 py-3">
+            <div className="flex items-center gap-2">
               {CHART_CONTEXT_TABS.map((tab) => (
                 <button
                   className={cn(
-                    "rounded-sm px-2.5 py-1.5 font-semibold text-[#6B7280] text-[11px] transition-colors hover:bg-[#11161D] hover:text-[#D1D5DB]",
-                    chartContext === tab && "bg-[#11161D] text-[#BFDBFE]",
+                    "rounded-xl px-3 py-1.5 font-medium text-[#748195] text-[11px] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]",
+                    chartContext === tab && "bg-white/6 text-[#E5ECF5]",
                   )}
                   key={tab}
                   onClick={() => onChartContextChange(tab)}
@@ -351,20 +351,20 @@ export function ChartPanel({
                 </button>
               ))}
             </div>
-            <div className="text-[#6B7280] text-[11px]">
+            <div className="text-[#5F6D80] text-[11px]">
               {chartContext === "Basis" ? "Basis view: mark minus spot in cNGN" : "Price view: cNGN per USDC"}
             </div>
           </div>
 
           <TradingChart candles={candles} entryPrice={entryPrice} markPrice={markPrice} ticker={ticker} timeframe={selectedTimeframe} />
 
-          <div className="flex items-center justify-between border-[#1B2430] border-t bg-[#0F1720] px-2.5 py-1 text-[11px]">
-            <div className="flex flex-wrap items-center gap-1">
+          <div className="flex items-center justify-between border-white/6 border-t px-5 py-3 text-[11px]">
+            <div className="flex flex-wrap items-center gap-2">
               {CHART_RANGE_BUTTONS.map((range) => (
                 <button
                   className={cn(
-                    "rounded-sm px-2 py-1 text-[#6B7280] transition-colors hover:bg-[#11161D] hover:text-[#D1D5DB]",
-                    selectedRange === range && "bg-[#11161D] text-[#BFDBFE]",
+                    "rounded-xl px-3 py-1.5 text-[#748195] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]",
+                    selectedRange === range && "bg-white/6 text-[#E5ECF5]",
                   )}
                   key={range}
                   onClick={() => onRangeChange(range)}
@@ -375,11 +375,11 @@ export function ChartPanel({
               ))}
             </div>
 
-            <div className="flex items-center gap-3 text-[#6B7280]">
+            <div className="flex items-center gap-4 text-[#5F6D80]">
               <span>{indicatorsEnabled ? "Indicators On" : "Indicators Off"}</span>
-              <button type="button">%</button>
-              <button type="button">log</button>
-              <button className="text-[#D1D5DB]" type="button">
+              <button className="transition-colors hover:text-[#D7DEE8]" type="button">%</button>
+              <button className="transition-colors hover:text-[#D7DEE8]" type="button">log</button>
+              <button className="text-[#D7DEE8]" type="button">
                 auto
               </button>
             </div>

@@ -3,8 +3,8 @@
 @source "../node_modules/tw-next-image/dist";
 
 :root {
-  --background: #0b0f14;
-  --foreground: #d1d5db;
+  --background: #081019;
+  --foreground: #d7dee8;
 }
 
 @theme inline {
@@ -23,9 +23,12 @@ html {
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(circle at top, rgba(24, 47, 78, 0.28), transparent 34%),
+    linear-gradient(180deg, #09111b 0%, #081019 42%, #060b12 100%);
   color: var(--foreground);
   font-family: var(--font-geist-sans), sans-serif;
+  min-height: 100vh;
 }
 
 button,

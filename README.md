@@ -140,7 +140,7 @@ Run `just` to see all available commands, including `prettier-*`, `mdformat-*`, 
 │   └── effect/            # Effect-ts utilities
 ├── public/                # Static files
 ├── ui/                    # UI components
-│   ├── Button.tsx         # Button component
+│   ├── AppButton.tsx      # Shared app button component
 │   ├── SmartImage.tsx     # Enhanced next/image wrapper
 │   └── SmartLink.tsx      # Enhanced next/link wrapper
 ├── AGENTS.md              # AI agent instructions (CLAUDE.md → symlink)

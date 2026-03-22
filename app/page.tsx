@@ -2,7 +2,7 @@ import { getChainlinkNgnUsdSpot } from "@/lib/chainlink-ngn-usd";
 import type { ChainlinkSpotSnapshot } from "@/lib/chainlink-ngn-usd";
 import { getSpotHistorySnapshots } from "@/lib/exchange-api-history";
 import type { SpotHistorySnapshot } from "@/lib/exchange-api-history";
-import { TradingTerminal } from "@/ui/trading-terminal/TradingTerminal";
+import { OrderBookTradingTerminal } from "@/ui/trading-terminal/OrderBookTradingTerminal";
 
 export default async function Home() {
   let chainlinkSpot: ChainlinkSpotSnapshot | null = null;
@@ -20,5 +20,5 @@ export default async function Home() {
     spotHistory = null;
   }
 
-  return <TradingTerminal chainlinkSpot={chainlinkSpot} spotHistory={spotHistory} />;
+  return <OrderBookTradingTerminal chainlinkSpot={chainlinkSpot} spotHistory={spotHistory} />;
 }

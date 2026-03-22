@@ -11,7 +11,7 @@ const FEATURES = [
   "BiomeJS linting and Bun runtime",
 ];
 
-export function DemoDialog() {
+export function TemplateInfoDialog() {
   return (
     <Dialog.Root>
       <Dialog.Trigger className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-full border border-black/8 border-solid px-4 font-medium text-sm transition-colors hover:border-transparent hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 dark:border-white/[.145] dark:hover:bg-neutral-900">

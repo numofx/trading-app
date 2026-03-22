@@ -7,8 +7,8 @@ import { cn } from "@/lib/cn";
 import { formatFxDisplayPair, getProductDisplayName, getSelectedInstrumentDisplay } from "@/lib/market-display";
 import type { ContractTab, MarketDefinition, MarketId, MarketStat } from "@/lib/trading.types";
 import { SmartImage } from "@/ui/SmartImage";
-import { MarketListRow } from "@/ui/trading-terminal/MarketListRow";
-import { useMarketPreferences } from "@/ui/trading-terminal/useMarketPreferences";
+import { MarketSwitcherRow } from "@/ui/trading-terminal/MarketSwitcherRow";
+import { useMarketSelectorPreferences } from "@/ui/trading-terminal/useMarketSelectorPreferences";
 
 function formatContractLabel(label: string) {
   const [month, year] = label.split(" ");
@@ -83,7 +83,7 @@ function scoreMarketMatch(market: MarketDefinition, query: string) {
   return 6;
 }
 
-export function MarketHeader({
+export function TradingMarketHeader({
   atmIvByMarketId,
   annualizedBasisByMarketId,
   basisByMarketId,
@@ -127,7 +127,7 @@ export function MarketHeader({
     pushRecent,
     recentMarketIds,
     toggleFavorite,
-  } = useMarketPreferences(validMarketIds);
+  } = useMarketSelectorPreferences(validMarketIds);
   const normalizedSearch = marketSearch.trim().toLowerCase();
   const selectedInstrument = getSelectedInstrumentDisplay(selectedMarket);
   const matchingMarkets = marketOptions
@@ -305,7 +305,7 @@ export function MarketHeader({
 
   function renderMarketRows(markets: MarketDefinition[]) {
     return markets.map((market) => (
-      <MarketListRow
+      <MarketSwitcherRow
         atmIv={atmIvByMarketId[market.id] ?? null}
         annualizedBasis={annualizedBasisByMarketId[market.id] ?? null}
         basis={basisByMarketId[market.id] ?? null}
@@ -325,13 +325,13 @@ export function MarketHeader({
   }
 
   return (
-    <header className="rounded-md border border-[#1B2430] bg-[#0F1720]">
-      <div className="flex flex-col gap-1.5 px-3 py-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+    <header className="rounded-[28px] bg-[#0C141E]/94 px-5 py-4 shadow-[0_18px_60px_rgba(0,0,0,0.24)] ring-1 ring-white/6">
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
             <SmartImage<string>
               alt="Numo"
-              className="ml-3 h-6 w-24 shrink-0 sm:h-7 sm:w-28"
+              className="h-6 w-24 shrink-0 sm:h-7 sm:w-28"
               imgClassName="object-left"
               priority
               src="/numo_logo_white.png"
@@ -341,7 +341,7 @@ export function MarketHeader({
               <button
                 aria-expanded={marketSearchOpen}
                 aria-haspopup="dialog"
-                className="inline-flex h-11 items-center gap-2.5 rounded-md border border-[#1B2430] bg-[#11161D] px-3.5 font-semibold text-[#E5E7EB] text-[15px] leading-none"
+                className="inline-flex h-12 items-center gap-3 rounded-2xl bg-white/[0.04] px-4 font-semibold text-[#E5ECF5] text-[15px] leading-none ring-1 ring-white/6"
                 onClick={() => setMarketSearchOpen(true)}
                 type="button"
               >
@@ -351,24 +351,24 @@ export function MarketHeader({
                   imgClassName="object-cover"
                   src="/flags/ng.svg"
                 />
-                <span className="min-w-0 truncate font-semibold text-[#E5E7EB] text-[15px] leading-none">
+                <span className="min-w-0 truncate font-semibold text-[#E5ECF5] text-[15px] leading-none">
                   {selectedInstrument.label}
                 </span>
-                <span className="hidden items-center gap-1 rounded-full border border-[#233044] bg-[#0D131A] px-2 py-1 font-medium text-[#6B7280] text-[11px] sm:inline-flex">
+                <span className="hidden items-center gap-1 rounded-full bg-white/[0.05] px-2.5 py-1 font-medium text-[#6F7C90] text-[11px] sm:inline-flex">
                   <Command className="size-3" />
                   K
                 </span>
-                <ChevronDown className="size-4 shrink-0 text-[#6B7280]" />
+                <ChevronDown className="size-4 shrink-0 text-[#6F7C90]" />
               </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {contractTabs.map((tab) => (
               <button
                 className={cn(
-                  "rounded-sm border border-[#1B2430] bg-[#11161D] px-2 py-1 font-medium text-[#6B7280] text-[11px] transition-colors hover:border-[#2B3543] hover:text-[#D1D5DB]",
-                  currentContract === tab.label && "border-[#2563EB] bg-[#172554]/40 text-[#BFDBFE]",
+                  "rounded-xl px-3 py-2 font-medium text-[#738095] text-[11px] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]",
+                  currentContract === tab.label && "bg-white/7 text-[#E5ECF5]",
                 )}
                 key={tab.label}
                 onClick={() => onContractSelect(tab.label)}
@@ -379,7 +379,7 @@ export function MarketHeader({
             ))}
 
             <button
-              className="inline-flex h-9 items-center gap-2 rounded-md border border-[#1F4FD1] bg-[#17316B] px-3 font-medium text-[#E5EDFF] text-[12px] transition-colors hover:bg-[#1A3A81]"
+              className="inline-flex h-11 items-center gap-2 rounded-2xl bg-[#19356C] px-4 font-medium text-[#EEF4FF] text-[12px] transition-colors hover:bg-[#214180]"
               type="button"
             >
               <Wallet className="size-3.5" />
@@ -388,15 +388,15 @@ export function MarketHeader({
           </div>
         </div>
 
-        <div className="flex h-9 flex-wrap items-center gap-2 overflow-hidden rounded-sm border border-[#1B2430] bg-[#11161D] px-3 text-[11px]">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-white/6 border-t pt-3 text-[11px]">
           {infoBar.map((stat, index) => (
             <div className="flex items-center gap-2" key={stat.label}>
-              {index > 0 ? <Dot className="size-3 text-[#374151]" /> : null}
-              <span className="font-medium text-[#9CA3AF]">{stat.label}</span>
+              {index > 0 ? <Dot className="size-3 text-[#324050]" /> : null}
+              <span className="font-medium text-[#738095]">{stat.label}</span>
               <span
                 className={cn(
-                  "font-semibold text-[#D1D5DB]",
-                  stat.tone === "accent" && "text-[#60A5FA]",
+                  "font-semibold text-[#D7DEE8]",
+                  stat.tone === "accent" && "text-[#8EB5F5]",
                 )}
               >
                 {stat.value}

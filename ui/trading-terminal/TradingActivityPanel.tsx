@@ -2,7 +2,7 @@ import { ChevronDown } from "lucide-react";
 import type { ActivityTab, ActivityView } from "@/lib/trading.types";
 import { cn } from "@/lib/cn";
 
-export function BottomTabs({
+export function TradingActivityPanel({
   activityView,
   filter,
   footerLinks,
@@ -20,20 +20,20 @@ export function BottomTabs({
   onTabSelect: (tabId: string) => void;
 }) {
   return (
-    <section className="rounded-md border border-[#1B2430] bg-[#0F1720]">
-      <div className="flex flex-col gap-2 border-[#1B2430] border-b px-3 py-1 lg:flex-row lg:items-center lg:justify-between">
+    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-[24px] bg-[#0A1119]/72 ring-1 ring-white/5">
+      <div className="flex flex-col gap-3 border-white/6 border-b px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex items-center gap-2 rounded-full border border-[#1B2430] bg-[#11161D] px-2 py-0.5 font-medium text-[#93C5FD] text-[10px]">
+          <div className="inline-flex items-center gap-2 rounded-full bg-white/[0.04] px-3 py-1 font-medium text-[#9CBFF2] text-[10px]">
             <span className="size-1.5 rounded-full bg-[#3B82F6]" />
             Online
           </div>
 
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-2">
             {tabs.map((tab) => (
               <button
                 className={cn(
-                  "rounded-sm px-2 py-1 font-medium text-[#6B7280] text-[11px] transition-colors hover:bg-[#11161D]",
-                  selectedTab === tab.id && "bg-[#11161D] text-[#E5E7EB]",
+                  "rounded-xl px-3 py-1.5 font-medium text-[#748195] text-[11px] transition-colors hover:bg-white/5",
+                  selectedTab === tab.id && "bg-white/6 text-[#E5ECF5]",
                 )}
                 key={tab.id}
                 onClick={() => onTabSelect(tab.id)}
@@ -46,7 +46,7 @@ export function BottomTabs({
         </div>
 
         <button
-          className="inline-flex items-center gap-1 self-start rounded-sm border border-[#1B2430] bg-[#11161D] px-2 py-1 text-[#D1D5DB] text-[11px] lg:self-auto"
+          className="inline-flex items-center gap-1.5 self-start rounded-xl bg-white/[0.04] px-3 py-2 text-[#C2CCD9] text-[11px] lg:self-auto"
           onClick={onFilterClick}
           type="button"
         >
@@ -55,9 +55,9 @@ export function BottomTabs({
         </button>
       </div>
 
-      <div className="min-h-[72px] px-3 py-2">
+      <div className="min-h-0 flex-1 overflow-auto px-4 py-4">
         <div
-          className="grid gap-2 text-[#6B7280] text-[10px] uppercase tracking-[0.14em]"
+          className="grid gap-2 text-[#5F6D80] text-[10px] uppercase tracking-[0.16em]"
           style={{ gridTemplateColumns: `repeat(${activityView.columns.length}, minmax(0, 1fr))` }}
         >
           {activityView.columns.map((column) => (
@@ -67,21 +67,21 @@ export function BottomTabs({
           ))}
         </div>
 
-        <div className="mt-2 rounded-sm border border-[#1B2430] bg-[#11161D] p-2">
+        <div className="mt-3 rounded-2xl bg-white/[0.03] p-3">
           {activityView.rows.map((row, rowIndex) => (
             <div
-              className="grid gap-2 text-[13px]"
+              className="grid gap-2 py-1 text-[13px]"
               key={`${row.cells[0]}-${rowIndex}`}
               style={{ gridTemplateColumns: `repeat(${activityView.columns.length}, minmax(0, 1fr))` }}
             >
               {row.cells.map((cell, cellIndex) => (
                 <span
                   className={cn(
-                    "text-[#D1D5DB]",
-                    cellIndex === 0 && "font-medium text-[#E5E7EB]",
+                    "text-[#C2CCD9]",
+                    cellIndex === 0 && "font-medium text-[#E5ECF5]",
                     (activityView.columns[cellIndex]?.includes("PnL") || activityView.columns[cellIndex]?.includes("%")) && "text-right",
-                    cell.startsWith("-") && "text-[#F0A0A0]",
-                    row.positiveCellIndexes?.includes(cellIndex) && "font-medium text-[#8CC9A3]",
+                    cell.startsWith("-") && "text-[#C89393]",
+                    row.positiveCellIndexes?.includes(cellIndex) && "font-medium text-[#8AB899]",
                   )}
                   key={`${cell}-${cellIndex}`}
                 >
@@ -93,9 +93,9 @@ export function BottomTabs({
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 border-[#1B2430] border-t px-3 py-1.5 text-[#6B7280] text-xs sm:flex-row sm:items-center sm:justify-end">
+      <div className="flex flex-col gap-2 border-white/6 border-t px-4 py-3 text-[#5F6D80] text-xs sm:flex-row sm:items-center sm:justify-end">
         {footerLinks.map((link) => (
-          <a className="transition-colors hover:text-[#D1D5DB]" href={link.href} key={link.label}>
+          <a className="transition-colors hover:text-[#D7DEE8]" href={link.href} key={link.label}>
             {link.label}
           </a>
         ))}

@@ -2,11 +2,11 @@
 
 import { useActionState } from "react";
 import { subscribe } from "@/lib/effect/actions";
-import { Button } from "./Button";
+import { AppButton } from "./AppButton";
 
 type FormState = { success: boolean; error?: string; email?: string } | null;
 
-export function ContactForm() {
+export function EmailSubscriptionForm() {
   const [state, formAction, isPending] = useActionState<FormState, FormData>(subscribe, null);
 
   if (state?.success) {
@@ -15,9 +15,9 @@ export function ContactForm() {
         <p className="text-green-800 text-sm dark:text-green-200">
           ✅ Thanks for subscribing! We'll keep you updated.
         </p>
-        <Button className="mt-2" onClick={() => window.location.reload()} size="sm" variant="ghost">
+        <AppButton className="mt-2" onClick={() => window.location.reload()} size="sm" variant="ghost">
           Subscribe another email
-        </Button>
+        </AppButton>
       </div>
     );
   }
@@ -43,9 +43,9 @@ export function ContactForm() {
         )}
       </div>
 
-      <Button className="w-full" disabled={isPending} size="sm" type="submit">
+      <AppButton className="w-full" disabled={isPending} size="sm" type="submit">
         {isPending ? "Subscribing..." : "Subscribe"}
-      </Button>
+      </AppButton>
     </form>
   );
 }

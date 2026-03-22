@@ -25,20 +25,20 @@ const buttonVariants = tv({
   },
 });
 
-export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> &
+export type AppButtonProps = ButtonHTMLAttributes<HTMLButtonElement> &
   VariantProps<typeof buttonVariants> & {
     children: ReactNode;
     asChild?: boolean;
   };
 
-export function Button({
+export function AppButton({
   className,
   variant,
   size,
   asChild = false,
   children,
   ...props
-}: ButtonProps) {
+}: AppButtonProps) {
   const classes = cn(buttonVariants({ size, variant }), className);
 
   if (asChild && typeof children === "object" && children !== null) {

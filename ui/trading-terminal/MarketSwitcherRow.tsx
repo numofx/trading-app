@@ -49,7 +49,7 @@ function getTertiaryMetricValue({
   return openInterest ?? "—";
 }
 
-export function MarketListRow({
+export function MarketSwitcherRow({
   atmIv,
   annualizedBasis,
   basis,

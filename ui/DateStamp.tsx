@@ -1,14 +1,14 @@
 import { DateTime } from "effect";
 
-type TimestampProps = {
+type DateStampProps = {
   date?: DateTime.DateTime.Input;
   label?: string;
 };
 
-export function Timestamp({
+export function DateStamp({
   date = DateTime.unsafeNow(),
   label = "Last modified",
-}: TimestampProps) {
+}: DateStampProps) {
   const dt = DateTime.unsafeMake(date);
 
   const year = DateTime.getPart(dt, "year");

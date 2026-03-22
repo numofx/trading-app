@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { ChevronDown, Expand, Gauge, Redo2, Settings2 } from "lucide-react";
-import { CHART_TOOL_ICONS, CHART_TOOLS, TIMEFRAME_OPTIONS } from "@/lib/mock-trading-data";
+import { ChevronDown, Expand, Gauge, Redo2 } from "lucide-react";
+import { CHART_TOOL_ICONS, CHART_TOOLS, TIMEFRAME_OPTIONS } from "@/lib/mock-orderbook-terminal-data";
 import { cn } from "@/lib/cn";
 
 function ToolbarButton({
@@ -17,8 +17,8 @@ function ToolbarButton({
   return (
     <button
       className={cn(
-        "inline-flex h-8 items-center gap-1 rounded-sm border border-[#1B2430] bg-[#11161D] px-3 font-semibold text-[#6B7280] text-xs transition-colors hover:border-[#334155] hover:text-[#D1D5DB]",
-        active && "border-[#2563EB] bg-[#172554]/40 text-[#BFDBFE]",
+        "inline-flex h-9 items-center gap-1.5 rounded-xl px-3 font-medium text-[#8391A7] text-xs transition-colors hover:bg-white/5 hover:text-[#D7DEE8]",
+        active && "bg-[#16233A] text-[#D7E7FF]",
         className,
       )}
       onClick={onClick}
@@ -29,7 +29,7 @@ function ToolbarButton({
   );
 }
 
-export function ChartToolbar({
+export function TradingChartToolbar({
   expandedChart,
   indicatorsEnabled,
   mode = "top",
@@ -52,15 +52,15 @@ export function ChartToolbar({
 }) {
   if (mode === "side") {
     return (
-      <div className="flex w-11 shrink-0 flex-col items-center gap-1 border-[#1B2430] border-r bg-[#11161D] px-1 py-2">
+      <div className="flex w-12 shrink-0 flex-col items-center gap-2 border-white/6 border-r px-2 py-4">
         {CHART_TOOLS.map((tool) => {
           const Icon = CHART_TOOL_ICONS[tool.id];
 
           return (
             <button
               className={cn(
-                "flex size-8 items-center justify-center rounded-sm text-[#6B7280] transition-colors hover:bg-[#151B23] hover:text-[#D1D5DB]",
-                selectedTool === tool.id && "bg-[#151B23] text-[#BFDBFE]",
+                "flex size-8 items-center justify-center rounded-xl text-[#6F7C90] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]",
+                selectedTool === tool.id && "bg-white/7 text-[#D7E7FF]",
               )}
               key={tool.id}
               onClick={() => onToolSelect(tool.id)}
@@ -76,8 +76,8 @@ export function ChartToolbar({
   }
 
   return (
-    <div className="flex items-center justify-between border-[#1B2430] border-b px-2.5 py-1">
-      <div className="flex flex-wrap items-center gap-1.5">
+    <div className="flex items-center justify-between border-white/6 border-b px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2">
         {TIMEFRAME_OPTIONS.map((range) => (
           <ToolbarButton
             active={selectedTimeframe === range}
@@ -88,16 +88,12 @@ export function ChartToolbar({
           </ToolbarButton>
         ))}
 
-        <ToolbarButton onClick={() => onToolSelect("cursor")} className="px-2">
+        <ToolbarButton onClick={() => onToolSelect("cursor")} className="px-2.5">
           <ChevronDown className="size-4" />
         </ToolbarButton>
 
-        <ToolbarButton active={selectedTool === "measure"} className="px-2" onClick={() => onToolSelect("measure")}>
+        <ToolbarButton active={selectedTool === "measure"} className="px-2.5" onClick={() => onToolSelect("measure")}>
           <Gauge className="size-4" />
-        </ToolbarButton>
-
-        <ToolbarButton active={selectedTool === "candles"} className="px-2" onClick={() => onToolSelect("candles")}>
-          <Settings2 className="size-4" />
         </ToolbarButton>
 
         <ToolbarButton active={indicatorsEnabled} onClick={onIndicatorsToggle}>
@@ -105,11 +101,11 @@ export function ChartToolbar({
         </ToolbarButton>
       </div>
 
-      <div className="flex items-center gap-1.5">
-        <ToolbarButton className="px-2" onClick={() => onToolSelect("crosshair")}>
+      <div className="flex items-center gap-2">
+        <ToolbarButton className="px-2.5" onClick={() => onToolSelect("crosshair")}>
           <Redo2 className="size-4" />
         </ToolbarButton>
-        <ToolbarButton active={expandedChart} className="px-2" onClick={onExpandedToggle}>
+        <ToolbarButton active={expandedChart} className="px-2.5" onClick={onExpandedToggle}>
           <Expand className="size-4" />
         </ToolbarButton>
       </div>

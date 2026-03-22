@@ -15,8 +15,8 @@ import {
   formatBasis,
   formatMarketPrice,
 } from "@/lib/market-formatting";
-import type { CHART_CONTEXT_TABS, CHART_RANGE_BUTTONS, TIMEFRAME_OPTIONS } from "@/lib/mock-trading-data";
-import type { CONTRACT_LABELS } from "@/lib/mock-trading-data";
+import type { CHART_CONTEXT_TABS, CHART_RANGE_BUTTONS, TIMEFRAME_OPTIONS } from "@/lib/mock-orderbook-terminal-data";
+import type { CONTRACT_LABELS } from "@/lib/mock-orderbook-terminal-data";
 import type { Candle, MarketDefinition, MarketId, MarketStat } from "@/lib/trading.types";
 import {
   ACTIVITY_VIEWS,
@@ -33,13 +33,13 @@ import {
   FILTER_OPTIONS,
   MARKET_DATA,
   MARKET_DEFINITIONS,
-} from "@/lib/mock-trading-data";
-import { BottomTabs } from "@/ui/trading-terminal/BottomTabs";
-import { ChartPanel } from "@/ui/trading-terminal/ChartPanel";
-import { LiveTabTitle } from "@/ui/trading-terminal/LiveTabTitle";
-import { MarketHeader } from "@/ui/trading-terminal/MarketHeader";
-import { OrderBook } from "@/ui/trading-terminal/OrderBook";
-import { TradePanel } from "@/ui/trading-terminal/TradePanel";
+} from "@/lib/mock-orderbook-terminal-data";
+import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
+import { OrderBookPanel } from "@/ui/trading-terminal/OrderBookPanel";
+import { OrderEntryPanel } from "@/ui/trading-terminal/OrderEntryPanel";
+import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
+import { TradingChartPanel } from "@/ui/trading-terminal/TradingChartPanel";
+import { TradingMarketHeader } from "@/ui/trading-terminal/TradingMarketHeader";
 
 function parseNumericString(value: string) {
   return Number(value.replaceAll(",", "").replaceAll("$", "").replaceAll("+", ""));
@@ -405,7 +405,7 @@ function getOrderMetrics(
 
 type SelectedContract = (typeof CONTRACT_LABELS)[number];
 
-export function TradingTerminal({
+export function OrderBookTradingTerminal({
   chainlinkSpot,
   spotHistory,
 }: {
@@ -578,11 +578,11 @@ export function TradingTerminal({
   }
 
   return (
-    <main className="min-h-screen bg-[#0B1118] text-[#D1D5DB] xl:h-screen xl:overflow-hidden">
-      <LiveTabTitle pair={formatFxDisplayPair(selectedMarket.pair)} price={liveCandles.at(-1)?.close ?? null} />
+    <main className="min-h-screen bg-transparent text-[#D7DEE8] xl:h-[100dvh] xl:overflow-hidden">
+      <MarketDocumentTitle pair={formatFxDisplayPair(selectedMarket.pair)} price={liveCandles.at(-1)?.close ?? null} />
 
-      <div className="mx-auto flex min-h-screen w-full max-w-none flex-col p-2 xl:h-screen xl:overflow-hidden">
-        <MarketHeader
+      <div className="mx-auto flex min-h-screen w-full max-w-none flex-col px-3 py-4 xl:h-[100dvh] xl:overflow-hidden xl:px-5">
+        <TradingMarketHeader
           atmIvByMarketId={optionAtmIvByMarketId}
           annualizedBasisByMarketId={selectorAnnualizedBasisByMarketId}
           basisByMarketId={selectorBasisByMarketId}
@@ -599,9 +599,9 @@ export function TradingTerminal({
           spotChangeByMarketId={spotChangeByMarketId}
         />
 
-        <section className="mt-2 grid flex-1 grid-cols-1 gap-2 xl:min-h-0 xl:grid-cols-[minmax(0,65fr)_minmax(280px,20fr)_minmax(250px,15fr)] xl:overflow-hidden">
-          <div className="min-h-[540px] xl:min-h-0 xl:overflow-hidden">
-            <ChartPanel
+        <section className="mt-4 grid flex-1 grid-cols-1 gap-4 xl:min-h-0 xl:grid-cols-[minmax(0,1.82fr)_minmax(290px,0.78fr)_minmax(340px,0.92fr)] xl:overflow-hidden 2xl:grid-cols-[minmax(0,1.9fr)_minmax(320px,0.8fr)_minmax(360px,0.95fr)]">
+          <div className="min-h-[520px] xl:min-h-0 xl:overflow-hidden">
+            <TradingChartPanel
               candles={liveCandles}
               chartContext={chartContext}
               entryPrice={entryPrice}
@@ -622,7 +622,7 @@ export function TradingTerminal({
           </div>
 
           <div className="min-h-[420px] xl:min-h-0 xl:overflow-hidden">
-            <OrderBook
+            <OrderBookPanel
               asks={market.orderBookAsks}
               bids={market.orderBookBids}
               contractLabel={selectedMarket.expiryLabel ?? "Spot"}
@@ -633,7 +633,7 @@ export function TradingTerminal({
           </div>
 
           <div className="min-h-[420px] xl:min-h-0 xl:overflow-hidden">
-            <TradePanel
+            <OrderEntryPanel
               allocation={allocation}
               atExpiryDeliver={atExpiryDeliver}
               buyingPower="$250,000"
@@ -668,8 +668,8 @@ export function TradingTerminal({
           </div>
         </section>
 
-        <div className="mt-2 xl:shrink-0">
-          <BottomTabs
+        <div className="mt-4 xl:h-[210px] xl:min-h-0 xl:shrink-0">
+          <TradingActivityPanel
             activityView={dynamicActivityViews[selectedBottomTab]}
             filter={filter}
             footerLinks={[]}

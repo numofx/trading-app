@@ -1,6 +1,9 @@
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { NextConfig } from "next";
 
 const isDevelopment = process.env.NODE_ENV === "development";
+const projectRoot = dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
   compress: true,
@@ -15,6 +18,9 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     turbopackFileSystemCacheForBuild: true,
+  },
+  turbopack: {
+    root: join(projectRoot),
   },
   // Image optimization
   images: {

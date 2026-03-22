@@ -27,29 +27,29 @@ function OrderRow({
   const width = `${(level.total / maxTotal) * 100}%`;
 
   return (
-    <div className="relative grid grid-cols-3 px-2 py-0.5 text-[11px]">
+    <div className="relative grid grid-cols-3 px-4 py-1 text-[11px]">
       <div
         className={cn(
-          "absolute inset-y-0 right-0 rounded-sm",
-          side === "ask" ? "bg-[#7F1D1D]/45" : "bg-[#14532D]/45",
+          "absolute inset-y-0 right-0 rounded-l-xl",
+          side === "ask" ? "bg-[#5A2628]/38" : "bg-[#17382A]/38",
         )}
         style={{ width }}
       />
       <span
         className={cn(
           "relative z-10 font-semibold",
-          side === "ask" ? "text-[#D59C9C]" : "text-[#8CC9A3]",
+          side === "ask" ? "text-[#D7A8A8]" : "text-[#9CC7A9]",
         )}
       >
         {formatPrice(level.price)}
       </span>
-      <span className="relative z-10 text-right font-medium text-[#D1D5DB]">{formatSize(level.size)}</span>
-      <span className="relative z-10 text-right text-[#9CA3AF]">{formatSize(level.total)}</span>
+      <span className="relative z-10 text-right font-medium text-[#C2CCD9]">{formatSize(level.size)}</span>
+      <span className="relative z-10 text-right text-[#788699]">{formatSize(level.total)}</span>
     </div>
   );
 }
 
-export function OrderBook({
+export function OrderBookPanel({
   asks,
   bids,
   contractLabel,
@@ -73,13 +73,13 @@ export function OrderBook({
   const spreadPercent = midPrice && spread !== null ? (spread / midPrice) * 100 : null;
 
   return (
-    <section className="flex h-full min-h-[420px] flex-col overflow-hidden rounded-md border border-[#1B2430] bg-[#0F1720] xl:min-h-0">
-      <div className="flex items-center justify-between border-[#1B2430] border-b px-2 py-1">
+    <section className="flex h-full min-h-[420px] flex-col overflow-hidden rounded-[24px] bg-[#0B121B]/76 ring-1 ring-white/5 xl:min-h-0">
+      <div className="flex items-center justify-between border-white/6 border-b px-4 py-3">
         <div className="flex items-center gap-2 font-medium text-xs">
           <button
             className={cn(
-              "rounded-sm px-2 py-1",
-              view === "Order Book" ? "bg-[#11161D] text-[#E5E7EB]" : "text-[#6B7280]",
+              "rounded-xl px-3 py-1.5",
+              view === "Order Book" ? "bg-white/6 text-[#E7EDF6]" : "text-[#728095]",
             )}
             onClick={() => onViewChange("Order Book")}
             type="button"
@@ -88,8 +88,8 @@ export function OrderBook({
           </button>
           <button
             className={cn(
-              "rounded-sm px-2 py-1",
-              view === "Trades" ? "bg-[#11161D] text-[#E5E7EB]" : "text-[#6B7280]",
+              "rounded-xl px-3 py-1.5",
+              view === "Trades" ? "bg-white/6 text-[#E7EDF6]" : "text-[#728095]",
             )}
             onClick={() => onViewChange("Trades")}
             type="button"
@@ -99,16 +99,16 @@ export function OrderBook({
         </div>
 
         <div className="flex items-center gap-2">
-          <button className="rounded-sm p-1.5 text-[#6B7280] hover:bg-[#11161D]" type="button">
+          <button className="rounded-xl p-2 text-[#728095] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]" type="button">
             <MoreHorizontal className="size-4" />
           </button>
-          <button className="rounded-sm border border-[#1B2430] bg-[#11161D] px-2 py-1 text-[#D1D5DB] text-xs" type="button">
+          <button className="rounded-xl bg-white/5 px-3 py-1.5 text-[#C3CFDD] text-xs" type="button">
             {contractLabel}
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 border-[#1B2430] border-b px-2 py-1 text-[#6B7280] text-[10px] uppercase tracking-[0.14em]">
+      <div className="grid grid-cols-3 border-white/6 border-b px-4 py-2 text-[#5E6B7F] text-[10px] uppercase tracking-[0.16em]">
         <span>Price</span>
         <span className="text-right">Size</span>
         <span className="text-right">Total</span>
@@ -116,7 +116,7 @@ export function OrderBook({
 
       {view === "Order Book" ? (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="border-[#1B2430] border-b bg-[#181015] px-2 py-0.5 text-[#D59C9C] text-[10px] uppercase tracking-[0.14em]">
+          <div className="px-4 py-2 text-[#B78787] text-[10px] uppercase tracking-[0.16em]">
             Asks
           </div>
           <div className="overflow-hidden">
@@ -125,27 +125,27 @@ export function OrderBook({
             ))}
           </div>
 
-          <div className="border-[#1B2430] border-y bg-[#11161D] px-2 py-1.5">
-            <div className="flex items-center justify-between">
+          <div className="mx-3 my-2 rounded-2xl bg-white/[0.03] px-4 py-3">
+            <div className="flex items-center justify-between gap-4">
               <div>
-                <div className="font-medium text-[#6B7280] text-[10px] uppercase tracking-[0.14em]">Spread</div>
-                <div className="mt-0.5 font-semibold text-[#E5E7EB] text-sm">
+                <div className="font-medium text-[#5E6B7F] text-[10px] uppercase tracking-[0.16em]">Spread</div>
+                <div className="mt-1 font-semibold text-[#E7EDF6] text-base">
                   {spread === null ? "—" : formatPrice(spread)} cNGN
                 </div>
               </div>
-              <div className="text-right">
-                <div className="font-medium text-[#6B7280] text-[10px] uppercase tracking-[0.14em]">Mid Price</div>
-                <div className="mt-0.5 font-semibold text-[#BFDBFE] text-sm">
+              <div className="text-center">
+                <div className="font-medium text-[#5E6B7F] text-[10px] uppercase tracking-[0.16em]">Mid Price</div>
+                <div className="mt-1 font-semibold text-[#DCE9FF] text-xl">
                   {midPrice === null ? "—" : formatPrice(midPrice)}
                 </div>
-                <div className="text-[#60A5FA] text-[10px]">
+                <div className="text-[#7BA7F4] text-[10px]">
                   {spreadPercent === null ? "—" : `${spreadPercent.toFixed(3)}%`}
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="border-[#1B2430] border-b bg-[#101A16] px-2 py-0.5 text-[#8CC9A3] text-[10px] uppercase tracking-[0.14em]">
+          <div className="px-4 py-2 text-[#7DA189] text-[10px] uppercase tracking-[0.16em]">
             Bids
           </div>
           <div className="overflow-hidden">
@@ -157,12 +157,12 @@ export function OrderBook({
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
           {trades.map((trade) => (
-            <div className="grid grid-cols-3 px-2.5 py-1 text-[11px]" key={`${trade.time}-${trade.price}`}>
-              <span className={cn("font-semibold", trade.side === "buy" ? "text-[#8CC9A3]" : "text-[#D59C9C]")}>
+            <div className="grid grid-cols-3 px-4 py-1.5 text-[11px]" key={`${trade.time}-${trade.price}`}>
+              <span className={cn("font-semibold", trade.side === "buy" ? "text-[#86AE95]" : "text-[#C48F8F]")}>
                 {formatPrice(trade.price)}
               </span>
-              <span className="text-right text-[#D1D5DB]">{formatSize(trade.size)}</span>
-              <span className="text-right text-[#9CA3AF]">{trade.time}</span>
+              <span className="text-right text-[#BCC7D3]">{formatSize(trade.size)}</span>
+              <span className="text-right text-[#6F7C90]">{trade.time}</span>
             </div>
           ))}
         </div>

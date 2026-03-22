@@ -25,7 +25,7 @@ function parseStoredMarketIds(value: string | null, validMarketIds: Set<string>)
   }
 }
 
-export function useMarketPreferences(validMarketIds: MarketId[], maxRecentMarkets = DEFAULT_MAX_RECENT_MARKETS) {
+export function useMarketSelectorPreferences(validMarketIds: MarketId[], maxRecentMarkets = DEFAULT_MAX_RECENT_MARKETS) {
   const [favoriteMarketIds, setFavoriteMarketIds] = useState<MarketId[]>([]);
   const [recentMarketIds, setRecentMarketIds] = useState<MarketId[]>([]);
   const validMarketIdsKey = validMarketIds.join("|");

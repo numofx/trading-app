@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-export function LiveTabTitle({
+export function MarketDocumentTitle({
   pair,
   price,
 }: {
