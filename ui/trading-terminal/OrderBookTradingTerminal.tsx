@@ -16,21 +16,15 @@ import {
   formatMarketPrice,
 } from "@/lib/market-formatting";
 import type { CHART_CONTEXT_TABS, CHART_RANGE_BUTTONS, TIMEFRAME_OPTIONS } from "@/lib/mock-orderbook-terminal-data";
-import type { CONTRACT_LABELS } from "@/lib/mock-orderbook-terminal-data";
-import type { Candle, MarketDefinition, MarketId, MarketStat } from "@/lib/trading.types";
+import type { Candle, MarketDefinition, MarketId, MarketStat, TradePrint } from "@/lib/trading.types";
 import {
   ACTIVITY_VIEWS,
   CHART_TOOLS,
-  CONTRACT_TABS,
   DEFAULT_BOTTOM_TAB,
   DEFAULT_CHART_CONTEXT,
-  DEFAULT_CONTRACT,
-  DEFAULT_MARKET_ID,
   DEFAULT_ORDER_TYPE,
   DEFAULT_SYMBOL,
   DEFAULT_TIMEFRAME,
-  MARKET_DATA,
-  MARKET_DEFINITIONS,
 } from "@/lib/mock-orderbook-terminal-data";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import { OrderBookPanel } from "@/ui/trading-terminal/OrderBookPanel";
@@ -40,16 +34,29 @@ import { TradingChartPanel } from "@/ui/trading-terminal/TradingChartPanel";
 import { TradingMarketHeader } from "@/ui/trading-terminal/TradingMarketHeader";
 
 function parseNumericString(value: string) {
-  return Number(value.replaceAll(",", "").replaceAll("$", "").replaceAll("+", ""));
+  const parsed = Number(value.replaceAll(",", "").replaceAll("$", "").replaceAll("+", ""));
+
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
 
 function formatPriceDisplay(value: number | string) {
   const numericValue = typeof value === "number" ? value : parseNumericString(value);
+
+  if (!Number.isFinite(numericValue)) {
+    return "—";
+  }
+
   return `${formatMarketPrice(numericValue)} cNGN per USDC`;
 }
 
-function getDirectionalLabel(side: "buy" | "sell") {
-  return side === "buy" ? "Long cNGN" : "Short cNGN";
+function getDirectionalLabel(side: "buy" | "sell", marketDefinition: MarketDefinition) {
+  const [base] = formatFxDisplayPair(marketDefinition.pair).split("/");
+
+  if (!base) {
+    return side === "buy" ? "Long" : "Short";
+  }
+
+  return side === "buy" ? `Long ${base}` : `Short ${base}`;
 }
 
 function getCompatibleSpotPrice(candidatePrice: number | null, referencePrice: number) {
@@ -66,10 +73,7 @@ function getCompatibleSpotPrice(candidatePrice: number | null, referencePrice: n
   return candidatePrice;
 }
 
-function shiftCandles(
-  candles: (typeof MARKET_DATA)[keyof typeof MARKET_DATA]["candles"],
-  targetClose: number,
-) {
+function shiftCandles(candles: Candle[], targetClose: number) {
   const currentClose = candles.at(-1)?.close ?? targetClose;
   const delta = targetClose - currentClose;
 
@@ -83,6 +87,8 @@ function shiftCandles(
 }
 
 function buildActivityViews(
+  buyDirection: string,
+  sellDirection: string,
   ticker: string,
   positionValue: string,
   entryPrice: string,
@@ -93,7 +99,7 @@ function buildActivityViews(
   return {
     "open-orders": {
       ...ACTIVITY_VIEWS["open-orders"],
-      rows: [{ cells: [ticker, "Long cNGN", "Limit", "25,000 contracts", entryPrice] }],
+      rows: [{ cells: [ticker, buyDirection, "Limit", "25,000 contracts", entryPrice] }],
     },
     positions: {
       ...ACTIVITY_VIEWS.positions,
@@ -102,8 +108,8 @@ function buildActivityViews(
     "trade-history": {
       ...ACTIVITY_VIEWS["trade-history"],
       rows: [
-        { cells: ["10:08:14", ticker, "Long cNGN", "50,000 contracts", markPrice] },
-        { cells: ["10:08:06", ticker, "Short cNGN", "35,000 contracts", entryPrice] },
+        { cells: ["10:08:14", ticker, buyDirection, "50,000 contracts", markPrice] },
+        { cells: ["10:08:06", ticker, sellDirection, "35,000 contracts", entryPrice] },
       ],
     },
   };
@@ -118,27 +124,34 @@ function getDefaultContractForMarket(market: MarketDefinition) {
     return market.contractLabel;
   }
 
-  return DEFAULT_CONTRACT;
+  return "";
 }
 
-function getContractTabsForProduct(type: MarketDefinition["type"]) {
+function getContractTabsForProduct(type: MarketDefinition["type"], marketDefinitions: MarketDefinition[]) {
   if (type === "future" || type === "option") {
-    return CONTRACT_TABS;
+    return Array.from(
+      new Set(
+        marketDefinitions
+          .filter((marketDefinition) => marketDefinition.type === type && marketDefinition.contractLabel)
+          .map((marketDefinition) => marketDefinition.contractLabel as string),
+      ),
+    ).map((label) => ({ label }));
   }
 
   return [];
 }
 
-function getMarketIdForSelection(type: MarketDefinition["type"], contract: SelectedContract) {
-  if (type === "option") {
-    return contract === "MAR 2026" ? "cngn-usdc-mar-2026-options" : "cngn-usdc-jun-2026-options";
-  }
-
-  if (type === "future") {
-    return contract === "MAR 2026" ? "cngn-usdc-mar-2026-futures" : "cngn-usdc-jun-2026-futures";
-  }
-
-  return DEFAULT_MARKET_ID;
+function getMarketIdForSelection(
+  type: MarketDefinition["type"],
+  contract: string,
+  marketDefinitions: MarketDefinition[],
+  fallbackMarketId: MarketId,
+) {
+  return (
+    marketDefinitions.find((marketDefinition) => {
+      return marketDefinition.type === type && marketDefinition.contractLabel === contract;
+    })?.id ?? fallbackMarketId
+  );
 }
 
 function getChartUpdateInterval(timeframe: (typeof TIMEFRAME_OPTIONS)[number]) {
@@ -259,25 +272,27 @@ function buildLiveInfoBar(
   infoBar: MarketStat[],
   marketDefinition: MarketDefinition,
   liveBasis: number | null,
+  marketData: Record<MarketId, { mark: string }>,
   liveSpotPrice: number,
 ) {
   const marketPrice =
     marketDefinition.type === "spot"
       ? liveSpotPrice
-      : parseNumericString(MARKET_DATA[marketDefinition.id as MarketId].mark);
+      : parseNumericString(marketData[marketDefinition.id as MarketId].mark);
+  const safeMarketPrice = Number.isFinite(marketPrice) ? marketPrice : null;
   const liveAnnualizedBasis = calculateAnnualizedBasisPercent(
-    marketPrice,
+    safeMarketPrice ?? 0,
     liveSpotPrice,
     marketDefinition.type === "future" ? marketDefinition.expiryDays : null,
   );
   const liveBasisPercent =
-    marketDefinition.type === "future" && liveBasis !== null && liveSpotPrice > 0
+    marketDefinition.type === "future" && liveBasis !== null && liveSpotPrice > 0 && safeMarketPrice !== null
       ? (liveBasis / liveSpotPrice) * 100
       : null;
 
   return infoBar.map((item: MarketStat) => {
     if (item.label === "Mark Price") {
-      return { ...item, value: formatPriceDisplay(marketPrice) };
+      return { ...item, value: formatPriceDisplay(safeMarketPrice ?? "—") };
     }
 
     if (item.label === "Spot") {
@@ -300,53 +315,69 @@ function buildLiveInfoBar(
   });
 }
 
-function buildSelectorMetrics(liveSpotPrice: number) {
+function buildSelectorMetrics(
+  liveSpotPrice: number,
+  marketDefinitions: MarketDefinition[],
+  marketData: Record<MarketId, { mark: string; trades: TradePrint[] }>,
+) {
   const spotChangeByMarketId = {
-    "cngn-usdc-jun-2026-futures": null,
     "cngn-usdc-jun-2026-options": null,
-    "cngn-usdc-mar-2026-futures": null,
     "cngn-usdc-mar-2026-options": null,
     "cngn-usdc-spot": "+0.18%",
-  } satisfies Record<string, string | null>;
+  } as Record<string, string | null>;
   const optionAtmIvByMarketId = {
-    "cngn-usdc-jun-2026-futures": null,
     "cngn-usdc-jun-2026-options": "61.8%",
-    "cngn-usdc-mar-2026-futures": null,
     "cngn-usdc-mar-2026-options": "54.2%",
     "cngn-usdc-spot": null,
-  } satisfies Record<string, string | null>;
+  } as Record<string, string | null>;
   const optionOpenInterestByMarketId = {
-    "cngn-usdc-jun-2026-futures": null,
     "cngn-usdc-jun-2026-options": "$3.1M",
-    "cngn-usdc-mar-2026-futures": null,
     "cngn-usdc-mar-2026-options": "$1.4M",
     "cngn-usdc-spot": null,
-  } satisfies Record<string, string | null>;
+  } as Record<string, string | null>;
+  for (const marketDefinition of marketDefinitions) {
+    if (marketDefinition.type === "future") {
+      spotChangeByMarketId[marketDefinition.id] = null;
+      optionAtmIvByMarketId[marketDefinition.id] = null;
+      optionOpenInterestByMarketId[marketDefinition.id] = null;
+    }
+  }
   const selectorLastByMarketId = Object.fromEntries(
-    MARKET_DEFINITIONS.map((marketDefinition) => [
+    marketDefinitions.map((marketDefinition) => [
       marketDefinition.id,
-      marketDefinition.type === "spot" || marketDefinition.type === "future"
-        ? parseNumericString(MARKET_DATA[marketDefinition.id as MarketId].mark)
-        : null,
+      marketDefinition.type === "spot"
+        ? (() => {
+            const parsed = parseNumericString(marketData[marketDefinition.id as MarketId].mark);
+            return Number.isFinite(parsed) ? parsed : null;
+          })()
+        : marketDefinition.type === "future"
+          ? (marketData[marketDefinition.id as MarketId].trades[0]?.price ?? null)
+          : null,
     ]),
   ) satisfies Record<string, number | null>;
   const selectorBasisByMarketId = Object.fromEntries(
-    MARKET_DEFINITIONS.map((marketDefinition) => {
+    marketDefinitions.map((marketDefinition) => {
       if (marketDefinition.type !== "future") {
         return [marketDefinition.id, null];
       }
 
-      const futuresPrice = parseNumericString(MARKET_DATA[marketDefinition.id as MarketId].mark);
+      const futuresPrice = parseNumericString(marketData[marketDefinition.id as MarketId].mark);
+      if (!Number.isFinite(futuresPrice)) {
+        return [marketDefinition.id, null];
+      }
       return [marketDefinition.id, calculateBasis(futuresPrice, liveSpotPrice)];
     }),
   ) satisfies Record<string, number | null>;
   const selectorAnnualizedBasisByMarketId = Object.fromEntries(
-    MARKET_DEFINITIONS.map((marketDefinition) => {
+    marketDefinitions.map((marketDefinition) => {
       if (marketDefinition.type !== "future") {
         return [marketDefinition.id, null];
       }
 
-      const futuresPrice = parseNumericString(MARKET_DATA[marketDefinition.id as MarketId].mark);
+      const futuresPrice = parseNumericString(marketData[marketDefinition.id as MarketId].mark);
+      if (!Number.isFinite(futuresPrice)) {
+        return [marketDefinition.id, null];
+      }
       return [
         marketDefinition.id,
         calculateAnnualizedBasisPercent(futuresPrice, liveSpotPrice, marketDefinition.expiryDays),
@@ -364,8 +395,12 @@ function buildSelectorMetrics(liveSpotPrice: number) {
   };
 }
 
-function getPositionMetrics(marketId: MarketId, livePrice: number) {
-  const activePosition = MARKET_DATA[marketId].positionOverview;
+function getPositionMetrics(
+  marketData: Record<MarketId, { positionOverview: { label: string; value: string }[] }>,
+  marketId: MarketId,
+  livePrice: number,
+) {
+  const activePosition = marketData[marketId].positionOverview;
 
   return {
     entryPrice: activePosition.find((item) => item.label === "Entry Price")?.value ?? "—",
@@ -387,31 +422,40 @@ function getOrderMetrics(
 ) {
   const sizeNumber = Number(size || "0");
   const limitPriceNumber = parseNumericString(limitPrice || marketMark);
-  const orderValue = sizeNumber * limitPriceNumber;
-  const estimatedFill = orderType === "Market" ? livePrice + (tradeSide === "buy" ? 0.12 : -0.12) : limitPriceNumber;
-  const averageExecution = orderType === "Market" ? estimatedFill + (tradeSide === "buy" ? 0.05 : -0.05) : limitPriceNumber;
+  const safeLimitPrice = Number.isFinite(limitPriceNumber) ? limitPriceNumber : 0;
+  const orderValue = sizeNumber * safeLimitPrice;
+  const estimatedFill = orderType === "Market" ? livePrice + (tradeSide === "buy" ? 0.12 : -0.12) : safeLimitPrice;
+  const averageExecution = orderType === "Market" ? estimatedFill + (tradeSide === "buy" ? 0.05 : -0.05) : safeLimitPrice;
 
   return {
     averageExecution,
     estimatedFill,
     fees: orderValue * 0.0002,
     initialMargin: orderValue * 0.05,
-    liquidationPrice: tradeSide === "buy" ? limitPriceNumber - 62.4 : limitPriceNumber + 62.4,
+    liquidationPrice: tradeSide === "buy" ? safeLimitPrice - 62.4 : safeLimitPrice + 62.4,
     orderValue,
   };
 }
 
-type SelectedContract = (typeof CONTRACT_LABELS)[number];
+type SelectedContract = string;
 
 export function OrderBookTradingTerminal({
   chainlinkSpot,
+  defaultContract,
+  defaultMarketId,
+  marketData,
+  marketDefinitions,
   spotHistory,
 }: {
   chainlinkSpot: ChainlinkSpotSnapshot | null;
+  defaultContract: string;
+  defaultMarketId: MarketId;
+  marketData: Record<MarketId, any>;
+  marketDefinitions: MarketDefinition[];
   spotHistory: Record<SpotHistorySnapshot["pair"], SpotHistorySnapshot> | null;
 }) {
-  const [selectedMarketId, setSelectedMarketId] = useState<MarketId>(DEFAULT_MARKET_ID);
-  const [selectedContract, setSelectedContract] = useState<SelectedContract>(DEFAULT_CONTRACT);
+  const [selectedMarketId, setSelectedMarketId] = useState<MarketId>(defaultMarketId);
+  const [selectedContract, setSelectedContract] = useState<SelectedContract>(defaultContract);
   const [timeframe, setTimeframe] = useState<(typeof TIMEFRAME_OPTIONS)[number]>(DEFAULT_TIMEFRAME);
   const [chartContext, setChartContext] = useState<(typeof CHART_CONTEXT_TABS)[number]>(
     DEFAULT_CHART_CONTEXT,
@@ -434,10 +478,10 @@ export function OrderBookTradingTerminal({
   const [lastAction, setLastAction] = useState("Ready");
 
   const selectedMarket =
-    MARKET_DEFINITIONS.find((marketOption) => marketOption.id === selectedMarketId) ??
-    MARKET_DEFINITIONS[0];
-  const market = MARKET_DATA[selectedMarketId];
-  const referenceSpotPrice = parseNumericString(MARKET_DATA["cngn-usdc-spot"].mark);
+    marketDefinitions.find((marketOption) => marketOption.id === selectedMarketId) ??
+    marketDefinitions[0];
+  const market = marketData[selectedMarketId];
+  const referenceSpotPrice = parseNumericString(marketData["cngn-usdc-spot"].mark);
   const liveSpotPrice = getCompatibleSpotPrice(
     spotHistory?.["NGN/USD"]?.latestPrice ?? chainlinkSpot?.priceNgnPerUsd ?? null,
     referenceSpotPrice,
@@ -461,8 +505,10 @@ export function OrderBookTradingTerminal({
     selectorBasisByMarketId,
     selectorLastByMarketId,
     spotChangeByMarketId,
-  } = buildSelectorMetrics(liveSpotPrice);
+  } = buildSelectorMetrics(liveSpotPrice, marketDefinitions, marketData);
   const dynamicActivityViews = buildActivityViews(
+    getDirectionalLabel("buy", selectedMarket),
+    getDirectionalLabel("sell", selectedMarket),
     getDisplayTicker(selectedMarket),
     market.positionOverview[0]?.value ?? "",
     market.positionOverview[1]?.value ?? "",
@@ -483,10 +529,11 @@ export function OrderBookTradingTerminal({
     market.infoBar,
     selectedMarket,
     liveBasis,
+    marketData,
     liveSpotPrice,
   );
   const { entryPrice, markPrice, pnl: unrealizedPnl, positionOverview, positionValue, returnPercent } =
-    getPositionMetrics(selectedMarketId, livePrice);
+    getPositionMetrics(marketData, selectedMarketId, livePrice);
   const { averageExecution, estimatedFill, fees, initialMargin, liquidationPrice, orderValue } = getOrderMetrics(
     limitPrice,
     market.mark,
@@ -530,19 +577,23 @@ export function OrderBookTradingTerminal({
 
   function handleContractSelect(contract: string) {
     startTransition(() => {
-      const nextContract = contract as SelectedContract;
-      const nextMarketId = getMarketIdForSelection(selectedMarket.type, nextContract);
+      const nextMarketId = getMarketIdForSelection(
+        selectedMarket.type,
+        contract,
+        marketDefinitions,
+        selectedMarketId,
+      );
 
-      setSelectedContract(nextContract);
+      setSelectedContract(contract);
       setSelectedMarketId(nextMarketId);
       setChartContext(DEFAULT_CHART_CONTEXT);
-      setLimitPrice(MARKET_DATA[nextMarketId].mark.replaceAll(",", ""));
-      setLastAction(`Switched to ${formatFxDisplayPair(DEFAULT_SYMBOL)} ${getProductDisplayName(selectedMarket.type)} ${contract}`);
+      setLimitPrice(marketData[nextMarketId].mark.replaceAll(",", ""));
+      setLastAction(`Switched to ${formatFxDisplayPair(selectedMarket.pair)} ${getProductDisplayName(selectedMarket.type)} ${contract}`);
     });
   }
 
   function handleMarketSelect(marketId: string) {
-    const nextMarket = MARKET_DEFINITIONS.find((marketOption) => marketOption.id === marketId);
+    const nextMarket = marketDefinitions.find((marketOption) => marketOption.id === marketId);
 
     if (!nextMarket) {
       return;
@@ -551,12 +602,12 @@ export function OrderBookTradingTerminal({
     startTransition(() => {
       setSelectedMarketId(marketId as MarketId);
       if (nextMarket.contractLabel) {
-        setSelectedContract(nextMarket.contractLabel as SelectedContract);
+        setSelectedContract(nextMarket.contractLabel);
       } else {
-        setSelectedContract(getDefaultContractForMarket(nextMarket) as SelectedContract);
+        setSelectedContract(getDefaultContractForMarket(nextMarket));
       }
       setChartContext(nextMarket.type === "spot" ? "Spot" : DEFAULT_CHART_CONTEXT);
-      setLimitPrice(MARKET_DATA[marketId as MarketId].mark.replaceAll(",", ""));
+      setLimitPrice(marketData[marketId as MarketId].mark.replaceAll(",", ""));
       setLastAction(`Switched to ${getDisplayTicker(nextMarket)}`);
     });
   }
@@ -564,7 +615,7 @@ export function OrderBookTradingTerminal({
   function handleSubmit(side: "buy" | "sell") {
     setTradeSide(side);
     setLastAction(
-      `${getDirectionalLabel(side)} ${Number(size || "0").toLocaleString("en-US")} contracts on ${market.ticker}`,
+      `${getDirectionalLabel(side, selectedMarket)} ${Number(size || "0").toLocaleString("en-US")} contracts on ${market.ticker}`,
     );
   }
 
@@ -577,12 +628,12 @@ export function OrderBookTradingTerminal({
           atmIvByMarketId={optionAtmIvByMarketId}
           annualizedBasisByMarketId={selectorAnnualizedBasisByMarketId}
           basisByMarketId={selectorBasisByMarketId}
-          contractTabs={getContractTabsForProduct(selectedMarket.type)}
+          contractTabs={getContractTabsForProduct(selectedMarket.type, marketDefinitions)}
           currentContract={selectedContract}
           currentMarketId={selectedMarketId}
           infoBar={liveInfoBar}
           lastByMarketId={selectorLastByMarketId}
-          marketOptions={MARKET_DEFINITIONS}
+          marketOptions={marketDefinitions}
           openInterestByMarketId={optionOpenInterestByMarketId}
           onContractSelect={handleContractSelect}
           onMarketSelect={handleMarketSelect}

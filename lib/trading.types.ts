@@ -43,24 +43,28 @@ export type ContractTab = {
 
 export type MarketType = "spot" | "future" | "option" | "perp";
 
-export type MarketId =
-  | "cngn-usdc-spot"
-  | "cngn-usdc-mar-2026-futures"
-  | "cngn-usdc-jun-2026-futures"
-  | "cngn-usdc-mar-2026-options"
-  | "cngn-usdc-jun-2026-options";
+export type MarketId = string;
 
 export type MarketDefinition = {
+  assetAddress?: string | null;
   contractLabel: string | null;
+  contractMultiplier?: string | null;
+  contractType?: string | null;
   expiryDays: number | null;
   expiryLabel: string | null;
+  expiryTimestamp?: number | null;
   flagSrc: string;
   id: MarketId;
+  lastTradeTimestamp?: number | null;
+  minSize?: string | null;
+  settlementType?: string | null;
   strikeLabel: string | null;
+  subId?: string | null;
   type: MarketType;
-  pair: "cNGNUSDC";
-  region: "Africa";
+  pair: string;
+  region: string;
   sortOrder: number;
+  tickSize?: string | null;
 };
 
 export type DeliveryTerm = {

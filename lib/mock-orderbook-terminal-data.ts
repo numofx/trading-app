@@ -27,6 +27,7 @@ import type {
   MarketId,
   TradePrint,
 } from "@/lib/trading.types";
+import type { BookResponse, PresentedTrade } from "@/lib/markets-service";
 
 const BASE_SPOT_CANDLES = [
   [1598.8, 1600.2, 1598.1, 1599.6, 260],
@@ -504,6 +505,277 @@ export const MARKET_DATA = {
   "cngn-usdc-jun-2026-options": buildOptionsMarket("JUN 2026", 0, 1),
   "cngn-usdc-mar-2026-options": buildOptionsMarket("MAR 2026", -6.4, 0.84),
 } satisfies Record<MarketId, ContractMarket>;
+
+type LiveDeliverableFutureConfig = {
+  assetAddress: string;
+  contractMultiplier?: string | null;
+  expiryTimestamp: number;
+  lastTradeTimestamp?: number | null;
+  market: string;
+  minSize?: string | null;
+  subId: string;
+  tickSize?: string | null;
+};
+
+function formatExpiryLabelFromTimestamp(expiryTimestamp: number) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    timeZone: "UTC",
+    year: "numeric",
+  }).format(new Date(expiryTimestamp * 1000));
+}
+
+function formatContractLabelFromTimestamp(expiryTimestamp: number) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    timeZone: "UTC",
+    year: "numeric",
+  })
+    .format(new Date(expiryTimestamp * 1000))
+    .toUpperCase();
+}
+
+function getExpiryDays(expiryTimestamp: number) {
+  const millisecondsToExpiry = expiryTimestamp * 1000 - Date.now();
+
+  return Math.max(0, Math.ceil(millisecondsToExpiry / (24 * 60 * 60 * 1000)));
+}
+
+export function buildDeliverableFutureDefinition(config: LiveDeliverableFutureConfig) {
+  return {
+    assetAddress: config.assetAddress,
+    contractLabel: formatContractLabelFromTimestamp(config.expiryTimestamp),
+    contractMultiplier: config.contractMultiplier ?? "10000",
+    contractType: "deliverable_fx_future",
+    expiryDays: getExpiryDays(config.expiryTimestamp),
+    expiryLabel: formatExpiryLabelFromTimestamp(config.expiryTimestamp),
+    expiryTimestamp: config.expiryTimestamp,
+    flagSrc: "/flags/ng.svg",
+    id: `${config.market.toLowerCase().replaceAll("/", "-").replaceAll(" ", "-")}-${config.subId}`,
+    lastTradeTimestamp: config.lastTradeTimestamp ?? null,
+    minSize: config.minSize ?? "0.001",
+    pair: "USDCcNGN",
+    region: "Africa",
+    settlementType: "physical_delivery",
+    sortOrder: 1,
+    strikeLabel: null,
+    subId: config.subId,
+    tickSize: config.tickSize ?? "1",
+    type: "future",
+  } satisfies MarketDefinition;
+}
+
+export function buildDeliverableFutureMarket(definition: MarketDefinition) {
+  const displayPair = formatFxDisplayPair(definition.pair);
+  const displayLabel = definition.expiryLabel ?? "—";
+  const mark = "1,605.25";
+  const spot = SPOT_MARKET_META.mark;
+  const basis = parseNumber(mark) - parseNumber(spot);
+  const annualizedBasis = calculateAnnualizedBasisPercent(
+    parseNumber(mark),
+    parseNumber(spot),
+    definition.expiryDays,
+  );
+
+  return {
+    candles: buildCandles(BASE_FUTURES_CANDLES, 0, 2),
+    contractDetails: [
+      { label: "Contract", value: `${displayPair} Futures · ${displayLabel}` },
+      { label: "Settlement", value: "Physical delivery" },
+      { label: "Manager", value: "Dedicated DeliverableFXManager" },
+      { label: "Contract Size", value: `${definition.contractMultiplier ?? "10000"} USDC` },
+      { label: "Min Size", value: `${definition.minSize ?? "0.001"} contracts` },
+      { label: "Tick Size", value: `${definition.tickSize ?? "1"} cNGN per USDC` },
+      { label: "Mark Price", value: formatPriceWithConvention(mark) },
+    ],
+    id: definition.id,
+    infoBar: [
+      { label: "Mark Price", value: formatPriceWithConvention(mark) },
+      { label: "Spot", value: formatPriceWithConvention(spot) },
+      { label: "Basis", tone: "accent", value: formatBasis(basis) },
+      { label: "Basis %", tone: "accent", value: `${((basis / parseNumber(spot)) * 100).toFixed(2)}%` },
+      { label: "Implied Carry", tone: "accent", value: formatAnnualizedBasis(annualizedBasis) },
+      { label: "Expiry", value: displayLabel },
+    ],
+    mark,
+    orderBookAsks: buildBook(BASE_FUTURES_ASKS, 0, 1, 2),
+    orderBookBids: buildBook(BASE_FUTURES_BIDS, 0, 1, 2),
+    positionOverview: [
+      { label: "Position", value: "Long USDC · 0.500 contracts" },
+      { label: "Entry Price", value: formatPriceWithConvention("1,600.00") },
+      { label: "Mark Price", value: formatPriceWithConvention(mark) },
+      { label: "Unrealized PnL", value: "+$156" },
+      { label: "Return %", value: "+0.64%" },
+    ],
+    referencePrice: spot,
+    ticker: `${displayPair} Futures`,
+    timeToExpiry: `${definition.expiryDays ?? 0}d`,
+    trades: buildFuturesTrades(mark, basis),
+  } satisfies ContractMarket;
+}
+
+function decimalStringToNumber(value: string, decimals = 18) {
+  const normalized = value.trim();
+
+  if (!normalized) {
+    return 0;
+  }
+
+  const negative = normalized.startsWith("-");
+  const digits = negative ? normalized.slice(1) : normalized;
+  const padded = digits.padStart(decimals + 1, "0");
+  const whole = padded.slice(0, -decimals);
+  const fraction = padded.slice(-decimals, -decimals + 2);
+  const formatted = `${negative ? "-" : ""}${whole}.${fraction}`;
+
+  return Number(formatted);
+}
+
+function buildLiveBookSide(
+  items: NonNullable<BookResponse["asks"]>,
+  side: "ask" | "bid",
+) {
+  const levels = items.map((item) => ({
+    price: decimalStringToNumber(item.limit_price),
+    size: decimalStringToNumber(item.desired_amount) * 10000,
+  }));
+
+  const ordered = [...levels].sort((left, right) => {
+    return side === "ask" ? left.price - right.price : right.price - left.price;
+  });
+
+  if (side === "ask") {
+    let runningTotal = 0;
+    for (let index = ordered.length - 1; index >= 0; index -= 1) {
+      runningTotal += ordered[index]?.size ?? 0;
+      if (ordered[index]) {
+        ordered[index].size = Math.round(ordered[index].size);
+        (ordered[index] as { total?: number }).total = Math.round(runningTotal);
+      }
+    }
+  } else {
+    let runningTotal = 0;
+    for (const level of ordered) {
+      runningTotal += level.size;
+      level.size = Math.round(level.size);
+      (level as { total?: number }).total = Math.round(runningTotal);
+    }
+  }
+
+  return ordered.map((level) => ({
+    price: level.price,
+    size: level.size,
+    total: (level as { total?: number }).total ?? level.size,
+  }));
+}
+
+function deriveMarkFromBook(asks: { price: number }[], bids: { price: number }[]) {
+  const bestAsk = asks[0]?.price ?? null;
+  const bestBid = bids[0]?.price ?? null;
+
+  if (bestAsk !== null && bestBid !== null) {
+    return ((bestAsk + bestBid) / 2).toFixed(2);
+  }
+
+  if (bestAsk !== null) {
+    return bestAsk.toFixed(2);
+  }
+
+  if (bestBid !== null) {
+    return bestBid.toFixed(2);
+  }
+
+  return null;
+}
+
+export function buildDeliverableFutureMarketFromBook(
+  definition: MarketDefinition,
+  book: BookResponse | null,
+  trades: PresentedTrade[],
+) {
+  const base = buildDeliverableFutureMarket(definition);
+  const asks = buildLiveBookSide(book?.asks ?? [], "ask");
+  const bids = buildLiveBookSide(book?.bids ?? [], "bid");
+  const derivedMark = deriveMarkFromBook(asks, bids);
+  const liveTrades = trades.map((trade) => ({
+    price: decimalStringToNumber(trade.price),
+    side: trade.aggressor_side,
+    size: Math.round(decimalStringToNumber(trade.size) * 10000),
+    time: new Intl.DateTimeFormat("en-US", {
+      hour: "2-digit",
+      hour12: false,
+      minute: "2-digit",
+      timeZone: "UTC",
+    }).format(new Date(trade.created_at)),
+  }));
+
+  return {
+    ...base,
+    infoBar: base.infoBar.map((item) => {
+      if (item.label === "Mark Price") {
+        return {
+          ...item,
+          value: derivedMark ? formatPriceWithConvention(derivedMark) : "—",
+        };
+      }
+
+      return item;
+    }),
+    mark: derivedMark ?? "—",
+    orderBookAsks: asks,
+    orderBookBids: bids,
+    positionOverview: base.positionOverview.map((item) => {
+      if (item.label === "Mark Price") {
+        return {
+          ...item,
+          value: derivedMark ? formatPriceWithConvention(derivedMark) : "—",
+        };
+      }
+
+      return item;
+    }),
+    trades: liveTrades,
+  } satisfies ContractMarket;
+}
+
+export function buildTradingTerminalMarkets(
+  liveFutureDefinition: MarketDefinition | null,
+  liveFutureBook: BookResponse | null,
+  liveFutureTrades: PresentedTrade[],
+) {
+  if (!liveFutureDefinition) {
+    return {
+      defaultContract: "",
+      defaultMarketId: "cngn-usdc-spot",
+      marketData: {
+        "cngn-usdc-spot": MARKET_DATA["cngn-usdc-spot"],
+        "cngn-usdc-jun-2026-options": MARKET_DATA["cngn-usdc-jun-2026-options"],
+        "cngn-usdc-mar-2026-options": MARKET_DATA["cngn-usdc-mar-2026-options"],
+      } satisfies Record<MarketId, ContractMarket>,
+      marketDefinitions: MARKET_DEFINITIONS.filter((marketDefinition) => marketDefinition.type !== "future"),
+    };
+  }
+
+  const marketDefinitions = [
+    MARKET_DEFINITIONS.find((marketDefinition) => marketDefinition.id === "cngn-usdc-spot"),
+    liveFutureDefinition,
+    ...MARKET_DEFINITIONS.filter((marketDefinition) => marketDefinition.type === "option"),
+  ].filter(Boolean) as MarketDefinition[];
+
+  const marketData = {
+    "cngn-usdc-spot": MARKET_DATA["cngn-usdc-spot"],
+    [liveFutureDefinition.id]: buildDeliverableFutureMarketFromBook(liveFutureDefinition, liveFutureBook, liveFutureTrades),
+    "cngn-usdc-jun-2026-options": MARKET_DATA["cngn-usdc-jun-2026-options"],
+    "cngn-usdc-mar-2026-options": MARKET_DATA["cngn-usdc-mar-2026-options"],
+  } satisfies Record<MarketId, ContractMarket>;
+
+  return {
+    defaultContract: liveFutureDefinition.contractLabel ?? DEFAULT_CONTRACT,
+    defaultMarketId: liveFutureDefinition.id,
+    marketData,
+    marketDefinitions,
+  };
+}
 
 export const BOTTOM_TABS = [
   { id: "positions", label: "Positions" },

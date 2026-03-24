@@ -1,6 +1,6 @@
 import type { MarketDefinition, MarketType } from "@/lib/trading.types";
 
-const KNOWN_QUOTES = ["USDC", "USDT", "USD", "EUR", "GBP", "JPY", "KES", "NGN"] as const;
+const KNOWN_QUOTES = ["cNGN", "USDC", "USDT", "USD", "EUR", "GBP", "JPY", "KES", "NGN"] as const;
 
 export function formatFxDisplayPair(symbol: string) {
   const quote = KNOWN_QUOTES.find((candidate) => symbol.endsWith(candidate));
