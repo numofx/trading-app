@@ -14,6 +14,15 @@ export type MarketPresentation = {
   price_semantics?: string;
   pricing_model?: string;
   quote_asset_symbol?: string;
+  order_entry_spec?: string;
+  ui_price_unit?: string;
+  ui_size_unit?: string;
+  ui_side_meaning?: string;
+  engine_price_unit?: string;
+  engine_amount_unit?: string;
+  engine_side_policy?: string;
+  ui_price_to_engine?: string;
+  ui_size_to_engine?: string;
   settlement_note?: string;
   settlement_type?: string;
   sub_id?: string;
@@ -26,6 +35,23 @@ export type PresentedOrder = {
   filled_amount: string;
   limit_price: string;
   side: "buy" | "sell";
+  spot_contract?: {
+    balance_delta: {
+      cngn: string;
+      usdc: string;
+    };
+    engine_order: {
+      amount: string;
+      price: string;
+      side: "buy" | "sell";
+    };
+    spec: string;
+    ui_intent: {
+      price: string;
+      side: "buy" | "sell";
+      size: string;
+    };
+  };
 };
 
 export type BookResponse = {
@@ -46,6 +72,23 @@ export type PresentedTrade = {
   sub_id: string;
   taker_order_id?: string;
   trade_id: number;
+  spot_contract?: {
+    balance_delta: {
+      cngn: string;
+      usdc: string;
+    };
+    engine_order: {
+      amount: string;
+      price: string;
+      side: "buy" | "sell";
+    };
+    spec: string;
+    ui_intent: {
+      price: string;
+      side: "buy" | "sell";
+      size: string;
+    };
+  };
 };
 
 export type TradeStats24h = {
@@ -101,6 +144,21 @@ export async function getLiveDeliverableFXFutures() {
 
       return leftExpiry - rightExpiry;
     });
+}
+
+export async function getLiveUSDCCNGNSpotMarket() {
+  const markets = await getMarketsServiceMarkets();
+
+  return (
+    markets.find((market) => {
+      return (
+        market.contract_type === "spot" &&
+        market.settlement_type === "spot" &&
+        market.base_asset_symbol === "USDC" &&
+        market.quote_asset_symbol === "cNGN"
+      );
+    }) ?? null
+  );
 }
 
 export async function getMarketBook(assetAddress: string, subId: string) {

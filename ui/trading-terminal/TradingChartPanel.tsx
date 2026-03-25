@@ -142,7 +142,7 @@ function TradingChart({
       </div>
 
       <svg
-        aria-label="Mock cNGN/USDC candlestick chart"
+        aria-label="Mock USDC/cNGN candlestick chart"
         className="size-full"
         preserveAspectRatio="none"
         role="img"

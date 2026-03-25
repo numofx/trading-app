@@ -5,6 +5,7 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { ChevronDown, Command, Dot, Search, Wallet, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatFxDisplayPair, getProductDisplayName, getSelectedInstrumentDisplay } from "@/lib/market-display";
+import { buildMarketSelectionAliasMap } from "@/lib/market-selection";
 import type { ContractTab, MarketDefinition, MarketId, MarketStat } from "@/lib/trading.types";
 import { SmartImage } from "@/ui/SmartImage";
 import { MarketSwitcherRow } from "@/ui/trading-terminal/MarketSwitcherRow";
@@ -154,12 +155,13 @@ export function TradingMarketHeader({
     useState<(typeof primaryTabs)[number]>("All");
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const validMarketIds = marketOptions.map((market) => market.id);
+  const marketSelectionAliases = buildMarketSelectionAliasMap(marketOptions);
   const {
     favoriteMarketIds,
     pushRecent,
     recentMarketIds,
     toggleFavorite,
-  } = useMarketSelectorPreferences(validMarketIds);
+  } = useMarketSelectorPreferences(validMarketIds, marketSelectionAliases);
   const normalizedSearch = marketSearch.trim().toLowerCase();
   const selectedInstrument = getSelectedInstrumentDisplay(selectedMarket);
   const matchingMarkets = marketOptions

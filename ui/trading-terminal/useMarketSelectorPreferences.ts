@@ -7,7 +7,7 @@ const FAVORITE_MARKETS_STORAGE_KEY = "market-selector-favorites";
 const RECENT_MARKETS_STORAGE_KEY = "market-selector-recents";
 const DEFAULT_MAX_RECENT_MARKETS = 4;
 
-function parseStoredMarketIds(value: string | null, validMarketIds: Set<string>) {
+function parseStoredMarketIds(value: string | null, validMarketIds: Set<string>, aliases: Map<string, MarketId>) {
   if (!value) {
     return [] as MarketId[];
   }
@@ -19,22 +19,47 @@ function parseStoredMarketIds(value: string | null, validMarketIds: Set<string>)
       return [] as MarketId[];
     }
 
-    return parsed.filter((item): item is MarketId => typeof item === "string" && validMarketIds.has(item));
+    const resolved = parsed.flatMap((item) => {
+      if (typeof item !== "string") {
+        return [];
+      }
+
+      const canonical = aliases.get(item.toLowerCase());
+      if (!canonical || !validMarketIds.has(canonical)) {
+        return [];
+      }
+
+      return [canonical];
+    });
+
+    return [...new Set(resolved)];
   } catch {
     return [] as MarketId[];
   }
 }
 
-export function useMarketSelectorPreferences(validMarketIds: MarketId[], maxRecentMarkets = DEFAULT_MAX_RECENT_MARKETS) {
+export function useMarketSelectorPreferences(
+  validMarketIds: MarketId[],
+  aliases: Map<string, MarketId>,
+  maxRecentMarkets = DEFAULT_MAX_RECENT_MARKETS,
+) {
   const [favoriteMarketIds, setFavoriteMarketIds] = useState<MarketId[]>([]);
   const [recentMarketIds, setRecentMarketIds] = useState<MarketId[]>([]);
   const validMarketIdsKey = validMarketIds.join("|");
+  const aliasEntriesKey = Array.from(aliases.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([alias, marketId]) => `${alias}:${marketId}`)
+    .join("|");
 
   useEffect(() => {
     const validMarketIdSet = new Set(validMarketIdsKey ? validMarketIdsKey.split("|") : []);
-    setFavoriteMarketIds(parseStoredMarketIds(window.localStorage.getItem(FAVORITE_MARKETS_STORAGE_KEY), validMarketIdSet));
-    setRecentMarketIds(parseStoredMarketIds(window.localStorage.getItem(RECENT_MARKETS_STORAGE_KEY), validMarketIdSet));
-  }, [validMarketIdsKey]);
+    setFavoriteMarketIds(
+      parseStoredMarketIds(window.localStorage.getItem(FAVORITE_MARKETS_STORAGE_KEY), validMarketIdSet, aliases),
+    );
+    setRecentMarketIds(
+      parseStoredMarketIds(window.localStorage.getItem(RECENT_MARKETS_STORAGE_KEY), validMarketIdSet, aliases),
+    );
+  }, [aliases, aliasEntriesKey, validMarketIdsKey]);
 
   useEffect(() => {
     window.localStorage.setItem(FAVORITE_MARKETS_STORAGE_KEY, JSON.stringify(favoriteMarketIds));

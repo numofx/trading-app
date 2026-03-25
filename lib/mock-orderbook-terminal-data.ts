@@ -15,6 +15,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { formatFxDisplayPair } from "@/lib/market-display";
 import { calculateAnnualizedBasisPercent, formatAnnualizedBasis, formatBasis } from "@/lib/market-formatting";
+import { buildCanonicalMarketId, buildLegacyDerivedMarketId, getMarketSymbolAliases } from "@/lib/market-selection";
 import type {
   ActivityTab,
   ActivityView,
@@ -177,7 +178,7 @@ const SPOT_MARKET_META = {
   executable: "Live on venue",
   id: "cngn-usdc-spot",
   mark: "1,603.90",
-  settlement: "Physical (cNGNUSDC)",
+  settlement: "Immediate spot-style settlement",
 } as const;
 
 const OPTIONS_MARKET_META = {
@@ -204,7 +205,7 @@ export const MARKET_DEFINITIONS = [
     id: "cngn-usdc-spot",
     strikeLabel: null,
     type: "spot",
-    pair: "cNGNUSDC",
+    pair: "USDCcNGN",
     region: "Africa",
     sortOrder: 0,
   },
@@ -216,7 +217,7 @@ export const MARKET_DEFINITIONS = [
     id: "cngn-usdc-mar-2026-options",
     strikeLabel: null,
     type: "option",
-    pair: "cNGNUSDC",
+    pair: "USDCcNGN",
     region: "Africa",
     sortOrder: 1,
   },
@@ -228,14 +229,14 @@ export const MARKET_DEFINITIONS = [
     id: "cngn-usdc-jun-2026-options",
     strikeLabel: null,
     type: "option",
-    pair: "cNGNUSDC",
+    pair: "USDCcNGN",
     region: "Africa",
     sortOrder: 2,
   },
 ] satisfies MarketDefinition[];
 
 export const DEFAULT_MARKET_ID = "cngn-usdc-spot" satisfies MarketId;
-export const DEFAULT_SYMBOL = "cNGNUSDC";
+export const DEFAULT_SYMBOL = "USDCcNGN";
 export const DEFAULT_CONTRACT = "";
 export const DEFAULT_TIMEFRAME = "1h";
 export const DEFAULT_ORDER_TYPE = "Market";
@@ -333,7 +334,7 @@ function getOptionsPositionOverview(label: keyof typeof OPTIONS_MARKET_META, mar
 }
 
 function buildSpotMarket() {
-  const displayPair = formatFxDisplayPair("cNGNUSDC");
+  const displayPair = formatFxDisplayPair("USDCcNGN");
 
   return {
     candles: buildCandles(BASE_SPOT_CANDLES, 0, 2),
@@ -366,7 +367,7 @@ function buildSpotMarket() {
 function buildOptionsMarket(label: keyof typeof OPTIONS_MARKET_META, offset: number, sizeMultiplier: number) {
   const meta = OPTIONS_MARKET_META[label];
   const displayLabel = getContractDisplayLabel(label);
-  const displayPair = formatFxDisplayPair("cNGNUSDC");
+  const displayPair = formatFxDisplayPair("USDCcNGN");
 
   return {
     candles: buildCandles(BASE_OPTIONS_CANDLES, offset, 2),
@@ -419,6 +420,19 @@ type LiveDeliverableFutureRuntime = {
   trades: PresentedTrade[];
 };
 
+type LiveSpotConfig = {
+  assetAddress: string;
+  market: string;
+  subId: string;
+  tickSize?: string | null;
+};
+
+type LiveSpotRuntime = {
+  book: BookResponse | null;
+  definition: MarketDefinition;
+  trades: PresentedTrade[];
+};
+
 function formatExpiryLabelFromTimestamp(expiryTimestamp: number) {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -453,10 +467,13 @@ export function buildDeliverableFutureDefinition(config: LiveDeliverableFutureCo
     expiryLabel: formatExpiryLabelFromTimestamp(config.expiryTimestamp),
     expiryTimestamp: config.expiryTimestamp,
     flagSrc: "/flags/ng.svg",
-    id: `${config.market.toLowerCase().replaceAll("/", "-").replaceAll(" ", "-")}-${config.subId}`,
+    id: buildCanonicalMarketId(config.assetAddress, config.subId),
     lastTradeTimestamp: config.lastTradeTimestamp ?? null,
+    marketIdAliases: [buildLegacyDerivedMarketId(config.market, config.subId)],
+    marketSymbol: config.market,
+    marketSymbolAliases: getMarketSymbolAliases(config.market),
     minSize: config.minSize ?? "0.001",
-    pair: "cNGNUSDC",
+    pair: "USDCcNGN",
     region: "Africa",
     settlementType: "physical_delivery",
     sortOrder: config.expiryTimestamp,
@@ -464,6 +481,32 @@ export function buildDeliverableFutureDefinition(config: LiveDeliverableFutureCo
     subId: config.subId,
     tickSize: config.tickSize ?? "1",
     type: "future",
+  } satisfies MarketDefinition;
+}
+
+export function buildSpotDefinition(config: LiveSpotConfig) {
+  return {
+    assetAddress: config.assetAddress,
+    contractLabel: null,
+    contractMultiplier: "1",
+    contractType: "spot",
+    expiryDays: null,
+    expiryLabel: null,
+    expiryTimestamp: null,
+    flagSrc: "/flags/ng.svg",
+    id: SPOT_MARKET_META.id,
+    lastTradeTimestamp: null,
+    marketSymbol: config.market,
+    marketSymbolAliases: getMarketSymbolAliases(config.market),
+    minSize: "0.000001",
+    pair: "USDCcNGN",
+    region: "Africa",
+    settlementType: "spot",
+    sortOrder: 0,
+    strikeLabel: null,
+    subId: config.subId,
+    tickSize: config.tickSize ?? "1",
+    type: "spot",
   } satisfies MarketDefinition;
 }
 
@@ -516,6 +559,64 @@ export function buildDeliverableFutureMarket(definition: MarketDefinition) {
   } satisfies ContractMarket;
 }
 
+export function buildLiveSpotMarketFromBook(
+  definition: MarketDefinition,
+  book: BookResponse | null,
+  trades: PresentedTrade[],
+) {
+  const base = buildSpotMarket();
+  const asks = buildLiveBookSide(book?.asks ?? [], "ask");
+  const bids = buildLiveBookSide(book?.bids ?? [], "bid");
+  const derivedMark = deriveMarkFromBook(asks, bids);
+  const liveTrades = trades.map((trade) => ({
+    price: Number(trade.spot_contract?.ui_intent.price ?? decimalStringToNumber(trade.price)),
+    side: trade.spot_contract?.ui_intent.side ?? trade.aggressor_side,
+    size: Math.round(Number(trade.spot_contract?.ui_intent.size ?? decimalStringToNumber(trade.size))),
+    time: new Intl.DateTimeFormat("en-US", {
+      hour: "2-digit",
+      hour12: false,
+      minute: "2-digit",
+      timeZone: "UTC",
+    }).format(new Date(trade.created_at)),
+  }));
+
+  return {
+    ...base,
+    contractDetails: [
+      { label: "Market", value: `${formatFxDisplayPair(definition.pair)} Spot` },
+      { label: "Quote Convention", value: "cNGN per USDC" },
+      { label: "Price", value: derivedMark ? formatPriceWithConvention(derivedMark) : "—" },
+      { label: "Executable", value: "Live on orderbook" },
+      { label: "Settlement", value: "Immediate spot-style settlement" },
+    ],
+    id: definition.id,
+    infoBar: base.infoBar.map((item) => {
+      if (item.label === "Mark Price") {
+        return {
+          ...item,
+          value: derivedMark ? formatPriceWithConvention(derivedMark) : "—",
+        };
+      }
+
+      return item;
+    }),
+    mark: derivedMark ?? "—",
+    orderBookAsks: asks,
+    orderBookBids: bids,
+    positionOverview: base.positionOverview.map((item) => {
+      if (item.label === "Mark Price") {
+        return {
+          ...item,
+          value: derivedMark ? formatPriceWithConvention(derivedMark) : "—",
+        };
+      }
+
+      return item;
+    }),
+    trades: liveTrades,
+  } satisfies ContractMarket;
+}
+
 function decimalStringToNumber(value: string, decimals = 18) {
   const normalized = value.trim();
 
@@ -538,8 +639,8 @@ function buildLiveBookSide(
   side: "ask" | "bid",
 ) {
   const levels = items.map((item) => ({
-    price: decimalStringToNumber(item.limit_price),
-    size: decimalStringToNumber(item.desired_amount) * 10_000,
+    price: Number(item.spot_contract?.ui_intent.price ?? decimalStringToNumber(item.limit_price)),
+    size: Number(item.spot_contract?.ui_intent.size ?? decimalStringToNumber(item.desired_amount) * 10_000),
   }));
 
   const ordered = [...levels].sort((left, right) => {
@@ -641,18 +742,29 @@ export function buildDeliverableFutureMarketFromBook(
 }
 
 export function buildTradingTerminalMarkets(
+  liveSpot: LiveSpotRuntime | null,
   liveFutures: LiveDeliverableFutureRuntime[],
 ) {
+  const fallbackSpotDefinition =
+    MARKET_DEFINITIONS.find((marketDefinition) => marketDefinition.id === "cngn-usdc-spot") ?? null;
+  const spotDefinition = liveSpot?.definition ?? fallbackSpotDefinition;
+  const spotMarketData = liveSpot
+    ? buildLiveSpotMarketFromBook(liveSpot.definition, liveSpot.book, liveSpot.trades)
+    : MARKET_DATA["cngn-usdc-spot"];
+
   if (!liveFutures.length) {
     return {
       defaultContract: "",
       defaultMarketId: DEFAULT_MARKET_ID,
       marketData: {
-        "cngn-usdc-spot": MARKET_DATA["cngn-usdc-spot"],
+        "cngn-usdc-spot": spotMarketData,
         "cngn-usdc-jun-2026-options": MARKET_DATA["cngn-usdc-jun-2026-options"],
         "cngn-usdc-mar-2026-options": MARKET_DATA["cngn-usdc-mar-2026-options"],
       } satisfies Record<MarketId, ContractMarket>,
-      marketDefinitions: MARKET_DEFINITIONS,
+      marketDefinitions: [
+        spotDefinition,
+        ...MARKET_DEFINITIONS.filter((marketDefinition) => marketDefinition.type === "option"),
+      ].filter(Boolean) as MarketDefinition[],
     };
   }
 
@@ -664,13 +776,13 @@ export function buildTradingTerminalMarkets(
   });
   const defaultFuture = sortedLiveFutures[0];
   const marketDefinitions = [
-    MARKET_DEFINITIONS.find((marketDefinition) => marketDefinition.id === "cngn-usdc-spot"),
+    spotDefinition,
     ...sortedLiveFutures.map((future) => future.definition),
     ...MARKET_DEFINITIONS.filter((marketDefinition) => marketDefinition.type === "option"),
   ].filter(Boolean) as MarketDefinition[];
 
   const marketData = {
-    "cngn-usdc-spot": MARKET_DATA["cngn-usdc-spot"],
+    "cngn-usdc-spot": spotMarketData,
     ...Object.fromEntries(
       sortedLiveFutures.map((future) => [
         future.definition.id,
@@ -698,13 +810,13 @@ export const BOTTOM_TABS = [
 export const ACTIVITY_VIEWS = {
   "open-orders": {
     columns: ["Instrument", "Direction", "Type", "Size", "Price"],
-    rows: [{ cells: ["cNGN/USDC Futures · Jun 2026", "Long cNGN", "Limit", "25,000 contracts", "1,604.80 cNGN per USDC"] }],
+    rows: [{ cells: ["USDC/cNGN Futures · Jun 2026", "Long cNGN", "Limit", "25,000 contracts", "1,604.80 cNGN per USDC"] }],
   },
   positions: {
     columns: ["Instrument", "Position", "Entry Price", "Mark Price", "Unrealized PnL", "Return %"],
     rows: [
       {
-        cells: ["cNGN/USDC Futures · Jun 2026", "Long cNGN · 50,000 contracts", "1,600.00 cNGN per USDC", "1,605.20 cNGN per USDC", "+$156", "+0.64%"],
+        cells: ["USDC/cNGN Futures · Jun 2026", "Long cNGN · 50,000 contracts", "1,600.00 cNGN per USDC", "1,605.20 cNGN per USDC", "+$156", "+0.64%"],
         positiveCellIndexes: [4, 5],
       },
     ],
@@ -712,8 +824,8 @@ export const ACTIVITY_VIEWS = {
   "trade-history": {
     columns: ["Time", "Instrument", "Direction", "Size", "Price"],
     rows: [
-      { cells: ["10:08:14", "cNGN/USDC Futures · Jun 2026", "Long cNGN", "50,000 contracts", "1,605.30 cNGN per USDC"] },
-      { cells: ["10:08:06", "cNGN/USDC Futures · Jun 2026", "Short cNGN", "35,000 contracts", "1,605.20 cNGN per USDC"] },
+      { cells: ["10:08:14", "USDC/cNGN Futures · Jun 2026", "Long cNGN", "50,000 contracts", "1,605.30 cNGN per USDC"] },
+      { cells: ["10:08:06", "USDC/cNGN Futures · Jun 2026", "Short cNGN", "35,000 contracts", "1,605.20 cNGN per USDC"] },
     ],
   },
 } satisfies Record<string, ActivityView>;

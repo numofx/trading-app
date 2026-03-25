@@ -29,6 +29,7 @@ export function OrderEntryPanel({
   estimatedFillPrice,
   fees,
   initialMargin,
+  isSpotUSDIntent,
   lastAction,
   limitPrice,
   liquidationPrice,
@@ -60,6 +61,7 @@ export function OrderEntryPanel({
   estimatedFillPrice: string;
   fees: string;
   initialMargin: string;
+  isSpotUSDIntent: boolean;
   lastAction: string;
   limitPrice: string;
   liquidationPrice: string;
@@ -85,9 +87,13 @@ export function OrderEntryPanel({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const isLong = tradeSide === "buy";
   const needsLimitPrice = orderType !== "Market";
-  const directionCopy = isLong
-    ? "Buy cNGN / sell USDC"
-    : "Sell cNGN / buy USDC";
+  const directionCopy = isSpotUSDIntent
+    ? isLong
+      ? "Buy USDC / sell cNGN"
+      : "Sell USDC / buy cNGN"
+    : isLong
+      ? "Buy cNGN / sell USDC"
+      : "Sell cNGN / buy USDC";
 
   return (
     <section className="flex h-full min-h-[320px] flex-col overflow-hidden rounded-[24px] bg-[#0D141E]/96 shadow-[0_20px_70px_rgba(0,0,0,0.32)] ring-1 ring-white/6 xl:min-h-0">
@@ -105,8 +111,10 @@ export function OrderEntryPanel({
               onClick={() => onSideChange("buy")}
               type="button"
             >
-              <span className="block font-semibold text-[13px]">Long cNGN</span>
-              <span className={cn("mt-1 block text-[10px]", isLong ? "text-[#9CC7A9]" : "text-[#768397]")}>Buy cNGN / sell USDC</span>
+              <span className="block font-semibold text-[13px]">{isSpotUSDIntent ? "Buy USDC" : "Long cNGN"}</span>
+              <span className={cn("mt-1 block text-[10px]", isLong ? "text-[#9CC7A9]" : "text-[#768397]")}>
+                {isSpotUSDIntent ? "Acquire USDC / sell cNGN" : "Buy cNGN / sell USDC"}
+              </span>
             </button>
             <button
               className={cn(
@@ -118,8 +126,10 @@ export function OrderEntryPanel({
               onClick={() => onSideChange("sell")}
               type="button"
             >
-              <span className="block font-semibold text-[13px]">Short cNGN</span>
-              <span className={cn("mt-1 block text-[10px]", isLong ? "text-[#768397]" : "text-[#D0A0A0]")}>Sell cNGN / buy USDC</span>
+              <span className="block font-semibold text-[13px]">{isSpotUSDIntent ? "Sell USDC" : "Short cNGN"}</span>
+              <span className={cn("mt-1 block text-[10px]", isLong ? "text-[#768397]" : "text-[#D0A0A0]")}>
+                {isSpotUSDIntent ? "Deliver USDC / buy cNGN" : "Sell cNGN / buy USDC"}
+              </span>
             </button>
           </div>
         </section>
@@ -147,21 +157,25 @@ export function OrderEntryPanel({
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
             <div className="space-y-2">
               <label className="text-[#6C798B] text-[10px] uppercase tracking-[0.18em]" htmlFor="trade-size">
-                Size
+                {isSpotUSDIntent ? "Size (USDC)" : "Size"}
               </label>
               <div className="flex items-center overflow-hidden rounded-2xl bg-white/[0.04] ring-1 ring-white/6">
             <input
               className="h-11 flex-1 bg-transparent px-3.5 text-[#D7DEE8] text-[13px] outline-none placeholder:text-[#6C798B]"
               id="trade-size"
-              onChange={(event) => onSizeChange(event.target.value.replace(/[^\d]/g, ""))}
-              placeholder="50,000"
+              onChange={(event) =>
+                onSizeChange(
+                  event.target.value.replace(isSpotUSDIntent ? /[^\d.]/g : /[^\d]/g, ""),
+                )
+              }
+              placeholder={isSpotUSDIntent ? "100" : "50,000"}
               value={size}
             />
                 <button
                   className="flex h-11 items-center gap-1 border-white/6 border-l px-3.5 text-[#C2CCD9] text-[13px]"
               type="button"
             >
-              Contracts
+              {isSpotUSDIntent ? "USDC" : "Contracts"}
                   <ChevronDown className="size-4 text-[#6C798B]" />
             </button>
           </div>
@@ -210,7 +224,7 @@ export function OrderEntryPanel({
               <div className="mt-1 text-[#738095] text-[10px]">{directionCopy}</div>
             </div>
             <div className="rounded-xl bg-[#142030] px-2.5 py-1 text-[#A8C4F6] text-[9px]">
-              Physically delivered
+              {isSpotUSDIntent ? "Spot settled" : "Physically delivered"}
             </div>
           </div>
           <div className="space-y-2">
@@ -242,7 +256,7 @@ export function OrderEntryPanel({
           onClick={() => onSubmit(tradeSide)}
           type="button"
         >
-          {isLong ? "Long cNGN" : "Short cNGN"}
+          {isSpotUSDIntent ? (isLong ? "Buy USDC" : "Sell USDC") : isLong ? "Long cNGN" : "Short cNGN"}
         </button>
 
         <section className="rounded-[22px] bg-white/[0.025] ring-1 ring-white/6">

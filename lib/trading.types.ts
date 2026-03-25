@@ -56,6 +56,9 @@ export type MarketDefinition = {
   flagSrc: string;
   id: MarketId;
   lastTradeTimestamp?: number | null;
+  marketIdAliases?: string[] | null;
+  marketSymbol?: string | null;
+  marketSymbolAliases?: string[] | null;
   minSize?: string | null;
   settlementType?: string | null;
   strikeLabel: string | null;
@@ -95,4 +98,27 @@ export type ActivityRow = {
 export type ActivityView = {
   columns: string[];
   rows: ActivityRow[];
+};
+
+export type SpotUIOrderIntent = {
+  price: number;
+  side: "buy" | "sell";
+  size: number;
+};
+
+export type SpotEngineOrder = {
+  amount: number;
+  price: number;
+  side: "buy" | "sell";
+};
+
+export type SpotFillDeltas = {
+  cngn: number;
+  usdc: number;
+};
+
+export type SpotOrderTranslation = {
+  deltas: SpotFillDeltas;
+  engine: SpotEngineOrder;
+  ui: SpotUIOrderIntent;
 };
