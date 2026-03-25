@@ -36,6 +36,38 @@ function getProductTabLabel(tab: "All" | "spot" | "future" | "option") {
   return "Spot";
 }
 
+function getRecentEmptyLabel(tab: "All" | "spot" | "future" | "option") {
+  if (tab === "future") {
+    return "No recent futures";
+  }
+
+  if (tab === "option") {
+    return "No recent options";
+  }
+
+  if (tab === "spot") {
+    return "No recent spot markets";
+  }
+
+  return "No recent markets";
+}
+
+function getResultsEmptyLabel(tab: "All" | "spot" | "future" | "option", hasSearch: boolean) {
+  if (tab === "future") {
+    return hasSearch ? "No futures found" : "No live futures available";
+  }
+
+  if (tab === "option") {
+    return hasSearch ? "No options found" : "No options available";
+  }
+
+  if (tab === "spot") {
+    return hasSearch ? "No spot markets found" : "No spot markets available";
+  }
+
+  return "No markets found";
+}
+
 function getMarketSearchTerms(market: MarketDefinition) {
   return [
     formatFxDisplayPair(market.pair),
@@ -341,7 +373,7 @@ export function TradingMarketHeader({
               <button
                 aria-expanded={marketSearchOpen}
                 aria-haspopup="dialog"
-                className="inline-flex h-11 items-center gap-3 rounded-2xl bg-white/[0.04] px-4 font-semibold text-[#E5ECF5] text-[14px] leading-none ring-1 ring-white/6"
+                className="inline-flex h-11 items-center gap-3 rounded-2xl bg-white/4 px-4 font-semibold text-[#E5ECF5] text-[14px] leading-none ring-1 ring-white/6"
                 onClick={() => setMarketSearchOpen(true)}
                 type="button"
               >
@@ -354,7 +386,7 @@ export function TradingMarketHeader({
                 <span className="min-w-0 truncate font-semibold text-[#E5ECF5] text-[14px] leading-none">
                   {selectedInstrument.label}
                 </span>
-                <span className="hidden items-center gap-1 rounded-full bg-white/[0.05] px-2.5 py-1 font-medium text-[#6F7C90] text-[11px] sm:inline-flex">
+                <span className="hidden items-center gap-1 rounded-full bg-white/5 px-2.5 py-1 font-medium text-[#6F7C90] text-[11px] sm:inline-flex">
                   <Command className="size-3" />
                   K
                 </span>
@@ -477,7 +509,7 @@ export function TradingMarketHeader({
                       <div className="space-y-1">{renderMarketRows(recentMarkets)}</div>
                     ) : (
                       <div className="px-3 py-8 text-center text-[#6B7280] text-sm">
-                        No recent markets
+                        {getRecentEmptyLabel(selectedPrimaryTab)}
                       </div>
                     )}
                   </section>
@@ -495,7 +527,7 @@ export function TradingMarketHeader({
 
                 {hasSearchResults ? null : (
                   <div className="px-3 py-10 text-center text-[#6B7280] text-sm">
-                    No markets found
+                    {getResultsEmptyLabel(selectedPrimaryTab, Boolean(normalizedSearch))}
                   </div>
                 )}
               </div>

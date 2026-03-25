@@ -21,7 +21,6 @@ import type {
   Candle,
   ChartTool,
   ContractMarket,
-  ContractTab,
   DeliveryTerm,
   MarketDefinition,
   MarketId,
@@ -181,25 +180,6 @@ const SPOT_MARKET_META = {
   settlement: "Physical (cNGNUSDC)",
 } as const;
 
-const FUTURES_MARKET_META = {
-  "JUN 2026": {
-    id: "cngn-usdc-jun-2026-futures",
-    mark: "1,605.25",
-    openInterest: "$48.3M",
-    settlement: "Physical (cNGNUSDC)",
-    timeToExpiry: "101d",
-    volume: "$6.2M",
-  },
-  "MAR 2026": {
-    id: "cngn-usdc-mar-2026-futures",
-    mark: "1,604.45",
-    openInterest: "$22.4M",
-    settlement: "Physical (cNGNUSDC)",
-    timeToExpiry: "11d",
-    volume: "$3.8M",
-  },
-} as const;
-
 const OPTIONS_MARKET_META = {
   "JUN 2026": {
     id: "cngn-usdc-jun-2026-options",
@@ -214,13 +194,6 @@ const OPTIONS_MARKET_META = {
     timeToExpiry: "11d",
   },
 } as const;
-
-export const CONTRACT_LABELS = ["MAR 2026", "JUN 2026"] as const;
-
-export const CONTRACT_TABS = CONTRACT_LABELS.map((label) => ({
-  active: label === "JUN 2026",
-  label,
-})) satisfies ContractTab[];
 
 export const MARKET_DEFINITIONS = [
   {
@@ -240,36 +213,12 @@ export const MARKET_DEFINITIONS = [
     expiryDays: 11,
     expiryLabel: "Mar 2026",
     flagSrc: "/flags/ng.svg",
-    id: "cngn-usdc-mar-2026-futures",
-    strikeLabel: null,
-    type: "future",
-    pair: "cNGNUSDC",
-    region: "Africa",
-    sortOrder: 1,
-  },
-  {
-    contractLabel: "JUN 2026",
-    expiryDays: 101,
-    expiryLabel: "Jun 2026",
-    flagSrc: "/flags/ng.svg",
-    id: "cngn-usdc-jun-2026-futures",
-    strikeLabel: null,
-    type: "future",
-    pair: "cNGNUSDC",
-    region: "Africa",
-    sortOrder: 2,
-  },
-  {
-    contractLabel: "MAR 2026",
-    expiryDays: 11,
-    expiryLabel: "Mar 2026",
-    flagSrc: "/flags/ng.svg",
     id: "cngn-usdc-mar-2026-options",
     strikeLabel: null,
     type: "option",
     pair: "cNGNUSDC",
     region: "Africa",
-    sortOrder: 3,
+    sortOrder: 1,
   },
   {
     contractLabel: "JUN 2026",
@@ -281,13 +230,13 @@ export const MARKET_DEFINITIONS = [
     type: "option",
     pair: "cNGNUSDC",
     region: "Africa",
-    sortOrder: 4,
+    sortOrder: 2,
   },
 ] satisfies MarketDefinition[];
 
-export const DEFAULT_MARKET_ID = "cngn-usdc-jun-2026-futures" satisfies MarketId;
+export const DEFAULT_MARKET_ID = "cngn-usdc-spot" satisfies MarketId;
 export const DEFAULT_SYMBOL = "cNGNUSDC";
-export const DEFAULT_CONTRACT = "JUN 2026";
+export const DEFAULT_CONTRACT = "";
 export const DEFAULT_TIMEFRAME = "1h";
 export const DEFAULT_ORDER_TYPE = "Market";
 export const DEFAULT_CHART_CONTEXT = "Price";
@@ -374,16 +323,6 @@ function getSpotPositionOverview(mark: string) {
   ] satisfies DeliveryTerm[];
 }
 
-function getFuturesPositionOverview(label: keyof typeof FUTURES_MARKET_META, mark: string) {
-  return [
-    { label: "Position", value: label === "MAR 2026" ? "Long cNGN · 20,000 contracts" : "Long cNGN · 50,000 contracts" },
-    { label: "Entry Price", value: formatPriceWithConvention(Number(parseNumber(mark) - 5.2).toFixed(2)) },
-    { label: "Mark Price", value: formatPriceWithConvention(Number(parseNumber(mark)).toFixed(2)) },
-    { label: "Unrealized PnL", value: label === "MAR 2026" ? "+$61" : "+$156" },
-    { label: "Return %", value: label === "MAR 2026" ? "+0.38%" : "+0.64%" },
-  ] satisfies DeliveryTerm[];
-}
-
 function getOptionsPositionOverview(label: keyof typeof OPTIONS_MARKET_META, mark: string) {
   return [
     { label: "Position (Contracts)", value: label === "MAR 2026" ? "+80 Calls" : "+120 Calls" },
@@ -424,47 +363,6 @@ function buildSpotMarket() {
   } satisfies ContractMarket;
 }
 
-function buildFuturesMarket(label: keyof typeof FUTURES_MARKET_META, offset: number, sizeMultiplier: number) {
-  const meta = FUTURES_MARKET_META[label];
-  const daysToExpiry = Number(meta.timeToExpiry.replace("d", ""));
-  const displayLabel = getContractDisplayLabel(label);
-  const displayPair = formatFxDisplayPair("cNGNUSDC");
-  const mark = parseNumber(meta.mark);
-  const spot = parseNumber(SPOT_MARKET_META.mark);
-  const basis = mark - spot;
-  const annualizedBasis = calculateAnnualizedBasisPercent(mark, spot, daysToExpiry);
-
-  return {
-    candles: buildCandles(BASE_FUTURES_CANDLES, offset, 2),
-    contractDetails: [
-      { label: "Contract", value: `${displayPair} Futures · ${displayLabel}` },
-      { label: "Expiry Month", value: displayLabel },
-      { label: "Quote Convention", value: "cNGN per USDC" },
-      { label: "Contract Size", value: "1,000 cNGN / contract" },
-      { label: "Tick Size", value: "0.05 cNGN per USDC" },
-      { label: "Settlement Type", value: "Physically delivered" },
-      { label: "Mark Price", value: formatPriceWithConvention(meta.mark) },
-    ],
-    id: meta.id,
-    infoBar: [
-      { label: "Mark Price", value: formatPriceWithConvention(meta.mark) },
-      { label: "Spot", value: formatPriceWithConvention(SPOT_MARKET_META.mark) },
-      { label: "Basis", tone: "accent", value: formatBasis(basis) },
-      { label: "Basis %", tone: "accent", value: `${((basis / spot) * 100).toFixed(2)}%` },
-      { label: "Implied Carry", tone: "accent", value: formatAnnualizedBasis(annualizedBasis) },
-      { label: "Expiry", value: displayLabel },
-    ],
-    mark: meta.mark,
-    orderBookAsks: buildBook(BASE_FUTURES_ASKS, offset, sizeMultiplier, 2),
-    orderBookBids: buildBook(BASE_FUTURES_BIDS, offset, sizeMultiplier, 2),
-    positionOverview: getFuturesPositionOverview(label, meta.mark),
-    referencePrice: SPOT_MARKET_META.mark,
-    ticker: `${displayPair} Futures`,
-    timeToExpiry: meta.timeToExpiry,
-    trades: buildFuturesTrades(meta.mark, basis),
-  } satisfies ContractMarket;
-}
-
 function buildOptionsMarket(label: keyof typeof OPTIONS_MARKET_META, offset: number, sizeMultiplier: number) {
   const meta = OPTIONS_MARKET_META[label];
   const displayLabel = getContractDisplayLabel(label);
@@ -499,8 +397,6 @@ function buildOptionsMarket(label: keyof typeof OPTIONS_MARKET_META, offset: num
 }
 
 export const MARKET_DATA = {
-  "cngn-usdc-jun-2026-futures": buildFuturesMarket("JUN 2026", 0, 1),
-  "cngn-usdc-mar-2026-futures": buildFuturesMarket("MAR 2026", -0.8, 0.78),
   "cngn-usdc-spot": buildSpotMarket(),
   "cngn-usdc-jun-2026-options": buildOptionsMarket("JUN 2026", 0, 1),
   "cngn-usdc-mar-2026-options": buildOptionsMarket("MAR 2026", -6.4, 0.84),
@@ -515,6 +411,12 @@ type LiveDeliverableFutureConfig = {
   minSize?: string | null;
   subId: string;
   tickSize?: string | null;
+};
+
+type LiveDeliverableFutureRuntime = {
+  book: BookResponse | null;
+  definition: MarketDefinition;
+  trades: PresentedTrade[];
 };
 
 function formatExpiryLabelFromTimestamp(expiryTimestamp: number) {
@@ -554,10 +456,10 @@ export function buildDeliverableFutureDefinition(config: LiveDeliverableFutureCo
     id: `${config.market.toLowerCase().replaceAll("/", "-").replaceAll(" ", "-")}-${config.subId}`,
     lastTradeTimestamp: config.lastTradeTimestamp ?? null,
     minSize: config.minSize ?? "0.001",
-    pair: "USDCcNGN",
+    pair: "cNGNUSDC",
     region: "Africa",
     settlementType: "physical_delivery",
-    sortOrder: 1,
+    sortOrder: config.expiryTimestamp,
     strikeLabel: null,
     subId: config.subId,
     tickSize: config.tickSize ?? "1",
@@ -637,7 +539,7 @@ function buildLiveBookSide(
 ) {
   const levels = items.map((item) => ({
     price: decimalStringToNumber(item.limit_price),
-    size: decimalStringToNumber(item.desired_amount) * 10000,
+    size: decimalStringToNumber(item.desired_amount) * 10_000,
   }));
 
   const ordered = [...levels].sort((left, right) => {
@@ -700,7 +602,7 @@ export function buildDeliverableFutureMarketFromBook(
   const liveTrades = trades.map((trade) => ({
     price: decimalStringToNumber(trade.price),
     side: trade.aggressor_side,
-    size: Math.round(decimalStringToNumber(trade.size) * 10000),
+    size: Math.round(decimalStringToNumber(trade.size) * 10_000),
     time: new Intl.DateTimeFormat("en-US", {
       hour: "2-digit",
       hour12: false,
@@ -739,39 +641,49 @@ export function buildDeliverableFutureMarketFromBook(
 }
 
 export function buildTradingTerminalMarkets(
-  liveFutureDefinition: MarketDefinition | null,
-  liveFutureBook: BookResponse | null,
-  liveFutureTrades: PresentedTrade[],
+  liveFutures: LiveDeliverableFutureRuntime[],
 ) {
-  if (!liveFutureDefinition) {
+  if (!liveFutures.length) {
     return {
       defaultContract: "",
-      defaultMarketId: "cngn-usdc-spot",
+      defaultMarketId: DEFAULT_MARKET_ID,
       marketData: {
         "cngn-usdc-spot": MARKET_DATA["cngn-usdc-spot"],
         "cngn-usdc-jun-2026-options": MARKET_DATA["cngn-usdc-jun-2026-options"],
         "cngn-usdc-mar-2026-options": MARKET_DATA["cngn-usdc-mar-2026-options"],
       } satisfies Record<MarketId, ContractMarket>,
-      marketDefinitions: MARKET_DEFINITIONS.filter((marketDefinition) => marketDefinition.type !== "future"),
+      marketDefinitions: MARKET_DEFINITIONS,
     };
   }
 
+  const sortedLiveFutures = [...liveFutures].sort((left, right) => {
+    const leftExpiry = left.definition.expiryTimestamp ?? Number.MAX_SAFE_INTEGER;
+    const rightExpiry = right.definition.expiryTimestamp ?? Number.MAX_SAFE_INTEGER;
+
+    return leftExpiry - rightExpiry;
+  });
+  const defaultFuture = sortedLiveFutures[0];
   const marketDefinitions = [
     MARKET_DEFINITIONS.find((marketDefinition) => marketDefinition.id === "cngn-usdc-spot"),
-    liveFutureDefinition,
+    ...sortedLiveFutures.map((future) => future.definition),
     ...MARKET_DEFINITIONS.filter((marketDefinition) => marketDefinition.type === "option"),
   ].filter(Boolean) as MarketDefinition[];
 
   const marketData = {
     "cngn-usdc-spot": MARKET_DATA["cngn-usdc-spot"],
-    [liveFutureDefinition.id]: buildDeliverableFutureMarketFromBook(liveFutureDefinition, liveFutureBook, liveFutureTrades),
+    ...Object.fromEntries(
+      sortedLiveFutures.map((future) => [
+        future.definition.id,
+        buildDeliverableFutureMarketFromBook(future.definition, future.book, future.trades),
+      ]),
+    ),
     "cngn-usdc-jun-2026-options": MARKET_DATA["cngn-usdc-jun-2026-options"],
     "cngn-usdc-mar-2026-options": MARKET_DATA["cngn-usdc-mar-2026-options"],
   } satisfies Record<MarketId, ContractMarket>;
 
   return {
-    defaultContract: liveFutureDefinition.contractLabel ?? DEFAULT_CONTRACT,
-    defaultMarketId: liveFutureDefinition.id,
+    defaultContract: defaultFuture?.definition.contractLabel ?? DEFAULT_CONTRACT,
+    defaultMarketId: defaultFuture?.definition.id ?? DEFAULT_MARKET_ID,
     marketData,
     marketDefinitions,
   };

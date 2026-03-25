@@ -83,19 +83,24 @@ export async function getMarketsServiceMarkets() {
   return (await response.json()) as MarketPresentation[];
 }
 
-export async function getLiveDeliverableFXFuture() {
+export async function getLiveDeliverableFXFutures() {
   const markets = await getMarketsServiceMarkets();
 
-  return (
-    markets.find((market) => {
+  return markets
+    .filter((market) => {
       return (
         market.contract_type === "deliverable_fx_future" &&
         market.settlement_type === "physical_delivery" &&
         market.base_asset_symbol === "USDC" &&
         market.quote_asset_symbol === "cNGN"
       );
-    }) ?? null
-  );
+    })
+    .sort((left, right) => {
+      const leftExpiry = left.expiry_timestamp ?? Number.MAX_SAFE_INTEGER;
+      const rightExpiry = right.expiry_timestamp ?? Number.MAX_SAFE_INTEGER;
+
+      return leftExpiry - rightExpiry;
+    });
 }
 
 export async function getMarketBook(assetAddress: string, subId: string) {
