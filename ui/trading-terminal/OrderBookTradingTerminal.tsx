@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useEffect, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import type { ChainlinkSpotSnapshot } from "@/lib/chainlink-ngn-usd";
 import type { SpotHistorySnapshot } from "@/lib/exchange-api-history";
@@ -22,7 +22,7 @@ import {
   formatMarketPrice,
 } from "@/lib/market-formatting";
 import type { CHART_CONTEXT_TABS, CHART_RANGE_BUTTONS, TIMEFRAME_OPTIONS } from "@/lib/mock-orderbook-terminal-data";
-import type { Candle, MarketDefinition, MarketId, MarketStat, TradePrint } from "@/lib/trading.types";
+import type { Candle, ContractMarket, MarketDefinition, MarketId, MarketStat, TradePrint } from "@/lib/trading.types";
 import { isUSDCCNGNSpotMarket, uiToEngineSpotOrder } from "@/lib/usdccngn-spot-order";
 import {
   ACTIVITY_VIEWS,
@@ -355,17 +355,24 @@ function buildSelectorMetrics(
       optionOpenInterestByMarketId[marketDefinition.id] = null;
     }
   }
+
+  function getSelectorLastPrice(marketDefinition: MarketDefinition) {
+    if (marketDefinition.type === "spot") {
+      const parsed = parseNumericString(marketData[marketDefinition.id as MarketId].mark);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    if (marketDefinition.type === "future") {
+      return marketData[marketDefinition.id as MarketId].trades[0]?.price ?? null;
+    }
+
+    return null;
+  }
+
   const selectorLastByMarketId = Object.fromEntries(
     marketDefinitions.map((marketDefinition) => [
       marketDefinition.id,
-      marketDefinition.type === "spot"
-        ? (() => {
-            const parsed = parseNumericString(marketData[marketDefinition.id as MarketId].mark);
-            return Number.isFinite(parsed) ? parsed : null;
-          })()
-        : marketDefinition.type === "future"
-          ? (marketData[marketDefinition.id as MarketId].trades[0]?.price ?? null)
-          : null,
+      getSelectorLastPrice(marketDefinition),
     ]),
   ) satisfies Record<string, number | null>;
   const selectorBasisByMarketId = Object.fromEntries(
@@ -437,9 +444,27 @@ function getOrderMetrics(
   const sizeNumber = Number(size || "0");
   const limitPriceNumber = parseNumericString(limitPrice || marketMark);
   const safeLimitPrice = Number.isFinite(limitPriceNumber) ? limitPriceNumber : 0;
+
+  function getEstimatedFill() {
+    if (orderType !== "Market") {
+      return safeLimitPrice;
+    }
+
+    return livePrice + (tradeSide === "buy" ? 0.12 : -0.12);
+  }
+
+  function getAverageExecution(estimatedFill: number) {
+    if (orderType !== "Market") {
+      return safeLimitPrice;
+    }
+
+    return estimatedFill + (tradeSide === "buy" ? 0.05 : -0.05);
+  }
+
+  const estimatedFill = getEstimatedFill();
+  const averageExecution = getAverageExecution(estimatedFill);
+
   if (isUSDCCNGNSpotMarket(marketDefinition)) {
-    const estimatedFill = orderType === "Market" ? livePrice + (tradeSide === "buy" ? 0.12 : -0.12) : safeLimitPrice;
-    const averageExecution = orderType === "Market" ? estimatedFill + (tradeSide === "buy" ? 0.05 : -0.05) : safeLimitPrice;
     const orderValue = sizeNumber;
 
     return {
@@ -453,8 +478,6 @@ function getOrderMetrics(
   }
 
   const orderValue = sizeNumber * safeLimitPrice;
-  const estimatedFill = orderType === "Market" ? livePrice + (tradeSide === "buy" ? 0.12 : -0.12) : safeLimitPrice;
-  const averageExecution = orderType === "Market" ? estimatedFill + (tradeSide === "buy" ? 0.05 : -0.05) : safeLimitPrice;
 
   return {
     averageExecution,
@@ -468,9 +491,9 @@ function getOrderMetrics(
 
 type SelectedContract = string;
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This component coordinates terminal state across chart, book, order entry, and URL persistence.
 export function OrderBookTradingTerminal({
   chainlinkSpot,
-  defaultContract,
   defaultMarketId,
   initialContract,
   initialMarketId,
@@ -479,16 +502,16 @@ export function OrderBookTradingTerminal({
   spotHistory,
 }: {
   chainlinkSpot: ChainlinkSpotSnapshot | null;
-  defaultContract: string;
   defaultMarketId: MarketId;
   initialContract: string;
   initialMarketId: MarketId;
-  marketData: Record<MarketId, any>;
+  marketData: Record<MarketId, ContractMarket>;
   marketDefinitions: MarketDefinition[];
   spotHistory: Record<SpotHistorySnapshot["pair"], SpotHistorySnapshot> | null;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const requestedMarketParam = searchParams.get("market");
   const [selectedMarketId, setSelectedMarketId] = useState<MarketId>(initialMarketId);
   const [selectedContract, setSelectedContract] = useState<SelectedContract>(initialContract);
   const [timeframe, setTimeframe] = useState<(typeof TIMEFRAME_OPTIONS)[number]>(DEFAULT_TIMEFRAME);
@@ -511,6 +534,8 @@ export function OrderBookTradingTerminal({
   const [selectedBottomTab, setSelectedBottomTab] =
     useState<keyof typeof ACTIVITY_VIEWS>(DEFAULT_BOTTOM_TAB);
   const [lastAction, setLastAction] = useState("Ready");
+  const [hasHydratedSelection, setHasHydratedSelection] = useState(false);
+  const selectedMarketIdRef = useRef(initialMarketId);
 
   const selectedMarket =
     marketDefinitions.find((marketOption) => marketOption.id === selectedMarketId) ??
@@ -559,6 +584,17 @@ export function OrderBookTradingTerminal({
     selectedMarket.type,
     selectedSpotHistory,
   );
+  const candleResetKey = [
+    selectedMarketId,
+    chartContext,
+    liveBasis ?? "null",
+    liveSpotPrice,
+    selectedSpotHistory?.latestPrice ?? "none",
+    market.candles.length,
+    market.candles[0]?.time ?? "start",
+    market.candles.at(-1)?.time ?? "end",
+    market.candles.at(-1)?.close ?? "close",
+  ].join("|");
 
   const liveInfoBar = buildLiveInfoBar(
     market.infoBar,
@@ -579,30 +615,45 @@ export function OrderBookTradingTerminal({
     tradeSide,
   );
   const [liveCandles, setLiveCandles] = useState<Candle[]>(displayCandles);
+  const lastCandleResetKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
+    selectedMarketIdRef.current = selectedMarketId;
+  }, [selectedMarketId]);
+
+  useEffect(() => {
+    function markSelectionHydrated() {
+      if (!hasHydratedSelection) {
+        setHasHydratedSelection(true);
+      }
+    }
+
     const marketSelectionAliases = buildMarketSelectionAliasMap(marketDefinitions);
     const resolution = resolveHydratedMarketSelection({
       aliases: marketSelectionAliases,
       defaultMarketId,
-      requestedMarket: searchParams.get("market"),
+      requestedMarket: requestedMarketParam,
       storedMarket: window.localStorage.getItem(SELECTED_MARKET_STORAGE_KEY),
     });
 
     if (resolution.shouldIgnoreInvalidRequestedMarket) {
+      markSelectionHydrated();
       return;
     }
 
     if (!resolution.selectedMarketId) {
+      markSelectionHydrated();
       return;
     }
 
-    if (resolution.selectedMarketId === selectedMarketId) {
+    if (resolution.selectedMarketId === selectedMarketIdRef.current) {
+      markSelectionHydrated();
       return;
     }
 
     const nextMarket = marketDefinitions.find((marketOption) => marketOption.id === resolution.selectedMarketId);
     if (!nextMarket) {
+      markSelectionHydrated();
       return;
     }
 
@@ -610,12 +661,18 @@ export function OrderBookTradingTerminal({
     setSelectedContract(nextMarket.contractLabel ?? getDefaultContractForMarket(nextMarket));
     setChartContext(nextMarket.type === "spot" ? "Spot" : DEFAULT_CHART_CONTEXT);
     setLimitPrice(marketData[resolution.selectedMarketId].mark.replaceAll(",", ""));
-  }, [defaultMarketId, marketData, marketDefinitions, searchParams, selectedMarketId]);
+    markSelectionHydrated();
+  }, [defaultMarketId, hasHydratedSelection, marketData, marketDefinitions, requestedMarketParam]);
 
   useEffect(() => {
+    if (!hasHydratedSelection) {
+      return;
+    }
+
     const marketSelectionAliases = buildMarketSelectionAliasMap(marketDefinitions);
     const canonicalMarketId = resolveMarketSelection(selectedMarketId, marketSelectionAliases) ?? selectedMarketId;
-    const requestedMarket = searchParams.get("market");
+    const currentSearchParams = new URLSearchParams(window.location.search);
+    const requestedMarket = currentSearchParams.get("market");
     const resolvedRequestedMarket =
       requestedMarket && requestedMarket.trim() !== ""
         ? resolveMarketSelection(requestedMarket, marketSelectionAliases)
@@ -627,16 +684,20 @@ export function OrderBookTradingTerminal({
 
     window.localStorage.setItem(SELECTED_MARKET_STORAGE_KEY, canonicalMarketId);
 
-    const params = new URLSearchParams(searchParams.toString());
-    if (params.get("market") === canonicalMarketId) {
+    if (currentSearchParams.get("market") === canonicalMarketId) {
       return;
     }
 
-    params.set("market", canonicalMarketId);
-    window.history.replaceState(null, "", `${pathname}?${params.toString()}`);
-  }, [marketDefinitions, pathname, searchParams, selectedMarketId]);
+    currentSearchParams.set("market", canonicalMarketId);
+    window.history.replaceState(null, "", `${pathname}?${currentSearchParams.toString()}`);
+  }, [hasHydratedSelection, marketDefinitions, pathname, selectedMarketId]);
 
   useEffect(() => {
+    if (lastCandleResetKeyRef.current === candleResetKey) {
+      return;
+    }
+
+    lastCandleResetKeyRef.current = candleResetKey;
     setLiveCandles(
       getDisplayCandles(
         chartContext,
@@ -647,17 +708,7 @@ export function OrderBookTradingTerminal({
         selectedSpotHistory,
       ),
     );
-  }, [
-    chartContext,
-    liveBasis,
-    liveSpotPrice,
-    market.candles,
-    selectedContract,
-    selectedMarket.type,
-    selectedMarketId,
-    selectedSpotHistory,
-    timeframe,
-  ]);
+  }, [candleResetKey, chartContext, liveBasis, liveSpotPrice, market.candles, selectedMarket.type, selectedSpotHistory]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -731,10 +782,10 @@ export function OrderBookTradingTerminal({
   }
 
   return (
-    <main className="min-h-screen bg-transparent text-[#D7DEE8] xl:h-[100dvh] xl:overflow-hidden">
+    <main className="min-h-screen bg-transparent text-[#D7DEE8] xl:h-dvh xl:overflow-hidden">
       <MarketDocumentTitle pair={formatFxDisplayPair(selectedMarket.pair)} price={liveCandles.at(-1)?.close ?? null} />
 
-      <div className="mx-auto flex min-h-screen w-full max-w-none flex-col px-2.5 py-3 xl:h-[100dvh] xl:overflow-hidden xl:px-4">
+      <div className="mx-auto flex min-h-screen w-full max-w-none flex-col px-2.5 py-3 xl:h-dvh xl:overflow-hidden xl:px-4">
         <TradingMarketHeader
           atmIvByMarketId={optionAtmIvByMarketId}
           annualizedBasisByMarketId={selectorAnnualizedBasisByMarketId}
@@ -752,7 +803,7 @@ export function OrderBookTradingTerminal({
           spotChangeByMarketId={spotChangeByMarketId}
         />
 
-        <section className="mt-3 grid grid-cols-1 gap-3 xl:h-[500px] xl:flex-none xl:min-h-0 xl:grid-cols-[minmax(0,1.9fr)_minmax(270px,0.72fr)_minmax(320px,0.86fr)] xl:overflow-hidden 2xl:h-[560px] 2xl:grid-cols-[minmax(0,1.95fr)_minmax(290px,0.76fr)_minmax(340px,0.9fr)]">
+        <section className="mt-3 grid grid-cols-1 gap-3 xl:h-[500px] xl:min-h-0 xl:flex-none xl:grid-cols-[minmax(0,1.9fr)_minmax(270px,0.72fr)_minmax(320px,0.86fr)] xl:overflow-hidden 2xl:h-[560px] 2xl:grid-cols-[minmax(0,1.95fr)_minmax(290px,0.76fr)_minmax(340px,0.9fr)]">
           <div className="min-h-[340px] xl:min-h-0 xl:overflow-hidden">
             <TradingChartPanel
               candles={liveCandles}

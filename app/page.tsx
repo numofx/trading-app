@@ -148,7 +148,6 @@ export default async function Home({ searchParams }: HomeProps) {
   return (
     <OrderBookTradingTerminal
       chainlinkSpot={chainlinkSpot}
-      defaultContract={defaultContract}
       defaultMarketId={defaultMarketId}
       initialContract={initialContract}
       initialMarketId={initialMarketId}

@@ -2,11 +2,12 @@
 
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
-import { ChevronDown, Command, Dot, Search, Wallet, X } from "lucide-react";
+import { ChevronDown, Command, Dot, Search, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatFxDisplayPair, getProductDisplayName, getSelectedInstrumentDisplay } from "@/lib/market-display";
 import { buildMarketSelectionAliasMap } from "@/lib/market-selection";
 import type { ContractTab, MarketDefinition, MarketId, MarketStat } from "@/lib/trading.types";
+import { PrivyWalletButton } from "@/ui/PrivyWalletButton";
 import { SmartImage } from "@/ui/SmartImage";
 import { MarketSwitcherRow } from "@/ui/trading-terminal/MarketSwitcherRow";
 import { useMarketSelectorPreferences } from "@/ui/trading-terminal/useMarketSelectorPreferences";
@@ -412,13 +413,7 @@ export function TradingMarketHeader({
               </button>
             ))}
 
-            <button
-              className="inline-flex h-10 items-center gap-2 rounded-2xl bg-[#19356C] px-3.5 font-medium text-[#EEF4FF] text-[12px] transition-colors hover:bg-[#214180]"
-              type="button"
-            >
-              <Wallet className="size-3.5" />
-              <span>Connect Wallet</span>
-            </button>
+            <PrivyWalletButton />
           </div>
         </div>
 
