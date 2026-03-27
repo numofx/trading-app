@@ -107,7 +107,7 @@ export type TradesResponse = {
 
 const DEFAULT_MARKETS_SERVICE_URL = "http://127.0.0.1:8080";
 
-function getMarketsServiceUrl() {
+export function getMarketsServiceUrl() {
   return process.env.MARKETS_SERVICE_URL?.trim() || DEFAULT_MARKETS_SERVICE_URL;
 }
 

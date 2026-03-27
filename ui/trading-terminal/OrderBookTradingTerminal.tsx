@@ -1,7 +1,10 @@
 "use client";
 
+import { useWallets } from "@privy-io/react-auth";
 import { startTransition, useEffect, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import { createWalletClient, custom } from "viem";
+import { base } from "viem/chains";
 import type { ChainlinkSpotSnapshot } from "@/lib/chainlink-ngn-usd";
 import type { SpotHistorySnapshot } from "@/lib/exchange-api-history";
 import {
@@ -23,7 +26,8 @@ import {
 } from "@/lib/market-formatting";
 import type { CHART_CONTEXT_TABS, CHART_RANGE_BUTTONS, TIMEFRAME_OPTIONS } from "@/lib/mock-orderbook-terminal-data";
 import type { Candle, ContractMarket, MarketDefinition, MarketId, MarketStat, TradePrint } from "@/lib/trading.types";
-import { isUSDCCNGNSpotMarket, uiToEngineSpotOrder } from "@/lib/usdccngn-spot-order";
+import { buildSpotOrderEnvelope, canSubmitSpotOrder } from "@/lib/spot-order-submission";
+import { isUSDCCNGNSpotMarket } from "@/lib/usdccngn-spot-order";
 import {
   ACTIVITY_VIEWS,
   CHART_TOOLS,
@@ -39,6 +43,7 @@ import { OrderEntryPanel } from "@/ui/trading-terminal/OrderEntryPanel";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
 import { TradingChartPanel } from "@/ui/trading-terminal/TradingChartPanel";
 import { TradingMarketHeader } from "@/ui/trading-terminal/TradingMarketHeader";
+import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
 
 const SELECTED_MARKET_STORAGE_KEY = "trading-terminal-selected-market";
 
@@ -70,6 +75,24 @@ function getDirectionalLabel(side: "buy" | "sell", marketDefinition: MarketDefin
   }
 
   return side === "buy" ? `Long ${base}` : `Short ${base}`;
+}
+
+function getSpotMarketCrossingPrice(
+  side: "buy" | "sell",
+  orderType: "Limit" | "Market" | "Stop",
+  market: ContractMarket,
+) {
+  if (orderType !== "Market") {
+    return null;
+  }
+
+  const bestOpposingLevel = side === "buy" ? market.orderBookBids[0] : market.orderBookAsks[0];
+
+  if (!bestOpposingLevel) {
+    return null;
+  }
+
+  return bestOpposingLevel.price.toString();
 }
 
 function getCompatibleSpotPrice(candidatePrice: number | null, referencePrice: number) {
@@ -534,8 +557,16 @@ export function OrderBookTradingTerminal({
   const [selectedBottomTab, setSelectedBottomTab] =
     useState<keyof typeof ACTIVITY_VIEWS>(DEFAULT_BOTTOM_TAB);
   const [lastAction, setLastAction] = useState("Ready");
+  const [isSubmittingSpotOrder, setIsSubmittingSpotOrder] = useState(false);
   const [hasHydratedSelection, setHasHydratedSelection] = useState(false);
   const selectedMarketIdRef = useRef(initialMarketId);
+  const { ready: walletsReady, wallets } = useWallets();
+  const primaryWallet = wallets[0] ?? null;
+  const {
+    ensureTradingSubaccount,
+    isLoading: isResolvingTradingSubaccount,
+    subaccountId: tradingSubaccountId,
+  } = useTradingSubaccount(primaryWallet?.address ?? null);
 
   const selectedMarket =
     marketDefinitions.find((marketOption) => marketOption.id === selectedMarketId) ??
@@ -755,24 +786,120 @@ export function OrderBookTradingTerminal({
     });
   }
 
-  function handleSubmit(side: "buy" | "sell") {
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Spot execution needs wallet, env, signing, and backend submission checks in one submit path.
+  async function handleSubmit(side: "buy" | "sell") {
     setTradeSide(side);
 
     if (isUSDCCNGNSpotMarket(selectedMarket)) {
+      if (!walletsReady) {
+        setLastAction("Wallet is still loading");
+        return;
+      }
+
+      if (!primaryWallet?.address) {
+        setLastAction("Connect a wallet before submitting a spot order");
+        return;
+      }
+
+      if (!canSubmitSpotOrder(selectedMarket)) {
+        setLastAction("Live spot execution is unavailable because markets-service did not expose a spot asset");
+        return;
+      }
+
+      const derivedCrossingPrice = getSpotMarketCrossingPrice(side, orderType, market);
+      const executionLimitPrice = derivedCrossingPrice ?? limitPrice;
+
+      if (orderType === "Market" && !derivedCrossingPrice) {
+        setLastAction("No opposing spot liquidity is available. Market orders need a live bid/ask to cross.");
+        return;
+      }
+
       try {
-        const translated = uiToEngineSpotOrder({
-          price: Number(limitPrice),
-          side,
-          size: Number(size),
+        setIsSubmittingSpotOrder(true);
+        setLastAction(
+          tradingSubaccountId
+            ? `Submitting spot order on trading account #${tradingSubaccountId}`
+            : "Preparing trading account...",
+        );
+
+        const resolvedTradingSubaccountId =
+          tradingSubaccountId ?? (await ensureTradingSubaccount(primaryWallet));
+
+        await primaryWallet.switchChain(base.id);
+
+        const provider = await primaryWallet.getEthereumProvider();
+        const walletClient = createWalletClient({
+          chain: base,
+          transport: custom(provider),
         });
+        const envelope = buildSpotOrderEnvelope({
+          limitPrice: executionLimitPrice,
+          market: selectedMarket,
+          side,
+          size,
+          subaccountId: resolvedTradingSubaccountId,
+          walletAddress: primaryWallet.address,
+        });
+        setLastAction(`Awaiting wallet signature for trading account #${resolvedTradingSubaccountId}`);
+        const signature = await walletClient.signTypedData({
+          account: primaryWallet.address as `0x${string}`,
+          ...envelope.typedData,
+        });
+        const response = await fetch("/api/orders", {
+          body: JSON.stringify({
+            ...envelope.payload,
+            signature,
+          }),
+          headers: {
+            "content-type": "application/json",
+          },
+          method: "POST",
+        });
+        const payload = (await response.json().catch(() => null)) as
+          | {
+              error?: string;
+              order?: {
+                spot_contract?: {
+                  balance_delta?: {
+                    cngn?: string;
+                    usdc?: string;
+                  };
+                  engine_order?: {
+                    amount?: string;
+                    price?: string;
+                    side?: "buy" | "sell";
+                  };
+                  ui_intent?: {
+                    price?: string;
+                    side?: "buy" | "sell";
+                    size?: string;
+                  };
+                };
+              };
+            }
+          | null;
+
+        if (!response.ok) {
+          setLastAction(payload?.error ?? "Spot order submission failed");
+          return;
+        }
+
+        const translated = payload?.order?.spot_contract;
+
+        if (!translated) {
+          setLastAction(`Spot order accepted for ${size} USDC @ ${executionLimitPrice} cNGN/USDC`);
+          return;
+        }
 
         setLastAction(
-          `UI ${translated.ui.side.toUpperCase()} ${translated.ui.size.toLocaleString("en-US")} USDC @ ${translated.ui.price.toLocaleString("en-US")} cNGN/USDC -> engine ${translated.engine.side.toUpperCase()} ${translated.engine.amount.toLocaleString("en-US", { maximumFractionDigits: 6 })} cNGN @ ${translated.engine.price.toLocaleString("en-US", { maximumFractionDigits: 12 })} USDC/cNGN | dUSDC ${translated.deltas.usdc >= 0 ? "+" : ""}${translated.deltas.usdc.toLocaleString("en-US")} | dcNGN ${translated.deltas.cngn >= 0 ? "+" : ""}${translated.deltas.cngn.toLocaleString("en-US", { maximumFractionDigits: 6 })}`,
+          `Spot order accepted: ${translated.ui_intent?.side?.toUpperCase() ?? side.toUpperCase()} ${translated.ui_intent?.size ?? size} USDC @ ${translated.ui_intent?.price ?? executionLimitPrice} cNGN/USDC -> engine ${translated.engine_order?.side?.toUpperCase() ?? "—"} ${translated.engine_order?.amount ?? "—"} cNGN @ ${translated.engine_order?.price ?? "—"} USDC/cNGN | dUSDC ${translated.balance_delta?.usdc ?? "—"} | dcNGN ${translated.balance_delta?.cngn ?? "—"}`,
         );
         return;
       } catch (error) {
         setLastAction(error instanceof Error ? error.message : "Invalid spot order");
         return;
+      } finally {
+        setIsSubmittingSpotOrder(false);
       }
     }
 
@@ -847,6 +974,7 @@ export function OrderBookTradingTerminal({
               estimatedFillPrice={formatPriceDisplay(estimatedFill)}
               fees={`$${fees.toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
               initialMargin={`$${initialMargin.toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
+              isSubmitting={isSubmittingSpotOrder || isResolvingTradingSubaccount}
               isSpotUSDIntent={isUSDCCNGNSpotMarket(selectedMarket)}
               lastAction={lastAction}
               limitPrice={limitPrice}

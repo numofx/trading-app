@@ -2,7 +2,7 @@
 
 **An orderbook for spot and futures stablecoin FX.**
 
-Enables spot-style trading and physically delivered FX futures on USDC/cNGN. Integrated with off/on ramping via Busha and Coinbase APIs for instant USD/USDC and NGN/cNGN conversions.
+Enables spot trading and physically delivered FX futures on USDC/cNGN. Integrated with off/on ramping via Busha and Coinbase APIs for instant USD/USDC and NGN/cNGN conversions.
 
 ## Runtime config
 

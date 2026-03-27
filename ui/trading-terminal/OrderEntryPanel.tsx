@@ -19,6 +19,27 @@ function LabelValueRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function getDirectionCopy(isSpotUSDIntent: boolean, isLong: boolean) {
+  if (isSpotUSDIntent) {
+    return isLong ? "Buy USDC / sell cNGN" : "Sell USDC / buy cNGN";
+  }
+
+  return isLong ? "Buy cNGN / sell USDC" : "Sell cNGN / buy USDC";
+}
+
+function getSubmitLabel(isSubmitting: boolean, isSpotUSDIntent: boolean, isLong: boolean) {
+  if (isSubmitting) {
+    return "Submitting...";
+  }
+
+  if (isSpotUSDIntent) {
+    return isLong ? "Buy USDC" : "Sell USDC";
+  }
+
+  return isLong ? "Long cNGN" : "Short cNGN";
+}
+
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This panel intentionally coordinates several dense trading UI sections.
 export function OrderEntryPanel({
   allocation,
   atExpiryDeliver,
@@ -29,6 +50,7 @@ export function OrderEntryPanel({
   estimatedFillPrice,
   fees,
   initialMargin,
+  isSubmitting,
   isSpotUSDIntent,
   lastAction,
   limitPrice,
@@ -61,6 +83,7 @@ export function OrderEntryPanel({
   estimatedFillPrice: string;
   fees: string;
   initialMargin: string;
+  isSubmitting?: boolean;
   isSpotUSDIntent: boolean;
   lastAction: string;
   limitPrice: string;
@@ -87,13 +110,8 @@ export function OrderEntryPanel({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const isLong = tradeSide === "buy";
   const needsLimitPrice = orderType !== "Market";
-  const directionCopy = isSpotUSDIntent
-    ? isLong
-      ? "Buy USDC / sell cNGN"
-      : "Sell USDC / buy cNGN"
-    : isLong
-      ? "Buy cNGN / sell USDC"
-      : "Sell cNGN / buy USDC";
+  const directionCopy = getDirectionCopy(isSpotUSDIntent, isLong);
+  const submitLabel = getSubmitLabel(Boolean(isSubmitting), isSpotUSDIntent, isLong);
 
   return (
     <section className="flex h-full min-h-[320px] flex-col overflow-hidden rounded-[24px] bg-[#0D141E]/96 shadow-[0_20px_70px_rgba(0,0,0,0.32)] ring-1 ring-white/6 xl:min-h-0">
@@ -103,7 +121,7 @@ export function OrderEntryPanel({
           <div className="grid grid-cols-2 gap-2.5">
             <button
               className={cn(
-                "rounded-2xl px-3.5 py-3.5 text-left transition-colors",
+                "rounded-2xl p-3.5 text-left transition-colors",
                 isLong
                   ? "bg-[#153425] text-[#EAF7EF] ring-1 ring-[#21583E]"
                   : "bg-white/[0.035] text-[#D7DEE8] ring-1 ring-white/6",
@@ -118,7 +136,7 @@ export function OrderEntryPanel({
             </button>
             <button
               className={cn(
-                "rounded-2xl px-3.5 py-3.5 text-left transition-colors",
+                "rounded-2xl p-3.5 text-left transition-colors",
                 isLong
                   ? "bg-white/[0.035] text-[#D7DEE8] ring-1 ring-white/6"
                   : "bg-[#401C1F] text-[#FFF0F0] ring-1 ring-[#683235]",
@@ -159,7 +177,7 @@ export function OrderEntryPanel({
               <label className="text-[#6C798B] text-[10px] uppercase tracking-[0.18em]" htmlFor="trade-size">
                 {isSpotUSDIntent ? "Size (USDC)" : "Size"}
               </label>
-              <div className="flex items-center overflow-hidden rounded-2xl bg-white/[0.04] ring-1 ring-white/6">
+              <div className="flex items-center overflow-hidden rounded-2xl bg-white/4 ring-1 ring-white/6">
             <input
               className="h-11 flex-1 bg-transparent px-3.5 text-[#D7DEE8] text-[13px] outline-none placeholder:text-[#6C798B]"
               id="trade-size"
@@ -186,7 +204,7 @@ export function OrderEntryPanel({
                 <label className="text-[#6C798B] text-[10px] uppercase tracking-[0.18em]" htmlFor="trade-limit-price">
                   {orderType === "Stop" ? "Stop Price" : "Limit Price"}
                 </label>
-                <div className="flex items-center overflow-hidden rounded-2xl bg-white/[0.04] ring-1 ring-white/6">
+                <div className="flex items-center overflow-hidden rounded-2xl bg-white/4 ring-1 ring-white/6">
                   <input
                     className="h-11 flex-1 bg-transparent px-3.5 text-[#D7DEE8] text-[13px] outline-none placeholder:text-[#6C798B]"
                     id="trade-limit-price"
@@ -211,7 +229,7 @@ export function OrderEntryPanel({
               type="range"
               value={allocation}
             />
-            <div className="rounded-xl bg-white/[0.04] px-3 py-1.5 text-[#D7DEE8] text-[10px] ring-1 ring-white/6">
+            <div className="rounded-xl bg-white/4 px-3 py-1.5 text-[#D7DEE8] text-[10px] ring-1 ring-white/6">
               {allocation}%
             </div>
           </div>
@@ -248,32 +266,37 @@ export function OrderEntryPanel({
 
         <button
           className={cn(
-            "flex h-11 w-full items-center justify-center rounded-2xl font-semibold text-[13px] transition-colors",
+            "flex h-11 w-full items-center justify-center rounded-2xl font-semibold text-[13px] transition-colors disabled:cursor-wait disabled:opacity-80",
             isLong
               ? "bg-[#E9EEF7] text-[#081019] hover:bg-white"
               : "bg-[#E9EEF7] text-[#081019] hover:bg-white",
           )}
           onClick={() => onSubmit(tradeSide)}
+          disabled={isSubmitting}
           type="button"
         >
-          {isSpotUSDIntent ? (isLong ? "Buy USDC" : "Sell USDC") : isLong ? "Long cNGN" : "Short cNGN"}
+          {submitLabel}
         </button>
 
-        <section className="rounded-[22px] bg-white/[0.025] ring-1 ring-white/6">
+        <div className="rounded-2xl bg-white/3 px-3 py-2 text-[#97A3B4] text-[10px] ring-1 ring-white/6">
+          {lastAction}
+        </div>
+
+        <section className="rounded-[22px] bg-white/2.5 ring-1 ring-white/6">
           <button
             className="flex w-full items-center justify-between px-3.5 py-2.5 text-left"
             onClick={() => setAdvancedOpen((current) => !current)}
             type="button"
           >
-            <span className="text-[#CBD5E1] text-[13px] font-medium">Advanced Settings</span>
+            <span className="font-medium text-[#CBD5E1] text-[13px]">Advanced Settings</span>
             {advancedOpen ? <ChevronUp className="size-4 text-[#6C798B]" /> : <ChevronDown className="size-4 text-[#6C798B]" />}
           </button>
 
           {advancedOpen ? (
-            <div className="space-y-2.5 border-white/6 border-t px-3.5 py-3.5">
+            <div className="space-y-2.5 border-white/6 border-t p-3.5">
               <div className="grid grid-cols-2 gap-2 text-[9px]">
                 <button
-                  className="flex items-center justify-between rounded-xl bg-white/[0.04] px-3 py-2"
+                  className="flex items-center justify-between rounded-xl bg-white/4 px-3 py-2"
                   onClick={onPostOnlyToggle}
                   type="button"
                 >
@@ -281,7 +304,7 @@ export function OrderEntryPanel({
                   <span className={cn("text-[#738095]", postOnly && "text-[#A8C4F6]")}>{postOnly ? "On" : "Off"}</span>
                 </button>
                 <button
-                  className="flex items-center justify-between rounded-xl bg-white/[0.04] px-3 py-2"
+                  className="flex items-center justify-between rounded-xl bg-white/4 px-3 py-2"
                   onClick={onAtExpiryDeliverToggle}
                   type="button"
                 >
@@ -290,10 +313,6 @@ export function OrderEntryPanel({
                     {atExpiryDeliver ? "On" : "Off"}
                   </span>
                 </button>
-              </div>
-
-              <div className="rounded-2xl bg-white/[0.03] px-3 py-2 text-[#97A3B4] text-[10px]">
-                {lastAction}
               </div>
             </div>
           ) : null}
@@ -326,7 +345,7 @@ export function OrderEntryPanel({
           <div className="grid grid-cols-2 gap-2 pt-1">
             {["Close Position", "Reduce 25%", "Reduce 50%", "Close All"].map((action) => (
               <button
-                className="h-8 rounded-xl bg-white/[0.04] text-[#738095] text-[9px] transition-colors"
+                className="h-8 rounded-xl bg-white/4 text-[#738095] text-[9px] transition-colors"
                 disabled
                 key={action}
                 type="button"
