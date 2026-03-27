@@ -572,6 +572,7 @@ export function OrderBookTradingTerminal({
     marketDefinitions.find((marketOption) => marketOption.id === selectedMarketId) ??
     marketDefinitions[0];
   const market = marketData[selectedMarketId];
+  const isLiveSpotExecutionAvailable = !isUSDCCNGNSpotMarket(selectedMarket) || canSubmitSpotOrder(selectedMarket);
   const referenceSpotPrice = parseNumericString(marketData["cngn-usdc-spot"].mark);
   const liveSpotPrice = getCompatibleSpotPrice(
     spotHistory?.["NGN/USD"]?.latestPrice ?? chainlinkSpot?.priceNgnPerUsd ?? null,
@@ -974,6 +975,7 @@ export function OrderBookTradingTerminal({
               estimatedFillPrice={formatPriceDisplay(estimatedFill)}
               fees={`$${fees.toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
               initialMargin={`$${initialMargin.toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
+              isSubmitDisabled={!isLiveSpotExecutionAvailable}
               isSubmitting={isSubmittingSpotOrder || isResolvingTradingSubaccount}
               isSpotUSDIntent={isUSDCCNGNSpotMarket(selectedMarket)}
               lastAction={lastAction}

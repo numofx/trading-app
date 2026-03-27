@@ -1,4 +1,5 @@
 import "server-only";
+import { selectLiveUSDCCNGNSpotMarket } from "@/lib/spot-market-discovery";
 
 export type MarketPresentation = {
   asset_address?: string;
@@ -106,7 +107,6 @@ export type TradesResponse = {
 };
 
 const DEFAULT_MARKETS_SERVICE_URL = "http://127.0.0.1:8080";
-
 export function getMarketsServiceUrl() {
   return process.env.MARKETS_SERVICE_URL?.trim() || DEFAULT_MARKETS_SERVICE_URL;
 }
@@ -149,16 +149,7 @@ export async function getLiveDeliverableFXFutures() {
 export async function getLiveUSDCCNGNSpotMarket() {
   const markets = await getMarketsServiceMarkets();
 
-  return (
-    markets.find((market) => {
-      return (
-        market.contract_type === "spot" &&
-        market.settlement_type === "spot" &&
-        market.base_asset_symbol === "USDC" &&
-        market.quote_asset_symbol === "cNGN"
-      );
-    }) ?? null
-  );
+  return selectLiveUSDCCNGNSpotMarket(markets);
 }
 
 export async function getMarketBook(assetAddress: string, subId: string) {

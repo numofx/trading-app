@@ -51,6 +51,7 @@ export function OrderEntryPanel({
   fees,
   initialMargin,
   isSubmitting,
+  isSubmitDisabled,
   isSpotUSDIntent,
   lastAction,
   limitPrice,
@@ -84,6 +85,7 @@ export function OrderEntryPanel({
   fees: string;
   initialMargin: string;
   isSubmitting?: boolean;
+  isSubmitDisabled?: boolean;
   isSpotUSDIntent: boolean;
   lastAction: string;
   limitPrice: string;
@@ -266,13 +268,13 @@ export function OrderEntryPanel({
 
         <button
           className={cn(
-            "flex h-11 w-full items-center justify-center rounded-2xl font-semibold text-[13px] transition-colors disabled:cursor-wait disabled:opacity-80",
+            "flex h-11 w-full items-center justify-center rounded-2xl font-semibold text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-80",
             isLong
               ? "bg-[#E9EEF7] text-[#081019] hover:bg-white"
               : "bg-[#E9EEF7] text-[#081019] hover:bg-white",
           )}
           onClick={() => onSubmit(tradeSide)}
-          disabled={isSubmitting}
+          disabled={isSubmitting || isSubmitDisabled}
           type="button"
         >
           {submitLabel}

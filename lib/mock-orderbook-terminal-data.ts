@@ -175,7 +175,7 @@ const BASE_OPTIONS_BIDS = [
 ] as const;
 
 const SPOT_MARKET_META = {
-  executable: "Live on venue",
+  executable: "Preview only",
   id: "cngn-usdc-spot",
   mark: "1,603.90",
   settlement: "Immediate spot-style settlement",

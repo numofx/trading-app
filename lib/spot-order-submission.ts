@@ -8,7 +8,7 @@ const DEFAULT_TRADE_MODULE_ADDRESS = "0x5fba217bFf9DfE7EDaD333972866DbA83c50B0f2
 const SPOT_ORDER_ENTRY_SPEC = "usdc_cngn_spot_v1";
 const SPOT_UI_DECIMALS = 6;
 const ENGINE_DECIMALS = 18;
-const DECIMAL_INPUT_PATTERN = /^\d+(\.\d+)?$/;
+const DECIMAL_INPUT_PATTERN = /^(\d+(\.\d+)?|\.\d+)$/;
 const TRAILING_ZEROES_PATTERN = /0+$/;
 const UNSIGNED_INTEGER_PATTERN = /^\d+$/;
 
@@ -95,7 +95,7 @@ function sanitizeDecimalInput(rawValue: string, label: string) {
     throw new Error(`${label} must be a valid number`);
   }
 
-  return trimmed;
+  return trimmed.startsWith(".") ? `0${trimmed}` : trimmed;
 }
 
 function formatFixedPointUnits(value: bigint, decimals: number) {
