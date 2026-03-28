@@ -34,8 +34,24 @@ export function getProductDisplayName(type: MarketType) {
   return "Spot";
 }
 
+function getInstrumentTypeDisplayName(type: MarketType) {
+  if (type === "future") {
+    return "Future";
+  }
+
+  if (type === "option") {
+    return "Option";
+  }
+
+  if (type === "perp") {
+    return "Perp";
+  }
+
+  return "Spot";
+}
+
 export function getInstrumentDetailDisplay(market: MarketDefinition) {
-  const product = getProductDisplayName(market.type);
+  const product = getInstrumentTypeDisplayName(market.type);
 
   if (market.type === "spot") {
     return product;
@@ -49,12 +65,14 @@ export function getInstrumentDisplayLabel(market: MarketDefinition) {
     return `${formatFxDisplayPair(market.pair)} Spot`;
   }
 
-  return `${formatFxDisplayPair(market.pair)} ${getProductDisplayName(market.type)} · ${market.expiryLabel ?? "—"}`;
+  return `${formatFxDisplayPair(market.pair)} ${getInstrumentTypeDisplayName(market.type)} · ${market.expiryLabel ?? "—"}`;
 }
 
 export function getSelectedInstrumentDisplay(market: MarketDefinition) {
   return {
-    label: getInstrumentDisplayLabel(market),
+    expiryLabel: market.type === "spot" ? null : market.expiryLabel ?? "—",
+    pairLabel: formatFxDisplayPair(market.pair),
+    typeLabel: getInstrumentTypeDisplayName(market.type),
   };
 }
 

@@ -256,19 +256,18 @@ export function TradingMarketHeader({
 
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
       event.preventDefault();
-      setMarketSearchOpen(true);
+      openMarketSearch();
       return;
     }
 
     if (event.key === "Escape") {
-      setMarketSearchOpen(false);
-      setMarketSearch("");
+      closeMarketSearch();
       return;
     }
 
     if (!marketSearchOpen && !isTypingTarget && event.key === "/") {
       event.preventDefault();
-      setMarketSearchOpen(true);
+      openMarketSearch();
     }
   });
 
@@ -278,10 +277,20 @@ export function TradingMarketHeader({
     return () => window.removeEventListener("keydown", handleGlobalKeydown);
   }, []);
 
-  function handleMarketPick(marketId: string) {
-    onMarketSelect(marketId);
+  function openMarketSearch() {
+    setSelectedPrimaryTab("All");
+    setMarketSearchOpen(true);
+  }
+
+  function closeMarketSearch() {
     setMarketSearchOpen(false);
     setMarketSearch("");
+    setSelectedPrimaryTab("All");
+  }
+
+  function handleMarketPick(marketId: string) {
+    onMarketSelect(marketId);
+    closeMarketSearch();
     pushRecent(marketId as MarketId);
   }
 
@@ -333,8 +342,7 @@ export function TradingMarketHeader({
 
     if (event.key === "Escape") {
       event.preventDefault();
-      setMarketSearchOpen(false);
-      setMarketSearch("");
+      closeMarketSearch();
     }
   }
 
@@ -377,7 +385,7 @@ export function TradingMarketHeader({
                 aria-expanded={marketSearchOpen}
                 aria-haspopup="dialog"
                 className="inline-flex h-11 items-center gap-3 rounded-2xl bg-white/4 px-4 font-semibold text-[#E5ECF5] text-[14px] leading-none ring-1 ring-white/6"
-                onClick={() => setMarketSearchOpen(true)}
+                onClick={openMarketSearch}
                 type="button"
               >
                 <SmartImage<string>
@@ -386,8 +394,18 @@ export function TradingMarketHeader({
                   imgClassName="object-cover"
                   src="/flags/ng.svg"
                 />
-                <span className="min-w-0 truncate font-semibold text-[#E5ECF5] text-[14px] leading-none">
-                  {selectedInstrument.label}
+                <span className="flex min-w-0 items-center gap-2 overflow-hidden">
+                  <span className="truncate font-semibold text-[#E5ECF5] text-[14px] leading-none">
+                    {selectedInstrument.pairLabel}
+                  </span>
+                  <span className="shrink-0 rounded-[10px] bg-[#0D4138] px-2.5 py-1 font-semibold text-[#51D0A6] text-[12px] uppercase leading-none tracking-[0.04em]">
+                    {selectedInstrument.typeLabel}
+                  </span>
+                  {selectedInstrument.expiryLabel ? (
+                    <span className="truncate font-semibold text-[#E5ECF5] text-[14px] leading-none">
+                      · {selectedInstrument.expiryLabel}
+                    </span>
+                  ) : null}
                 </span>
                 <span className="hidden items-center gap-1 rounded-full bg-white/5 px-2.5 py-1 font-medium text-[#6F7C90] text-[11px] sm:inline-flex">
                   <Command className="size-3" />
@@ -440,10 +458,7 @@ export function TradingMarketHeader({
           <button
             aria-label="Close market switcher"
             className="absolute inset-0"
-            onClick={() => {
-              setMarketSearchOpen(false);
-              setMarketSearch("");
-            }}
+            onClick={closeMarketSearch}
             type="button"
           />
           <div
