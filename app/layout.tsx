@@ -16,6 +16,9 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   description: "A dark trading terminal interface mockup built with Next.js.",
+  other: {
+    "base:app_id": "69c83c9c4e918ceaf56a8408",
+  },
   title: "Trading Terminal",
 };
 
