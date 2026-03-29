@@ -27,7 +27,7 @@ function OrderRow({
   const width = `${(level.total / maxTotal) * 100}%`;
 
   return (
-    <div className="relative grid grid-cols-3 px-3.5 py-0.5 text-[10px]">
+    <div className="relative grid grid-cols-3 px-3 py-0.5 text-[9px]">
       <div
         className={cn(
           "absolute inset-y-0 right-0 rounded-l-xl",
@@ -73,12 +73,12 @@ export function OrderBookPanel({
   const spreadPercent = midPrice && spread !== null ? (spread / midPrice) * 100 : null;
 
   return (
-    <section className="flex h-full min-h-[320px] flex-col overflow-hidden rounded-[22px] bg-[#0B121B]/76 ring-1 ring-white/5 xl:min-h-0">
-      <div className="flex items-center justify-between border-white/6 border-b px-3.5 py-2.5">
-        <div className="flex items-center gap-2 font-medium text-xs">
+    <section className="flex h-full min-h-[300px] flex-col overflow-hidden rounded-[20px] bg-[#0B121B]/76 ring-1 ring-white/5 xl:min-h-0">
+      <div className="flex items-center justify-between border-white/6 border-b px-3 py-2">
+        <div className="flex items-center gap-1.5 font-medium text-[11px]">
           <button
             className={cn(
-              "rounded-xl px-2.5 py-1.5",
+              "rounded-xl px-2 py-1",
               view === "Order Book" ? "bg-white/6 text-[#E7EDF6]" : "text-[#728095]",
             )}
             onClick={() => onViewChange("Order Book")}
@@ -88,7 +88,7 @@ export function OrderBookPanel({
           </button>
           <button
             className={cn(
-              "rounded-xl px-2.5 py-1.5",
+              "rounded-xl px-2 py-1",
               view === "Trades" ? "bg-white/6 text-[#E7EDF6]" : "text-[#728095]",
             )}
             onClick={() => onViewChange("Trades")}
@@ -98,17 +98,17 @@ export function OrderBookPanel({
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button className="rounded-xl p-1.5 text-[#728095] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]" type="button">
-            <MoreHorizontal className="size-4" />
+        <div className="flex items-center gap-1.5">
+          <button className="rounded-xl p-1 text-[#728095] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]" type="button">
+            <MoreHorizontal className="size-3.5" />
           </button>
-          <button className="rounded-xl bg-white/5 px-2.5 py-1.5 text-[#C3CFDD] text-[11px]" type="button">
+          <button className="rounded-xl bg-white/5 px-2 py-1 text-[#C3CFDD] text-[10px]" type="button">
             {contractLabel}
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 border-white/6 border-b px-3.5 py-2 text-[#5E6B7F] text-[9px] uppercase tracking-[0.16em]">
+      <div className="grid grid-cols-3 border-white/6 border-b px-3 py-1.5 text-[#5E6B7F] text-[8px] uppercase tracking-[0.16em]">
         <span>Price</span>
         <span className="text-right">Size</span>
         <span className="text-right">Total</span>
@@ -116,7 +116,7 @@ export function OrderBookPanel({
 
       {view === "Order Book" ? (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="px-3.5 py-1.5 text-[#B78787] text-[9px] uppercase tracking-[0.16em]">
+          <div className="px-3 py-1 text-[#B78787] text-[8px] uppercase tracking-[0.16em]">
             Asks
           </div>
           <div className="overflow-hidden">
@@ -125,27 +125,27 @@ export function OrderBookPanel({
             ))}
           </div>
 
-          <div className="mx-2.5 my-2 rounded-2xl bg-white/[0.03] px-3.5 py-2.5">
+          <div className="mx-2 my-1.5 rounded-2xl bg-white/3 px-3 py-2">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <div className="font-medium text-[#5E6B7F] text-[9px] uppercase tracking-[0.16em]">Spread</div>
-                <div className="mt-1 font-semibold text-[#E7EDF6] text-[15px]">
+                <div className="font-medium text-[#5E6B7F] text-[8px] uppercase tracking-[0.16em]">Spread</div>
+                <div className="mt-1 font-semibold text-[#E7EDF6] text-[13px]">
                   {spread === null ? "—" : formatPrice(spread)} cNGN
                 </div>
               </div>
               <div className="text-center">
-                <div className="font-medium text-[#5E6B7F] text-[9px] uppercase tracking-[0.16em]">Mid Price</div>
-                <div className="mt-1 font-semibold text-[#DCE9FF] text-[18px]">
+                <div className="font-medium text-[#5E6B7F] text-[8px] uppercase tracking-[0.16em]">Mid Price</div>
+                <div className="mt-1 font-semibold text-[#DCE9FF] text-[15px]">
                   {midPrice === null ? "—" : formatPrice(midPrice)}
                 </div>
-                <div className="text-[#7BA7F4] text-[9px]">
+                <div className="text-[#7BA7F4] text-[8px]">
                   {spreadPercent === null ? "—" : `${spreadPercent.toFixed(3)}%`}
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="px-3.5 py-1.5 text-[#7DA189] text-[9px] uppercase tracking-[0.16em]">
+          <div className="px-3 py-1 text-[#7DA189] text-[8px] uppercase tracking-[0.16em]">
             Bids
           </div>
           <div className="overflow-hidden">
@@ -157,7 +157,7 @@ export function OrderBookPanel({
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
           {trades.map((trade) => (
-            <div className="grid grid-cols-3 px-3.5 py-1 text-[10px]" key={`${trade.time}-${trade.price}`}>
+            <div className="grid grid-cols-3 px-3 py-1 text-[9px]" key={`${trade.time}-${trade.price}`}>
               <span className={cn("font-semibold", trade.side === "buy" ? "text-[#86AE95]" : "text-[#C48F8F]")}>
                 {formatPrice(trade.price)}
               </span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import type { MarketId } from "@/lib/trading.types";
 
 const FAVORITE_MARKETS_STORAGE_KEY = "market-selector-favorites";
@@ -38,6 +38,14 @@ function parseStoredMarketIds(value: string | null, validMarketIds: Set<string>,
   }
 }
 
+function marketIdsEqual(left: MarketId[], right: MarketId[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((marketId, index) => marketId === right[index]);
+}
+
 export function useMarketSelectorPreferences(
   validMarketIds: MarketId[],
   aliases: Map<string, MarketId>,
@@ -50,16 +58,20 @@ export function useMarketSelectorPreferences(
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([alias, marketId]) => `${alias}:${marketId}`)
     .join("|");
+  const parseStoredIds = useEffectEvent((storageKey: string, validMarketIdSet: Set<string>) =>
+    parseStoredMarketIds(window.localStorage.getItem(storageKey), validMarketIdSet, aliases),
+  );
 
   useEffect(() => {
     const validMarketIdSet = new Set(validMarketIdsKey ? validMarketIdsKey.split("|") : []);
-    setFavoriteMarketIds(
-      parseStoredMarketIds(window.localStorage.getItem(FAVORITE_MARKETS_STORAGE_KEY), validMarketIdSet, aliases),
+    const nextFavoriteMarketIds = parseStoredIds(FAVORITE_MARKETS_STORAGE_KEY, validMarketIdSet);
+    const nextRecentMarketIds = parseStoredIds(RECENT_MARKETS_STORAGE_KEY, validMarketIdSet);
+
+    setFavoriteMarketIds((current) =>
+      marketIdsEqual(current, nextFavoriteMarketIds) ? current : nextFavoriteMarketIds,
     );
-    setRecentMarketIds(
-      parseStoredMarketIds(window.localStorage.getItem(RECENT_MARKETS_STORAGE_KEY), validMarketIdSet, aliases),
-    );
-  }, [aliases, aliasEntriesKey, validMarketIdsKey]);
+    setRecentMarketIds((current) => (marketIdsEqual(current, nextRecentMarketIds) ? current : nextRecentMarketIds));
+  }, [aliasEntriesKey, validMarketIdsKey]);
 
   useEffect(() => {
     window.localStorage.setItem(FAVORITE_MARKETS_STORAGE_KEY, JSON.stringify(favoriteMarketIds));

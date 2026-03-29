@@ -1,3 +1,6 @@
+"use client";
+
+import { Popover } from "@base-ui/react/popover";
 import { ChevronDown, ChevronUp, Info } from "lucide-react";
 import { useState } from "react";
 import type { DeliveryTerm } from "@/lib/trading.types";
@@ -33,7 +36,7 @@ function getSubmitLabel(isSubmitting: boolean, isSpotUSDIntent: boolean, isLong:
   }
 
   if (isSpotUSDIntent) {
-    return isLong ? "Buy USDC" : "Sell USDC";
+    return isLong ? "Buy" : "Sell";
   }
 
   return isLong ? "Long cNGN" : "Short cNGN";
@@ -64,6 +67,7 @@ export function OrderEntryPanel({
   postOnly,
   returnPercent,
   size,
+  spotSizeCurrency,
   slippageEstimate,
   tradeSide,
   onAllocationChange,
@@ -73,6 +77,7 @@ export function OrderEntryPanel({
   onPostOnlyToggle,
   onSideChange,
   onSizeChange,
+  onSpotSizeCurrencyChange,
   onSubmit,
 }: {
   allocation: number;
@@ -98,6 +103,7 @@ export function OrderEntryPanel({
   postOnly: boolean;
   returnPercent: string;
   size: string;
+  spotSizeCurrency?: "USDC" | "cNGN";
   slippageEstimate: string;
   tradeSide: "buy" | "sell";
   onAllocationChange: (value: number) => void;
@@ -107,60 +113,62 @@ export function OrderEntryPanel({
   onPostOnlyToggle: () => void;
   onSideChange: (side: "buy" | "sell") => void;
   onSizeChange: (value: string) => void;
+  onSpotSizeCurrencyChange?: (value: "USDC" | "cNGN") => void;
   onSubmit: (side: "buy" | "sell") => void;
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [sizeCurrencyPickerOpen, setSizeCurrencyPickerOpen] = useState(false);
   const isLong = tradeSide === "buy";
   const needsLimitPrice = orderType !== "Market";
   const directionCopy = getDirectionCopy(isSpotUSDIntent, isLong);
   const submitLabel = getSubmitLabel(Boolean(isSubmitting), isSpotUSDIntent, isLong);
+  const activeSpotSizeCurrency = spotSizeCurrency ?? "USDC";
+  let sizePlaceholder = "50,000";
+
+  if (isSpotUSDIntent) {
+    sizePlaceholder = activeSpotSizeCurrency === "USDC" ? "100" : "160,000";
+  }
 
   return (
-    <section className="flex h-full min-h-[320px] flex-col overflow-hidden rounded-[24px] bg-[#0D141E]/96 shadow-[0_20px_70px_rgba(0,0,0,0.32)] ring-1 ring-white/6 xl:min-h-0">
-      <div className="space-y-3 overflow-y-auto p-3.5 text-[10px] lg:p-4">
-        <section className="space-y-3">
-          <div className="text-[#6C798B] text-[10px] uppercase tracking-[0.18em]">Direction</div>
-          <div className="grid grid-cols-2 gap-2.5">
+    <section className="flex h-full min-h-[300px] flex-col overflow-hidden rounded-[22px] bg-[#0D141E]/96 shadow-[0_20px_70px_rgba(0,0,0,0.32)] ring-1 ring-white/6 xl:min-h-0">
+      <div className="space-y-2.5 overflow-y-auto p-3 text-[9px] lg:p-3.5">
+        <section className="space-y-2">
+          <div className="text-[#6C798B] text-[9px] uppercase tracking-[0.18em]">Direction</div>
+          <div className="grid grid-cols-2 gap-2">
             <button
               className={cn(
-                "rounded-2xl p-3.5 text-left transition-colors",
+                "flex min-h-10 items-center justify-center rounded-2xl px-2.5 py-2 text-center transition-colors",
                 isLong
-                  ? "bg-[#153425] text-[#EAF7EF] ring-1 ring-[#21583E]"
-                  : "bg-white/[0.035] text-[#D7DEE8] ring-1 ring-white/6",
+                  ? "bg-[#22BC87] text-[#081019] ring-1 ring-[#37D79F]"
+                  : "bg-white/8 text-[#F4F7FB] ring-1 ring-white/6",
               )}
               onClick={() => onSideChange("buy")}
               type="button"
             >
-              <span className="block font-semibold text-[13px]">{isSpotUSDIntent ? "Buy USDC" : "Long cNGN"}</span>
-              <span className={cn("mt-1 block text-[10px]", isLong ? "text-[#9CC7A9]" : "text-[#768397]")}>
-                {isSpotUSDIntent ? "Acquire USDC / sell cNGN" : "Buy cNGN / sell USDC"}
-              </span>
+              <span className="block font-semibold text-[12px] leading-none">{isSpotUSDIntent ? "Buy" : "Long"}</span>
             </button>
             <button
               className={cn(
-                "rounded-2xl p-3.5 text-left transition-colors",
+                "flex min-h-10 items-center justify-center rounded-2xl px-2.5 py-2 text-center transition-colors",
                 isLong
-                  ? "bg-white/[0.035] text-[#D7DEE8] ring-1 ring-white/6"
-                  : "bg-[#401C1F] text-[#FFF0F0] ring-1 ring-[#683235]",
+                  ? "bg-white/8 text-[#F4F7FB] ring-1 ring-white/6"
+                  : "bg-white/16 text-white ring-1 ring-white/10 [text-shadow:0_1px_0_rgba(0,0,0,0.45)]",
               )}
               onClick={() => onSideChange("sell")}
               type="button"
             >
-              <span className="block font-semibold text-[13px]">{isSpotUSDIntent ? "Sell USDC" : "Short cNGN"}</span>
-              <span className={cn("mt-1 block text-[10px]", isLong ? "text-[#768397]" : "text-[#D0A0A0]")}>
-                {isSpotUSDIntent ? "Deliver USDC / buy cNGN" : "Sell cNGN / buy USDC"}
-              </span>
+              <span className="block font-semibold text-[12px] leading-none">{isSpotUSDIntent ? "Sell" : "Short"}</span>
             </button>
           </div>
         </section>
 
-        <section className="space-y-3">
-          <div className="text-[#6C798B] text-[10px] uppercase tracking-[0.18em]">Order Type</div>
-          <div className="grid grid-cols-3 gap-1.5 rounded-2xl bg-white/[0.035] p-1.5">
+        <section className="space-y-2">
+          <div className="text-[#6C798B] text-[9px] uppercase tracking-[0.18em]">Order Type</div>
+          <div className="grid grid-cols-3 gap-1 rounded-2xl bg-white/[0.035] p-1">
           {["Market", "Limit", "Stop"].map((tab) => (
             <button
               className={cn(
-                "rounded-xl px-2.5 py-1.5 font-medium text-[10px] transition-colors",
+                "rounded-xl px-2 py-1 font-medium text-[9px] transition-colors",
                 orderType === tab ? "bg-white/8 text-[#E7EDF6]" : "text-[#748195]",
               )}
               key={tab}
@@ -173,48 +181,78 @@ export function OrderEntryPanel({
           </div>
         </section>
 
-        <section className="space-y-3">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
-            <div className="space-y-2">
-              <label className="text-[#6C798B] text-[10px] uppercase tracking-[0.18em]" htmlFor="trade-size">
-                {isSpotUSDIntent ? "Size (USDC)" : "Size"}
+        <section className="space-y-2.5">
+          <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-1">
+            <div className="space-y-1.5">
+              <label className="text-[#6C798B] text-[9px] uppercase tracking-[0.18em]" htmlFor="trade-size">
+                {isSpotUSDIntent ? `Size (${activeSpotSizeCurrency})` : "Size"}
               </label>
               <div className="flex items-center overflow-hidden rounded-2xl bg-white/4 ring-1 ring-white/6">
-            <input
-              className="h-11 flex-1 bg-transparent px-3.5 text-[#D7DEE8] text-[13px] outline-none placeholder:text-[#6C798B]"
-              id="trade-size"
-              onChange={(event) =>
-                onSizeChange(
-                  event.target.value.replace(isSpotUSDIntent ? /[^\d.]/g : /[^\d]/g, ""),
-                )
-              }
-              placeholder={isSpotUSDIntent ? "100" : "50,000"}
-              value={size}
-            />
-                <button
-                  className="flex h-11 items-center gap-1 border-white/6 border-l px-3.5 text-[#C2CCD9] text-[13px]"
-              type="button"
-            >
-              {isSpotUSDIntent ? "USDC" : "Contracts"}
-                  <ChevronDown className="size-4 text-[#6C798B]" />
-            </button>
-          </div>
+                <input
+                  className="h-9.5 flex-1 bg-transparent px-3 text-[#D7DEE8] text-[12px] outline-none placeholder:text-[#6C798B]"
+                  id="trade-size"
+                  onChange={(event) =>
+                    onSizeChange(
+                      event.target.value.replace(isSpotUSDIntent ? /[^\d.]/g : /[^\d]/g, ""),
+                    )
+                  }
+                  placeholder={sizePlaceholder}
+                  value={size}
+                />
+                {isSpotUSDIntent ? (
+                  <Popover.Root onOpenChange={setSizeCurrencyPickerOpen} open={sizeCurrencyPickerOpen}>
+                    <Popover.Trigger className="flex h-9.5 items-center gap-1 border-white/6 border-l px-3 text-[#C2CCD9] text-[12px] transition-colors hover:bg-white/5 data-popup-open:bg-white/6">
+                      {activeSpotSizeCurrency}
+                      <ChevronDown className="size-3.5 text-[#6C798B]" />
+                    </Popover.Trigger>
+                    <Popover.Portal>
+                      <Popover.Positioner align="end" sideOffset={8}>
+                        <Popover.Popup className="z-50 overflow-hidden rounded-2xl border border-white/8 bg-[#111926] p-1 shadow-[0_20px_60px_rgba(0,0,0,0.45)] outline-none transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
+                          {(["USDC", "cNGN"] as const).map((currency) => (
+                            <button
+                              className={cn(
+                                "flex min-w-20 items-center justify-between rounded-xl px-2.5 py-1.5 text-left text-[11px] transition-colors",
+                                activeSpotSizeCurrency === currency
+                                  ? "bg-white/8 text-[#E7EDF6]"
+                                  : "text-[#9BA8BA] hover:bg-white/5 hover:text-[#E7EDF6]",
+                              )}
+                              key={currency}
+                              onClick={() => {
+                                onSpotSizeCurrencyChange?.(currency);
+                                setSizeCurrencyPickerOpen(false);
+                              }}
+                              type="button"
+                            >
+                              <span>{currency}</span>
+                              {activeSpotSizeCurrency === currency ? <ChevronUp className="size-3 text-[#7BA7F4]" /> : null}
+                            </button>
+                          ))}
+                        </Popover.Popup>
+                      </Popover.Positioner>
+                    </Popover.Portal>
+                  </Popover.Root>
+                ) : (
+                  <div className="flex h-9.5 items-center gap-1 border-white/6 border-l px-3 text-[#C2CCD9] text-[12px]">
+                    Contracts
+                  </div>
+                )}
+              </div>
             </div>
 
             {needsLimitPrice ? (
-              <div className="space-y-2">
-                <label className="text-[#6C798B] text-[10px] uppercase tracking-[0.18em]" htmlFor="trade-limit-price">
+              <div className="space-y-1.5">
+                <label className="text-[#6C798B] text-[9px] uppercase tracking-[0.18em]" htmlFor="trade-limit-price">
                   {orderType === "Stop" ? "Stop Price" : "Limit Price"}
                 </label>
                 <div className="flex items-center overflow-hidden rounded-2xl bg-white/4 ring-1 ring-white/6">
                   <input
-                    className="h-11 flex-1 bg-transparent px-3.5 text-[#D7DEE8] text-[13px] outline-none placeholder:text-[#6C798B]"
+                    className="h-9.5 flex-1 bg-transparent px-3 text-[#D7DEE8] text-[12px] outline-none placeholder:text-[#6C798B]"
                     id="trade-limit-price"
                     onChange={(event) => onLimitPriceChange(event.target.value.replace(/[^\d.]/g, ""))}
                     placeholder="1,605.25"
                     value={limitPrice}
                   />
-                  <div className="flex h-11 items-center border-white/6 border-l px-3.5 text-[#738095] text-[9px] uppercase tracking-[0.14em]">
+                  <div className="flex h-9.5 items-center border-white/6 border-l px-3 text-[#738095] text-[8px] uppercase tracking-[0.14em]">
                     cNGN / USDC
                   </div>
                 </div>
@@ -222,7 +260,7 @@ export function OrderEntryPanel({
             ) : null}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <input
               className="h-1.5 flex-1 accent-[#4277E8]"
               max="100"
@@ -231,32 +269,32 @@ export function OrderEntryPanel({
               type="range"
               value={allocation}
             />
-            <div className="rounded-xl bg-white/4 px-3 py-1.5 text-[#D7DEE8] text-[10px] ring-1 ring-white/6">
+            <div className="rounded-xl bg-white/4 px-2.5 py-1 text-[#D7DEE8] text-[9px] ring-1 ring-white/6">
               {allocation}%
             </div>
           </div>
         </section>
 
-        <section className="space-y-2.5 rounded-[22px] bg-white/[0.035] p-3.5 ring-1 ring-white/6">
-          <div className="flex items-start justify-between gap-4">
+        <section className="space-y-2 rounded-[20px] bg-white/[0.035] p-3 ring-1 ring-white/6">
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="font-semibold text-[#E5ECF5] text-[13px]">{contractLabel}</div>
-              <div className="mt-1 text-[#738095] text-[10px]">{directionCopy}</div>
+              <div className="font-semibold text-[#E5ECF5] text-[12px]">{contractLabel}</div>
+              <div className="mt-1 text-[#738095] text-[9px]">{directionCopy}</div>
             </div>
-            <div className="rounded-xl bg-[#142030] px-2.5 py-1 text-[#A8C4F6] text-[9px]">
+            <div className="rounded-xl bg-[#142030] px-2 py-1 text-[#A8C4F6] text-[8px]">
               {isSpotUSDIntent ? "Spot settled" : "Physically delivered"}
             </div>
           </div>
-          <div className="space-y-2">
-            <div className="text-[#6C798B] text-[10px] uppercase tracking-[0.18em]">Order Summary</div>
+          <div className="space-y-1.5">
+            <div className="text-[#6C798B] text-[9px] uppercase tracking-[0.18em]">Order Summary</div>
           <LabelValueRow label="Order Value" value={orderValue} />
           <LabelValueRow label="Initial Margin" value={initialMargin} />
           <LabelValueRow label="Fees" value={fees} />
           <LabelValueRow label="Available Buying Power" value={buyingPower} />
-          <div className="flex items-center justify-between text-[11px]">
+          <div className="flex items-center justify-between text-[10px]">
             <span className="inline-flex items-center gap-1 text-[#738095]">
               Slippage Estimate
-              <Info className="size-3" />
+              <Info className="size-2.5" />
             </span>
             <span className="font-medium text-[#D7DEE8]">{slippageEstimate}</span>
           </div>
@@ -268,7 +306,7 @@ export function OrderEntryPanel({
 
         <button
           className={cn(
-            "flex h-11 w-full items-center justify-center rounded-2xl font-semibold text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-80",
+            "flex h-9.5 w-full items-center justify-center rounded-2xl font-semibold text-[12px] transition-colors disabled:cursor-not-allowed disabled:opacity-80",
             isLong
               ? "bg-[#E9EEF7] text-[#081019] hover:bg-white"
               : "bg-[#E9EEF7] text-[#081019] hover:bg-white",
@@ -280,25 +318,25 @@ export function OrderEntryPanel({
           {submitLabel}
         </button>
 
-        <div className="rounded-2xl bg-white/3 px-3 py-2 text-[#97A3B4] text-[10px] ring-1 ring-white/6">
+        <div className="rounded-2xl bg-white/3 px-2.5 py-1.5 text-[#97A3B4] text-[9px] ring-1 ring-white/6">
           {lastAction}
         </div>
 
-        <section className="rounded-[22px] bg-white/2.5 ring-1 ring-white/6">
+        <section className="rounded-[20px] bg-white/2.5 ring-1 ring-white/6">
           <button
-            className="flex w-full items-center justify-between px-3.5 py-2.5 text-left"
+            className="flex w-full items-center justify-between px-3 py-2 text-left"
             onClick={() => setAdvancedOpen((current) => !current)}
             type="button"
           >
-            <span className="font-medium text-[#CBD5E1] text-[13px]">Advanced Settings</span>
-            {advancedOpen ? <ChevronUp className="size-4 text-[#6C798B]" /> : <ChevronDown className="size-4 text-[#6C798B]" />}
+            <span className="font-medium text-[#CBD5E1] text-[12px]">Advanced Settings</span>
+            {advancedOpen ? <ChevronUp className="size-3.5 text-[#6C798B]" /> : <ChevronDown className="size-3.5 text-[#6C798B]" />}
           </button>
 
           {advancedOpen ? (
-            <div className="space-y-2.5 border-white/6 border-t p-3.5">
-              <div className="grid grid-cols-2 gap-2 text-[9px]">
+            <div className="space-y-2 border-white/6 border-t p-3">
+              <div className="grid grid-cols-2 gap-2 text-[8px]">
                 <button
-                  className="flex items-center justify-between rounded-xl bg-white/4 px-3 py-2"
+                  className="flex items-center justify-between rounded-xl bg-white/4 px-2.5 py-1.5"
                   onClick={onPostOnlyToggle}
                   type="button"
                 >
@@ -306,7 +344,7 @@ export function OrderEntryPanel({
                   <span className={cn("text-[#738095]", postOnly && "text-[#A8C4F6]")}>{postOnly ? "On" : "Off"}</span>
                 </button>
                 <button
-                  className="flex items-center justify-between rounded-xl bg-white/4 px-3 py-2"
+                  className="flex items-center justify-between rounded-xl bg-white/4 px-2.5 py-1.5"
                   onClick={onAtExpiryDeliverToggle}
                   type="button"
                 >

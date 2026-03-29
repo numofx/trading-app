@@ -307,7 +307,7 @@ export function TradingChartPanel({
   onToolSelect: (toolId: string) => void;
 }) {
   return (
-    <section className="flex h-full min-h-[340px] flex-col overflow-hidden rounded-[24px] bg-[#0C141E]/95 shadow-[0_18px_60px_rgba(0,0,0,0.28)] ring-1 ring-white/6 xl:min-h-0">
+    <section className="flex h-full min-h-[320px] flex-col overflow-hidden rounded-[22px] bg-[#0C141E]/95 shadow-[0_18px_60px_rgba(0,0,0,0.28)] ring-1 ring-white/6 xl:min-h-0">
       <TradingChartToolbar
         expandedChart={expandedChart}
         indicatorsEnabled={indicatorsEnabled}
@@ -335,12 +335,12 @@ export function TradingChartPanel({
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="flex items-center justify-between border-white/6 border-b px-4 py-2.5">
-            <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between border-white/6 border-b px-3 py-2">
+            <div className="flex items-center gap-1.5">
               {CHART_CONTEXT_TABS.map((tab) => (
                 <button
                   className={cn(
-                    "rounded-xl px-2.5 py-1.5 font-medium text-[#748195] text-[11px] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]",
+                    "rounded-xl px-2 py-1 font-medium text-[#748195] text-[10px] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]",
                     chartContext === tab && "bg-white/6 text-[#E5ECF5]",
                   )}
                   key={tab}
@@ -351,19 +351,19 @@ export function TradingChartPanel({
                 </button>
               ))}
             </div>
-            <div className="text-[#5F6D80] text-[10px]">
+            <div className="text-[#5F6D80] text-[9px]">
               {chartContext === "Basis" ? "Basis view: mark minus spot in cNGN" : "Price view: cNGN per USDC"}
             </div>
           </div>
 
           <TradingChart candles={candles} entryPrice={entryPrice} markPrice={markPrice} ticker={ticker} timeframe={selectedTimeframe} />
 
-          <div className="flex items-center justify-between border-white/6 border-t px-4 py-2.5 text-[10px]">
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center justify-between border-white/6 border-t px-3 py-2 text-[9px]">
+            <div className="flex flex-wrap items-center gap-1.5">
               {CHART_RANGE_BUTTONS.map((range) => (
                 <button
                   className={cn(
-                    "rounded-xl px-2.5 py-1.5 text-[#748195] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]",
+                    "rounded-xl px-2 py-1 text-[#748195] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]",
                     selectedRange === range && "bg-white/6 text-[#E5ECF5]",
                   )}
                   key={range}
@@ -375,7 +375,7 @@ export function TradingChartPanel({
               ))}
             </div>
 
-            <div className="flex items-center gap-4 text-[#5F6D80]">
+            <div className="flex items-center gap-3 text-[#5F6D80]">
               <span>{indicatorsEnabled ? "Indicators On" : "Indicators Off"}</span>
               <button className="transition-colors hover:text-[#D7DEE8]" type="button">%</button>
               <button className="transition-colors hover:text-[#D7DEE8]" type="button">log</button>

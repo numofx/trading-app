@@ -46,6 +46,8 @@ import { TradingMarketHeader } from "@/ui/trading-terminal/TradingMarketHeader";
 import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
 
 const SELECTED_MARKET_STORAGE_KEY = "trading-terminal-selected-market";
+type SpotSizeCurrency = "USDC" | "cNGN";
+const TRAILING_ZERO_DECIMALS_PATTERN = /\.?0+$/;
 
 function parseNumericString(value: string) {
   const parsed = Number(value.replaceAll(",", "").replaceAll("$", "").replaceAll("+", ""));
@@ -512,6 +514,57 @@ function getOrderMetrics(
   };
 }
 
+function getSpotSizeReferencePrice(
+  orderType: "Limit" | "Market" | "Stop",
+  limitPrice: string,
+  livePrice: number,
+  tradeSide: "buy" | "sell",
+) {
+  const limitPriceNumber = parseNumericString(limitPrice);
+  const safeLimitPrice = Number.isFinite(limitPriceNumber) ? limitPriceNumber : livePrice;
+
+  if (orderType !== "Market") {
+    return safeLimitPrice;
+  }
+
+  return livePrice + (tradeSide === "buy" ? 0.12 : -0.12);
+}
+
+function convertSpotSizeInputToUSDC(
+  sizeInput: string,
+  sizeCurrency: SpotSizeCurrency,
+  referencePrice: number,
+) {
+  const sizeNumber = Number(sizeInput || "0");
+
+  if (!Number.isFinite(sizeNumber) || sizeNumber <= 0) {
+    return 0;
+  }
+
+  if (sizeCurrency === "USDC") {
+    return sizeNumber;
+  }
+
+  return referencePrice > 0 ? sizeNumber / referencePrice : 0;
+}
+
+function convertUSDCSizeToSpotInput(
+  canonicalUSDCSize: string,
+  sizeCurrency: SpotSizeCurrency,
+  referencePrice: number,
+) {
+  if (sizeCurrency === "USDC") {
+    return canonicalUSDCSize;
+  }
+
+  const sizeNumber = Number(canonicalUSDCSize || "0");
+  if (!Number.isFinite(sizeNumber) || sizeNumber <= 0 || referencePrice <= 0) {
+    return "";
+  }
+
+  return (sizeNumber * referencePrice).toFixed(2).replace(TRAILING_ZERO_DECIMALS_PATTERN, "");
+}
+
 type SelectedContract = string;
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This component coordinates terminal state across chart, book, order entry, and URL persistence.
@@ -550,6 +603,7 @@ export function OrderBookTradingTerminal({
   const [orderType, setOrderType] = useState<"Limit" | "Market" | "Stop">(DEFAULT_ORDER_TYPE);
   const [tradeSide, setTradeSide] = useState<"buy" | "sell">("buy");
   const [size, setSize] = useState("50000");
+  const [spotSizeCurrency, setSpotSizeCurrency] = useState<SpotSizeCurrency>("USDC");
   const [limitPrice, setLimitPrice] = useState("1605.25");
   const [allocation, setAllocation] = useState(20);
   const [postOnly, setPostOnly] = useState(false);
@@ -637,12 +691,16 @@ export function OrderBookTradingTerminal({
   );
   const { entryPrice, markPrice, pnl: unrealizedPnl, positionOverview, positionValue, returnPercent } =
     getPositionMetrics(marketData, selectedMarketId, livePrice);
+  const spotSizeReferencePrice = getSpotSizeReferencePrice(orderType, limitPrice, livePrice, tradeSide);
+  const canonicalSpotSize = convertSpotSizeInputToUSDC(size, spotSizeCurrency, spotSizeReferencePrice);
+  const effectiveSize = isUSDCCNGNSpotMarket(selectedMarket) ? String(canonicalSpotSize) : size;
+  const displayedSpotOrderValue = spotSizeCurrency === "USDC" ? canonicalSpotSize : Number(size || "0");
   const { averageExecution, estimatedFill, fees, initialMargin, liquidationPrice, orderValue } = getOrderMetrics(
     selectedMarket,
     limitPrice,
     market.mark,
     orderType,
-    size,
+    effectiveSize,
     livePrice,
     tradeSide,
   );
@@ -837,7 +895,7 @@ export function OrderBookTradingTerminal({
           limitPrice: executionLimitPrice,
           market: selectedMarket,
           side,
-          size,
+          size: effectiveSize,
           subaccountId: resolvedTradingSubaccountId,
           walletAddress: primaryWallet.address,
         });
@@ -888,12 +946,12 @@ export function OrderBookTradingTerminal({
         const translated = payload?.order?.spot_contract;
 
         if (!translated) {
-          setLastAction(`Spot order accepted for ${size} USDC @ ${executionLimitPrice} cNGN/USDC`);
+          setLastAction(`Spot order accepted for ${effectiveSize} USDC @ ${executionLimitPrice} cNGN/USDC`);
           return;
         }
 
         setLastAction(
-          `Spot order accepted: ${translated.ui_intent?.side?.toUpperCase() ?? side.toUpperCase()} ${translated.ui_intent?.size ?? size} USDC @ ${translated.ui_intent?.price ?? executionLimitPrice} cNGN/USDC -> engine ${translated.engine_order?.side?.toUpperCase() ?? "—"} ${translated.engine_order?.amount ?? "—"} cNGN @ ${translated.engine_order?.price ?? "—"} USDC/cNGN | dUSDC ${translated.balance_delta?.usdc ?? "—"} | dcNGN ${translated.balance_delta?.cngn ?? "—"}`,
+          `Spot order accepted: ${translated.ui_intent?.side?.toUpperCase() ?? side.toUpperCase()} ${translated.ui_intent?.size ?? effectiveSize} USDC @ ${translated.ui_intent?.price ?? executionLimitPrice} cNGN/USDC -> engine ${translated.engine_order?.side?.toUpperCase() ?? "—"} ${translated.engine_order?.amount ?? "—"} cNGN @ ${translated.engine_order?.price ?? "—"} USDC/cNGN | dUSDC ${translated.balance_delta?.usdc ?? "—"} | dcNGN ${translated.balance_delta?.cngn ?? "—"}`,
         );
         return;
       } catch (error) {
@@ -913,7 +971,7 @@ export function OrderBookTradingTerminal({
     <main className="min-h-screen bg-transparent text-[#D7DEE8] xl:h-dvh xl:overflow-hidden">
       <MarketDocumentTitle pair={formatFxDisplayPair(selectedMarket.pair)} price={liveCandles.at(-1)?.close ?? null} />
 
-      <div className="mx-auto flex min-h-screen w-full max-w-none flex-col px-2.5 py-3 xl:h-dvh xl:overflow-hidden xl:px-4">
+      <div className="mx-auto flex min-h-screen w-full max-w-none flex-col px-2 py-2.5 xl:h-dvh xl:overflow-hidden xl:px-3">
         <TradingMarketHeader
           atmIvByMarketId={optionAtmIvByMarketId}
           annualizedBasisByMarketId={selectorAnnualizedBasisByMarketId}
@@ -931,8 +989,8 @@ export function OrderBookTradingTerminal({
           spotChangeByMarketId={spotChangeByMarketId}
         />
 
-        <section className="mt-3 grid grid-cols-1 gap-3 xl:h-[500px] xl:min-h-0 xl:flex-none xl:grid-cols-[minmax(0,1.9fr)_minmax(270px,0.72fr)_minmax(320px,0.86fr)] xl:overflow-hidden 2xl:h-[560px] 2xl:grid-cols-[minmax(0,1.95fr)_minmax(290px,0.76fr)_minmax(340px,0.9fr)]">
-          <div className="min-h-[340px] xl:min-h-0 xl:overflow-hidden">
+        <section className="mt-2.5 grid grid-cols-1 gap-2.5 xl:h-[460px] xl:min-h-0 xl:flex-none xl:grid-cols-[minmax(0,1.9fr)_minmax(250px,0.68fr)_minmax(300px,0.82fr)] xl:overflow-hidden 2xl:h-[520px] 2xl:grid-cols-[minmax(0,1.95fr)_minmax(270px,0.72fr)_minmax(320px,0.86fr)]">
+          <div className="min-h-[320px] xl:min-h-0 xl:overflow-hidden">
             <TradingChartPanel
               candles={liveCandles}
               chartContext={chartContext}
@@ -953,7 +1011,7 @@ export function OrderBookTradingTerminal({
             />
           </div>
 
-          <div className="min-h-[320px] xl:min-h-0 xl:overflow-hidden">
+          <div className="min-h-[300px] xl:min-h-0 xl:overflow-hidden">
             <OrderBookPanel
               asks={market.orderBookAsks}
               bids={market.orderBookBids}
@@ -964,7 +1022,7 @@ export function OrderBookTradingTerminal({
             />
           </div>
 
-          <div className="min-h-[320px] xl:min-h-0 xl:overflow-hidden">
+          <div className="min-h-[300px] xl:min-h-0 xl:overflow-hidden">
             <OrderEntryPanel
               allocation={allocation}
               atExpiryDeliver={atExpiryDeliver}
@@ -983,7 +1041,9 @@ export function OrderBookTradingTerminal({
               liquidationPrice={formatPriceDisplay(liquidationPrice)}
               orderValue={
                 isUSDCCNGNSpotMarket(selectedMarket)
-                  ? `$${orderValue.toLocaleString("en-US", { maximumFractionDigits: 2 })} USDC`
+                  ? `${displayedSpotOrderValue.toLocaleString("en-US", {
+                      maximumFractionDigits: spotSizeCurrency === "USDC" ? 2 : 0,
+                    })} ${spotSizeCurrency}`
                   : `${orderValue.toLocaleString("en-US", { maximumFractionDigits: 0 })} cNGN`
               }
               orderType={orderType}
@@ -993,6 +1053,7 @@ export function OrderBookTradingTerminal({
               postOnly={postOnly}
               returnPercent={returnPercent}
               size={size}
+              spotSizeCurrency={spotSizeCurrency}
               slippageEstimate="0.01% / max 0.25%"
               tradeSide={tradeSide}
               onAllocationChange={setAllocation}
@@ -1002,12 +1063,20 @@ export function OrderBookTradingTerminal({
               onPostOnlyToggle={() => setPostOnly((current) => !current)}
               onSideChange={setTradeSide}
               onSizeChange={setSize}
+              onSpotSizeCurrencyChange={(nextCurrency) => {
+                if (nextCurrency === spotSizeCurrency) {
+                  return;
+                }
+
+                setSize(convertUSDCSizeToSpotInput(String(canonicalSpotSize), nextCurrency, spotSizeReferencePrice));
+                setSpotSizeCurrency(nextCurrency);
+              }}
               onSubmit={handleSubmit}
             />
           </div>
         </section>
 
-        <div className="mt-3 min-h-[220px] flex-1 xl:min-h-[260px] xl:shrink-0">
+        <div className="mt-2.5 min-h-[200px] flex-1 xl:min-h-[230px] xl:shrink-0">
           <TradingActivityPanel
             activityView={dynamicActivityViews[selectedBottomTab]}
             footerLinks={[]}

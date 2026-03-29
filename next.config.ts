@@ -16,9 +16,6 @@ const nextConfig: NextConfig = {
   compiler: {
     removeConsole: !isDevelopment,
   },
-  experimental: {
-    turbopackFileSystemCacheForBuild: true,
-  },
   turbopack: {
     root: join(projectRoot),
   },
