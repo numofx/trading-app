@@ -12,11 +12,20 @@ Set:
 
 - `MARKETS_SERVICE_URL`
 
-Example:
+Local development:
 
 ```bash
 MARKETS_SERVICE_URL=http://127.0.0.1:8080
 ```
+
+Production must override that local default. For the current Railway backend deployment:
+
+```bash
+MARKETS_SERVICE_URL=https://markets-service-production.up.railway.app
+```
+
+Do not deploy the frontend with `MARKETS_SERVICE_URL=http://127.0.0.1:8080`.
+In production, `MARKETS_SERVICE_URL` must point at the live `markets-service` deployment.
 
 For the current Base staging deployment, `markets-service` should expose:
 
@@ -28,6 +37,8 @@ For the current Base staging deployment, `markets-service` should expose:
 - `sub_id=1777507200`
 - `contract_type=deliverable_fx_future`
 - `settlement_type=physical_delivery`
+
+If the frontend is deployed on Railway, encode `MARKETS_SERVICE_URL` in that deploy environment and treat it as required production configuration rather than tribal knowledge.
 
 ## Spot Order Contract
 

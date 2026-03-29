@@ -107,8 +107,27 @@ export type TradesResponse = {
 };
 
 const DEFAULT_MARKETS_SERVICE_URL = "http://127.0.0.1:8080";
+
+function isLocalMarketsServiceUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.hostname === "127.0.0.1" || url.hostname === "localhost";
+  } catch {
+    return value.includes("127.0.0.1") || value.includes("localhost");
+  }
+}
+
 export function getMarketsServiceUrl() {
-  return process.env.MARKETS_SERVICE_URL?.trim() || DEFAULT_MARKETS_SERVICE_URL;
+  const configuredUrl = process.env.MARKETS_SERVICE_URL?.trim();
+  const resolvedUrl = configuredUrl || DEFAULT_MARKETS_SERVICE_URL;
+
+  if (process.env.NODE_ENV === "production" && (!configuredUrl || isLocalMarketsServiceUrl(resolvedUrl))) {
+    throw new Error(
+      "MARKETS_SERVICE_URL must point to the live markets-service in production and must not be localhost",
+    );
+  }
+
+  return resolvedUrl;
 }
 
 export async function getMarketsServiceMarkets() {
