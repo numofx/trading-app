@@ -25,7 +25,7 @@ import {
   formatMarketPrice,
 } from "@/lib/market-formatting";
 import type { CHART_CONTEXT_TABS, CHART_RANGE_BUTTONS, TIMEFRAME_OPTIONS } from "@/lib/mock-orderbook-terminal-data";
-import type { Candle, ContractMarket, MarketDefinition, MarketId, MarketStat, TradePrint } from "@/lib/trading.types";
+import type { Candle, ContractMarket, DeliveryTerm, MarketDefinition, MarketId, MarketStat, TradePrint } from "@/lib/trading.types";
 import { buildSpotOrderEnvelope, canSubmitSpotOrder } from "@/lib/spot-order-submission";
 import { isUSDCCNGNSpotMarket } from "@/lib/usdccngn-spot-order";
 import {
@@ -114,6 +114,22 @@ function formatContractQuantity(value: number | null) {
     maximumFractionDigits: 3,
     minimumFractionDigits: value % 1 === 0 ? 0 : 3,
   });
+}
+
+function formatAssetAmount(value: number, asset: string, maximumFractionDigits = 2) {
+  if (!Number.isFinite(value)) {
+    return "—";
+  }
+
+  let minimumFractionDigits = 2;
+  if (maximumFractionDigits === 0 || value % 1 === 0) {
+    minimumFractionDigits = 0;
+  }
+
+  return `${value.toLocaleString("en-US", {
+    maximumFractionDigits,
+    minimumFractionDigits,
+  })} ${asset}`;
 }
 
 function getRenderablePriceInput(mark: string) {
@@ -661,6 +677,52 @@ function getFuturePositionMetrics(
   };
 }
 
+function getOrderSummaryRows({
+  averageExecution,
+  buyingPower,
+  contracts,
+  estimatedFill,
+  fees,
+  initialMargin,
+  isSpotUSDIntent,
+  liquidationPrice,
+  tradeSide,
+}: {
+  averageExecution: number | null;
+  buyingPower: string;
+  contracts: number;
+  estimatedFill: number | null;
+  fees: number;
+  initialMargin: number;
+  isSpotUSDIntent: boolean;
+  liquidationPrice: number | null;
+  tradeSide: "buy" | "sell";
+}) {
+  if (isSpotUSDIntent) {
+    const quoteAmount = estimatedFill !== null && Number.isFinite(estimatedFill) ? contracts * estimatedFill : Number.NaN;
+
+    return [
+      { label: tradeSide === "buy" ? "You buy" : "You sell", value: formatAssetAmount(contracts, "USDC") },
+      { label: tradeSide === "buy" ? "You pay" : "You receive", value: formatAssetAmount(quoteAmount, "cNGN", 0) },
+      { label: "Price", value: formatPriceDisplay(estimatedFill) },
+      { label: "Fees", value: `$${fees.toLocaleString("en-US", { maximumFractionDigits: 2 })}` },
+      { label: "Available Buying Power", value: buyingPower },
+    ] satisfies DeliveryTerm[];
+  }
+
+  const orderValue = estimatedFill !== null && Number.isFinite(estimatedFill) ? contracts * estimatedFill : 0;
+
+  return [
+    { label: "Order Value", value: `${orderValue.toLocaleString("en-US", { maximumFractionDigits: 0 })} cNGN` },
+    { label: "Initial Margin", value: `$${initialMargin.toLocaleString("en-US", { maximumFractionDigits: 0 })}` },
+    { label: "Fees", value: `$${fees.toLocaleString("en-US", { maximumFractionDigits: 2 })}` },
+    { label: "Available Buying Power", value: buyingPower },
+    { label: "Estimated Fill Price", value: formatPriceDisplay(estimatedFill) },
+    { label: "Estimated Avg Execution", value: formatPriceDisplay(averageExecution) },
+    { label: "Liquidation Price", value: formatPriceDisplay(liquidationPrice) },
+  ] satisfies DeliveryTerm[];
+}
+
 function getOrderMetrics(
   marketDefinition: MarketDefinition,
   limitPrice: string,
@@ -917,8 +979,7 @@ export function OrderBookTradingTerminal({
   const spotSizeReferencePrice = getSpotSizeReferencePrice(orderType, limitPrice, safeLivePrice, tradeSide);
   const canonicalSpotSize = convertSpotSizeInputToUSDC(size, spotSizeCurrency, spotSizeReferencePrice);
   const effectiveSize = isUSDCCNGNSpotMarket(selectedMarket) ? String(canonicalSpotSize) : size;
-  const displayedSpotOrderValue = spotSizeCurrency === "USDC" ? canonicalSpotSize : Number(size || "0");
-  const { averageExecution, estimatedFill, fees, initialMargin, liquidationPrice, orderValue } = getOrderMetrics(
+  const { averageExecution, estimatedFill, fees, initialMargin, liquidationPrice } = getOrderMetrics(
     selectedMarket,
     limitPrice,
     market.mark,
@@ -927,6 +988,17 @@ export function OrderBookTradingTerminal({
     safeLivePrice,
     tradeSide,
   );
+  const orderSummaryRows = getOrderSummaryRows({
+    averageExecution,
+    buyingPower: "$250,000",
+    contracts: isUSDCCNGNSpotMarket(selectedMarket) ? canonicalSpotSize : Number(effectiveSize || "0"),
+    estimatedFill,
+    fees,
+    initialMargin,
+    isSpotUSDIntent: isUSDCCNGNSpotMarket(selectedMarket),
+    liquidationPrice,
+    tradeSide,
+  });
   const marketDiagnostics = {
     asksCount: market.orderBookAsks.length,
     bidsCount: market.orderBookBids.length,
@@ -1258,26 +1330,14 @@ export function OrderBookTradingTerminal({
             <OrderEntryPanel
               allocation={allocation}
               atExpiryDeliver={atExpiryDeliver}
-              buyingPower="$250,000"
               contractDetails={market.contractDetails}
               contractLabel={getDisplayTicker(selectedMarket)}
-              estimatedAverageExecution={formatPriceDisplay(averageExecution)}
-              estimatedFillPrice={formatPriceDisplay(estimatedFill)}
-              fees={`$${fees.toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
-              initialMargin={`$${initialMargin.toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
               isSubmitDisabled={!isLiveSpotExecutionAvailable}
               isSubmitting={isSubmittingSpotOrder || isResolvingTradingSubaccount}
               isSpotUSDIntent={isUSDCCNGNSpotMarket(selectedMarket)}
               lastAction={lastAction}
               limitPrice={limitPrice}
-              liquidationPrice={formatPriceDisplay(liquidationPrice)}
-              orderValue={
-                isUSDCCNGNSpotMarket(selectedMarket)
-                  ? `${displayedSpotOrderValue.toLocaleString("en-US", {
-                      maximumFractionDigits: spotSizeCurrency === "USDC" ? 2 : 0,
-                    })} ${spotSizeCurrency}`
-                  : `${orderValue.toLocaleString("en-US", { maximumFractionDigits: 0 })} cNGN`
-              }
+              orderSummaryRows={orderSummaryRows}
               orderType={orderType}
               pnl={unrealizedPnl}
               positionOverview={positionOverview}

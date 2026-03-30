@@ -50,20 +50,14 @@ function getSubmitLabel(isSubmitting: boolean, isSpotUSDIntent: boolean, isLong:
 export function OrderEntryPanel({
   allocation,
   atExpiryDeliver,
-  buyingPower,
   contractDetails,
   contractLabel,
-  estimatedAverageExecution,
-  estimatedFillPrice,
-  fees,
-  initialMargin,
   isSubmitting,
   isSubmitDisabled,
   isSpotUSDIntent,
   lastAction,
   limitPrice,
-  liquidationPrice,
-  orderValue,
+  orderSummaryRows,
   orderType,
   pnl,
   positionOverview,
@@ -87,20 +81,14 @@ export function OrderEntryPanel({
 }: {
   allocation: number;
   atExpiryDeliver: boolean;
-  buyingPower: string;
   contractDetails: DeliveryTerm[];
   contractLabel: string;
-  estimatedAverageExecution: string;
-  estimatedFillPrice: string;
-  fees: string;
-  initialMargin: string;
   isSubmitting?: boolean;
   isSubmitDisabled?: boolean;
   isSpotUSDIntent: boolean;
   lastAction: string;
   limitPrice: string;
-  liquidationPrice: string;
-  orderValue: string;
+  orderSummaryRows: DeliveryTerm[];
   orderType: "Limit" | "Market" | "Stop";
   pnl: string;
   positionOverview: DeliveryTerm[];
@@ -295,10 +283,9 @@ export function OrderEntryPanel({
           </div>
           <div className="space-y-1.5">
             <div className="text-[#6C798B] text-[9px] uppercase tracking-[0.18em]">Order Summary</div>
-          <LabelValueRow label="Order Value" value={orderValue} />
-          <LabelValueRow label="Initial Margin" value={initialMargin} />
-          <LabelValueRow label="Fees" value={fees} />
-          <LabelValueRow label="Available Buying Power" value={buyingPower} />
+          {orderSummaryRows.map((item) => (
+            <LabelValueRow key={item.label} label={item.label} value={item.value} />
+          ))}
           <div className="flex items-center justify-between text-[10px]">
             <span className="inline-flex items-center gap-1 text-[#738095]">
               Slippage Estimate
@@ -306,9 +293,6 @@ export function OrderEntryPanel({
             </span>
             <span className="font-medium text-[#D7DEE8]">{slippageEstimate}</span>
           </div>
-          <LabelValueRow label="Estimated Fill Price" value={estimatedFillPrice} />
-          <LabelValueRow label="Estimated Avg Execution" value={estimatedAverageExecution} />
-          <LabelValueRow label="Liquidation Price" value={liquidationPrice} />
           </div>
         </section>
 
