@@ -148,7 +148,11 @@ export function TradingMarketHeader({
   selectedMarket: MarketDefinition;
   spotChangeByMarketId: Record<string, string | null>;
 }) {
-  const primaryTabs = ["All", "spot", "future", "option"] as const;
+  const availableMarketTypes = Array.from(new Set(marketOptions.map((market) => market.type)));
+  const primaryTabs = [
+    "All",
+    ...(["spot", "future", "option"] as const).filter((type) => availableMarketTypes.includes(type)),
+  ] as const;
   const [marketSearchOpen, setMarketSearchOpen] = useState(false);
   const [marketSearch, setMarketSearch] = useState("");
   const [activeMarketId, setActiveMarketId] = useState<MarketId | null>(null);
@@ -202,6 +206,16 @@ export function TradingMarketHeader({
   const showMainListDivider = recentMarkets.length > 0 && showMainList;
   const visibleMarkets = [...recentMarkets, ...mainListMarkets];
   const visibleMarketIdsKey = visibleMarkets.map((market) => market.id).join("|");
+
+  useEffect(() => {
+    if (selectedPrimaryTab === "All") {
+      return;
+    }
+
+    if (!availableMarketTypes.includes(selectedPrimaryTab)) {
+      setSelectedPrimaryTab("All");
+    }
+  }, [availableMarketTypes, selectedPrimaryTab]);
 
   useEffect(() => {
     if (!marketSearchOpen) {

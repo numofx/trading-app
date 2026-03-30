@@ -831,13 +831,8 @@ export function buildTradingTerminalMarkets(
       defaultMarketId: DEFAULT_MARKET_ID,
       marketData: {
         "cngn-usdc-spot": spotMarketData,
-        "cngn-usdc-jun-2026-options": MARKET_DATA["cngn-usdc-jun-2026-options"],
-        "cngn-usdc-mar-2026-options": MARKET_DATA["cngn-usdc-mar-2026-options"],
       } satisfies Record<MarketId, ContractMarket>,
-      marketDefinitions: [
-        spotDefinition,
-        ...MARKET_DEFINITIONS.filter((marketDefinition) => marketDefinition.type === "option"),
-      ].filter(Boolean) as MarketDefinition[],
+      marketDefinitions: [spotDefinition].filter(Boolean) as MarketDefinition[],
     };
   }
 
@@ -851,7 +846,6 @@ export function buildTradingTerminalMarkets(
   const marketDefinitions = [
     spotDefinition,
     ...sortedLiveFutures.map((future) => future.definition),
-    ...MARKET_DEFINITIONS.filter((marketDefinition) => marketDefinition.type === "option"),
   ].filter(Boolean) as MarketDefinition[];
 
   const marketData = {
@@ -862,8 +856,6 @@ export function buildTradingTerminalMarkets(
         buildDeliverableFutureMarketFromBook(future.definition, future.book, future.trades),
       ]),
     ),
-    "cngn-usdc-jun-2026-options": MARKET_DATA["cngn-usdc-jun-2026-options"],
-    "cngn-usdc-mar-2026-options": MARKET_DATA["cngn-usdc-mar-2026-options"],
   } satisfies Record<MarketId, ContractMarket>;
 
   return {
