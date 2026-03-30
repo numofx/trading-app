@@ -686,7 +686,6 @@ function getOrderSummaryRows({
   initialMargin,
   isSpotUSDIntent,
   liquidationPrice,
-  tradeSide,
 }: {
   averageExecution: number | null;
   buyingPower: string;
@@ -696,17 +695,12 @@ function getOrderSummaryRows({
   initialMargin: number;
   isSpotUSDIntent: boolean;
   liquidationPrice: number | null;
-  tradeSide: "buy" | "sell";
 }) {
   if (isSpotUSDIntent) {
     const quoteAmount = estimatedFill !== null && Number.isFinite(estimatedFill) ? contracts * estimatedFill : Number.NaN;
 
     return [
-      { label: tradeSide === "buy" ? "You buy" : "You sell", value: formatAssetAmount(contracts, "USDC") },
-      { label: tradeSide === "buy" ? "You pay" : "You receive", value: formatAssetAmount(quoteAmount, "cNGN", 0) },
-      { label: "Price", value: formatPriceDisplay(estimatedFill) },
-      { label: "Fees", value: `$${fees.toLocaleString("en-US", { maximumFractionDigits: 2 })}` },
-      { label: "Available Buying Power", value: buyingPower },
+      { label: "Total", value: `~${formatAssetAmount(quoteAmount, "cNGN", 0)}` },
     ] satisfies DeliveryTerm[];
   }
 
@@ -997,7 +991,6 @@ export function OrderBookTradingTerminal({
     initialMargin,
     isSpotUSDIntent: isUSDCCNGNSpotMarket(selectedMarket),
     liquidationPrice,
-    tradeSide,
   });
   const marketDiagnostics = {
     asksCount: market.orderBookAsks.length,
