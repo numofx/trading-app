@@ -123,7 +123,7 @@ export function OrderEntryPanel({
   const directionCopy = getDirectionCopy(isSpotUSDIntent, isLong);
   const submitLabel = getSubmitLabel(Boolean(isSubmitting), isSpotUSDIntent, isLong);
   const activeSpotSizeCurrency = spotSizeCurrency ?? "USDC";
-  let sizePlaceholder = "50,000";
+  let sizePlaceholder = "5";
 
   if (isSpotUSDIntent) {
     sizePlaceholder = activeSpotSizeCurrency === "USDC" ? "100" : "160,000";

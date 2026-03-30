@@ -147,7 +147,7 @@ function buildActivityViews(
   return {
     "open-orders": {
       ...ACTIVITY_VIEWS["open-orders"],
-      rows: [{ cells: [ticker, buyDirection, "Limit", "25,000 contracts", entryPrice] }],
+      rows: [{ cells: [ticker, buyDirection, "Limit", "5 contracts", entryPrice] }],
     },
     positions: {
       ...ACTIVITY_VIEWS.positions,
@@ -156,8 +156,8 @@ function buildActivityViews(
     "trade-history": {
       ...ACTIVITY_VIEWS["trade-history"],
       rows: [
-        { cells: ["10:08:14", ticker, buyDirection, "50,000 contracts", markPrice] },
-        { cells: ["10:08:06", ticker, sellDirection, "35,000 contracts", entryPrice] },
+        { cells: ["10:08:14", ticker, buyDirection, "5 contracts", markPrice] },
+        { cells: ["10:08:06", ticker, sellDirection, "3 contracts", entryPrice] },
       ],
     },
   };
@@ -636,7 +636,7 @@ export function OrderBookTradingTerminal({
   const [orderBookView, setOrderBookView] = useState<"Order Book" | "Trades">("Order Book");
   const [orderType, setOrderType] = useState<"Limit" | "Market" | "Stop">(DEFAULT_ORDER_TYPE);
   const [tradeSide, setTradeSide] = useState<"buy" | "sell">("buy");
-  const [size, setSize] = useState("50000");
+  const [size, setSize] = useState("5");
   const [spotSizeCurrency, setSpotSizeCurrency] = useState<SpotSizeCurrency>("USDC");
   const [limitPrice, setLimitPrice] = useState("1605.25");
   const [allocation, setAllocation] = useState(20);

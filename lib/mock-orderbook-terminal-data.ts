@@ -875,13 +875,13 @@ export const BOTTOM_TABS = [
 export const ACTIVITY_VIEWS = {
   "open-orders": {
     columns: ["Instrument", "Direction", "Type", "Size", "Price"],
-    rows: [{ cells: ["USDC/cNGN Futures · Jun 2026", "Long cNGN", "Limit", "25,000 contracts", "1,604.80 cNGN per USDC"] }],
+    rows: [{ cells: ["USDC/cNGN Futures · Jun 2026", "Long cNGN", "Limit", "5 contracts", "1,604.80 cNGN per USDC"] }],
   },
   positions: {
     columns: ["Instrument", "Position", "Entry Price", "Mark Price", "Unrealized PnL", "Return %"],
     rows: [
       {
-        cells: ["USDC/cNGN Futures · Jun 2026", "Long cNGN · 50,000 contracts", "1,600.00 cNGN per USDC", "1,605.20 cNGN per USDC", "+$156", "+0.64%"],
+        cells: ["USDC/cNGN Futures · Jun 2026", "Long cNGN · 5 contracts", "1,600.00 cNGN per USDC", "1,605.20 cNGN per USDC", "+$156", "+0.64%"],
         positiveCellIndexes: [4, 5],
       },
     ],
@@ -889,8 +889,8 @@ export const ACTIVITY_VIEWS = {
   "trade-history": {
     columns: ["Time", "Instrument", "Direction", "Size", "Price"],
     rows: [
-      { cells: ["10:08:14", "USDC/cNGN Futures · Jun 2026", "Long cNGN", "50,000 contracts", "1,605.30 cNGN per USDC"] },
-      { cells: ["10:08:06", "USDC/cNGN Futures · Jun 2026", "Short cNGN", "35,000 contracts", "1,605.20 cNGN per USDC"] },
+      { cells: ["10:08:14", "USDC/cNGN Futures · Jun 2026", "Long cNGN", "5 contracts", "1,605.30 cNGN per USDC"] },
+      { cells: ["10:08:06", "USDC/cNGN Futures · Jun 2026", "Short cNGN", "3 contracts", "1,605.20 cNGN per USDC"] },
     ],
   },
 } satisfies Record<string, ActivityView>;
