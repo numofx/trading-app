@@ -7,13 +7,17 @@ import type { DeliveryTerm } from "@/lib/trading.types";
 import { cn } from "@/lib/cn";
 
 function LabelValueRow({ label, value }: { label: string; value: string }) {
+  const isNegative = value.startsWith("-");
+  const isPositive = value.startsWith("+");
+
   return (
     <div className="flex items-start justify-between gap-3 text-[11px]">
       <span className="min-w-0 flex-1 text-[#738095]">{label}</span>
       <span
         className={cn(
           "wrap-break-word min-w-0 max-w-[60%] text-right font-medium text-[#D7DEE8] leading-snug",
-          value.startsWith("+$") && "text-[#8AB899]",
+          isPositive && "text-[#8AB899]",
+          isNegative && "text-[#C89393]",
         )}
       >
         {value}
@@ -63,9 +67,10 @@ export function OrderEntryPanel({
   orderType,
   pnl,
   positionOverview,
-  positionValue,
+  exposureLabel,
   postOnly,
-  returnPercent,
+  returnLabel,
+  returnValue,
   size,
   spotSizeCurrency,
   slippageEstimate,
@@ -99,9 +104,10 @@ export function OrderEntryPanel({
   orderType: "Limit" | "Market" | "Stop";
   pnl: string;
   positionOverview: DeliveryTerm[];
-  positionValue: string;
+  exposureLabel: string;
   postOnly: boolean;
-  returnPercent: string;
+  returnLabel: string;
+  returnValue: string;
   size: string;
   spotSizeCurrency?: "USDC" | "cNGN";
   slippageEstimate: string;
@@ -123,6 +129,8 @@ export function OrderEntryPanel({
   const directionCopy = getDirectionCopy(isSpotUSDIntent, isLong);
   const submitLabel = getSubmitLabel(Boolean(isSubmitting), isSpotUSDIntent, isLong);
   const activeSpotSizeCurrency = spotSizeCurrency ?? "USDC";
+  const isNegativePnl = pnl.startsWith("-");
+  const isNegativeReturn = returnValue.startsWith("-");
   let sizePlaceholder = "5";
 
   if (isSpotUSDIntent) {
@@ -373,10 +381,12 @@ export function OrderEntryPanel({
           <div className="text-[#6C798B] text-[10px] uppercase tracking-[0.18em]">Position Summary</div>
           <div className="rounded-[22px] bg-white/[0.035] p-3.5 ring-1 ring-white/6">
             <div className="text-[#6C798B] text-[10px] uppercase tracking-[0.18em]">Unrealized PnL</div>
-            <div className="mt-2 font-semibold text-[#8AB899] text-[22px]">{pnl}</div>
-            <div className="mt-2 flex items-center justify-between text-[11px]">
-              <span className="text-[#97A3B4]">{positionValue}</span>
-              <span className="font-medium text-[#8AB899]">{returnPercent}</span>
+            <div className={cn("mt-2 font-semibold text-[22px]", isNegativePnl ? "text-[#C89393]" : "text-[#8AB899]")}>
+              {pnl}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+              <span className="min-w-0 flex-1 text-[#97A3B4]">{exposureLabel}</span>
+              <span className={cn("font-medium", isNegativeReturn ? "text-[#C89393]" : "text-[#8AB899]")}>{returnValue}</span>
             </div>
           </div>
           {positionOverview.map((item) => (
@@ -385,7 +395,7 @@ export function OrderEntryPanel({
           <div className="grid grid-cols-2 gap-2 pt-1">
             {["Close Position", "Reduce 25%", "Reduce 50%", "Close All"].map((action) => (
               <button
-                className="h-8 rounded-xl bg-white/4 text-[#738095] text-[9px] transition-colors"
+                className="h-8 cursor-not-allowed rounded-xl bg-white/4 text-[#738095] text-[9px] opacity-50 transition-colors"
                 disabled
                 key={action}
                 type="button"
@@ -394,7 +404,7 @@ export function OrderEntryPanel({
               </button>
             ))}
           </div>
-          <div className="text-[#4F5D70] text-[10px]">TODO: wire position reductions to venue actions.</div>
+          <div className="text-[#4F5D70] text-[10px]">{`${returnLabel} uses preview math. Reduction controls stay disabled until venue actions are wired.`}</div>
         </section>
       </div>
     </section>

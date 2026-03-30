@@ -17,6 +17,7 @@ export function TradingActivityPanel({
   const minimumVisibleRows = 7;
   const isEmpty = activityView.rows.length === 0;
   const fillerRowCount = Math.max(0, minimumVisibleRows - activityView.rows.length);
+  const isMetricColumn = (column: string) => column.includes("PnL") || column.includes("%") || column.includes("Return");
 
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-[20px] bg-[#0A1119]/72 ring-1 ring-white/5">
@@ -49,7 +50,7 @@ export function TradingActivityPanel({
           style={{ gridTemplateColumns: `repeat(${activityView.columns.length}, minmax(0, 1fr))` }}
         >
           {activityView.columns.map((column) => (
-            <span className={column.includes("PnL") || column.includes("%") ? "text-right" : undefined} key={column}>
+            <span className={isMetricColumn(column) ? "text-right" : undefined} key={column}>
               {column}
             </span>
           ))}
@@ -99,7 +100,7 @@ export function TradingActivityPanel({
                       className={cn(
                         "text-[#C2CCD9]",
                         cellIndex === 0 && "font-medium text-[#E5ECF5]",
-                        (activityView.columns[cellIndex]?.includes("PnL") || activityView.columns[cellIndex]?.includes("%")) && "text-right",
+                        isMetricColumn(activityView.columns[cellIndex] ?? "") && "text-right",
                         cell.startsWith("-") && "text-[#C89393]",
                         row.positiveCellIndexes?.includes(cellIndex) && "font-medium text-[#8AB899]",
                       )}
@@ -121,9 +122,9 @@ export function TradingActivityPanel({
                     <span
                       className={cn(
                         "block h-px w-full rounded-full bg-white/6",
-                        (column.includes("PnL") || column.includes("%")) && "ml-auto max-w-[72px]",
+                        isMetricColumn(column) && "ml-auto max-w-[72px]",
                         columnIndex === 0 && "max-w-[160px]",
-                        columnIndex !== 0 && !column.includes("PnL") && !column.includes("%") && "max-w-[110px]",
+                        columnIndex !== 0 && !isMetricColumn(column) && "max-w-[110px]",
                       )}
                       key={`filler-${rowIndex}-${column}`}
                     />

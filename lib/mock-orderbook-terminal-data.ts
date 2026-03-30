@@ -339,7 +339,7 @@ function getSpotPositionOverview(mark: string) {
     { label: "Entry Price", value: formatPriceWithConvention(Number(parseNumber(mark) - 1.2).toFixed(2)) },
     { label: "Mark Price", value: formatPriceWithConvention(Number(parseNumber(mark)).toFixed(2)) },
     { label: "Unrealized PnL", value: "+$96" },
-    { label: "Return %", value: "+0.12%" },
+    { label: "Return on Margin", value: "+0.12%" },
   ] satisfies DeliveryTerm[];
 }
 
@@ -584,7 +584,7 @@ export function buildDeliverableFutureMarket(definition: MarketDefinition) {
       { label: "Entry Price", value: formatPriceWithConvention("1,600.00") },
       { label: "Mark Price", value: formatPriceWithConvention(mark) },
       { label: "Unrealized PnL", value: "+$156" },
-      { label: "Return %", value: "+0.64%" },
+      { label: "Return on Margin", value: "+0.64%" },
     ],
     referencePrice: spot,
     ticker: `${displayPair} Futures`,
@@ -781,7 +781,7 @@ function buildLiveDeliverableFutureMarket(
       { label: "Entry Price", value: formatPriceWithConvention("1,600.00") },
       { label: "Mark Price", value: markValue },
       { label: "Unrealized PnL", value: "—" },
-      { label: "Return %", value: "—" },
+      { label: "Return on Margin", value: "—" },
     ],
     referencePrice: spot,
     ticker: `${displayPair} Futures`,
@@ -878,7 +878,7 @@ export const ACTIVITY_VIEWS = {
     rows: [{ cells: ["USDC/cNGN Futures · Jun 2026", "Long cNGN", "Limit", "5 contracts", "1,604.80 cNGN per USDC"] }],
   },
   positions: {
-    columns: ["Instrument", "Position", "Entry Price", "Mark Price", "Unrealized PnL", "Return %"],
+    columns: ["Instrument", "Position", "Entry Price", "Mark Price", "Unrealized PnL", "Return on Margin"],
     rows: [
       {
         cells: ["USDC/cNGN Futures · Jun 2026", "Long cNGN · 5 contracts", "1,600.00 cNGN per USDC", "1,605.20 cNGN per USDC", "+$156", "+0.64%"],

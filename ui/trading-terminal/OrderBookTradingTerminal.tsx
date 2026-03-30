@@ -49,6 +49,7 @@ const SELECTED_MARKET_STORAGE_KEY = "trading-terminal-selected-market";
 const IS_DEVELOPMENT = process.env.NODE_ENV !== "production";
 type SpotSizeCurrency = "USDC" | "cNGN";
 const TRAILING_ZERO_DECIMALS_PATTERN = /\.?0+$/;
+const CONTRACT_COUNT_PATTERN = /(\d[\d,]*(?:\.\d+)?)\s+contracts/i;
 
 function parseNumericString(value: string) {
   const parsed = Number(value.replaceAll(",", "").replaceAll("$", "").replaceAll("+", ""));
@@ -68,6 +69,51 @@ function formatPriceDisplay(value: number | string | null) {
   }
 
   return `${formatMarketPrice(numericValue)} cNGN per USDC`;
+}
+
+function formatSignedUsd(value: number | null) {
+  if (value === null || !Number.isFinite(value)) {
+    return "—";
+  }
+
+  let sign = "";
+  if (value > 0) {
+    sign = "+";
+  } else if (value < 0) {
+    sign = "-";
+  }
+  const absoluteValue = Math.abs(value);
+
+  return `${sign}$${absoluteValue.toLocaleString("en-US", {
+    maximumFractionDigits: absoluteValue >= 100 ? 0 : 2,
+    minimumFractionDigits: absoluteValue > 0 && absoluteValue < 100 ? 2 : 0,
+  })}`;
+}
+
+function formatSignedPercent(value: number | null) {
+  if (value === null || !Number.isFinite(value)) {
+    return "—";
+  }
+
+  let sign = "";
+  if (value > 0) {
+    sign = "+";
+  } else if (value < 0) {
+    sign = "-";
+  }
+
+  return `${sign}${Math.abs(value).toFixed(2)}%`;
+}
+
+function formatContractQuantity(value: number | null) {
+  if (value === null || !Number.isFinite(value)) {
+    return "—";
+  }
+
+  return value.toLocaleString("en-US", {
+    maximumFractionDigits: 3,
+    minimumFractionDigits: value % 1 === 0 ? 0 : 3,
+  });
 }
 
 function getRenderablePriceInput(mark: string) {
@@ -144,6 +190,8 @@ function buildActivityViews(
   pnl: string,
   returnValue: string,
 ) {
+  const positiveMetricIndexes = [pnl, returnValue].flatMap((value, index) => (value.startsWith("+") ? [index + 4] : []));
+
   return {
     "open-orders": {
       ...ACTIVITY_VIEWS["open-orders"],
@@ -151,7 +199,7 @@ function buildActivityViews(
     },
     positions: {
       ...ACTIVITY_VIEWS.positions,
-      rows: [{ cells: [ticker, positionValue, entryPrice, markPrice, pnl, returnValue], positiveCellIndexes: [4, 5] }],
+      rows: [{ cells: [ticker, positionValue, entryPrice, markPrice, pnl, returnValue], positiveCellIndexes: positiveMetricIndexes }],
     },
     "trade-history": {
       ...ACTIVITY_VIEWS["trade-history"],
@@ -458,19 +506,158 @@ function buildSelectorMetrics(
 }
 
 function getPositionMetrics(
-  marketData: Record<MarketId, { positionOverview: { label: string; value: string }[] }>,
+  marketData: Record<MarketId, ContractMarket>,
+  marketDefinition: MarketDefinition,
   marketId: MarketId,
   livePrice: number | null,
 ) {
   const activePosition = marketData[marketId].positionOverview;
+  const entryPrice = activePosition.find((item) => item.label === "Entry Price")?.value ?? "—";
+  const markPrice = activePosition.find((item) => item.label === "Mark Price")?.value ?? formatPriceDisplay(livePrice ?? "—");
+  const fallbackReturnValue =
+    activePosition.find((item) => item.label === "Return on Margin")?.value ??
+    activePosition.find((item) => item.label === "Return %")?.value ??
+    "—";
+
+  if (marketDefinition.type !== "future") {
+    return {
+      entryPrice,
+      exposureLabel: activePosition.find((item) => item.label === "Position")?.value ?? "—",
+      markPrice,
+      pnl: activePosition.find((item) => item.label === "Unrealized PnL")?.value ?? "—",
+      positionOverview: activePosition,
+      positionValue: activePosition.find((item) => item.label === "Position")?.value ?? "—",
+      returnLabel: activePosition.some((item) => item.label === "Return on Margin") ? "Return on Margin" : "Return %",
+      returnValue: fallbackReturnValue,
+    };
+  }
+
+  return getFuturePositionMetrics(activePosition, entryPrice, markPrice, livePrice, marketDefinition);
+}
+
+function getResolvedMarkPrice(markPrice: string, livePrice: number | null) {
+  if (livePrice !== null && Number.isFinite(livePrice)) {
+    return livePrice;
+  }
+
+  const fallbackMarkPrice = parseNumericString(markPrice);
+  if (Number.isFinite(fallbackMarkPrice)) {
+    return fallbackMarkPrice;
+  }
+
+  return Number.NaN;
+}
+
+function getFuturePositionContext(rawPosition: string, marketDefinition: MarketDefinition) {
+  const contractsMatch = rawPosition.match(CONTRACT_COUNT_PATTERN);
+  const contracts = contractsMatch ? Number(contractsMatch[1]?.replaceAll(",", "")) : Number.NaN;
+  const contractMultiplier = parseNumericString(marketDefinition.contractMultiplier ?? "1");
+  const pairLabel = formatFxDisplayPair(marketDefinition.pair);
+  const [baseAsset = "Base", quoteAsset = "Quote"] = pairLabel.split("/");
+  const isShortBase = rawPosition.toLowerCase().includes("short");
+  const sideLabel = isShortBase ? `Short ${baseAsset} / Long ${quoteAsset}` : `Long ${baseAsset} / Short ${quoteAsset}`;
 
   return {
-    entryPrice: activePosition.find((item) => item.label === "Entry Price")?.value ?? "—",
-    markPrice: activePosition.find((item) => item.label === "Mark Price")?.value ?? formatPriceDisplay(livePrice ?? "—"),
-    pnl: activePosition.find((item) => item.label === "Unrealized PnL")?.value ?? "—",
-    positionOverview: activePosition,
-    positionValue: activePosition.find((item) => item.label === "Position")?.value ?? "—",
-    returnPercent: activePosition.find((item) => item.label === "Return %")?.value ?? "—",
+    baseAsset,
+    contractMultiplier,
+    contracts,
+    isShortBase,
+    sideLabel,
+  };
+}
+
+function getFutureExposureLabel(contracts: number, contractMultiplier: number, baseAsset: string) {
+  const baseExposure = contracts * contractMultiplier;
+  const formattedContracts = formatContractQuantity(contracts);
+  const formattedMultiplier = contractMultiplier.toLocaleString("en-US");
+  const formattedBaseExposure = `${baseExposure.toLocaleString("en-US", { maximumFractionDigits: 0 })} ${baseAsset}`;
+
+  return {
+    baseExposure,
+    exposureLabel: `${formattedContracts} contracts x ${formattedMultiplier} ${baseAsset} = ${formattedBaseExposure} notional`,
+    formattedBaseExposure,
+    formattedContracts,
+    formattedMultiplier,
+  };
+}
+
+function getFuturePnlMetrics(
+  baseExposure: number,
+  isShortBase: boolean,
+  parsedEntryPrice: number,
+  resolvedMarkPrice: number,
+) {
+  const directionalDelta = isShortBase ? parsedEntryPrice - resolvedMarkPrice : resolvedMarkPrice - parsedEntryPrice;
+  const pnlInQuote = directionalDelta * baseExposure;
+  const pnlInBase = resolvedMarkPrice > 0 ? pnlInQuote / resolvedMarkPrice : Number.NaN;
+  const initialMargin = baseExposure * 0.05;
+  const returnOnMargin = initialMargin > 0 ? (pnlInBase / initialMargin) * 100 : Number.NaN;
+
+  return {
+    pnl: formatSignedUsd(Number.isFinite(pnlInBase) ? pnlInBase : null),
+    returnValue: formatSignedPercent(Number.isFinite(returnOnMargin) ? returnOnMargin : null),
+  };
+}
+
+function buildFuturePositionOverview(
+  sideLabel: string,
+  exposure: ReturnType<typeof getFutureExposureLabel> | null,
+  baseAsset: string,
+  parsedEntryPrice: number,
+  resolvedMarkPrice: number,
+  pnl: string,
+  returnValue: string,
+) {
+  return [
+    { label: "Side", value: sideLabel },
+    { label: "Contracts", value: `${exposure?.formattedContracts ?? "—"} contracts` },
+    { label: "Contract Multiplier", value: `${exposure?.formattedMultiplier ?? "—"} ${baseAsset} per contract` },
+    { label: "Base Exposure", value: `${exposure?.formattedBaseExposure ?? "—"} notional` },
+    { label: "Entry Price", value: formatPriceDisplay(parsedEntryPrice) },
+    { label: "Mark Price", value: formatPriceDisplay(resolvedMarkPrice) },
+    { label: "Unrealized PnL", value: pnl },
+    { label: "Return on Margin", value: returnValue },
+  ];
+}
+
+function getFuturePositionMetrics(
+  activePosition: { label: string; value: string }[],
+  entryPrice: string,
+  markPrice: string,
+  livePrice: number | null,
+  marketDefinition: MarketDefinition,
+) {
+  const rawPosition = activePosition.find((item) => item.label === "Position")?.value ?? "";
+  const { baseAsset, contractMultiplier, contracts, isShortBase, sideLabel } = getFuturePositionContext(rawPosition, marketDefinition);
+  const parsedEntryPrice = parseNumericString(entryPrice);
+  const resolvedMarkPrice = getResolvedMarkPrice(markPrice, livePrice);
+  const exposure =
+    Number.isFinite(contracts) && Number.isFinite(contractMultiplier)
+      ? getFutureExposureLabel(contracts, contractMultiplier, baseAsset)
+      : null;
+  const metrics =
+    exposure && Number.isFinite(parsedEntryPrice) && Number.isFinite(resolvedMarkPrice)
+      ? getFuturePnlMetrics(exposure.baseExposure, isShortBase, parsedEntryPrice, resolvedMarkPrice)
+      : { pnl: "—", returnValue: "—" };
+  const computedPositionOverview = buildFuturePositionOverview(
+    sideLabel,
+    exposure,
+    baseAsset,
+    parsedEntryPrice,
+    resolvedMarkPrice,
+    metrics.pnl,
+    metrics.returnValue,
+  );
+
+  return {
+    entryPrice: computedPositionOverview[4]?.value ?? "—",
+    exposureLabel: exposure?.exposureLabel ?? "—",
+    markPrice: computedPositionOverview[5]?.value ?? "—",
+    pnl: metrics.pnl,
+    positionOverview: computedPositionOverview,
+    positionValue: computedPositionOverview[0]?.value ?? "—",
+    returnLabel: "Return on Margin",
+    returnValue: metrics.returnValue,
   };
 }
 
@@ -688,16 +875,6 @@ export function OrderBookTradingTerminal({
     selectorLastByMarketId,
     spotChangeByMarketId,
   } = buildSelectorMetrics(liveSpotPrice, marketDefinitions, marketData);
-  const dynamicActivityViews = buildActivityViews(
-    getDirectionalLabel("buy", selectedMarket),
-    getDirectionalLabel("sell", selectedMarket),
-    getDisplayTicker(selectedMarket),
-    market.positionOverview[0]?.value ?? "",
-    market.positionOverview[1]?.value ?? "",
-    market.positionOverview[2]?.value ?? "",
-    market.positionOverview[3]?.value ?? "",
-    market.positionOverview[4]?.value ?? "",
-  );
   const displayCandles = getDisplayCandles(
     chartContext,
     liveBasis,
@@ -725,8 +902,18 @@ export function OrderBookTradingTerminal({
     marketData,
     liveSpotPrice,
   );
-  const { entryPrice, markPrice, pnl: unrealizedPnl, positionOverview, positionValue, returnPercent } =
-    getPositionMetrics(marketData, selectedMarketId, safeLivePrice);
+  const { entryPrice, markPrice, pnl: unrealizedPnl, positionOverview, positionValue, exposureLabel, returnLabel, returnValue } =
+    getPositionMetrics(marketData, selectedMarket, selectedMarketId, safeLivePrice);
+  const dynamicActivityViews = buildActivityViews(
+    getDirectionalLabel("buy", selectedMarket),
+    getDirectionalLabel("sell", selectedMarket),
+    getDisplayTicker(selectedMarket),
+    positionValue,
+    entryPrice,
+    markPrice,
+    unrealizedPnl,
+    returnValue,
+  );
   const spotSizeReferencePrice = getSpotSizeReferencePrice(orderType, limitPrice, safeLivePrice, tradeSide);
   const canonicalSpotSize = convertSpotSizeInputToUSDC(size, spotSizeCurrency, spotSizeReferencePrice);
   const effectiveSize = isUSDCCNGNSpotMarket(selectedMarket) ? String(canonicalSpotSize) : size;
@@ -1094,9 +1281,10 @@ export function OrderBookTradingTerminal({
               orderType={orderType}
               pnl={unrealizedPnl}
               positionOverview={positionOverview}
-              positionValue={positionValue}
+              exposureLabel={exposureLabel}
               postOnly={postOnly}
-              returnPercent={returnPercent}
+              returnLabel={returnLabel}
+              returnValue={returnValue}
               size={size}
               spotSizeCurrency={spotSizeCurrency}
               slippageEstimate="0.01% / max 0.25%"
