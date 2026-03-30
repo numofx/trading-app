@@ -8,11 +8,11 @@ import { cn } from "@/lib/cn";
 
 function LabelValueRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between text-[11px]">
-      <span className="text-[#738095]">{label}</span>
+    <div className="flex items-start justify-between gap-3 text-[11px]">
+      <span className="min-w-0 flex-1 text-[#738095]">{label}</span>
       <span
         className={cn(
-          "font-medium text-[#D7DEE8]",
+          "wrap-break-word min-w-0 max-w-[60%] text-right font-medium text-[#D7DEE8] leading-snug",
           value.startsWith("+$") && "text-[#8AB899]",
         )}
       >
@@ -361,7 +361,7 @@ export function OrderEntryPanel({
         <section className="border-white/6 border-t pt-3.5">
           <div className="space-y-3">
             <div className="text-[#6C798B] text-[10px] uppercase tracking-[0.18em]">Contract Details</div>
-            <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+            <div className="grid gap-x-3 gap-y-2 sm:grid-cols-2">
               {contractDetails.map((item) => (
                 <LabelValueRow key={item.label} label={item.label} value={item.value} />
               ))}
