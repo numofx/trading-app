@@ -75,7 +75,14 @@ export type DeliveryTerm = {
   value: string;
 };
 
+export type MarketAvailability = {
+  bookAvailable: boolean;
+  markAvailable: boolean;
+  tradesAvailable: boolean;
+};
+
 export type ContractMarket = {
+  availability: MarketAvailability;
   candles: Candle[];
   contractDetails: DeliveryTerm[];
   id: string;

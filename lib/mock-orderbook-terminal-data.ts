@@ -24,6 +24,7 @@ import type {
   ContractMarket,
   DeliveryTerm,
   MarketDefinition,
+  MarketAvailability,
   MarketId,
   TradePrint,
 } from "@/lib/trading.types";
@@ -314,6 +315,24 @@ function formatPriceWithConvention(value: string) {
   return `${value} cNGN per USDC`;
 }
 
+function getMarketAvailability({
+  asks,
+  bids,
+  mark,
+  trades,
+}: {
+  asks: { price: number }[];
+  bids: { price: number }[];
+  mark: string | null;
+  trades: TradePrint[];
+}) {
+  return {
+    bookAvailable: asks.length > 0 || bids.length > 0,
+    markAvailable: mark !== null,
+    tradesAvailable: trades.length > 0,
+  } satisfies MarketAvailability;
+}
+
 function getSpotPositionOverview(mark: string) {
   return [
     { label: "Position", value: "+80,000 USDC" },
@@ -337,6 +356,11 @@ function buildSpotMarket() {
   const displayPair = formatFxDisplayPair("USDCcNGN");
 
   return {
+    availability: {
+      bookAvailable: true,
+      markAvailable: true,
+      tradesAvailable: true,
+    },
     candles: buildCandles(BASE_SPOT_CANDLES, 0, 2),
     contractDetails: [
       { label: "Market", value: `${displayPair} Spot` },
@@ -370,6 +394,11 @@ function buildOptionsMarket(label: keyof typeof OPTIONS_MARKET_META, offset: num
   const displayPair = formatFxDisplayPair("USDCcNGN");
 
   return {
+    availability: {
+      bookAvailable: true,
+      markAvailable: true,
+      tradesAvailable: true,
+    },
     candles: buildCandles(BASE_OPTIONS_CANDLES, offset, 2),
     contractDetails: [
       { label: "Contract", value: `${displayPair} Options` },
@@ -523,6 +552,11 @@ export function buildDeliverableFutureMarket(definition: MarketDefinition) {
   );
 
   return {
+    availability: {
+      bookAvailable: true,
+      markAvailable: true,
+      tradesAvailable: true,
+    },
     candles: buildCandles(BASE_FUTURES_CANDLES, 0, 2),
     contractDetails: [
       { label: "Contract", value: `${displayPair} Futures · ${displayLabel}` },
@@ -568,20 +602,28 @@ export function buildLiveSpotMarketFromBook(
   const asks = buildLiveBookSide(book?.asks ?? [], "ask");
   const bids = buildLiveBookSide(book?.bids ?? [], "bid");
   const derivedMark = deriveMarkFromBook(asks, bids);
-  const liveTrades = trades.map((trade) => ({
-    price: Number(trade.spot_contract?.ui_intent.price ?? decimalStringToNumber(trade.price)),
-    side: trade.spot_contract?.ui_intent.side ?? trade.aggressor_side,
-    size: Math.round(Number(trade.spot_contract?.ui_intent.size ?? decimalStringToNumber(trade.size))),
-    time: new Intl.DateTimeFormat("en-US", {
-      hour: "2-digit",
-      hour12: false,
-      minute: "2-digit",
-      timeZone: "UTC",
-    }).format(new Date(trade.created_at)),
-  }));
+  const liveTrades = trades
+    .map((trade) => ({
+      price: Number(trade.spot_contract?.ui_intent.price ?? decimalStringToNumber(trade.price)),
+      side: trade.spot_contract?.ui_intent.side ?? trade.aggressor_side,
+      size: Math.round(Number(trade.spot_contract?.ui_intent.size ?? decimalStringToNumber(trade.size))),
+      time: new Intl.DateTimeFormat("en-US", {
+        hour: "2-digit",
+        hour12: false,
+        minute: "2-digit",
+        timeZone: "UTC",
+      }).format(new Date(trade.created_at)),
+    }))
+    .filter((trade) => Number.isFinite(trade.price) && trade.price > 0 && Number.isFinite(trade.size) && trade.size > 0);
 
   return {
     ...base,
+    availability: getMarketAvailability({
+      asks,
+      bids,
+      mark: derivedMark,
+      trades: liveTrades,
+    }),
     contractDetails: [
       { label: "Market", value: `${formatFxDisplayPair(definition.pair)} Spot` },
       { label: "Quote Convention", value: "cNGN per USDC" },
@@ -638,10 +680,12 @@ function buildLiveBookSide(
   items: NonNullable<BookResponse["asks"]>,
   side: "ask" | "bid",
 ) {
-  const levels = items.map((item) => ({
-    price: Number(item.spot_contract?.ui_intent.price ?? decimalStringToNumber(item.limit_price)),
-    size: Number(item.spot_contract?.ui_intent.size ?? decimalStringToNumber(item.desired_amount) * 10_000),
-  }));
+  const levels = items
+    .map((item) => ({
+      price: Number(item.spot_contract?.ui_intent.price ?? decimalStringToNumber(item.limit_price)),
+      size: Number(item.spot_contract?.ui_intent.size ?? decimalStringToNumber(item.desired_amount) * 10_000),
+    }))
+    .filter((level) => Number.isFinite(level.price) && level.price > 0 && Number.isFinite(level.size) && level.size > 0);
 
   const ordered = [...levels].sort((left, right) => {
     return side === "ask" ? left.price - right.price : right.price - left.price;
@@ -691,54 +735,83 @@ function deriveMarkFromBook(asks: { price: number }[], bids: { price: number }[]
   return null;
 }
 
+function buildLiveDeliverableFutureMarket(
+  definition: MarketDefinition,
+  asks: ReturnType<typeof buildLiveBookSide>,
+  bids: ReturnType<typeof buildLiveBookSide>,
+  trades: TradePrint[],
+) {
+  const displayPair = formatFxDisplayPair(definition.pair);
+  const displayLabel = definition.expiryLabel ?? "—";
+  const spot = SPOT_MARKET_META.mark;
+  const derivedMark = deriveMarkFromBook(asks, bids);
+  const markValue = derivedMark ? formatPriceWithConvention(derivedMark) : "—";
+
+  return {
+    availability: getMarketAvailability({
+      asks,
+      bids,
+      mark: derivedMark,
+      trades,
+    }),
+    candles: buildCandles(BASE_FUTURES_CANDLES, 0, 2),
+    contractDetails: [
+      { label: "Contract", value: `${displayPair} Futures · ${displayLabel}` },
+      { label: "Settlement", value: "Physical delivery" },
+      { label: "Manager", value: "Dedicated DeliverableFXManager" },
+      { label: "Contract Size", value: `${definition.contractMultiplier ?? "10000"} USDC` },
+      { label: "Min Size", value: `${definition.minSize ?? "0.001"} contracts` },
+      { label: "Tick Size", value: `${definition.tickSize ?? "1"} cNGN per USDC` },
+      { label: "Mark Price", value: markValue },
+    ],
+    id: definition.id,
+    infoBar: [
+      { label: "Mark Price", value: markValue },
+      { label: "Spot", value: formatPriceWithConvention(spot) },
+      { label: "Basis", tone: "accent", value: "—" },
+      { label: "Basis %", tone: "accent", value: "—" },
+      { label: "Implied Carry", tone: "accent", value: "—" },
+      { label: "Expiry", value: displayLabel },
+    ],
+    mark: derivedMark ?? "—",
+    orderBookAsks: asks,
+    orderBookBids: bids,
+    positionOverview: [
+      { label: "Position", value: "Long USDC · 0.500 contracts" },
+      { label: "Entry Price", value: formatPriceWithConvention("1,600.00") },
+      { label: "Mark Price", value: markValue },
+      { label: "Unrealized PnL", value: "—" },
+      { label: "Return %", value: "—" },
+    ],
+    referencePrice: spot,
+    ticker: `${displayPair} Futures`,
+    timeToExpiry: `${definition.expiryDays ?? 0}d`,
+    trades,
+  } satisfies ContractMarket;
+}
+
 export function buildDeliverableFutureMarketFromBook(
   definition: MarketDefinition,
   book: BookResponse | null,
   trades: PresentedTrade[],
 ) {
-  const base = buildDeliverableFutureMarket(definition);
   const asks = buildLiveBookSide(book?.asks ?? [], "ask");
   const bids = buildLiveBookSide(book?.bids ?? [], "bid");
-  const derivedMark = deriveMarkFromBook(asks, bids);
-  const liveTrades = trades.map((trade) => ({
-    price: decimalStringToNumber(trade.price),
-    side: trade.aggressor_side,
-    size: Math.round(decimalStringToNumber(trade.size) * 10_000),
-    time: new Intl.DateTimeFormat("en-US", {
-      hour: "2-digit",
-      hour12: false,
-      minute: "2-digit",
-      timeZone: "UTC",
-    }).format(new Date(trade.created_at)),
-  }));
+  const liveTrades = trades
+    .map((trade) => ({
+      price: decimalStringToNumber(trade.price),
+      side: trade.aggressor_side,
+      size: Math.round(decimalStringToNumber(trade.size) * 10_000),
+      time: new Intl.DateTimeFormat("en-US", {
+        hour: "2-digit",
+        hour12: false,
+        minute: "2-digit",
+        timeZone: "UTC",
+      }).format(new Date(trade.created_at)),
+    }))
+    .filter((trade) => Number.isFinite(trade.price) && trade.price > 0 && Number.isFinite(trade.size) && trade.size > 0);
 
-  return {
-    ...base,
-    infoBar: base.infoBar.map((item) => {
-      if (item.label === "Mark Price") {
-        return {
-          ...item,
-          value: derivedMark ? formatPriceWithConvention(derivedMark) : "—",
-        };
-      }
-
-      return item;
-    }),
-    mark: derivedMark ?? "—",
-    orderBookAsks: asks,
-    orderBookBids: bids,
-    positionOverview: base.positionOverview.map((item) => {
-      if (item.label === "Mark Price") {
-        return {
-          ...item,
-          value: derivedMark ? formatPriceWithConvention(derivedMark) : "—",
-        };
-      }
-
-      return item;
-    }),
-    trades: liveTrades,
-  } satisfies ContractMarket;
+  return buildLiveDeliverableFutureMarket(definition, asks, bids, liveTrades);
 }
 
 export function buildTradingTerminalMarkets(
