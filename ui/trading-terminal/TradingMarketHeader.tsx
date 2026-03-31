@@ -22,6 +22,10 @@ function formatContractLabel(label: string) {
   return `${month[0]}${month.slice(1).toLowerCase()} ${year}`;
 }
 
+function hasAprilLeverageBadge(label: string) {
+  return label.toUpperCase().startsWith("APR ");
+}
+
 function getProductTabLabel(tab: "All" | "spot" | "future" | "option") {
   if (tab === "All") {
     return "All";
@@ -117,6 +121,7 @@ function scoreMarketMatch(market: MarketDefinition, query: string) {
   return 6;
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This header coordinates selector state, search, and responsive market chrome in one component.
 export function TradingMarketHeader({
   atmIvByMarketId,
   annualizedBasisByMarketId,
@@ -415,6 +420,11 @@ export function TradingMarketHeader({
                   <span className="shrink-0 rounded-[10px] bg-[#0D4138] px-2 py-0.5 font-semibold text-[#51D0A6] text-[10px] uppercase leading-none tracking-[0.04em]">
                     {selectedInstrument.typeLabel}
                   </span>
+                  {selectedInstrument.expiryLabel && hasAprilLeverageBadge(selectedInstrument.expiryLabel) ? (
+                    <span className="shrink-0 rounded-full bg-[#153C2B] px-1.5 py-0.5 font-semibold text-[#6EE7A8] text-[9px] leading-none">
+                      10x
+                    </span>
+                  ) : null}
                   {selectedInstrument.expiryLabel ? (
                     <span className="truncate font-semibold text-[#E5ECF5] text-[13px] leading-none">
                       · {selectedInstrument.expiryLabel}
@@ -434,14 +444,14 @@ export function TradingMarketHeader({
             {contractTabs.map((tab) => (
               <button
                 className={cn(
-                  "rounded-xl px-2.5 py-1 font-medium text-[#738095] text-[10px] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]",
+                  "flex items-center gap-1.5 rounded-xl px-2.5 py-1 font-medium text-[#738095] text-[10px] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]",
                   currentContract === tab.label && "bg-white/7 text-[#E5ECF5]",
                 )}
                 key={tab.label}
                 onClick={() => onContractSelect(tab.label)}
                 type="button"
               >
-                {formatContractLabel(tab.label)}
+                <span>{formatContractLabel(tab.label)}</span>
               </button>
             ))}
 

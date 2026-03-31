@@ -7,6 +7,22 @@ import { formatAnnualizedBasis, formatBasis, formatMarketPrice } from "@/lib/mar
 import type { MarketDefinition } from "@/lib/trading.types";
 import { SmartImage } from "@/ui/SmartImage";
 
+function getInstrumentTypePillLabel(type: MarketDefinition["type"]) {
+  if (type === "future") {
+    return "Future";
+  }
+
+  if (type === "spot") {
+    return "Spot";
+  }
+
+  return null;
+}
+
+function hasAprilLeverageBadge(market: MarketDefinition) {
+  return market.type === "future" && (market.expiryLabel?.toUpperCase().startsWith("APR ") ?? false);
+}
+
 function getSecondaryMetricValue({
   atmIv,
   basis,
@@ -90,6 +106,7 @@ export function MarketSwitcherRow({
     type: market.type,
   });
   const instrumentDetail = getInstrumentDetailDisplay(market);
+  const instrumentTypePillLabel = getInstrumentTypePillLabel(market.type);
   let metricItems: { label: string; value: string }[] = [
     { label: "ATM IV", value: secondaryMetricValue },
     { label: "OI", value: tertiaryMetricValue },
@@ -137,8 +154,20 @@ export function MarketSwitcherRow({
               <span className="truncate font-semibold text-[#F3F4F6] text-[15px] leading-tight">
                 {formatFxDisplayPair(market.pair)}
               </span>
-              <span className="truncate font-medium text-[#8F98A8] text-[14px] leading-tight">
-                {instrumentDetail}
+              <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+                {instrumentTypePillLabel ? (
+                  <span className="shrink-0 rounded-full bg-[#153C2B] px-2 py-0.5 font-semibold text-[#6EE7A8] text-[10px] uppercase leading-none tracking-[0.04em]">
+                    {instrumentTypePillLabel}
+                  </span>
+                ) : null}
+                {hasAprilLeverageBadge(market) ? (
+                  <span className="shrink-0 rounded-full bg-[#153C2B] px-1.5 py-0.5 font-semibold text-[#6EE7A8] text-[9px] leading-none">
+                    10x
+                  </span>
+                ) : null}
+                <span className="truncate font-medium text-[#8F98A8] text-[14px] leading-tight">
+                  {market.type === "future" ? market.expiryLabel ?? instrumentDetail : instrumentDetail}
+                </span>
               </span>
             </div>
           </div>
