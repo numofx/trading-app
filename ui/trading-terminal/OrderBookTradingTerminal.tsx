@@ -1320,7 +1320,7 @@ export function OrderBookTradingTerminal({
 
       if (!isSpotMarket) {
         setLastAction(
-          `Futures order accepted: ${orderSide.toUpperCase()} ${effectiveSize} contracts @ ${executionLimitPrice} cNGN/USDC on ${market.ticker}; position after: ${positionAfter}`,
+          `Futures order accepted: ${orderSide.toUpperCase()} ${effectiveSize} USDC notional @ ${executionLimitPrice} cNGN/USDC on ${market.ticker}; position after: ${positionAfter}`,
         );
         return;
       }
@@ -1424,6 +1424,7 @@ export function OrderBookTradingTerminal({
               size={size}
               spotSizeCurrency={spotSizeCurrency}
               slippageEstimate="0.01% / max 0.25%"
+              futureSizeUnit={selectedMarket.type === "future" ? "USDC" : undefined}
               orderSide={orderSide}
               onAllocationChange={setAllocation}
               onAtExpiryDeliverToggle={() => setAtExpiryDeliver((current) => !current)}

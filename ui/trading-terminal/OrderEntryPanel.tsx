@@ -71,6 +71,7 @@ export function OrderEntryPanel({
   size,
   spotSizeCurrency,
   slippageEstimate,
+  futureSizeUnit,
   orderSide,
   onAllocationChange,
   onAtExpiryDeliverToggle,
@@ -105,6 +106,7 @@ export function OrderEntryPanel({
   size: string;
   spotSizeCurrency?: "USDC" | "cNGN";
   slippageEstimate: string;
+  futureSizeUnit?: string;
   orderSide: "buy" | "sell";
   onAllocationChange: (value: number) => void;
   onAtExpiryDeliverToggle: () => void;
@@ -125,22 +127,22 @@ export function OrderEntryPanel({
   const activeSpotSizeCurrency = spotSizeCurrency ?? "USDC";
   const isNegativePnl = pnl.startsWith("-");
   const isNegativeReturn = returnValue.startsWith("-");
+  let sizeLabel = "Size";
   let liquidationToneClasses = "border-white/6 bg-white/[0.025] text-[#D7DEE8]";
-  let liquidationToneLabel = "Monitor";
   if (liquidationTone === "safe") {
     liquidationToneClasses = "border-[#214C3A] bg-[#101B16] text-[#7EE2AA]";
-    liquidationToneLabel = "Safe";
   } else if (liquidationTone === "tight") {
     liquidationToneClasses = "border-[#5C531F] bg-[#1E1A0F] text-[#F5D36B]";
-    liquidationToneLabel = "Tight";
   } else if (liquidationTone === "danger") {
     liquidationToneClasses = "border-[#6A2B2B] bg-[#201112] text-[#F2A6A6]";
-    liquidationToneLabel = "Danger";
   }
   let sizePlaceholder = "5";
 
   if (isSpotUSDIntent) {
+    sizeLabel = `Size (${activeSpotSizeCurrency})`;
     sizePlaceholder = activeSpotSizeCurrency === "USDC" ? "100" : "160,000";
+  } else if (futureSizeUnit) {
+    sizeLabel = `Size (${futureSizeUnit})`;
   }
 
   return (
@@ -199,7 +201,7 @@ export function OrderEntryPanel({
           <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-1">
             <div className="space-y-1.5">
               <label className="text-[#6C798B] text-[9px] uppercase tracking-[0.18em]" htmlFor="trade-size">
-                {isSpotUSDIntent ? `Size (${activeSpotSizeCurrency})` : "Size"}
+                {sizeLabel}
               </label>
               <div className="flex items-center overflow-hidden rounded-2xl bg-white/4 ring-1 ring-white/6">
                 <input
@@ -207,7 +209,7 @@ export function OrderEntryPanel({
                   id="trade-size"
                   onChange={(event) =>
                     onSizeChange(
-                      event.target.value.replace(isSpotUSDIntent ? /[^\d.]/g : /[^\d]/g, ""),
+                      event.target.value.replace(isSpotUSDIntent || futureSizeUnit ? /[^\d.]/g : /[^\d]/g, ""),
                     )
                   }
                   placeholder={sizePlaceholder}
@@ -247,7 +249,7 @@ export function OrderEntryPanel({
                   </Popover.Root>
                 ) : (
                   <div className="flex h-9.5 items-center gap-1 border-white/6 border-l px-3 text-[#C2CCD9] text-[12px]">
-                    Contracts
+                    {futureSizeUnit ?? "Contracts"}
                   </div>
                 )}
               </div>
@@ -309,15 +311,8 @@ export function OrderEntryPanel({
 
         {isSpotUSDIntent ? null : (
           <section className={cn("rounded-[16px] border px-3 py-2.5", liquidationToneClasses)}>
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-[9px] uppercase tracking-[0.18em] opacity-75">Liquidation Price</div>
-                <div className="mt-1 font-semibold text-[15px] leading-none">{liquidationPrice}</div>
-              </div>
-              <div className="rounded-full bg-black/15 px-2 py-1 font-semibold text-[9px] uppercase tracking-[0.08em]">
-                {liquidationToneLabel}
-              </div>
-            </div>
+            <div className="text-[9px] uppercase tracking-[0.18em] opacity-75">Liquidation Price</div>
+            <div className="mt-1 font-semibold text-[15px] leading-none">{liquidationPrice}</div>
           </section>
         )}
 

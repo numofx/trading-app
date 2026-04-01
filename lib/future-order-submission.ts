@@ -109,6 +109,43 @@ function formatFixedPointUnits(value: bigint, decimals: number) {
   return `${negative ? "-" : ""}${integerPart.toString()}.${fraction}`;
 }
 
+type Rational = {
+  denominator: bigint;
+  numerator: bigint;
+};
+
+function parseDecimalToRational(value: string): Rational {
+  const [wholePart, fractionPart = ""] = value.split(".");
+  const normalizedWholePart = wholePart === "" ? "0" : wholePart;
+  const denominator = 10n ** BigInt(fractionPart.length);
+  const numerator = BigInt(normalizedWholePart + fractionPart);
+
+  return {
+    denominator,
+    numerator,
+  };
+}
+
+function divideRationals(left: Rational, right: Rational): Rational {
+  if (right.numerator === 0n) {
+    throw new Error("Cannot divide by zero");
+  }
+
+  return {
+    denominator: left.denominator * right.numerator,
+    numerator: left.numerator * right.denominator,
+  };
+}
+
+function roundRationalToScaledUnits(value: Rational, decimals: number) {
+  const scale = 10n ** BigInt(decimals);
+  const scaledNumerator = value.numerator * scale;
+  const quotient = scaledNumerator / value.denominator;
+  const remainder = scaledNumerator % value.denominator;
+
+  return remainder * 2n >= value.denominator ? quotient + 1n : quotient;
+}
+
 function getMatchingChainId() {
   const configuredChainId = process.env.NEXT_PUBLIC_MATCHING_CHAIN_ID?.trim();
 
@@ -167,7 +204,11 @@ export function buildFutureOrderEnvelope({
   const tradeModuleAddress = getTradeModuleAddress();
   const chainId = getMatchingChainId();
   const limitPriceUnits = parseUnits(sanitizedPrice, ENGINE_DECIMALS);
-  const desiredAmountUnits = parseUnits(sanitizedSize, ENGINE_DECIMALS);
+  const contractMultiplier = sanitizeDecimalInput(market.contractMultiplier ?? "1", "Contract multiplier");
+  const desiredAmountUnits = roundRationalToScaledUnits(
+    divideRationals(parseDecimalToRational(sanitizedSize), parseDecimalToRational(contractMultiplier)),
+    ENGINE_DECIMALS,
+  );
 
   if (limitPriceUnits <= 0n) {
     throw new Error("Limit price must be greater than zero");
