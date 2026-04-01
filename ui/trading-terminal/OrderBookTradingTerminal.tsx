@@ -26,6 +26,7 @@ import {
 } from "@/lib/market-formatting";
 import type { CHART_CONTEXT_TABS, CHART_RANGE_BUTTONS, TIMEFRAME_OPTIONS } from "@/lib/mock-orderbook-terminal-data";
 import type { Candle, ContractMarket, DeliveryTerm, MarketDefinition, MarketId, MarketStat, TradePrint } from "@/lib/trading.types";
+import { buildFutureOrderEnvelope, canSubmitFutureOrder } from "@/lib/future-order-submission";
 import { buildSpotOrderEnvelope, canSubmitSpotOrder } from "@/lib/spot-order-submission";
 import { isUSDCCNGNSpotMarket } from "@/lib/usdccngn-spot-order";
 import {
@@ -161,6 +162,24 @@ function getSpotMarketCrossingPrice(
   }
 
   const bestOpposingLevel = side === "buy" ? market.orderBookBids[0] : market.orderBookAsks[0];
+
+  if (!bestOpposingLevel) {
+    return null;
+  }
+
+  return bestOpposingLevel.price.toString();
+}
+
+function getFutureMarketCrossingPrice(
+  side: "buy" | "sell",
+  orderType: "Limit" | "Market" | "Stop",
+  market: ContractMarket,
+) {
+  if (orderType !== "Market") {
+    return null;
+  }
+
+  const bestOpposingLevel = side === "buy" ? market.orderBookAsks[0] : market.orderBookBids[0];
 
   if (!bestOpposingLevel) {
     return null;
@@ -921,7 +940,7 @@ export function OrderBookTradingTerminal({
   const [selectedBottomTab, setSelectedBottomTab] =
     useState<keyof typeof ACTIVITY_VIEWS>(DEFAULT_BOTTOM_TAB);
   const [lastAction, setLastAction] = useState("Ready");
-  const [isSubmittingSpotOrder, setIsSubmittingSpotOrder] = useState(false);
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const [hasHydratedSelection, setHasHydratedSelection] = useState(false);
   const selectedMarketIdRef = useRef(initialMarketId);
   const { ready: walletsReady, wallets } = useWallets();
@@ -1182,122 +1201,146 @@ export function OrderBookTradingTerminal({
   async function handleSubmit(side: "buy" | "sell") {
     setTradeSide(side);
 
-    if (isUSDCCNGNSpotMarket(selectedMarket)) {
-      if (!walletsReady) {
-        setLastAction("Wallet is still loading");
-        return;
-      }
-
-      if (!primaryWallet?.address) {
-        setLastAction("Connect a wallet before submitting a spot order");
-        return;
-      }
-
-      if (!canSubmitSpotOrder(selectedMarket)) {
-        setLastAction("Live spot execution is unavailable because markets-service did not expose a spot asset");
-        return;
-      }
-
-      const derivedCrossingPrice = getSpotMarketCrossingPrice(side, orderType, market);
-      const executionLimitPrice = derivedCrossingPrice ?? limitPrice;
-
-      if (orderType === "Market" && !derivedCrossingPrice) {
-        setLastAction("No opposing spot liquidity is available. Market orders need a live bid/ask to cross.");
-        return;
-      }
-
-      try {
-        setIsSubmittingSpotOrder(true);
-        setLastAction(
-          tradingSubaccountId
-            ? `Submitting spot order on trading account #${tradingSubaccountId}`
-            : "Preparing trading account...",
-        );
-
-        const resolvedTradingSubaccountId =
-          tradingSubaccountId ?? (await ensureTradingSubaccount(primaryWallet));
-
-        await primaryWallet.switchChain(base.id);
-
-        const provider = await primaryWallet.getEthereumProvider();
-        const walletClient = createWalletClient({
-          chain: base,
-          transport: custom(provider),
-        });
-        const envelope = buildSpotOrderEnvelope({
-          limitPrice: executionLimitPrice,
-          market: selectedMarket,
-          side,
-          size: effectiveSize,
-          subaccountId: resolvedTradingSubaccountId,
-          walletAddress: primaryWallet.address,
-        });
-        setLastAction(`Awaiting wallet signature for trading account #${resolvedTradingSubaccountId}`);
-        const signature = await walletClient.signTypedData({
-          account: primaryWallet.address as `0x${string}`,
-          ...envelope.typedData,
-        });
-        const response = await fetch("/api/orders", {
-          body: JSON.stringify({
-            ...envelope.payload,
-            signature,
-          }),
-          headers: {
-            "content-type": "application/json",
-          },
-          method: "POST",
-        });
-        const payload = (await response.json().catch(() => null)) as
-          | {
-              error?: string;
-              order?: {
-                spot_contract?: {
-                  balance_delta?: {
-                    cngn?: string;
-                    usdc?: string;
-                  };
-                  engine_order?: {
-                    amount?: string;
-                    price?: string;
-                    side?: "buy" | "sell";
-                  };
-                  ui_intent?: {
-                    price?: string;
-                    side?: "buy" | "sell";
-                    size?: string;
-                  };
-                };
-              };
-            }
-          | null;
-
-        if (!response.ok) {
-          setLastAction(payload?.error ?? "Spot order submission failed");
-          return;
-        }
-
-        const translated = payload?.order?.spot_contract;
-
-        if (!translated) {
-          setLastAction(`Spot order accepted for ${effectiveSize} USDC @ ${executionLimitPrice} cNGN/USDC`);
-          return;
-        }
-
-        setLastAction(
-          `Spot order accepted: ${translated.ui_intent?.side?.toUpperCase() ?? side.toUpperCase()} ${translated.ui_intent?.size ?? effectiveSize} USDC @ ${translated.ui_intent?.price ?? executionLimitPrice} cNGN/USDC -> engine ${translated.engine_order?.side?.toUpperCase() ?? "—"} ${translated.engine_order?.amount ?? "—"} cNGN @ ${translated.engine_order?.price ?? "—"} USDC/cNGN | dUSDC ${translated.balance_delta?.usdc ?? "—"} | dcNGN ${translated.balance_delta?.cngn ?? "—"}`,
-        );
-        return;
-      } catch (error) {
-        setLastAction(error instanceof Error ? error.message : "Invalid spot order");
-        return;
-      } finally {
-        setIsSubmittingSpotOrder(false);
-      }
+    if (!walletsReady) {
+      setLastAction("Wallet is still loading");
+      return;
     }
 
-    setLastAction(
-      `${getDirectionalLabel(side, selectedMarket)} ${Number(size || "0").toLocaleString("en-US")} contracts on ${market.ticker}`,
-    );
+    if (!primaryWallet?.address) {
+      setLastAction("Connect a wallet before submitting an order");
+      return;
+    }
+
+    const isSpotMarket = isUSDCCNGNSpotMarket(selectedMarket);
+
+    if (isSpotMarket && !canSubmitSpotOrder(selectedMarket)) {
+      setLastAction("Live spot execution is unavailable because markets-service did not expose a spot asset");
+      return;
+    }
+
+    if (!isSpotMarket && !canSubmitFutureOrder(selectedMarket)) {
+      setLastAction("Live futures execution is unavailable because markets-service did not expose the future asset");
+      return;
+    }
+
+    const derivedCrossingPrice = isSpotMarket
+      ? getSpotMarketCrossingPrice(side, orderType, market)
+      : getFutureMarketCrossingPrice(side, orderType, market);
+    const executionLimitPrice = derivedCrossingPrice ?? limitPrice;
+
+    if (orderType === "Market" && !derivedCrossingPrice) {
+      setLastAction(
+        isSpotMarket
+          ? "No opposing spot liquidity is available. Market orders need a live bid/ask to cross."
+          : "No opposing futures liquidity is available. Market orders need a live bid/ask to cross.",
+      );
+      return;
+    }
+
+    try {
+      setIsSubmittingOrder(true);
+      setLastAction(
+        tradingSubaccountId
+          ? `Submitting ${isSpotMarket ? "spot" : "futures"} order on trading account #${tradingSubaccountId}`
+          : "Preparing trading account...",
+      );
+
+      const resolvedTradingSubaccountId =
+        tradingSubaccountId ?? (await ensureTradingSubaccount(primaryWallet));
+
+      await primaryWallet.switchChain(base.id);
+
+      const provider = await primaryWallet.getEthereumProvider();
+      const walletClient = createWalletClient({
+        chain: base,
+        transport: custom(provider),
+      });
+      const envelope = isSpotMarket
+        ? buildSpotOrderEnvelope({
+            limitPrice: executionLimitPrice,
+            market: selectedMarket,
+            side,
+            size: effectiveSize,
+            subaccountId: resolvedTradingSubaccountId,
+            walletAddress: primaryWallet.address,
+          })
+        : buildFutureOrderEnvelope({
+            limitPrice: executionLimitPrice,
+            market: selectedMarket,
+            side,
+            size: effectiveSize,
+            subaccountId: resolvedTradingSubaccountId,
+            walletAddress: primaryWallet.address,
+          });
+      setLastAction(`Awaiting wallet signature for trading account #${resolvedTradingSubaccountId}`);
+      const signature = await walletClient.signTypedData({
+        account: primaryWallet.address as `0x${string}`,
+        ...envelope.typedData,
+      });
+      const response = await fetch("/api/orders", {
+        body: JSON.stringify({
+          ...envelope.payload,
+          signature,
+        }),
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            error?: string;
+            order?: {
+              order_id?: string;
+              spot_contract?: {
+                balance_delta?: {
+                  cngn?: string;
+                  usdc?: string;
+                };
+                engine_order?: {
+                  amount?: string;
+                  price?: string;
+                  side?: "buy" | "sell";
+                };
+                ui_intent?: {
+                  price?: string;
+                  side?: "buy" | "sell";
+                  size?: string;
+                };
+              };
+            };
+          }
+        | null;
+
+      if (!response.ok) {
+        setLastAction(payload?.error ?? `${isSpotMarket ? "Spot" : "Futures"} order submission failed`);
+        return;
+      }
+
+      if (!isSpotMarket) {
+        setLastAction(
+          `Futures order accepted: ${side.toUpperCase()} ${effectiveSize} contracts @ ${executionLimitPrice} cNGN/USDC on ${market.ticker}`,
+        );
+        return;
+      }
+
+      const translated = payload?.order?.spot_contract;
+
+      if (!translated) {
+        setLastAction(`Spot order accepted for ${effectiveSize} USDC @ ${executionLimitPrice} cNGN/USDC`);
+        return;
+      }
+
+      setLastAction(
+        `Spot order accepted: ${translated.ui_intent?.side?.toUpperCase() ?? side.toUpperCase()} ${translated.ui_intent?.size ?? effectiveSize} USDC @ ${translated.ui_intent?.price ?? executionLimitPrice} cNGN/USDC -> engine ${translated.engine_order?.side?.toUpperCase() ?? "—"} ${translated.engine_order?.amount ?? "—"} cNGN @ ${translated.engine_order?.price ?? "—"} USDC/cNGN | dUSDC ${translated.balance_delta?.usdc ?? "—"} | dcNGN ${translated.balance_delta?.cngn ?? "—"}`,
+      );
+      return;
+    } catch (error) {
+      setLastAction(error instanceof Error ? error.message : `${isSpotMarket ? "Spot" : "Futures"} order submission failed`);
+      return;
+    } finally {
+      setIsSubmittingOrder(false);
+    }
   }
 
   return (
@@ -1363,7 +1406,7 @@ export function OrderBookTradingTerminal({
               contractDetails={market.contractDetails}
               contractLabel={getDisplayTicker(selectedMarket)}
               isSubmitDisabled={!isLiveSpotExecutionAvailable}
-              isSubmitting={isSubmittingSpotOrder || isResolvingTradingSubaccount}
+              isSubmitting={isSubmittingOrder || isResolvingTradingSubaccount}
               isSpotUSDIntent={isUSDCCNGNSpotMarket(selectedMarket)}
               lastAction={lastAction}
               liquidationPrice={formatPriceDisplay(liquidationPrice)}
