@@ -678,16 +678,12 @@ function getFuturePositionMetrics(
 }
 
 function getOrderSummaryRows({
-  averageExecution,
-  buyingPower,
   contracts,
   estimatedFill,
   fees,
   initialMargin,
   isSpotUSDIntent,
 }: {
-  averageExecution: number | null;
-  buyingPower: string;
   contracts: number;
   estimatedFill: number | null;
   fees: number;
@@ -705,11 +701,28 @@ function getOrderSummaryRows({
   const orderValue = estimatedFill !== null && Number.isFinite(estimatedFill) ? contracts * estimatedFill : 0;
 
   return [
-    { label: "Order Value", value: `${orderValue.toLocaleString("en-US", { maximumFractionDigits: 0 })} cNGN` },
-    { label: "Initial Margin", value: `$${initialMargin.toLocaleString("en-US", { maximumFractionDigits: 0 })}` },
+    { label: "Notional", value: `${orderValue.toLocaleString("en-US", { maximumFractionDigits: 0 })} cNGN` },
+    { label: "Margin Required", value: `$${initialMargin.toLocaleString("en-US", { maximumFractionDigits: 0 })}` },
+    { label: "Fill Price", value: formatPriceDisplay(estimatedFill) },
     { label: "Fees", value: `$${fees.toLocaleString("en-US", { maximumFractionDigits: 2 })}` },
+  ] satisfies DeliveryTerm[];
+}
+
+function getAdvancedSummaryRows({
+  averageExecution,
+  buyingPower,
+  isSpotUSDIntent,
+}: {
+  averageExecution: number | null;
+  buyingPower: string;
+  isSpotUSDIntent: boolean;
+}) {
+  if (isSpotUSDIntent) {
+    return [{ label: "Available Buying Power", value: buyingPower }] satisfies DeliveryTerm[];
+  }
+
+  return [
     { label: "Available Buying Power", value: buyingPower },
-    { label: "Estimated Fill Price", value: formatPriceDisplay(estimatedFill) },
     { label: "Estimated Avg Execution", value: formatPriceDisplay(averageExecution) },
   ] satisfies DeliveryTerm[];
 }
@@ -1003,12 +1016,15 @@ export function OrderBookTradingTerminal({
     tradeSide,
   );
   const orderSummaryRows = getOrderSummaryRows({
-    averageExecution,
-    buyingPower: "$250,000",
     contracts: isUSDCCNGNSpotMarket(selectedMarket) ? canonicalSpotSize : Number(effectiveSize || "0"),
     estimatedFill,
     fees,
     initialMargin,
+    isSpotUSDIntent: isUSDCCNGNSpotMarket(selectedMarket),
+  });
+  const advancedSummaryRows = getAdvancedSummaryRows({
+    averageExecution,
+    buyingPower: "$250,000",
     isSpotUSDIntent: isUSDCCNGNSpotMarket(selectedMarket),
   });
   const liquidationTone = isUSDCCNGNSpotMarket(selectedMarket) ? "neutral" : getLiquidationTone(estimatedFill, liquidationPrice);
@@ -1342,6 +1358,7 @@ export function OrderBookTradingTerminal({
           <div className="min-h-[300px] xl:min-h-0 xl:overflow-hidden">
             <OrderEntryPanel
               allocation={allocation}
+              advancedSummaryRows={advancedSummaryRows}
               atExpiryDeliver={atExpiryDeliver}
               contractDetails={market.contractDetails}
               contractLabel={getDisplayTicker(selectedMarket)}

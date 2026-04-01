@@ -49,6 +49,7 @@ function getSubmitLabel(isSubmitting: boolean, isSpotUSDIntent: boolean, isLong:
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This panel intentionally coordinates several dense trading UI sections.
 export function OrderEntryPanel({
   allocation,
+  advancedSummaryRows,
   atExpiryDeliver,
   contractDetails,
   contractLabel,
@@ -82,6 +83,7 @@ export function OrderEntryPanel({
   onSubmit,
 }: {
   allocation: number;
+  advancedSummaryRows: DeliveryTerm[];
   atExpiryDeliver: boolean;
   contractDetails: DeliveryTerm[];
   contractLabel: string;
@@ -123,13 +125,17 @@ export function OrderEntryPanel({
   const activeSpotSizeCurrency = spotSizeCurrency ?? "USDC";
   const isNegativePnl = pnl.startsWith("-");
   const isNegativeReturn = returnValue.startsWith("-");
-  let liquidationToneClasses = "border-white/6 bg-white/[0.035] text-[#D7DEE8]";
+  let liquidationToneClasses = "border-white/6 bg-white/[0.025] text-[#D7DEE8]";
+  let liquidationToneLabel = "Monitor";
   if (liquidationTone === "safe") {
-    liquidationToneClasses = "border-[#1F5C43] bg-[#0F241C] text-[#7EE2AA]";
+    liquidationToneClasses = "border-[#214C3A] bg-[#101B16] text-[#7EE2AA]";
+    liquidationToneLabel = "Safe";
   } else if (liquidationTone === "tight") {
-    liquidationToneClasses = "border-[#6B5B1B] bg-[#2A2410] text-[#F5D36B]";
+    liquidationToneClasses = "border-[#5C531F] bg-[#1E1A0F] text-[#F5D36B]";
+    liquidationToneLabel = "Tight";
   } else if (liquidationTone === "danger") {
-    liquidationToneClasses = "border-[#6A2B2B] bg-[#261212] text-[#F2A6A6]";
+    liquidationToneClasses = "border-[#6A2B2B] bg-[#201112] text-[#F2A6A6]";
+    liquidationToneLabel = "Danger";
   }
   let sizePlaceholder = "5";
 
@@ -283,44 +289,44 @@ export function OrderEntryPanel({
           </div>
         </section>
 
-        <section className="space-y-2 rounded-[20px] bg-white/[0.035] p-3 ring-1 ring-white/6">
+        <section className="space-y-2 rounded-[18px] bg-[#0B121B] p-3">
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="font-semibold text-[#E5ECF5] text-[12px]">{contractLabel}</div>
               <div className="mt-1 text-[#738095] text-[9px]">{directionCopy}</div>
             </div>
-            <div className="rounded-xl bg-[#142030] px-2 py-1 text-[#A8C4F6] text-[8px]">
+            <div className="rounded-full border border-white/8 px-2 py-1 text-[#6F7C90] text-[8px]">
               {isSpotUSDIntent ? "Spot settled" : "Physically delivered"}
             </div>
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <div className="text-[#6C798B] text-[9px] uppercase tracking-[0.18em]">Order Summary</div>
-          {orderSummaryRows.map((item) => (
-            <LabelValueRow key={item.label} label={item.label} value={item.value} />
-          ))}
-          <div className="flex items-center justify-between text-[10px]">
-            <span className="inline-flex items-center gap-1 text-[#738095]">
-              Slippage Estimate
-              <Info className="size-2.5" />
-            </span>
-            <span className="font-medium text-[#D7DEE8]">{slippageEstimate}</span>
-          </div>
+            {orderSummaryRows.map((item) => (
+              <LabelValueRow key={item.label} label={item.label} value={item.value} />
+            ))}
           </div>
         </section>
 
         {isSpotUSDIntent ? null : (
-          <section className={cn("rounded-[20px] border p-3 ring-1 ring-inset", liquidationToneClasses)}>
-            <div className="text-[10px] uppercase tracking-[0.18em] opacity-80">Liquidation Price</div>
-            <div className="mt-2 font-semibold text-[22px] leading-none">{liquidationPrice}</div>
+          <section className={cn("rounded-[16px] border px-3 py-2.5", liquidationToneClasses)}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[9px] uppercase tracking-[0.18em] opacity-75">Liquidation Price</div>
+                <div className="mt-1 font-semibold text-[15px] leading-none">{liquidationPrice}</div>
+              </div>
+              <div className="rounded-full bg-black/15 px-2 py-1 font-semibold text-[9px] uppercase tracking-[0.08em]">
+                {liquidationToneLabel}
+              </div>
+            </div>
           </section>
         )}
 
         <button
           className={cn(
-            "flex h-9.5 w-full items-center justify-center rounded-2xl font-semibold text-[12px] transition-colors disabled:cursor-not-allowed disabled:opacity-80",
+            "flex h-12 w-full items-center justify-center rounded-2xl font-semibold text-[13px] shadow-[0_12px_30px_rgba(0,0,0,0.28)] transition-all disabled:cursor-not-allowed disabled:opacity-60",
             isLong
-              ? "bg-[#E9EEF7] text-[#081019] hover:bg-white"
-              : "bg-[#E9EEF7] text-[#081019] hover:bg-white",
+              ? "bg-[#1FCB84] text-[#081019] ring-1 ring-[#46E6A4] hover:bg-[#31DA95]"
+              : "bg-[#E15B64] text-white ring-1 ring-[#F07C84] hover:bg-[#EA6B74]",
           )}
           onClick={() => onSubmit(tradeSide)}
           disabled={isSubmitting || isSubmitDisabled}
@@ -364,6 +370,18 @@ export function OrderEntryPanel({
                     {atExpiryDeliver ? "On" : "Off"}
                   </span>
                 </button>
+              </div>
+              <div className="space-y-1.5 border-white/6 border-t pt-2">
+                {advancedSummaryRows.map((item) => (
+                  <LabelValueRow key={item.label} label={item.label} value={item.value} />
+                ))}
+                <div className="flex items-center justify-between text-[10px]">
+                  <span className="inline-flex items-center gap-1 text-[#738095]">
+                    Slippage Estimate
+                    <Info className="size-2.5" />
+                  </span>
+                  <span className="font-medium text-[#D7DEE8]">{slippageEstimate}</span>
+                </div>
               </div>
             </div>
           ) : null}
