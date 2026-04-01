@@ -685,7 +685,6 @@ function getOrderSummaryRows({
   fees,
   initialMargin,
   isSpotUSDIntent,
-  liquidationPrice,
 }: {
   averageExecution: number | null;
   buyingPower: string;
@@ -694,7 +693,6 @@ function getOrderSummaryRows({
   fees: number;
   initialMargin: number;
   isSpotUSDIntent: boolean;
-  liquidationPrice: number | null;
 }) {
   if (isSpotUSDIntent) {
     const quoteAmount = estimatedFill !== null && Number.isFinite(estimatedFill) ? contracts * estimatedFill : Number.NaN;
@@ -713,8 +711,30 @@ function getOrderSummaryRows({
     { label: "Available Buying Power", value: buyingPower },
     { label: "Estimated Fill Price", value: formatPriceDisplay(estimatedFill) },
     { label: "Estimated Avg Execution", value: formatPriceDisplay(averageExecution) },
-    { label: "Liquidation Price", value: formatPriceDisplay(liquidationPrice) },
   ] satisfies DeliveryTerm[];
+}
+
+function getLiquidationTone(estimatedFill: number | null, liquidationPrice: number | null) {
+  if (
+    estimatedFill === null ||
+    liquidationPrice === null ||
+    !Number.isFinite(estimatedFill) ||
+    !Number.isFinite(liquidationPrice) ||
+    estimatedFill <= 0
+  ) {
+    return "neutral" as const;
+  }
+
+  const distancePercent = (Math.abs(estimatedFill - liquidationPrice) / estimatedFill) * 100;
+  if (distancePercent <= 2) {
+    return "danger" as const;
+  }
+
+  if (distancePercent <= 5) {
+    return "tight" as const;
+  }
+
+  return "safe" as const;
 }
 
 function getOrderMetrics(
@@ -990,8 +1010,8 @@ export function OrderBookTradingTerminal({
     fees,
     initialMargin,
     isSpotUSDIntent: isUSDCCNGNSpotMarket(selectedMarket),
-    liquidationPrice,
   });
+  const liquidationTone = isUSDCCNGNSpotMarket(selectedMarket) ? "neutral" : getLiquidationTone(estimatedFill, liquidationPrice);
   const marketDiagnostics = {
     asksCount: market.orderBookAsks.length,
     bidsCount: market.orderBookBids.length,
@@ -1329,6 +1349,8 @@ export function OrderBookTradingTerminal({
               isSubmitting={isSubmittingSpotOrder || isResolvingTradingSubaccount}
               isSpotUSDIntent={isUSDCCNGNSpotMarket(selectedMarket)}
               lastAction={lastAction}
+              liquidationPrice={formatPriceDisplay(liquidationPrice)}
+              liquidationTone={liquidationTone}
               limitPrice={limitPrice}
               orderSummaryRows={orderSummaryRows}
               orderType={orderType}

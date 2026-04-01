@@ -56,6 +56,8 @@ export function OrderEntryPanel({
   isSubmitDisabled,
   isSpotUSDIntent,
   lastAction,
+  liquidationPrice,
+  liquidationTone,
   limitPrice,
   orderSummaryRows,
   orderType,
@@ -87,6 +89,8 @@ export function OrderEntryPanel({
   isSubmitDisabled?: boolean;
   isSpotUSDIntent: boolean;
   lastAction: string;
+  liquidationPrice: string;
+  liquidationTone: "safe" | "tight" | "danger" | "neutral";
   limitPrice: string;
   orderSummaryRows: DeliveryTerm[];
   orderType: "Limit" | "Market" | "Stop";
@@ -119,6 +123,14 @@ export function OrderEntryPanel({
   const activeSpotSizeCurrency = spotSizeCurrency ?? "USDC";
   const isNegativePnl = pnl.startsWith("-");
   const isNegativeReturn = returnValue.startsWith("-");
+  let liquidationToneClasses = "border-white/6 bg-white/[0.035] text-[#D7DEE8]";
+  if (liquidationTone === "safe") {
+    liquidationToneClasses = "border-[#1F5C43] bg-[#0F241C] text-[#7EE2AA]";
+  } else if (liquidationTone === "tight") {
+    liquidationToneClasses = "border-[#6B5B1B] bg-[#2A2410] text-[#F5D36B]";
+  } else if (liquidationTone === "danger") {
+    liquidationToneClasses = "border-[#6A2B2B] bg-[#261212] text-[#F2A6A6]";
+  }
   let sizePlaceholder = "5";
 
   if (isSpotUSDIntent) {
@@ -295,6 +307,13 @@ export function OrderEntryPanel({
           </div>
           </div>
         </section>
+
+        {isSpotUSDIntent ? null : (
+          <section className={cn("rounded-[20px] border p-3 ring-1 ring-inset", liquidationToneClasses)}>
+            <div className="text-[10px] uppercase tracking-[0.18em] opacity-80">Liquidation Price</div>
+            <div className="mt-2 font-semibold text-[22px] leading-none">{liquidationPrice}</div>
+          </section>
+        )}
 
         <button
           className={cn(
