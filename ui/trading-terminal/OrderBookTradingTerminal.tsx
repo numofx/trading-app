@@ -138,22 +138,22 @@ function getRenderablePriceInput(mark: string) {
   return Number.isFinite(parsedMark) ? mark.replaceAll(",", "") : "";
 }
 
-function getDirectionalLabel(side: "buy" | "sell", marketDefinition: MarketDefinition) {
+function getDirectionalLabel(orderSide: "buy" | "sell", marketDefinition: MarketDefinition) {
   if (isUSDCCNGNSpotMarket(marketDefinition)) {
-    return side === "buy" ? "Buy USDC" : "Sell USDC";
+    return orderSide === "buy" ? "Buy USDC" : "Sell USDC";
   }
 
   const [base] = formatFxDisplayPair(marketDefinition.pair).split("/");
 
   if (!base) {
-    return side === "buy" ? "Long" : "Short";
+    return orderSide === "buy" ? "Long" : "Short";
   }
 
-  return side === "buy" ? `Long ${base}` : `Short ${base}`;
+  return orderSide === "buy" ? `Long ${base}` : `Short ${base}`;
 }
 
 function getSpotMarketCrossingPrice(
-  side: "buy" | "sell",
+  orderSide: "buy" | "sell",
   orderType: "Limit" | "Market" | "Stop",
   market: ContractMarket,
 ) {
@@ -161,7 +161,7 @@ function getSpotMarketCrossingPrice(
     return null;
   }
 
-  const bestOpposingLevel = side === "buy" ? market.orderBookBids[0] : market.orderBookAsks[0];
+  const bestOpposingLevel = orderSide === "buy" ? market.orderBookBids[0] : market.orderBookAsks[0];
 
   if (!bestOpposingLevel) {
     return null;
@@ -171,7 +171,7 @@ function getSpotMarketCrossingPrice(
 }
 
 function getFutureMarketCrossingPrice(
-  side: "buy" | "sell",
+  orderSide: "buy" | "sell",
   orderType: "Limit" | "Market" | "Stop",
   market: ContractMarket,
 ) {
@@ -179,7 +179,7 @@ function getFutureMarketCrossingPrice(
     return null;
   }
 
-  const bestOpposingLevel = side === "buy" ? market.orderBookAsks[0] : market.orderBookBids[0];
+  const bestOpposingLevel = orderSide === "buy" ? market.orderBookAsks[0] : market.orderBookBids[0];
 
   if (!bestOpposingLevel) {
     return null;
@@ -776,7 +776,7 @@ function getOrderMetrics(
   orderType: "Limit" | "Market" | "Stop",
   size: string,
   livePrice: number | null,
-  tradeSide: "buy" | "sell",
+  orderSide: "buy" | "sell",
 ) {
   const sizeNumber = Number(size || "0");
   const limitPriceNumber = parseNumericString(limitPrice || marketMark);
@@ -791,7 +791,7 @@ function getOrderMetrics(
       return safeLimitPrice;
     }
 
-    return livePrice + (tradeSide === "buy" ? 0.12 : -0.12);
+    return livePrice + (orderSide === "buy" ? 0.12 : -0.12);
   }
 
   function getAverageExecution(estimatedFill: number | null) {
@@ -803,7 +803,7 @@ function getOrderMetrics(
       return null;
     }
 
-    return estimatedFill + (tradeSide === "buy" ? 0.05 : -0.05);
+    return estimatedFill + (orderSide === "buy" ? 0.05 : -0.05);
   }
 
   const estimatedFill = getEstimatedFill();
@@ -826,7 +826,7 @@ function getOrderMetrics(
   let liquidationPrice: number | null = null;
 
   if (safeLimitPrice !== null) {
-    liquidationPrice = tradeSide === "buy" ? safeLimitPrice - 62.4 : safeLimitPrice + 62.4;
+    liquidationPrice = orderSide === "buy" ? safeLimitPrice - 62.4 : safeLimitPrice + 62.4;
   }
 
   return {
@@ -843,7 +843,7 @@ function getSpotSizeReferencePrice(
   orderType: "Limit" | "Market" | "Stop",
   limitPrice: string,
   livePrice: number | null,
-  tradeSide: "buy" | "sell",
+  orderSide: "buy" | "sell",
 ) {
   const limitPriceNumber = parseNumericString(limitPrice);
   const safeLimitPrice = Number.isFinite(limitPriceNumber) ? limitPriceNumber : livePrice;
@@ -856,7 +856,7 @@ function getSpotSizeReferencePrice(
     return safeLimitPrice ?? 0;
   }
 
-  return livePrice + (tradeSide === "buy" ? 0.12 : -0.12);
+  return livePrice + (orderSide === "buy" ? 0.12 : -0.12);
 }
 
 function convertSpotSizeInputToUSDC(
@@ -930,7 +930,7 @@ export function OrderBookTradingTerminal({
   const [expandedChart, setExpandedChart] = useState(false);
   const [orderBookView, setOrderBookView] = useState<"Order Book" | "Trades">("Order Book");
   const [orderType, setOrderType] = useState<"Limit" | "Market" | "Stop">(DEFAULT_ORDER_TYPE);
-  const [tradeSide, setTradeSide] = useState<"buy" | "sell">("buy");
+  const [orderSide, setOrderSide] = useState<"buy" | "sell">("buy");
   const [size, setSize] = useState("5");
   const [spotSizeCurrency, setSpotSizeCurrency] = useState<SpotSizeCurrency>("USDC");
   const [limitPrice, setLimitPrice] = useState("1605.25");
@@ -1022,7 +1022,7 @@ export function OrderBookTradingTerminal({
     unrealizedPnl,
     returnValue,
   );
-  const spotSizeReferencePrice = getSpotSizeReferencePrice(orderType, limitPrice, safeLivePrice, tradeSide);
+  const spotSizeReferencePrice = getSpotSizeReferencePrice(orderType, limitPrice, safeLivePrice, orderSide);
   const canonicalSpotSize = convertSpotSizeInputToUSDC(size, spotSizeCurrency, spotSizeReferencePrice);
   const effectiveSize = isUSDCCNGNSpotMarket(selectedMarket) ? String(canonicalSpotSize) : size;
   const { averageExecution, estimatedFill, fees, initialMargin, liquidationPrice } = getOrderMetrics(
@@ -1032,7 +1032,7 @@ export function OrderBookTradingTerminal({
     orderType,
     effectiveSize,
     safeLivePrice,
-    tradeSide,
+    orderSide,
   );
   const orderSummaryRows = getOrderSummaryRows({
     contracts: isUSDCCNGNSpotMarket(selectedMarket) ? canonicalSpotSize : Number(effectiveSize || "0"),
@@ -1198,8 +1198,9 @@ export function OrderBookTradingTerminal({
   }
 
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Spot execution needs wallet, env, signing, and backend submission checks in one submit path.
-  async function handleSubmit(side: "buy" | "sell") {
-    setTradeSide(side);
+  async function handleSubmit(orderSide: "buy" | "sell") {
+    setOrderSide(orderSide);
+    const positionAfter = orderSide === "buy" ? "long" : "short";
 
     if (!walletsReady) {
       setLastAction("Wallet is still loading");
@@ -1224,8 +1225,8 @@ export function OrderBookTradingTerminal({
     }
 
     const derivedCrossingPrice = isSpotMarket
-      ? getSpotMarketCrossingPrice(side, orderType, market)
-      : getFutureMarketCrossingPrice(side, orderType, market);
+      ? getSpotMarketCrossingPrice(orderSide, orderType, market)
+      : getFutureMarketCrossingPrice(orderSide, orderType, market);
     const executionLimitPrice = derivedCrossingPrice ?? limitPrice;
 
     if (orderType === "Market" && !derivedCrossingPrice) {
@@ -1259,7 +1260,7 @@ export function OrderBookTradingTerminal({
         ? buildSpotOrderEnvelope({
             limitPrice: executionLimitPrice,
             market: selectedMarket,
-            side,
+            side: orderSide,
             size: effectiveSize,
             subaccountId: resolvedTradingSubaccountId,
             walletAddress: primaryWallet.address,
@@ -1267,7 +1268,7 @@ export function OrderBookTradingTerminal({
         : buildFutureOrderEnvelope({
             limitPrice: executionLimitPrice,
             market: selectedMarket,
-            side,
+            side: orderSide,
             size: effectiveSize,
             subaccountId: resolvedTradingSubaccountId,
             walletAddress: primaryWallet.address,
@@ -1319,7 +1320,7 @@ export function OrderBookTradingTerminal({
 
       if (!isSpotMarket) {
         setLastAction(
-          `Futures order accepted: ${side.toUpperCase()} ${effectiveSize} contracts @ ${executionLimitPrice} cNGN/USDC on ${market.ticker}`,
+          `Futures order accepted: ${orderSide.toUpperCase()} ${effectiveSize} contracts @ ${executionLimitPrice} cNGN/USDC on ${market.ticker}; position after: ${positionAfter}`,
         );
         return;
       }
@@ -1332,7 +1333,7 @@ export function OrderBookTradingTerminal({
       }
 
       setLastAction(
-        `Spot order accepted: ${translated.ui_intent?.side?.toUpperCase() ?? side.toUpperCase()} ${translated.ui_intent?.size ?? effectiveSize} USDC @ ${translated.ui_intent?.price ?? executionLimitPrice} cNGN/USDC -> engine ${translated.engine_order?.side?.toUpperCase() ?? "—"} ${translated.engine_order?.amount ?? "—"} cNGN @ ${translated.engine_order?.price ?? "—"} USDC/cNGN | dUSDC ${translated.balance_delta?.usdc ?? "—"} | dcNGN ${translated.balance_delta?.cngn ?? "—"}`,
+        `Spot order accepted: ${translated.ui_intent?.side?.toUpperCase() ?? orderSide.toUpperCase()} ${translated.ui_intent?.size ?? effectiveSize} USDC @ ${translated.ui_intent?.price ?? executionLimitPrice} cNGN/USDC -> engine ${translated.engine_order?.side?.toUpperCase() ?? "—"} ${translated.engine_order?.amount ?? "—"} cNGN @ ${translated.engine_order?.price ?? "—"} USDC/cNGN | dUSDC ${translated.balance_delta?.usdc ?? "—"} | dcNGN ${translated.balance_delta?.cngn ?? "—"}`,
       );
       return;
     } catch (error) {
@@ -1423,13 +1424,13 @@ export function OrderBookTradingTerminal({
               size={size}
               spotSizeCurrency={spotSizeCurrency}
               slippageEstimate="0.01% / max 0.25%"
-              tradeSide={tradeSide}
+              orderSide={orderSide}
               onAllocationChange={setAllocation}
               onAtExpiryDeliverToggle={() => setAtExpiryDeliver((current) => !current)}
               onLimitPriceChange={setLimitPrice}
               onOrderTypeChange={setOrderType}
               onPostOnlyToggle={() => setPostOnly((current) => !current)}
-              onSideChange={setTradeSide}
+              onSideChange={setOrderSide}
               onSizeChange={setSize}
               onSpotSizeCurrencyChange={(nextCurrency) => {
                 if (nextCurrency === spotSizeCurrency) {

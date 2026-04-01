@@ -71,7 +71,7 @@ export function OrderEntryPanel({
   size,
   spotSizeCurrency,
   slippageEstimate,
-  tradeSide,
+  orderSide,
   onAllocationChange,
   onAtExpiryDeliverToggle,
   onLimitPriceChange,
@@ -105,7 +105,7 @@ export function OrderEntryPanel({
   size: string;
   spotSizeCurrency?: "USDC" | "cNGN";
   slippageEstimate: string;
-  tradeSide: "buy" | "sell";
+  orderSide: "buy" | "sell";
   onAllocationChange: (value: number) => void;
   onAtExpiryDeliverToggle: () => void;
   onLimitPriceChange: (value: string) => void;
@@ -118,7 +118,7 @@ export function OrderEntryPanel({
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [sizeCurrencyPickerOpen, setSizeCurrencyPickerOpen] = useState(false);
-  const isLong = tradeSide === "buy";
+  const isLong = orderSide === "buy";
   const needsLimitPrice = orderType !== "Market";
   const directionCopy = getDirectionCopy(isSpotUSDIntent, isLong);
   const submitLabel = getSubmitLabel(Boolean(isSubmitting), isSpotUSDIntent, isLong);
@@ -328,7 +328,7 @@ export function OrderEntryPanel({
               ? "bg-[#1FCB84] text-[#081019] ring-1 ring-[#46E6A4] hover:bg-[#31DA95]"
               : "bg-[#E15B64] text-white ring-1 ring-[#F07C84] hover:bg-[#EA6B74]",
           )}
-          onClick={() => onSubmit(tradeSide)}
+          onClick={() => onSubmit(orderSide)}
           disabled={isSubmitting || isSubmitDisabled}
           type="button"
         >
