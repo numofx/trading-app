@@ -4,6 +4,7 @@ import { Star } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatFxDisplayPair, getInstrumentDetailDisplay } from "@/lib/market-display";
 import { formatAnnualizedBasis, formatBasis, formatMarketPrice } from "@/lib/market-formatting";
+import { getMarketTokenIcons } from "@/lib/market-token-icons";
 import type { MarketDefinition } from "@/lib/trading.types";
 import { SmartImage } from "@/ui/SmartImage";
 
@@ -105,6 +106,7 @@ export function MarketSwitcherRow({
     openInterest,
     type: market.type,
   });
+  const marketTokenIcons = getMarketTokenIcons(market.pair);
   const instrumentDetail = getInstrumentDetailDisplay(market);
   const instrumentTypePillLabel = getInstrumentTypePillLabel(market.type);
   let metricItems: { label: string; value: string }[] = [
@@ -143,12 +145,25 @@ export function MarketSwitcherRow({
         type="button"
       >
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <SmartImage<string>
-            alt={`${market.pair} flag`}
-            className="h-6 w-9 shrink-0 overflow-hidden rounded-[4px] border border-[#1B2430]"
-            imgClassName="object-cover"
-            src={market.flagSrc}
-          />
+          {marketTokenIcons.length > 0 ? (
+            <span className="flex shrink-0 items-center -space-x-1">
+              {marketTokenIcons.map((tokenIcon) => (
+                <SmartImage<string>
+                  alt={tokenIcon.symbol}
+                  className="size-6.5 overflow-hidden rounded-full border border-[#1B2430] bg-white"
+                  key={tokenIcon.symbol}
+                  src={tokenIcon.src}
+                />
+              ))}
+            </span>
+          ) : (
+            <SmartImage<string>
+              alt={`${market.pair} flag`}
+              className="h-6 w-9 shrink-0 overflow-hidden rounded-[4px] border border-[#1B2430]"
+              imgClassName="object-cover"
+              src={market.flagSrc}
+            />
+          )}
           <div className="min-w-0">
             <div className="flex min-w-0 items-baseline gap-x-3">
               <span className="truncate font-semibold text-[#F3F4F6] text-[15px] leading-tight">

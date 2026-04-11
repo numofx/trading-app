@@ -5,6 +5,7 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { ChevronDown, Command, Dot, Search, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatFxDisplayPair, getProductDisplayName, getSelectedInstrumentDisplay } from "@/lib/market-display";
+import { getMarketTokenIcons } from "@/lib/market-token-icons";
 import { buildMarketSelectionAliasMap } from "@/lib/market-selection";
 import type { ContractTab, MarketDefinition, MarketId, MarketStat } from "@/lib/trading.types";
 import { PrivyWalletButton } from "@/ui/PrivyWalletButton";
@@ -174,6 +175,7 @@ export function TradingMarketHeader({
   } = useMarketSelectorPreferences(validMarketIds, marketSelectionAliases);
   const normalizedSearch = marketSearch.trim().toLowerCase();
   const selectedInstrument = getSelectedInstrumentDisplay(selectedMarket);
+  const selectedMarketTokenIcons = getMarketTokenIcons(selectedMarket.pair);
   const matchingMarkets = marketOptions
     .filter((market) => {
     const matchesPrimary =
@@ -407,12 +409,25 @@ export function TradingMarketHeader({
                 onClick={openMarketSearch}
                 type="button"
               >
-                <SmartImage<string>
-                  alt="NG"
-                  className="h-3.5 w-5 shrink-0 overflow-hidden rounded-[2px]"
-                  imgClassName="object-cover"
-                  src="/flags/ng.svg"
-                />
+                {selectedMarketTokenIcons.length > 0 ? (
+                  <span className="flex shrink-0 items-center -space-x-1">
+                    {selectedMarketTokenIcons.map((tokenIcon) => (
+                      <SmartImage<string>
+                        alt={tokenIcon.symbol}
+                        className="size-5.5 overflow-hidden rounded-full border border-[#1B2430] bg-white"
+                        key={tokenIcon.symbol}
+                        src={tokenIcon.src}
+                      />
+                    ))}
+                  </span>
+                ) : (
+                  <SmartImage<string>
+                    alt="NG"
+                    className="h-3.5 w-5 shrink-0 overflow-hidden rounded-[2px]"
+                    imgClassName="object-cover"
+                    src={selectedMarket.flagSrc}
+                  />
+                )}
                 <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
                   <span className="truncate font-semibold text-[#E5ECF5] text-[13px] leading-none">
                     {selectedInstrument.pairLabel}
