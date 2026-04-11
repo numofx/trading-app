@@ -34,9 +34,13 @@ function getDirectionCopy(isSpotUSDIntent: boolean, isLong: boolean) {
   return isLong ? "Buy cNGN / sell USDC" : "Sell cNGN / buy USDC";
 }
 
-function getSubmitLabel(isSubmitting: boolean, isSpotUSDIntent: boolean, isLong: boolean) {
+function getSubmitLabel(isSubmitting: boolean, isSpotUSDIntent: boolean, isLong: boolean, isFXFuture: boolean) {
   if (isSubmitting) {
     return "Submitting...";
+  }
+
+  if (isFXFuture) {
+    return isLong ? "Buy USD" : "Sell USD";
   }
 
   if (isSpotUSDIntent) {
@@ -57,15 +61,15 @@ export function OrderEntryPanel({
   isSubmitDisabled,
   isSpotUSDIntent,
   lastAction,
-  liquidationPrice,
-  liquidationTone,
   limitPrice,
   orderSummaryRows,
   orderType,
   pnl,
   positionOverview,
   exposureLabel,
+  isFXFuture,
   postOnly,
+  positionBuilderRows,
   returnLabel,
   returnValue,
   size,
@@ -92,15 +96,15 @@ export function OrderEntryPanel({
   isSubmitDisabled?: boolean;
   isSpotUSDIntent: boolean;
   lastAction: string;
-  liquidationPrice: string;
-  liquidationTone: "safe" | "tight" | "danger" | "neutral";
   limitPrice: string;
   orderSummaryRows: DeliveryTerm[];
   orderType: "Limit" | "Market" | "Stop";
   pnl: string;
   positionOverview: DeliveryTerm[];
   exposureLabel: string;
+  isFXFuture: boolean;
   postOnly: boolean;
+  positionBuilderRows: DeliveryTerm[];
   returnLabel: string;
   returnValue: string;
   size: string;
@@ -122,20 +126,23 @@ export function OrderEntryPanel({
   const [sizeCurrencyPickerOpen, setSizeCurrencyPickerOpen] = useState(false);
   const isLong = orderSide === "buy";
   const needsLimitPrice = orderType !== "Market";
-  const directionCopy = getDirectionCopy(isSpotUSDIntent, isLong);
-  const submitLabel = getSubmitLabel(Boolean(isSubmitting), isSpotUSDIntent, isLong);
+  let directionCopy = getDirectionCopy(isSpotUSDIntent, isLong);
+  if (isFXFuture) {
+    directionCopy = isLong
+      ? "Buy USD (Sell cNGN)"
+      : "Sell USD (Buy cNGN)";
+  }
+  const submitLabel = getSubmitLabel(Boolean(isSubmitting), isSpotUSDIntent, isLong, isFXFuture);
+  let buyDirectionLabel = isSpotUSDIntent ? "Buy" : "Long";
+  let sellDirectionLabel = isSpotUSDIntent ? "Sell" : "Short";
+  if (isFXFuture) {
+    buyDirectionLabel = "Buy USD (Sell cNGN)";
+    sellDirectionLabel = "Sell USD (Buy cNGN)";
+  }
   const activeSpotSizeCurrency = spotSizeCurrency ?? "USDC";
   const isNegativePnl = pnl.startsWith("-");
   const isNegativeReturn = returnValue.startsWith("-");
   let sizeLabel = "Size";
-  let liquidationToneClasses = "border-white/6 bg-white/[0.025] text-[#D7DEE8]";
-  if (liquidationTone === "safe") {
-    liquidationToneClasses = "border-[#214C3A] bg-[#101B16] text-[#7EE2AA]";
-  } else if (liquidationTone === "tight") {
-    liquidationToneClasses = "border-[#5C531F] bg-[#1E1A0F] text-[#F5D36B]";
-  } else if (liquidationTone === "danger") {
-    liquidationToneClasses = "border-[#6A2B2B] bg-[#201112] text-[#F2A6A6]";
-  }
   let sizePlaceholder = "5";
 
   if (isSpotUSDIntent) {
@@ -161,7 +168,7 @@ export function OrderEntryPanel({
               onClick={() => onSideChange("buy")}
               type="button"
             >
-              <span className="block font-semibold text-[12px] leading-none">{isSpotUSDIntent ? "Buy" : "Long"}</span>
+              <span className="block font-semibold text-[12px] leading-none">{buyDirectionLabel}</span>
             </button>
             <button
               className={cn(
@@ -173,7 +180,7 @@ export function OrderEntryPanel({
               onClick={() => onSideChange("sell")}
               type="button"
             >
-              <span className="block font-semibold text-[12px] leading-none">{isSpotUSDIntent ? "Sell" : "Short"}</span>
+              <span className="block font-semibold text-[12px] leading-none">{sellDirectionLabel}</span>
             </button>
           </div>
         </section>
@@ -309,12 +316,14 @@ export function OrderEntryPanel({
           </div>
         </section>
 
-        {isSpotUSDIntent ? null : (
-          <section className={cn("rounded-[16px] border px-3 py-2.5", liquidationToneClasses)}>
-            <div className="text-[9px] uppercase tracking-[0.18em] opacity-75">Liquidation Price</div>
-            <div className="mt-1 font-semibold text-[15px] leading-none">{liquidationPrice}</div>
+        {positionBuilderRows.length > 0 ? (
+          <section className="space-y-2 rounded-[16px] border border-[#2A3B51] bg-[#101823] px-3 py-2.5">
+            <div className="text-[#8FA4BE] text-[9px] uppercase tracking-[0.18em]">Position Builder</div>
+            {positionBuilderRows.map((item) => (
+              <LabelValueRow key={item.label} label={item.label} value={item.value} />
+            ))}
           </section>
-        )}
+        ) : null}
 
         <button
           className={cn(

@@ -241,7 +241,7 @@ export const DEFAULT_SYMBOL = "USDCcNGN";
 export const DEFAULT_CONTRACT = "";
 export const DEFAULT_TIMEFRAME = "1h";
 export const DEFAULT_ORDER_TYPE = "Market";
-export const DEFAULT_CHART_CONTEXT = "Price";
+export const DEFAULT_CHART_CONTEXT = "Basis";
 export const DEFAULT_BOTTOM_TAB = "positions";
 export const DEFAULT_FILTER = "All";
 
@@ -904,7 +904,7 @@ export const FOOTER_LINKS = [
 ] as const;
 
 export const CHART_RANGE_BUTTONS = ["5y", "1y", "6m", "3m", "1m", "5d", "1d"] as const;
-export const CHART_CONTEXT_TABS = ["Price", "Spot", "Basis"] as const;
+export const CHART_CONTEXT_TABS = ["Basis", "Carry", "Price"] as const;
 export const TIMEFRAME_OPTIONS = ["5m", "1h", "D"] as const;
 
 export const CHART_TOOLS = [

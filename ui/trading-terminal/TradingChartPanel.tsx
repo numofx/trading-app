@@ -306,6 +306,13 @@ export function TradingChartPanel({
   onTimeframeChange: (timeframe: (typeof TIMEFRAME_OPTIONS)[number]) => void;
   onToolSelect: (toolId: string) => void;
 }) {
+  let chartContextDescription = "Price view: cNGN per USDC";
+  if (chartContext === "Basis") {
+    chartContextDescription = "Basis view: futures minus spot in cNGN";
+  } else if (chartContext === "Carry") {
+    chartContextDescription = "Carry view: annualized basis (%)";
+  }
+
   return (
     <section className="flex h-full min-h-[320px] flex-col overflow-hidden rounded-[22px] bg-[#0C141E]/95 shadow-[0_18px_60px_rgba(0,0,0,0.28)] ring-1 ring-white/6 xl:min-h-0">
       <TradingChartToolbar
@@ -352,7 +359,7 @@ export function TradingChartPanel({
               ))}
             </div>
             <div className="text-[#5F6D80] text-[9px]">
-              {chartContext === "Basis" ? "Basis view: mark minus spot in cNGN" : "Price view: cNGN per USDC"}
+              {chartContextDescription}
             </div>
           </div>
 

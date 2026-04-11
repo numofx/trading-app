@@ -143,6 +143,12 @@ function getDirectionalLabel(orderSide: "buy" | "sell", marketDefinition: Market
     return orderSide === "buy" ? "Buy USDC" : "Sell USDC";
   }
 
+  if (marketDefinition.type === "future" && formatFxDisplayPair(marketDefinition.pair) === "USDC/cNGN") {
+    return orderSide === "buy"
+      ? "Long USD / Short cNGN"
+      : "Short USD / Long cNGN";
+  }
+
   const [base] = formatFxDisplayPair(marketDefinition.pair).split("/");
 
   if (!base) {
@@ -300,17 +306,13 @@ function getChartUpdateInterval(timeframe: (typeof TIMEFRAME_OPTIONS)[number]) {
 function getDisplayCandles(
   chartContext: (typeof CHART_CONTEXT_TABS)[number],
   liveBasis: number | null,
-  liveIndex: number,
+  liveCarry: number | null,
   marketCandles: Candle[],
   marketType: MarketDefinition["type"],
   selectedSpotHistory: SpotHistorySnapshot | null,
 ) {
   if (marketType === "spot" && selectedSpotHistory?.series) {
     return selectedSpotHistory.series;
-  }
-
-  if (chartContext === "Spot") {
-    return shiftCandles(marketCandles, liveIndex);
   }
 
   if (chartContext === "Basis") {
@@ -321,7 +323,23 @@ function getDisplayCandles(
     return shiftCandles(marketCandles, liveBasis);
   }
 
+  if (chartContext === "Carry") {
+    if (liveCarry === null) {
+      return marketCandles;
+    }
+
+    return shiftCandles(marketCandles, liveCarry);
+  }
+
   return marketCandles;
+}
+
+function getDefaultChartContextForMarket(marketDefinition: MarketDefinition) {
+  if (marketDefinition.type === "spot") {
+    return "Price" as const;
+  }
+
+  return DEFAULT_CHART_CONTEXT;
 }
 
 function getNextCandleTimeLabel(currentLabel: string) {
@@ -702,12 +720,14 @@ function getOrderSummaryRows({
   fees,
   initialMargin,
   isSpotUSDIntent,
+  liquidationPrice,
 }: {
   contracts: number;
   estimatedFill: number | null;
   fees: number;
   initialMargin: number;
   isSpotUSDIntent: boolean;
+  liquidationPrice: number | null;
 }) {
   if (isSpotUSDIntent) {
     const quoteAmount = estimatedFill !== null && Number.isFinite(estimatedFill) ? contracts * estimatedFill : Number.NaN;
@@ -718,12 +738,27 @@ function getOrderSummaryRows({
   }
 
   const orderValue = estimatedFill !== null && Number.isFinite(estimatedFill) ? contracts * estimatedFill : 0;
+  const liquidationDistancePercent = getLiquidationBufferPercent(estimatedFill, liquidationPrice);
+  let liquidationDistanceLabel = "—";
+
+  if (
+    liquidationDistancePercent !== null &&
+    estimatedFill !== null &&
+    liquidationPrice !== null &&
+    Number.isFinite(estimatedFill) &&
+    Number.isFinite(liquidationPrice)
+  ) {
+    const direction = liquidationPrice < estimatedFill ? "below mark" : "above mark";
+    liquidationDistanceLabel = `${liquidationDistancePercent.toFixed(1)}% ${direction}`;
+  }
 
   return [
     { label: "Notional", value: `${orderValue.toLocaleString("en-US", { maximumFractionDigits: 0 })} cNGN` },
     { label: "Margin Required", value: `$${initialMargin.toLocaleString("en-US", { maximumFractionDigits: 0 })}` },
-    { label: "Fill Price", value: formatPriceDisplay(estimatedFill) },
+    { label: "Est. Fill Price", value: formatPriceDisplay(estimatedFill) },
     { label: "Fees", value: `$${fees.toLocaleString("en-US", { maximumFractionDigits: 2 })}` },
+    { label: "Liquidation Price", value: formatPriceDisplay(liquidationPrice) },
+    { label: "Est. Distance to Liquidation", value: liquidationDistanceLabel },
   ] satisfies DeliveryTerm[];
 }
 
@@ -746,7 +781,7 @@ function getAdvancedSummaryRows({
   ] satisfies DeliveryTerm[];
 }
 
-function getLiquidationTone(estimatedFill: number | null, liquidationPrice: number | null) {
+function getLiquidationBufferPercent(estimatedFill: number | null, liquidationPrice: number | null) {
   if (
     estimatedFill === null ||
     liquidationPrice === null ||
@@ -754,19 +789,95 @@ function getLiquidationTone(estimatedFill: number | null, liquidationPrice: numb
     !Number.isFinite(liquidationPrice) ||
     estimatedFill <= 0
   ) {
-    return "neutral" as const;
+    return null;
   }
 
-  const distancePercent = (Math.abs(estimatedFill - liquidationPrice) / estimatedFill) * 100;
-  if (distancePercent <= 2) {
-    return "danger" as const;
+  return (Math.abs(estimatedFill - liquidationPrice) / estimatedFill) * 100;
+}
+
+function formatSignedAssetAmount(value: number | null, asset: string, maximumFractionDigits = 0) {
+  if (value === null || !Number.isFinite(value)) {
+    return "—";
   }
 
-  if (distancePercent <= 5) {
-    return "tight" as const;
+  const absoluteValue = Math.abs(value);
+  const formatted = formatAssetAmount(absoluteValue, asset, maximumFractionDigits);
+
+  if (value > 0) {
+    return `+${formatted}`;
   }
 
-  return "safe" as const;
+  if (value < 0) {
+    return `-${formatted}`;
+  }
+
+  return formatted;
+}
+
+function getSlippageEstimate(
+  averageExecution: number | null,
+  estimatedFill: number | null,
+  orderType: "Limit" | "Market" | "Stop",
+) {
+  if (
+    orderType !== "Market" ||
+    averageExecution === null ||
+    estimatedFill === null ||
+    !Number.isFinite(averageExecution) ||
+    !Number.isFinite(estimatedFill) ||
+    estimatedFill <= 0
+  ) {
+    return "0.00% / max 0.25%";
+  }
+
+  const slippagePercent = (Math.abs(averageExecution - estimatedFill) / estimatedFill) * 100;
+  return `${slippagePercent.toFixed(2)}% / max 0.25%`;
+}
+
+function getPositionBuilderRows({
+  contracts,
+  estimatedFill,
+  liquidationPrice,
+  liveSpotPrice,
+  marketDefinition,
+  orderSide,
+}: {
+  contracts: number;
+  estimatedFill: number | null;
+  liquidationPrice: number | null;
+  liveSpotPrice: number;
+  marketDefinition: MarketDefinition;
+  orderSide: "buy" | "sell";
+}) {
+  if (marketDefinition.type !== "future") {
+    return [] satisfies DeliveryTerm[];
+  }
+
+  const safeContracts = Number.isFinite(contracts) ? contracts : 0;
+  const safeEstimatedFill =
+    estimatedFill !== null && Number.isFinite(estimatedFill) ? estimatedFill : null;
+  const directionMultiplier = orderSide === "buy" ? 1 : -1;
+  const expiryPnl =
+    safeEstimatedFill === null
+      ? null
+      : (liveSpotPrice - safeEstimatedFill) * safeContracts * directionMultiplier;
+  const annualizedCarry =
+    safeEstimatedFill === null || !marketDefinition.expiryDays || marketDefinition.expiryDays <= 0
+      ? null
+      : ((liveSpotPrice - safeEstimatedFill) / safeEstimatedFill) *
+          (365 / marketDefinition.expiryDays) *
+          100 *
+          directionMultiplier;
+  const liquidationBufferPercent = getLiquidationBufferPercent(
+    safeEstimatedFill,
+    liquidationPrice,
+  );
+
+  return [
+    { label: "Est. PnL @ Expiry", value: formatSignedAssetAmount(expiryPnl, "cNGN", 0) },
+    { label: "Carry Earned (annualized)", value: formatSignedPercent(annualizedCarry) },
+    { label: "Liquidation Buffer (% move)", value: formatSignedPercent(liquidationBufferPercent) },
+  ] satisfies DeliveryTerm[];
 }
 
 function getOrderMetrics(
@@ -983,10 +1094,11 @@ export function OrderBookTradingTerminal({
     selectorLastByMarketId,
     spotChangeByMarketId,
   } = buildSelectorMetrics(liveSpotPrice, marketDefinitions, marketData);
+  const liveCarry = selectorAnnualizedBasisByMarketId[selectedMarket.id] ?? null;
   const displayCandles = getDisplayCandles(
     chartContext,
     liveBasis,
-    liveSpotPrice,
+    liveCarry,
     market.candles,
     selectedMarket.type,
     selectedSpotHistory,
@@ -1040,13 +1152,22 @@ export function OrderBookTradingTerminal({
     fees,
     initialMargin,
     isSpotUSDIntent: isUSDCCNGNSpotMarket(selectedMarket),
+    liquidationPrice,
   });
   const advancedSummaryRows = getAdvancedSummaryRows({
     averageExecution,
     buyingPower: "$250,000",
     isSpotUSDIntent: isUSDCCNGNSpotMarket(selectedMarket),
   });
-  const liquidationTone = isUSDCCNGNSpotMarket(selectedMarket) ? "neutral" : getLiquidationTone(estimatedFill, liquidationPrice);
+  const positionBuilderRows = getPositionBuilderRows({
+    contracts: isUSDCCNGNSpotMarket(selectedMarket) ? canonicalSpotSize : Number(effectiveSize || "0"),
+    estimatedFill,
+    liquidationPrice,
+    liveSpotPrice,
+    marketDefinition: selectedMarket,
+    orderSide,
+  });
+  const slippageEstimate = getSlippageEstimate(averageExecution, estimatedFill, orderType);
   const marketDiagnostics = {
     asksCount: market.orderBookAsks.length,
     bidsCount: market.orderBookBids.length,
@@ -1101,7 +1222,7 @@ export function OrderBookTradingTerminal({
 
     setSelectedMarketId(resolution.selectedMarketId);
     setSelectedContract(nextMarket.contractLabel ?? getDefaultContractForMarket(nextMarket));
-    setChartContext(nextMarket.type === "spot" ? "Spot" : DEFAULT_CHART_CONTEXT);
+    setChartContext(getDefaultChartContextForMarket(nextMarket));
     setLimitPrice(getRenderablePriceInput(marketData[resolution.selectedMarketId].mark));
     markSelectionHydrated();
   }, [defaultMarketId, hasHydratedSelection, marketData, marketDefinitions, requestedMarketParam]);
@@ -1144,13 +1265,13 @@ export function OrderBookTradingTerminal({
       getDisplayCandles(
         chartContext,
         liveBasis,
-        liveSpotPrice,
+        liveCarry,
         market.candles,
         selectedMarket.type,
         selectedSpotHistory,
       ),
     );
-  }, [candleResetKey, chartContext, liveBasis, liveSpotPrice, market.candles, selectedMarket.type, selectedSpotHistory]);
+  }, [candleResetKey, chartContext, liveBasis, liveCarry, liveSpotPrice, market.candles, selectedMarket.type, selectedSpotHistory]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -1171,7 +1292,7 @@ export function OrderBookTradingTerminal({
 
       setSelectedContract(contract);
       setSelectedMarketId(nextMarketId);
-      setChartContext(DEFAULT_CHART_CONTEXT);
+      setChartContext(getDefaultChartContextForMarket(selectedMarket));
       setLimitPrice(getRenderablePriceInput(marketData[nextMarketId].mark));
       setLastAction(`Switched to ${formatFxDisplayPair(selectedMarket.pair)} ${getProductDisplayName(selectedMarket.type)} ${contract}`);
     });
@@ -1191,7 +1312,7 @@ export function OrderBookTradingTerminal({
       } else {
         setSelectedContract(getDefaultContractForMarket(nextMarket));
       }
-      setChartContext(nextMarket.type === "spot" ? "Spot" : DEFAULT_CHART_CONTEXT);
+      setChartContext(getDefaultChartContextForMarket(nextMarket));
       setLimitPrice(getRenderablePriceInput(marketData[marketId as MarketId].mark));
       setLastAction(`Switched to ${getDisplayTicker(nextMarket)}`);
     });
@@ -1410,20 +1531,20 @@ export function OrderBookTradingTerminal({
               isSubmitting={isSubmittingOrder || isResolvingTradingSubaccount}
               isSpotUSDIntent={isUSDCCNGNSpotMarket(selectedMarket)}
               lastAction={lastAction}
-              liquidationPrice={formatPriceDisplay(liquidationPrice)}
-              liquidationTone={liquidationTone}
               limitPrice={limitPrice}
               orderSummaryRows={orderSummaryRows}
               orderType={orderType}
               pnl={unrealizedPnl}
               positionOverview={positionOverview}
               exposureLabel={exposureLabel}
+              isFXFuture={selectedMarket.type === "future" && formatFxDisplayPair(selectedMarket.pair) === "USDC/cNGN"}
               postOnly={postOnly}
+              positionBuilderRows={positionBuilderRows}
               returnLabel={returnLabel}
               returnValue={returnValue}
               size={size}
               spotSizeCurrency={spotSizeCurrency}
-              slippageEstimate="0.01% / max 0.25%"
+              slippageEstimate={slippageEstimate}
               futureSizeUnit={selectedMarket.type === "future" ? "USDC" : undefined}
               orderSide={orderSide}
               onAllocationChange={setAllocation}
