@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import type { ConnectedWallet } from "@privy-io/react-auth";
-import { base } from "viem/chains";
+import { baseSepolia } from "viem/chains";
 import { createPublicClient, createWalletClient, custom, decodeEventLog, getAddress, http, parseAbiItem } from "viem";
 
-const DEFAULT_BASE_RPC_URL = "https://mainnet.base.org";
-const DEFAULT_CHAIN_ID = 8453;
+const DEFAULT_BASE_RPC_URL = "https://sepolia.base.org";
+const DEFAULT_CHAIN_ID = 84_532;
 const DEFAULT_MATCHING_ADDRESS = "0xe4c2a55401F73A540CA6e1C43067Aa7164f89088";
 const DEFAULT_SUBACCOUNT_CREATOR_ADDRESS = "0x5448B304AD283f24A741B54AE9b3a71C8d7DCDF2";
 const DEFAULT_USDCCNGN_MANAGER_ADDRESS = "0x0777C37C3925666474C77f5907E3805177705543";
@@ -32,6 +32,10 @@ function getMatchingChainId() {
     throw new Error("NEXT_PUBLIC_MATCHING_CHAIN_ID must be a positive integer");
   }
 
+  if (parsedChainId !== DEFAULT_CHAIN_ID) {
+    throw new Error(`NEXT_PUBLIC_MATCHING_CHAIN_ID must be ${DEFAULT_CHAIN_ID} (Base Sepolia)`);
+  }
+
   return parsedChainId;
 }
 
@@ -55,7 +59,7 @@ function getUSDCDeliverableBaseAssetAddress() {
 
 function createBasePublicClient() {
   return createPublicClient({
-    chain: base,
+    chain: baseSepolia,
     transport: http(getBaseRpcUrl()),
   });
 }
@@ -98,7 +102,7 @@ async function createTradingSubaccount(wallet: ConnectedWallet) {
 
   const provider = await wallet.getEthereumProvider();
   const walletClient = createWalletClient({
-    chain: base,
+    chain: baseSepolia,
     transport: custom(provider),
   });
   const [account] = await walletClient.getAddresses();

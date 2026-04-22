@@ -1,6 +1,6 @@
 import "server-only";
 
-const BASE_MAINNET_RPC_URL = "https://mainnet.base.org";
+const DEFAULT_BASE_SEPOLIA_RPC_URL = "https://sepolia.base.org";
 const CHAINLINK_NGN_USD_FEED_ADDRESS = "0xdfbb5Cbc88E382de007bfe6CE99C388176ED80aD";
 const DECIMALS_SELECTOR = "0x313ce567";
 const LATEST_ROUND_DATA_SELECTOR = "0xfeaf968c";
@@ -14,7 +14,7 @@ export type ChainlinkSpotSnapshot = {
 };
 
 async function callBaseRpc(data: string) {
-  const response = await fetch(BASE_MAINNET_RPC_URL, {
+  const response = await fetch(process.env.NEXT_PUBLIC_BASE_RPC_URL?.trim() || DEFAULT_BASE_SEPOLIA_RPC_URL, {
     body: JSON.stringify({
       id: 1,
       jsonrpc: "2.0",
@@ -92,7 +92,7 @@ export async function getChainlinkNgnUsdSpot(): Promise<ChainlinkSpotSnapshot> {
 
   return {
     contractAddress: CHAINLINK_NGN_USD_FEED_ADDRESS,
-    feedUrl: "https://data.chain.link/feeds/base/base/ngn-usd",
+    feedUrl: "https://data.chain.link/feeds/base-sepolia/base/ngn-usd",
     pair: "NGN/USD",
     priceNgnPerUsd: invertNgnUsdToNgnPerUsd(answer, decimals),
     updatedAt: updatedAt > 0 ? updatedAt : null,

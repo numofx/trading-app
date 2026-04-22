@@ -2,7 +2,7 @@ import { encodeAbiParameters, getAddress, parseUnits } from "viem";
 import type { MarketDefinition } from "@/lib/trading.types";
 import { isUSDCCNGNSpotMarket } from "@/lib/usdccngn-spot-order";
 
-const DEFAULT_MATCHING_CHAIN_ID = 8453;
+const DEFAULT_MATCHING_CHAIN_ID = 84_532;
 const DEFAULT_MATCHING_ADDRESS = "0xe4c2a55401F73A540CA6e1C43067Aa7164f89088";
 const DEFAULT_TRADE_MODULE_ADDRESS = "0x5fba217bFf9DfE7EDaD333972866DbA83c50B0f2";
 const SPOT_ORDER_ENTRY_SPEC = "usdc_cngn_spot_v1";
@@ -168,6 +168,10 @@ function getMatchingChainId() {
 
   if (!Number.isInteger(parsedChainId) || parsedChainId <= 0) {
     throw new Error("NEXT_PUBLIC_MATCHING_CHAIN_ID must be a positive integer");
+  }
+
+  if (parsedChainId !== DEFAULT_MATCHING_CHAIN_ID) {
+    throw new Error(`NEXT_PUBLIC_MATCHING_CHAIN_ID must be ${DEFAULT_MATCHING_CHAIN_ID} (Base Sepolia)`);
   }
 
   return parsedChainId;
