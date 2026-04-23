@@ -33,10 +33,22 @@ For the current Base staging deployment, `markets-service` should expose:
 - `sub_id=0`
 - `contract_type=spot`
 - `settlement_type=spot`
-- `asset_address=0x752803d72c1835cdcd300C7fDE6c7D7d2F12E679`
+- `asset_address=0xCE2846771074E20fEc739CF97a60E6075D1E464b`
 - `sub_id=1777507200`
 - `contract_type=deliverable_fx_future`
 - `settlement_type=physical_delivery`
+
+For Base Sepolia frontend execution, the matching stack env should point to deployed contracts:
+
+- `NEXT_PUBLIC_MATCHING_ADDRESS=0x1599636347FD5bA1fBE21D58AfE0b8B9cbe283FF`
+- `NEXT_PUBLIC_TRADE_MODULE_ADDRESS=0x0AAE65AaA66Fe7f54486cDbD007956d3De611990`
+- `NEXT_PUBLIC_USDCCNGN_MANAGER_ADDRESS=0x1917960763BF3a0DfA10a05f0a112E828C1A934f`
+- `NEXT_PUBLIC_USDC_DELIVERABLE_BASE_ASSET_ADDRESS=0x8b3C43D2b2555ca3fc4Fa1BC34544133B8576110`
+
+If `markets-service` serves stale APR market metadata, override it in the frontend:
+
+- `NEXT_PUBLIC_USDCCNGN_APR_FUTURE_ASSET_ADDRESS=0xCE2846771074E20fEc739CF97a60E6075D1E464b`
+- `NEXT_PUBLIC_USDCCNGN_APR_FUTURE_SUB_ID=1777507200`
 
 If the frontend is deployed on Railway, encode `MARKETS_SERVICE_URL` in that deploy environment and treat it as required production configuration rather than tribal knowledge.
 

@@ -21,6 +21,34 @@ import {
 } from "@/lib/mock-orderbook-terminal-data";
 import { OrderBookTradingTerminal } from "@/ui/trading-terminal/OrderBookTradingTerminal";
 
+const APR_2026_EXPIRY_TIMESTAMP = 1_777_507_200;
+const ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
+const UNSIGNED_INTEGER_PATTERN = /^\d+$/;
+
+function getAprFutureOverrides() {
+  const assetAddress = process.env.NEXT_PUBLIC_USDCCNGN_APR_FUTURE_ASSET_ADDRESS?.trim() ?? "";
+  const subId = process.env.NEXT_PUBLIC_USDCCNGN_APR_FUTURE_SUB_ID?.trim() ?? "";
+
+  return {
+    assetAddress: ADDRESS_PATTERN.test(assetAddress) ? assetAddress : null,
+    subId: UNSIGNED_INTEGER_PATTERN.test(subId) ? subId : null,
+  };
+}
+
+function applyAprFutureOverrides<T extends { asset_address?: string; expiry_timestamp?: number; sub_id?: string }>(market: T) {
+  if (market.expiry_timestamp !== APR_2026_EXPIRY_TIMESTAMP) {
+    return market;
+  }
+
+  const overrides = getAprFutureOverrides();
+
+  return {
+    ...market,
+    asset_address: overrides.assetAddress ?? market.asset_address,
+    sub_id: overrides.subId ?? market.sub_id,
+  };
+}
+
 type HomeProps = {
   searchParams?: Promise<{
     market?: string | string[];
@@ -92,7 +120,7 @@ export default async function Home({ searchParams }: HomeProps) {
 
   try {
     const liveFutureMarkets = await getLiveDeliverableFXFutures();
-    const validLiveFutures = liveFutureMarkets.filter((market) => {
+    const validLiveFutures = liveFutureMarkets.map(applyAprFutureOverrides).filter((market) => {
       return Boolean(market.asset_address && market.sub_id && market.expiry_timestamp);
     });
 

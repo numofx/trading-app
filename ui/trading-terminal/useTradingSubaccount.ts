@@ -7,10 +7,11 @@ import { createPublicClient, createWalletClient, custom, decodeEventLog, getAddr
 
 const DEFAULT_BASE_RPC_URL = "https://sepolia.base.org";
 const DEFAULT_CHAIN_ID = 84_532;
-const DEFAULT_MATCHING_ADDRESS = "0xe4c2a55401F73A540CA6e1C43067Aa7164f89088";
+const DEFAULT_MATCHING_ADDRESS = "0x1599636347FD5bA1fBE21D58AfE0b8B9cbe283FF";
+const DEFAULT_TRADE_MODULE_ADDRESS = "0x0AAE65AaA66Fe7f54486cDbD007956d3De611990";
 const DEFAULT_SUBACCOUNT_CREATOR_ADDRESS = "0x5448B304AD283f24A741B54AE9b3a71C8d7DCDF2";
-const DEFAULT_USDCCNGN_MANAGER_ADDRESS = "0x0777C37C3925666474C77f5907E3805177705543";
-const DEFAULT_USDC_DELIVERABLE_BASE_ASSET_ADDRESS = "0x25b77602a493ec8fe2155b8E82be8Bc447c955c5";
+const DEFAULT_USDCCNGN_MANAGER_ADDRESS = "0x1917960763BF3a0DfA10a05f0a112E828C1A934f";
+const DEFAULT_USDC_DELIVERABLE_BASE_ASSET_ADDRESS = "0x8b3C43D2b2555ca3fc4Fa1BC34544133B8576110";
 const LOG_QUERY_BLOCK_RANGE = 10_000n;
 
 const depositedSubAccountEvent = parseAbiItem("event DepositedSubAccount(uint indexed accountId, address indexed owner)");
@@ -45,6 +46,10 @@ function getMatchingAddress() {
 
 function getSubaccountCreatorAddress() {
   return getAddress(process.env.NEXT_PUBLIC_SUBACCOUNT_CREATOR_ADDRESS?.trim() || DEFAULT_SUBACCOUNT_CREATOR_ADDRESS);
+}
+
+function getTradeModuleAddress() {
+  return getAddress(process.env.NEXT_PUBLIC_TRADE_MODULE_ADDRESS?.trim() || DEFAULT_TRADE_MODULE_ADDRESS);
 }
 
 function getUSDCCNGNManagerAddress() {
@@ -111,27 +116,45 @@ async function createTradingSubaccount(wallet: ConnectedWallet) {
     throw new Error("Connected wallet address unavailable");
   }
 
-  const hash = await walletClient.writeContract({
-    abi: [
-      {
-        inputs: [
-          { name: "baseAsset", type: "address" },
-          { name: "initDeposit", type: "uint256" },
-          { name: "manager", type: "address" },
-        ],
-        name: "createAndDepositSubAccount",
-        outputs: [{ name: "accountId", type: "uint256" }],
-        stateMutability: "nonpayable",
-        type: "function",
-      },
-    ],
-    account,
-    address: getSubaccountCreatorAddress(),
-    args: [getUSDCDeliverableBaseAssetAddress(), 0n, getUSDCCNGNManagerAddress()],
-    functionName: "createAndDepositSubAccount",
+  const publicClient = createBasePublicClient();
+  const subaccountCreatorAddress = getSubaccountCreatorAddress();
+  const creatorCode = await publicClient.getCode({
+    address: subaccountCreatorAddress,
   });
 
-  const publicClient = createBasePublicClient();
+  const shouldFallbackToMatching = creatorCode === undefined || creatorCode === "0x";
+  const hash = await walletClient.writeContract({
+    abi: shouldFallbackToMatching
+      ? [
+          {
+            inputs: [{ name: "module", type: "address" }],
+            name: "createSubAccount",
+            outputs: [{ name: "accountId", type: "uint256" }],
+            stateMutability: "nonpayable",
+            type: "function",
+          },
+        ]
+      : [
+          {
+            inputs: [
+              { name: "baseAsset", type: "address" },
+              { name: "initDeposit", type: "uint256" },
+              { name: "manager", type: "address" },
+            ],
+            name: "createAndDepositSubAccount",
+            outputs: [{ name: "accountId", type: "uint256" }],
+            stateMutability: "nonpayable",
+            type: "function",
+          },
+        ],
+    account,
+    address: shouldFallbackToMatching ? getMatchingAddress() : subaccountCreatorAddress,
+    args: shouldFallbackToMatching
+      ? [getTradeModuleAddress()]
+      : [getUSDCDeliverableBaseAssetAddress(), 0n, getUSDCCNGNManagerAddress()],
+    functionName: shouldFallbackToMatching ? "createSubAccount" : "createAndDepositSubAccount",
+  });
+
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
   const matchingAddress = getMatchingAddress();
 
