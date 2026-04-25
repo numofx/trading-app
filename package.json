@@ -44,6 +44,7 @@
   },
   "scripts": {
     "build": "next build",
-    "prepare": "husky"
+    "prepare": "husky",
+    "start": "next start"
   }
 }
