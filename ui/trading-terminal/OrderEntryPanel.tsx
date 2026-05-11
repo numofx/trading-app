@@ -1,10 +1,12 @@
 "use client";
 
 import { Popover } from "@base-ui/react/popover";
-import { ChevronDown, ChevronUp, Info } from "lucide-react";
+import { ChevronDown, ChevronUp, Info, Minus, Plus } from "lucide-react";
 import { useState } from "react";
 import type { DeliveryTerm } from "@/lib/trading.types";
 import { cn } from "@/lib/cn";
+
+const FUTURE_LEVERAGE_OPTIONS = [1, 2, 5, 10, 20] as const;
 
 function LabelValueRow({ label, value }: { label: string; value: string }) {
   const isNegative = value.startsWith("-");
@@ -48,6 +50,35 @@ function getSubmitLabel(isSubmitting: boolean, isSpotUSDIntent: boolean, isLong:
   }
 
   return isLong ? "Long cNGN" : "Short cNGN";
+}
+
+function parseDisplayNumber(value: string) {
+  const parsed = Number(value.replaceAll(",", "").replaceAll("$", "").replaceAll("₦", "").replaceAll("cNGN", "").replaceAll("USDC", ""));
+
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
+function formatCompactAmount(value: number, unit: string, maximumFractionDigits = 0) {
+  if (!Number.isFinite(value)) {
+    return `— ${unit}`;
+  }
+
+  return `${value.toLocaleString("en-US", {
+    maximumFractionDigits,
+    minimumFractionDigits: maximumFractionDigits > 0 ? 1 : 0,
+  })} ${unit}`;
+}
+
+function formatFutureRate(value: number) {
+  if (!Number.isFinite(value)) {
+    return "— / USDC";
+  }
+
+  return `₦${value.toLocaleString("en-US", { maximumFractionDigits: 0 })} / USDC`;
+}
+
+function getSummaryRowValue(rows: DeliveryTerm[], label: string) {
+  return rows.find((row) => row.label === label)?.value ?? null;
 }
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This panel intentionally coordinates several dense trading UI sections.
@@ -148,6 +179,172 @@ export function OrderEntryPanel({
     sizePlaceholder = activeSpotSizeCurrency === "USDC" ? "100" : "160,000";
   } else if (futureSizeUnit) {
     sizeLabel = `Size (${futureSizeUnit})`;
+  }
+
+  if (isFXFuture) {
+    const leverage = FUTURE_LEVERAGE_OPTIONS.includes(allocation as (typeof FUTURE_LEVERAGE_OPTIONS)[number])
+      ? allocation
+      : 10;
+    const amount = Number(size || "0");
+    const displayedAmount = Number.isFinite(amount) ? amount : 0;
+    const fallbackRate = parseDisplayNumber(limitPrice);
+    const summaryRate = parseDisplayNumber(getSummaryRowValue(orderSummaryRows, "Est. Fill Price") ?? "");
+    const forwardRate = Number.isFinite(fallbackRate) ? fallbackRate : summaryRate;
+    const totalNotional = Number.isFinite(forwardRate) ? displayedAmount * forwardRate : Number.NaN;
+    const initialMargin = displayedAmount / leverage;
+    const maintenanceMargin = initialMargin / 2;
+    const summaryLiquidationPrice = parseDisplayNumber(getSummaryRowValue(orderSummaryRows, "Liquidation Price") ?? "");
+    const liquidationPrice = Number.isFinite(summaryLiquidationPrice)
+      ? summaryLiquidationPrice
+      : forwardRate - (isLong ? 160 : -160);
+    const fee = displayedAmount * 0.000_75;
+    const nextStepSize = displayedAmount >= 1000 ? 1000 : 1;
+    return (
+      <section className="flex h-full min-h-[300px] flex-col rounded-[18px] border border-white/10 bg-black/92 p-3 text-[#F5F5F5] shadow-[0_20px_70px_rgba(0,0,0,0.32)] xl:min-h-0">
+        <div className="space-y-3.5 overflow-y-auto">
+          <div className="grid grid-cols-2 overflow-hidden rounded-[12px] border border-white/14">
+            <button
+              className={cn(
+                "min-h-11 px-3 font-semibold text-[14px] transition-colors",
+                isLong ? "bg-white text-black" : "bg-transparent text-white hover:bg-white/6",
+              )}
+              onClick={() => onSideChange("buy")}
+              type="button"
+            >
+              Long
+            </button>
+            <button
+              className={cn(
+                "min-h-11 border-white/14 border-l px-3 font-semibold text-[14px] transition-colors",
+                isLong ? "bg-transparent text-white hover:bg-white/6" : "bg-white text-black",
+              )}
+              onClick={() => onSideChange("sell")}
+              type="button"
+            >
+              Short
+            </button>
+          </div>
+
+          <div className="grid grid-cols-3 rounded-[14px] bg-white/6 p-1">
+            {(["Market", "Limit", "Stop"] as const).map((tab) => (
+              <button
+                className={cn(
+                  "rounded-[10px] p-2 font-semibold text-[12px] transition-colors",
+                  orderType === tab ? "bg-white/12 text-white" : "text-white/75 hover:bg-white/7",
+                )}
+                key={tab}
+                onClick={() => onOrderTypeChange(tab)}
+                type="button"
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3 text-[12px]">
+              <label className="text-white/82" htmlFor="future-trade-size">
+                Amount (USDC)
+              </label>
+              <span className="text-white/70">Balance: 250,000 USDC</span>
+            </div>
+            <div className="grid grid-cols-[42px_minmax(0,1fr)_66px_42px] overflow-hidden rounded-[12px] border border-white/10 bg-white/6">
+              <button
+                aria-label="Decrease amount"
+                className="flex min-h-11 items-center justify-center border-white/10 border-r text-white transition-colors hover:bg-white/8"
+                onClick={() => onSizeChange(String(Math.max(0, displayedAmount - nextStepSize)))}
+                type="button"
+              >
+                <Minus className="size-4" />
+              </button>
+              <input
+                className="min-h-11 bg-transparent px-3 text-center font-semibold text-[18px] text-white outline-none"
+                id="future-trade-size"
+                inputMode="decimal"
+                onChange={(event) => onSizeChange(event.target.value.replace(/[^\d.]/g, ""))}
+                value={size}
+              />
+              <div className="flex min-h-11 items-center justify-center border-white/10 border-l text-[12px] text-white/75">
+                USDC
+              </div>
+              <button
+                aria-label="Increase amount"
+                className="flex min-h-11 items-center justify-center border-white/10 border-l text-white transition-colors hover:bg-white/8"
+                onClick={() => onSizeChange(String(displayedAmount + nextStepSize))}
+                type="button"
+              >
+                <Plus className="size-4" />
+              </button>
+            </div>
+          </div>
+
+          {needsLimitPrice ? (
+            <div className="space-y-2">
+              <label className="block text-[12px] text-white/82" htmlFor="future-limit-price">
+                {orderType === "Stop" ? "Stop Price" : "Limit Price"}
+              </label>
+              <div className="flex overflow-hidden rounded-[12px] border border-white/10 bg-white/6">
+                <input
+                  className="min-h-10 flex-1 bg-transparent px-3 font-semibold text-[14px] text-white outline-none"
+                  id="future-limit-price"
+                  inputMode="decimal"
+                  onChange={(event) => onLimitPriceChange(event.target.value.replace(/[^\d.]/g, ""))}
+                  value={limitPrice}
+                />
+                <div className="flex min-h-10 items-center border-white/10 border-l px-3 text-[11px] text-white/65">
+                  cNGN / USDC
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="space-y-2">
+            <div className="text-[12px] text-white/82">Leverage</div>
+            <div className="grid grid-cols-5 gap-2">
+              {FUTURE_LEVERAGE_OPTIONS.map((option) => (
+                <button
+                  className={cn(
+                    "min-h-10 rounded-[8px] border border-white/14 font-semibold text-[14px] transition-colors",
+                    leverage === option ? "bg-white text-black" : "bg-transparent text-white hover:bg-white/7",
+                  )}
+                  key={option}
+                  onClick={() => onAllocationChange(option)}
+                  type="button"
+                >
+                  {option}x
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <section className="space-y-2 rounded-[10px] border border-white/10 bg-white/[0.035] p-3">
+            <LabelValueRow label="Position Notional" value={formatCompactAmount(displayedAmount, "USDC")} />
+            <LabelValueRow label="Forward Rate" value={formatFutureRate(forwardRate)} />
+            <LabelValueRow label="Total Notional" value={formatCompactAmount(totalNotional, "cNGN")} />
+            <LabelValueRow label="Leverage" value={`${leverage}x`} />
+            <div className="border-white/10 border-t pt-2">
+              <LabelValueRow label={`Initial Margin (${Math.round(100 / leverage)}%)`} value={formatCompactAmount(initialMargin, "USDC")} />
+              <LabelValueRow label={`Maintenance Margin (${Math.round(50 / leverage)}%)`} value={formatCompactAmount(maintenanceMargin, "USDC")} />
+              <LabelValueRow label="Liquidation Price" value={formatFutureRate(liquidationPrice)} />
+              <LabelValueRow label="Fee (0.075%)" value={formatCompactAmount(fee, "USDC", 1)} />
+            </div>
+          </section>
+
+          <button
+            className="min-h-13 w-full rounded-[10px] bg-white px-3 font-semibold text-[17px] text-black transition-colors hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isSubmitting || isSubmitDisabled}
+            onClick={() => onSubmit(orderSide)}
+            type="button"
+          >
+            <span className="block">{isSubmitting ? "Submitting..." : "Review"}</span>
+          </button>
+
+          <div className="rounded-[12px] border border-white/10 bg-white/[0.035] px-3 py-2 text-[11px] text-white/65">
+            {lastAction}
+          </div>
+        </div>
+      </section>
+    );
   }
 
   return (

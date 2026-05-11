@@ -39,7 +39,6 @@ import {
   DEFAULT_TIMEFRAME,
 } from "@/lib/mock-orderbook-terminal-data";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
-import { OrderBookPanel } from "@/ui/trading-terminal/OrderBookPanel";
 import { OrderEntryPanel } from "@/ui/trading-terminal/OrderEntryPanel";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
 import { TradingChartPanel } from "@/ui/trading-terminal/TradingChartPanel";
@@ -1037,13 +1036,12 @@ export function OrderBookTradingTerminal({
   const [selectedTool, setSelectedTool] = useState(CHART_TOOLS[0]?.id ?? "crosshair");
   const [indicatorsEnabled, setIndicatorsEnabled] = useState(false);
   const [expandedChart, setExpandedChart] = useState(false);
-  const [orderBookView, setOrderBookView] = useState<"Order Book" | "Trades">("Order Book");
   const [orderType, setOrderType] = useState<"Limit" | "Market" | "Stop">(DEFAULT_ORDER_TYPE);
   const [orderSide, setOrderSide] = useState<"buy" | "sell">("buy");
-  const [size, setSize] = useState("5");
+  const [size, setSize] = useState("10000");
   const [spotSizeCurrency, setSpotSizeCurrency] = useState<SpotSizeCurrency>("USDC");
   const [limitPrice, setLimitPrice] = useState("1605.25");
-  const [allocation, setAllocation] = useState(20);
+  const [allocation, setAllocation] = useState(10);
   const [postOnly, setPostOnly] = useState(false);
   const [atExpiryDeliver, setAtExpiryDeliver] = useState(true);
   const [selectedBottomTab, setSelectedBottomTab] =
@@ -1485,7 +1483,7 @@ export function OrderBookTradingTerminal({
           spotChangeByMarketId={spotChangeByMarketId}
         />
 
-        <section className="mt-2.5 grid grid-cols-1 gap-2.5 xl:h-[460px] xl:min-h-0 xl:flex-none xl:grid-cols-[minmax(0,1.9fr)_minmax(250px,0.68fr)_minmax(300px,0.82fr)] xl:overflow-hidden 2xl:h-[520px] 2xl:grid-cols-[minmax(0,1.95fr)_minmax(270px,0.72fr)_minmax(320px,0.86fr)]">
+        <section className="mt-2.5 grid grid-cols-1 gap-2.5 xl:h-[460px] xl:min-h-0 xl:flex-none xl:grid-cols-[minmax(0,1fr)_320px] xl:overflow-hidden 2xl:h-[520px] 2xl:grid-cols-[minmax(0,1fr)_340px]">
           <div className="min-h-[320px] xl:min-h-0 xl:overflow-hidden">
             <TradingChartPanel
               candles={liveCandles}
@@ -1504,17 +1502,6 @@ export function OrderBookTradingTerminal({
               onRangeChange={setSelectedRange}
               onTimeframeChange={setTimeframe}
               onToolSelect={setSelectedTool}
-            />
-          </div>
-
-          <div className="min-h-[300px] xl:min-h-0 xl:overflow-hidden">
-            <OrderBookPanel
-              asks={market.orderBookAsks}
-              bids={market.orderBookBids}
-              contractLabel={selectedMarket.expiryLabel ?? "Spot"}
-              trades={market.trades}
-              view={orderBookView}
-              onViewChange={setOrderBookView}
             />
           </div>
 
