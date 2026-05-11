@@ -46,7 +46,6 @@ import { TradingMarketHeader } from "@/ui/trading-terminal/TradingMarketHeader";
 import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
 
 const SELECTED_MARKET_STORAGE_KEY = "trading-terminal-selected-market";
-const IS_DEVELOPMENT = process.env.NODE_ENV !== "production";
 type SpotSizeCurrency = "USDC" | "cNGN";
 const TRAILING_ZERO_DECIMALS_PATTERN = /\.?0+$/;
 const CONTRACT_COUNT_PATTERN = /(\d[\d,]*(?:\.\d+)?)\s+contracts/i;
@@ -1164,15 +1163,6 @@ export function OrderBookTradingTerminal({
     orderSide,
   });
   const slippageEstimate = getSlippageEstimate(averageExecution, estimatedFill, orderType);
-  const marketDiagnostics = {
-    asksCount: market.orderBookAsks.length,
-    bidsCount: market.orderBookBids.length,
-    bookAvailable: market.availability.bookAvailable,
-    instrumentKey: selectedMarket.id,
-    markAvailable: market.availability.markAvailable,
-    tradesAvailable: market.availability.tradesAvailable,
-    tradesCount: market.trades.length,
-  };
   const [liveCandles, setLiveCandles] = useState<Candle[]>(displayCandles);
   const lastCandleResetKeyRef = useRef<string | null>(null);
 
@@ -1551,21 +1541,6 @@ export function OrderBookTradingTerminal({
             />
           </div>
         </section>
-
-        {IS_DEVELOPMENT ? (
-          <section className="mt-2.5 rounded-md border border-[#1F2937] bg-[#0B1220]/80 px-3 py-2.5 text-[#9CA3AF] text-[11px]">
-            <div className="mb-2 font-medium text-[#E5E7EB] uppercase tracking-[0.18em]">Live Market Diagnostics</div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1 md:grid-cols-4">
-              <div>{`instrumentKey: ${marketDiagnostics.instrumentKey}`}</div>
-              <div>{`markAvailable: ${marketDiagnostics.markAvailable}`}</div>
-              <div>{`bookAvailable: ${marketDiagnostics.bookAvailable}`}</div>
-              <div>{`tradesAvailable: ${marketDiagnostics.tradesAvailable}`}</div>
-              <div>{`parsedBids: ${marketDiagnostics.bidsCount}`}</div>
-              <div>{`parsedAsks: ${marketDiagnostics.asksCount}`}</div>
-              <div>{`parsedTrades: ${marketDiagnostics.tradesCount}`}</div>
-            </div>
-          </section>
-        ) : null}
 
         <div className="mt-2.5 min-h-[200px] flex-1 xl:min-h-[230px] xl:shrink-0">
           <TradingActivityPanel

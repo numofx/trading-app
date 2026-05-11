@@ -1,293 +1,126 @@
+"use client";
+
+import { useState } from "react";
 import type { Candle } from "@/lib/trading.types";
-import type { TIMEFRAME_OPTIONS } from "@/lib/mock-orderbook-terminal-data";
-import { CHART_CONTEXT_TABS, CHART_RANGE_BUTTONS } from "@/lib/mock-orderbook-terminal-data";
+import type { CHART_CONTEXT_TABS, CHART_RANGE_BUTTONS, TIMEFRAME_OPTIONS } from "@/lib/mock-orderbook-terminal-data";
 import { cn } from "@/lib/cn";
-import { TradingChartToolbar } from "@/ui/trading-terminal/TradingChartToolbar";
+import { SmartImage } from "@/ui/SmartImage";
 
-type Point = {
-  closeY: number;
-  highY: number;
-  lowY: number;
-  openY: number;
-  volumeHeight: number;
-  x: number;
-};
+const FORWARD_POINTS = [
+  { basis: null, label: "Spot", rate: 1500, tenor: "Spot" },
+  { basis: 3.2, label: "Jun 2026", rate: 1545, tenor: "1M" },
+  { basis: 4.1, label: "Jul 2026", rate: 1585, tenor: "2M" },
+  { basis: 5.3, label: "Sep 2026", rate: 1630, tenor: "3M" },
+  { basis: 7.3, label: "Dec 2026", rate: 1720, tenor: "6M" },
+  { basis: 9.6, label: "Mar 2027", rate: 1820, tenor: "12M" },
+] as const;
 
-function formatPrice(value: number) {
-  let digits = 1;
+function formatNaira(value: number) {
+  return `₦${value.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+}
 
-  if (Math.abs(value) < 10) {
-    digits = 4;
-  } else if (value % 1 === 0) {
-    digits = 0;
+function formatBasis(value: number | null) {
+  if (value === null) {
+    return "—";
   }
 
-  return new Intl.NumberFormat("en-US", {
-    maximumFractionDigits: digits,
-    minimumFractionDigits: digits,
-  }).format(value);
+  return `+${value.toFixed(1)}%`;
 }
 
-function parsePriceValue(value: string) {
-  const parsed = Number(value.replaceAll(",", "").split(" ")[0]);
-  return Number.isFinite(parsed) ? parsed : null;
+function buildCurvePath(points: { x: number; y: number }[]) {
+  return points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
 }
 
-function getPriceDomain(candles: Candle[]) {
-  const low = Math.min(...candles.map((candle) => candle.low));
-  const high = Math.max(...candles.map((candle) => candle.high));
-  const range = Math.max(high - low, 0.5);
-  const padding = Math.max(range * 0.22, 0.8);
-
-  return {
-    maxPrice: high + padding,
-    minPrice: low - padding,
-  };
+function getPairLabel(ticker: string) {
+  const [pair] = ticker.split(" ");
+  return pair?.trim() || "USDC/cNGN";
 }
 
-function getChangeLabel(candles: Candle[]) {
-  const firstCandle = candles[0];
-  const lastCandle = candles.at(-1);
+function ForwardCurveChart({ activeIndex }: { activeIndex: number }) {
+  const width = 1000;
+  const height = 210;
+  const plotLeft = 115;
+  const plotRight = 960;
+  const plotTop = 12;
+  const plotBottom = 168;
+  const minRate = 1300;
+  const maxRate = 1850;
+  const rateRange = maxRate - minRate;
+  const visiblePoints = [FORWARD_POINTS[0], FORWARD_POINTS[1], FORWARD_POINTS[3], FORWARD_POINTS[4], FORWARD_POINTS[5]];
+  const chartPoints = visiblePoints.map((point, index) => {
+    const x = plotLeft + (index / (visiblePoints.length - 1)) * (plotRight - plotLeft);
+    const y = plotBottom - ((point.rate - minRate) / rateRange) * (plotBottom - plotTop);
 
-  if (!firstCandle || !lastCandle) {
-    return { delta: "0.0", percent: "0.00%", positive: true };
-  }
-
-  const delta = lastCandle.close - firstCandle.open;
-  const percent = firstCandle.open === 0 ? 0 : (delta / firstCandle.open) * 100;
-
-  return {
-    delta: `${delta >= 0 ? "+" : ""}${formatPrice(delta)}`,
-    percent: `${percent >= 0 ? "+" : ""}${percent.toFixed(2)}%`,
-    positive: delta >= 0,
-  };
-}
-
-function TradingChart({
-  candles,
-  entryPrice,
-  markPrice,
-  timeframe,
-  ticker,
-}: {
-  candles: Candle[];
-  entryPrice: string;
-  markPrice: string;
-  timeframe: (typeof TIMEFRAME_OPTIONS)[number];
-  ticker: string;
-}) {
-  const width = 920;
-  const height = 430;
-  const volumeHeight = 88;
-  const rightAxisGutter = 96;
-  const plotWidth = width - rightAxisGutter;
-  const chartTop = 22;
-  const chartBottom = height - volumeHeight - 20;
-  const { maxPrice, minPrice } = getPriceDomain(candles);
-  const priceRange = maxPrice - minPrice;
-  const stepX = plotWidth / candles.length;
-  const candleWidth = Math.max(9, stepX * 0.62);
-  const maxVolume = Math.max(...candles.map((candle) => candle.volume));
-  const lastCandle = candles.at(-1);
-  const changeLabel = getChangeLabel(candles);
-
-  if (!lastCandle) {
-    return null;
-  }
-
-  const points = candles.map((candle, index) => {
-    const x = index * stepX + stepX / 2;
-    const highY = chartTop + ((maxPrice - candle.high) / priceRange) * (chartBottom - chartTop);
-    const lowY = chartTop + ((maxPrice - candle.low) / priceRange) * (chartBottom - chartTop);
-    const openY = chartTop + ((maxPrice - candle.open) / priceRange) * (chartBottom - chartTop);
-    const closeY = chartTop + ((maxPrice - candle.close) / priceRange) * (chartBottom - chartTop);
-
-    return {
-      closeY,
-      highY,
-      lowY,
-      openY,
-      volumeHeight: (candle.volume / maxVolume) * (volumeHeight - 12),
-      x,
-    } satisfies Point;
+    return { ...point, x, y };
   });
-
-  const currentPriceY =
-    chartTop + ((maxPrice - lastCandle.close) / priceRange) * (chartBottom - chartTop);
-  const entryPriceValue = parsePriceValue(entryPrice);
-  const markPriceValue = parsePriceValue(markPrice);
-  const entryPriceY =
-    entryPriceValue === null
-      ? null
-      : chartTop + ((maxPrice - entryPriceValue) / priceRange) * (chartBottom - chartTop);
-  const markPriceY =
-    markPriceValue === null
-      ? null
-      : chartTop + ((maxPrice - markPriceValue) / priceRange) * (chartBottom - chartTop);
-  const axisValues = Array.from({ length: 6 }, (_, index) => maxPrice - (priceRange / 5) * index);
+  const path = buildCurvePath(chartPoints);
+  const areaPath = `${path} L ${chartPoints.at(-1)?.x ?? plotRight} ${plotBottom} L ${chartPoints[0]?.x ?? plotLeft} ${plotBottom} Z`;
+  const gridLines = [1800, 1700, 1600, 1500, 1400, 1300];
 
   return (
-    <div className="relative flex-1 overflow-hidden">
-      <div className="absolute inset-x-0 top-0 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-[10px]">
-        <span className="font-semibold text-[#E2E8F0]">
-          {ticker} · {timeframe} · Central Limit Order Book
-        </span>
-        <span className="text-[#66758A]">
-          O{formatPrice(lastCandle.open)} H{formatPrice(lastCandle.high)} L
-          {formatPrice(lastCandle.low)} C{formatPrice(lastCandle.close)}
-          <span className={cn("ml-2", changeLabel.positive ? "text-[#8BB69A]" : "text-[#C89393]")}>
-            {changeLabel.delta} ({changeLabel.percent})
-          </span>
-        </span>
-      </div>
+    <svg
+      aria-label="USDC/cNGN forward curve"
+      className="h-[170px] w-full"
+      role="img"
+      viewBox={`0 0 ${width} ${height}`}
+    >
+      <defs>
+        <linearGradient id="forwardCurveFill" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.32" />
+          <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0.02" />
+        </linearGradient>
+      </defs>
 
-      <svg
-        aria-label="Mock USDC/cNGN candlestick chart"
-        className="size-full"
-        preserveAspectRatio="none"
-        role="img"
-        viewBox={`0 0 ${width} ${height}`}
-      >
-        <defs>
-          <pattern height="68" id="gridPattern" patternUnits="userSpaceOnUse" width="92">
-            <path d="M 92 0 L 0 0 0 68" fill="none" stroke="#14202D" strokeWidth="0.6" />
-          </pattern>
-        </defs>
+      {gridLines.map((rate) => {
+        const y = plotBottom - ((rate - minRate) / rateRange) * (plotBottom - plotTop);
 
-        <rect fill="url(#gridPattern)" height={height} width={width} x="0" y="0" />
-
-        {axisValues.map((value) => {
-          const y = chartTop + ((maxPrice - value) / priceRange) * (chartBottom - chartTop);
-
-          return (
-            <g key={value}>
-              <line stroke="#14202D" strokeDasharray="4 8" x1="0" x2={width} y1={y} y2={y} />
-              <text fill="#5F6D80" fontSize="10" textAnchor="end" x={width - 8} y={y - 6}>
-                {formatPrice(value)}
-              </text>
-            </g>
-          );
-        })}
-
-        {points.map((point, index) => {
-          const candle = candles[index];
-          const isBullish = candle.close >= candle.open;
-          const bodyTop = Math.min(point.openY, point.closeY);
-          const bodyHeight = Math.max(Math.abs(point.closeY - point.openY), 3);
-          const color = isBullish ? "#16914A" : "#C13A3A";
-          const volumeY = height - point.volumeHeight - 18;
-
-          return (
-            <g key={`${candle.time}-${index}`}>
-              <line stroke={color} strokeWidth="1.5" x1={point.x} x2={point.x} y1={point.highY} y2={point.lowY} />
-              <rect
-                fill={color}
-                height={bodyHeight}
-                rx="1"
-                width={candleWidth}
-                x={point.x - candleWidth / 2}
-                y={bodyTop}
-              />
-              <rect
-                fill={isBullish ? "#113126" : "#421A1C"}
-                height={point.volumeHeight}
-                opacity="0.55"
-                width={Math.max(6, candleWidth)}
-                x={point.x - Math.max(6, candleWidth) / 2}
-                y={volumeY}
-              />
-            </g>
-          );
-        })}
-
-        <line
-          stroke="#2D6DE0"
-          strokeDasharray="3 5"
-          strokeWidth="1"
-          x1="0"
-          x2={plotWidth}
-          y1={currentPriceY}
-          y2={currentPriceY}
-        />
-
-        {markPriceY !== null ? (
-          <g>
-            <line stroke="#2BA064" strokeDasharray="6 6" strokeWidth="1" x1="0" x2={plotWidth} y1={markPriceY} y2={markPriceY} />
-            <text fill="#7DBD94" fontSize="10" fontWeight="700" x="10" y={markPriceY - 6}>
-              Mark
+        return (
+          <g key={rate}>
+            <line stroke="#FFFFFF" strokeDasharray="5 9" strokeOpacity="0.16" x1={plotLeft - 28} x2={plotRight + 20} y1={y} y2={y} />
+            <text fill="#D5D5D5" fontSize="12" textAnchor="end" x={plotLeft - 44} y={y + 4}>
+              {rate.toLocaleString("en-US")}
             </text>
           </g>
-        ) : null}
+        );
+      })}
 
-        {entryPriceY !== null ? (
-          <g>
-            <line stroke="#C98A2B" strokeDasharray="6 6" strokeWidth="1" x1="0" x2={plotWidth} y1={entryPriceY} y2={entryPriceY} />
-            <text fill="#D9B36B" fontSize="10" fontWeight="700" x="10" y={entryPriceY - 6}>
-              Entry
-            </text>
+      <path d={areaPath} fill="url(#forwardCurveFill)" />
+      <path d={path} fill="none" stroke="#F5F5F5" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" />
+
+      {chartPoints.map((point) => {
+        const sourceIndex = FORWARD_POINTS.findIndex((candidate) => candidate.tenor === point.tenor);
+        const isActive = sourceIndex === activeIndex;
+
+        return (
+          <g key={point.tenor}>
+            <circle
+              cx={point.x}
+              cy={point.y}
+              fill={isActive ? "#FFFFFF" : "#F5F5F5"}
+              r={isActive ? 7 : 5.5}
+              stroke={isActive ? "#FFFFFF" : "#E8E8E8"}
+              strokeWidth="2"
+            />
           </g>
-        ) : null}
+        );
+      })}
 
-        <g>
-          <rect
-            fill="#275BD0"
-            height="22"
-            rx="4"
-            width="64"
-            x={width - 70}
-            y={currentPriceY - 11}
-          />
-          <text
-            fill="#F5F8FF"
-            fontSize="11"
-            fontWeight="700"
-            textAnchor="middle"
-            x={width - 38}
-            y={currentPriceY + 4}
-          >
-            {formatPrice(lastCandle.close)}
-          </text>
-        </g>
+      <line stroke="#FFFFFF" strokeOpacity="0.5" x1={plotLeft - 28} x2={plotRight + 20} y1={plotBottom} y2={plotBottom} />
 
-        {candles.filter((_, index) => index % 4 === 0).map((candle, index) => {
-          const sourceIndex = index * 4;
-          const x = sourceIndex * stepX + stepX / 2;
-
-          return (
-            <text
-              fill="#5F6D80"
-              fontSize="10"
-              key={`${candle.time}-${sourceIndex}`}
-              textAnchor="middle"
-              x={x}
-              y={height - 4}
-            >
-              {candle.time}
-            </text>
-          );
-        })}
-      </svg>
-    </div>
+      {chartPoints.map((point) => (
+        <text fill="#D8D8D8" fontSize="13" key={`axis-${point.tenor}`} textAnchor="middle" x={point.x} y={plotBottom + 27}>
+          {point.tenor}
+        </text>
+      ))}
+    </svg>
   );
 }
 
 export function TradingChartPanel({
-  candles,
   chartContext,
-  entryPrice,
-  expandedChart,
-  indicatorsEnabled,
-  markPrice,
-  selectedRange,
-  selectedTimeframe,
-  selectedTool,
   ticker,
   onChartContextChange,
-  onExpandedToggle,
-  onIndicatorsToggle,
   onRangeChange,
-  onTimeframeChange,
-  onToolSelect,
 }: {
   candles: Candle[];
   chartContext: (typeof CHART_CONTEXT_TABS)[number];
@@ -306,92 +139,87 @@ export function TradingChartPanel({
   onTimeframeChange: (timeframe: (typeof TIMEFRAME_OPTIONS)[number]) => void;
   onToolSelect: (toolId: string) => void;
 }) {
-  let chartContextDescription = "Price view: cNGN per USDC";
-  if (chartContext === "Basis") {
-    chartContextDescription = "Basis view: futures minus spot in cNGN";
-  } else if (chartContext === "Carry") {
-    chartContextDescription = "Carry view: annualized basis (%)";
-  }
+  const [activeIndex, setActiveIndex] = useState(3);
+  const pairLabel = getPairLabel(ticker);
 
   return (
-    <section className="flex h-full min-h-[320px] flex-col overflow-hidden rounded-[22px] bg-[#0C141E]/95 shadow-[0_18px_60px_rgba(0,0,0,0.28)] ring-1 ring-white/6 xl:min-h-0">
-      <TradingChartToolbar
-        expandedChart={expandedChart}
-        indicatorsEnabled={indicatorsEnabled}
-        selectedTimeframe={selectedTimeframe}
-        selectedTool={selectedTool}
-        onExpandedToggle={onExpandedToggle}
-        onIndicatorsToggle={onIndicatorsToggle}
-        onTimeframeChange={onTimeframeChange}
-        onToolSelect={onToolSelect}
-      />
-
-      <div className="flex min-h-0 flex-1">
-        <div className="hidden xl:block">
-          <TradingChartToolbar
-            expandedChart={expandedChart}
-            indicatorsEnabled={indicatorsEnabled}
-            mode="side"
-            selectedTimeframe={selectedTimeframe}
-            selectedTool={selectedTool}
-            onExpandedToggle={onExpandedToggle}
-            onIndicatorsToggle={onIndicatorsToggle}
-            onTimeframeChange={onTimeframeChange}
-            onToolSelect={onToolSelect}
-          />
-        </div>
-
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div className="flex items-center justify-between border-white/6 border-b px-3 py-2">
-            <div className="flex items-center gap-1.5">
-              {CHART_CONTEXT_TABS.map((tab) => (
-                <button
-                  className={cn(
-                    "rounded-xl px-2 py-1 font-medium text-[#748195] text-[10px] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]",
-                    chartContext === tab && "bg-white/6 text-[#E5ECF5]",
-                  )}
-                  key={tab}
-                  onClick={() => onChartContextChange(tab)}
-                  type="button"
-                >
-                  {tab}
-                </button>
-              ))}
-            </div>
-            <div className="text-[#5F6D80] text-[9px]">
-              {chartContextDescription}
-            </div>
+    <section className="flex h-full min-h-[320px] flex-col overflow-hidden rounded-[20px] border border-white/10 bg-black/94 p-3 text-white shadow-[0_18px_60px_rgba(0,0,0,0.28)] xl:min-h-0">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="font-semibold text-[26px] leading-none">{pairLabel}</h2>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <SmartImage<string> alt="USDC" className="size-8 rounded-full bg-white/12 p-1" src="/tokens/usdc.svg" />
+            <span className="font-semibold text-[15px]">USDC</span>
           </div>
-
-          <TradingChart candles={candles} entryPrice={entryPrice} markPrice={markPrice} ticker={ticker} timeframe={selectedTimeframe} />
-
-          <div className="flex items-center justify-between border-white/6 border-t px-3 py-2 text-[9px]">
-            <div className="flex flex-wrap items-center gap-1.5">
-              {CHART_RANGE_BUTTONS.map((range) => (
-                <button
-                  className={cn(
-                    "rounded-xl px-2 py-1 text-[#748195] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]",
-                    selectedRange === range && "bg-white/6 text-[#E5ECF5]",
-                  )}
-                  key={range}
-                  onClick={() => onRangeChange(range)}
-                  type="button"
-                >
-                  {range}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-3 text-[#5F6D80]">
-              <span>{indicatorsEnabled ? "Indicators On" : "Indicators Off"}</span>
-              <button className="transition-colors hover:text-[#D7DEE8]" type="button">%</button>
-              <button className="transition-colors hover:text-[#D7DEE8]" type="button">log</button>
-              <button className="text-[#D7DEE8]" type="button">
-                auto
-              </button>
-            </div>
+          <span className="text-[18px] text-white/60">→</span>
+          <div className="flex items-center gap-2">
+            <SmartImage<string> alt="cNGN" className="size-8 rounded-full bg-white/12 p-1" src="/tokens/cngn.svg" />
+            <span className="font-semibold text-[15px]">cNGN</span>
           </div>
         </div>
+      </div>
+
+      <div className="mt-3 grid gap-2.5 md:grid-cols-5">
+        {FORWARD_POINTS.slice(1).map((point) => {
+          const sourceIndex = FORWARD_POINTS.findIndex((candidate) => candidate.tenor === point.tenor);
+          const isActive = sourceIndex === activeIndex;
+
+          return (
+            <button
+              className={cn(
+                "rounded-[10px] border border-white/12 p-2.5 text-left transition-colors hover:bg-white/6",
+                isActive && "border-white bg-white/[0.035]",
+              )}
+              key={point.tenor}
+              onClick={() => {
+                setActiveIndex(sourceIndex);
+                onChartContextChange("Basis");
+              }}
+              type="button"
+            >
+              <div className="font-medium text-[12px] text-white/82">{point.label}</div>
+              <div className="mt-1.5 font-semibold text-[18px]">{formatNaira(point.rate)}</div>
+              <div className="text-[12px] text-white/75">{formatBasis(point.basis)}</div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-3 text-[13px] text-white/82">NGN per USDC</div>
+      <div className="min-h-0 shrink-0">
+        <ForwardCurveChart activeIndex={activeIndex} />
+      </div>
+
+      <div className="mt-2 grid shrink-0 overflow-hidden rounded-[10px] border border-white/10 md:grid-cols-6">
+        <div className="border-white/10 border-r px-3 py-2">
+          <div className="text-[10px] text-white/70 uppercase">Spot</div>
+          <div className="mt-1 font-semibold text-[16px]">{formatNaira(FORWARD_POINTS[0].rate)}</div>
+          <div className="text-[11px] text-white/65">—</div>
+        </div>
+        {FORWARD_POINTS.slice(1).filter((point) => point.tenor !== "2M").map((point) => (
+          <button
+            className="border-white/10 border-r px-3 py-2 text-left transition-colors last:border-r-0 hover:bg-white/6"
+            key={`summary-${point.tenor}`}
+            onClick={() => {
+              setActiveIndex(FORWARD_POINTS.findIndex((candidate) => candidate.tenor === point.tenor));
+              onRangeChange("1d");
+            }}
+            type="button"
+          >
+            <div className="text-[10px] text-white/70 uppercase">{point.tenor} FWD</div>
+            <div className="mt-1 font-semibold text-[16px]">{formatNaira(point.rate)}</div>
+            <div className="text-[11px] text-white/65">{formatBasis(point.basis)}</div>
+          </button>
+        ))}
+        <div className="px-3 py-2">
+          <div className="text-[10px] text-white/70 uppercase">Open Interest</div>
+          <div className="mt-1 font-semibold text-[16px]">$2.1M</div>
+          <div className="text-[11px] text-white/65">Across 184 traders</div>
+        </div>
+      </div>
+
+      <div className="sr-only">
+        {chartContext}
       </div>
     </section>
   );
