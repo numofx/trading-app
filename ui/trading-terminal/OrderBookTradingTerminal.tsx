@@ -144,9 +144,7 @@ function getDirectionalLabel(orderSide: "buy" | "sell", marketDefinition: Market
   }
 
   if (marketDefinition.type === "future" && formatFxDisplayPair(marketDefinition.pair) === "USDC/cNGN") {
-    return orderSide === "buy"
-      ? "Long USD / Short cNGN"
-      : "Short USD / Long cNGN";
+    return orderSide === "buy" ? "Long" : "Short";
   }
 
   const [base] = formatFxDisplayPair(marketDefinition.pair).split("/");

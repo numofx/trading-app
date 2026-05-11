@@ -462,6 +462,60 @@ type LiveSpotRuntime = {
   trades: PresentedTrade[];
 };
 
+const PREVIEW_FUTURE_DEFINITIONS = [
+  {
+    contractLabel: "JUN 2026",
+    expiryDays: 50,
+    expiryLabel: "Jun 2026",
+    expiryTimestamp: 1_781_654_400,
+    id: "usdc-cngn-jun-2026-future",
+    sortOrder: 1_781_654_400,
+  },
+  {
+    contractLabel: "SEP 2026",
+    expiryDays: 142,
+    expiryLabel: "Sep 2026",
+    expiryTimestamp: 1_789_603_200,
+    id: "usdc-cngn-sep-2026-future",
+    sortOrder: 1_789_603_200,
+  },
+  {
+    contractLabel: "DEC 2026",
+    expiryDays: 233,
+    expiryLabel: "Dec 2026",
+    expiryTimestamp: 1_797_465_600,
+    id: "usdc-cngn-dec-2026-future",
+    sortOrder: 1_797_465_600,
+  },
+] as const;
+
+function buildPreviewFutureDefinition(config: (typeof PREVIEW_FUTURE_DEFINITIONS)[number]) {
+  return {
+    assetAddress: null,
+    contractLabel: config.contractLabel,
+    contractMultiplier: "10000",
+    contractType: "deliverable_fx_future",
+    expiryDays: config.expiryDays,
+    expiryLabel: config.expiryLabel,
+    expiryTimestamp: config.expiryTimestamp,
+    flagSrc: "/flags/ng.svg",
+    id: config.id,
+    lastTradeTimestamp: null,
+    marketIdAliases: null,
+    marketSymbol: null,
+    marketSymbolAliases: null,
+    minSize: "0.001",
+    pair: "USDCcNGN",
+    region: "Africa",
+    settlementType: "physical_delivery",
+    sortOrder: config.sortOrder,
+    strikeLabel: null,
+    subId: null,
+    tickSize: "1",
+    type: "future",
+  } satisfies MarketDefinition;
+}
+
 function formatExpiryLabelFromTimestamp(expiryTimestamp: number) {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -818,21 +872,26 @@ export function buildTradingTerminalMarkets(
   liveSpot: LiveSpotRuntime | null,
   liveFutures: LiveDeliverableFutureRuntime[],
 ) {
-  const fallbackSpotDefinition =
-    MARKET_DEFINITIONS.find((marketDefinition) => marketDefinition.id === "cngn-usdc-spot") ?? null;
-  const spotDefinition = liveSpot?.definition ?? fallbackSpotDefinition;
   const spotMarketData = liveSpot
     ? buildLiveSpotMarketFromBook(liveSpot.definition, liveSpot.book, liveSpot.trades)
     : MARKET_DATA["cngn-usdc-spot"];
 
   if (!liveFutures.length) {
+    const previewFutureDefinitions = PREVIEW_FUTURE_DEFINITIONS.map(buildPreviewFutureDefinition);
+
     return {
-      defaultContract: "",
-      defaultMarketId: DEFAULT_MARKET_ID,
+      defaultContract: previewFutureDefinitions[0]?.contractLabel ?? DEFAULT_CONTRACT,
+      defaultMarketId: previewFutureDefinitions[0]?.id ?? DEFAULT_MARKET_ID,
       marketData: {
         "cngn-usdc-spot": spotMarketData,
+        ...Object.fromEntries(
+          previewFutureDefinitions.map((definition) => [
+            definition.id,
+            buildDeliverableFutureMarket(definition),
+          ]),
+        ),
       } satisfies Record<MarketId, ContractMarket>,
-      marketDefinitions: [spotDefinition].filter(Boolean) as MarketDefinition[],
+      marketDefinitions: previewFutureDefinitions,
     };
   }
 
@@ -843,10 +902,7 @@ export function buildTradingTerminalMarkets(
     return leftExpiry - rightExpiry;
   });
   const defaultFuture = sortedLiveFutures[0];
-  const marketDefinitions = [
-    spotDefinition,
-    ...sortedLiveFutures.map((future) => future.definition),
-  ].filter(Boolean) as MarketDefinition[];
+  const marketDefinitions = sortedLiveFutures.map((future) => future.definition);
 
   const marketData = {
     "cngn-usdc-spot": spotMarketData,

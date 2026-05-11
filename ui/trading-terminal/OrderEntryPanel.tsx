@@ -40,7 +40,7 @@ function getSubmitLabel(isSubmitting: boolean, isSpotUSDIntent: boolean, isLong:
   }
 
   if (isFXFuture) {
-    return isLong ? "Buy USD" : "Sell USD";
+    return isLong ? "Long" : "Short";
   }
 
   if (isSpotUSDIntent) {
@@ -128,16 +128,14 @@ export function OrderEntryPanel({
   const needsLimitPrice = orderType !== "Market";
   let directionCopy = getDirectionCopy(isSpotUSDIntent, isLong);
   if (isFXFuture) {
-    directionCopy = isLong
-      ? "Buy USD (Sell cNGN)"
-      : "Sell USD (Buy cNGN)";
+    directionCopy = isLong ? "Long" : "Short";
   }
   const submitLabel = getSubmitLabel(Boolean(isSubmitting), isSpotUSDIntent, isLong, isFXFuture);
   let buyDirectionLabel = isSpotUSDIntent ? "Buy" : "Long";
   let sellDirectionLabel = isSpotUSDIntent ? "Sell" : "Short";
   if (isFXFuture) {
-    buyDirectionLabel = "Buy USD (Sell cNGN)";
-    sellDirectionLabel = "Sell USD (Buy cNGN)";
+    buyDirectionLabel = "Long";
+    sellDirectionLabel = "Short";
   }
   const activeSpotSizeCurrency = spotSizeCurrency ?? "USDC";
   const isNegativePnl = pnl.startsWith("-");
