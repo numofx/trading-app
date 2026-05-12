@@ -436,7 +436,7 @@ export function TradingMarketHeader({
       </div>
 
       {marketSearchOpen ? (
-        <div className="fixed inset-0 z-40 flex items-start justify-center bg-[#050A11]/72 p-4 pt-[12vh] backdrop-blur-sm">
+        <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/72 p-4 pt-[14vh] backdrop-blur-md">
           <button
             aria-label="Close market switcher"
             className="absolute inset-0"
@@ -444,43 +444,43 @@ export function TradingMarketHeader({
             type="button"
           />
           <div
-            className="relative z-10 w-full max-w-4xl overflow-hidden rounded-2xl border border-[#223043] bg-[#0D141C] shadow-[0_32px_120px_rgba(0,0,0,0.58)]"
+            className="relative z-10 w-full max-w-3xl overflow-hidden rounded-[28px] bg-black shadow-[0_40px_140px_rgba(0,0,0,0.68)] ring-1 ring-white/10"
             role="dialog"
             aria-modal="true"
             aria-label="Market switcher"
           >
-            <div className="border-[#1B2430] border-b p-4">
-              <div className="flex items-center gap-3 rounded-xl border border-[#324051] bg-[#111922] px-4 py-3">
-                <Search className="size-4 text-[#6B7280]" />
+            <div className="p-5">
+              <div className="flex items-center gap-3 rounded-[18px] bg-white/[0.035] px-4 py-3.5 ring-1 ring-white/10">
+                <Search className="size-4 text-white/42" />
                 <input
                   ref={searchInputRef}
-                  className="flex-1 bg-transparent text-[#E5E7EB] text-base outline-none placeholder:text-[#6B7280]"
+                  className="flex-1 bg-transparent text-base text-white outline-none placeholder:text-white/35"
                   onChange={(event) => setMarketSearch(event.target.value)}
                   onKeyDown={handleSearchKeyDown}
                   placeholder="Search pair, product, or expiry"
                   value={marketSearch}
                 />
-                {marketSearch ? (
+                  {marketSearch ? (
                   <button
-                    className="text-[#6B7280] transition-colors hover:text-[#D1D5DB]"
+                    className="text-white/42 transition-colors hover:text-white/80"
                     onClick={() => setMarketSearch("")}
                     type="button"
                   >
                     <X className="size-4" />
                   </button>
                 ) : null}
-                <div className="hidden items-center gap-1 rounded-full border border-[#223043] bg-[#0D131A] px-2 py-1 text-[#6B7280] text-[11px] sm:flex">
+                <div className="hidden items-center gap-1 rounded-full bg-white/6 px-2 py-1 text-[11px] text-white/38 sm:flex">
                   <Command className="size-3" />
                   K
                 </div>
               </div>
 
-              <div className="mt-3 flex items-center gap-2 overflow-x-auto">
+              <div className="mt-4 flex items-center gap-2 overflow-x-auto">
                 {primaryTabs.map((tab) => (
                   <button
                     className={cn(
-                      "rounded-full border border-[#1B2430] bg-[#111922] px-3 py-1.5 text-[#9CA3AF] text-sm transition-colors hover:text-[#E5E7EB]",
-                      selectedPrimaryTab === tab && "border-[#2563EB] bg-[#172554]/40 text-[#E5E7EB]",
+                      "rounded-full bg-white/5 px-4 py-2 text-sm text-white/50 transition-colors hover:bg-white/8 hover:text-white/80",
+                      selectedPrimaryTab === tab && "bg-white text-black",
                     )}
                     key={tab}
                     onClick={() => setSelectedPrimaryTab(tab)}
@@ -492,17 +492,17 @@ export function TradingMarketHeader({
               </div>
             </div>
 
-            <div className="max-h-[min(68vh,720px)] overflow-y-auto p-4">
-              <div className="space-y-5">
+            <div className="max-h-[min(62vh,620px)] overflow-y-auto px-5 pb-5">
+              <div className="space-y-6">
                 {normalizedSearch ? null : (
-                  <section className="space-y-2">
-                    <div className="px-1 text-[#6B7280] text-[11px] uppercase tracking-[0.14em]">
+                  <section className="space-y-3">
+                    <div className="px-1 text-[10px] text-white/32 uppercase tracking-[0.22em]">
                       Recent
                     </div>
                     {recentMarkets.length ? (
                       <div className="space-y-1">{renderMarketRows(recentMarkets)}</div>
                     ) : (
-                      <div className="px-3 py-8 text-center text-[#6B7280] text-sm">
+                      <div className="rounded-[20px] bg-white/2.5 px-3 py-8 text-center text-sm text-white/35">
                         {getRecentEmptyLabel(selectedPrimaryTab)}
                       </div>
                     )}
@@ -510,17 +510,17 @@ export function TradingMarketHeader({
                 )}
 
                 {normalizedSearch && recentMarkets.length ? (
-                  <section className="space-y-1">{renderMarketRows(recentMarkets)}</section>
+                  <section className="space-y-2">{renderMarketRows(recentMarkets)}</section>
                 ) : null}
 
-                {showMainListDivider ? <div className="border-[#1B2430] border-t" /> : null}
+                {showMainListDivider ? <div className="h-px bg-white/8" /> : null}
 
                 {showMainList ? (
-                  <section className="space-y-1">{renderMarketRows(mainListMarkets)}</section>
+                  <section className="space-y-2">{renderMarketRows(mainListMarkets)}</section>
                 ) : null}
 
                 {hasSearchResults ? null : (
-                  <div className="px-3 py-10 text-center text-[#6B7280] text-sm">
+                  <div className="rounded-[20px] bg-white/2.5 px-3 py-10 text-center text-sm text-white/35">
                     {getResultsEmptyLabel(selectedPrimaryTab, Boolean(normalizedSearch))}
                   </div>
                 )}
