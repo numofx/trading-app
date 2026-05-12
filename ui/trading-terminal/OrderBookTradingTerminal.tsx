@@ -20,12 +20,10 @@ import {
 import {
   calculateAnnualizedBasisPercent,
   calculateBasis,
-  formatAnnualizedBasis,
-  formatBasis,
   formatMarketPrice,
 } from "@/lib/market-formatting";
 import type { CHART_CONTEXT_TABS, CHART_RANGE_BUTTONS, TIMEFRAME_OPTIONS } from "@/lib/mock-orderbook-terminal-data";
-import type { Candle, ContractMarket, DeliveryTerm, MarketDefinition, MarketId, MarketStat, TradePrint } from "@/lib/trading.types";
+import type { Candle, ContractMarket, DeliveryTerm, MarketDefinition, MarketId, TradePrint } from "@/lib/trading.types";
 import { buildFutureOrderEnvelope, canSubmitFutureOrder } from "@/lib/future-order-submission";
 import { buildSpotOrderEnvelope, canSubmitSpotOrder } from "@/lib/spot-order-submission";
 import { isUSDCCNGNSpotMarket } from "@/lib/usdccngn-spot-order";
@@ -252,41 +250,6 @@ function getDisplayTicker(marketDefinition: MarketDefinition) {
   return getInstrumentDisplayLabel(marketDefinition);
 }
 
-function getDefaultContractForMarket(market: MarketDefinition) {
-  if (market.contractLabel) {
-    return market.contractLabel;
-  }
-
-  return "";
-}
-
-function getContractTabsForProduct(type: MarketDefinition["type"], marketDefinitions: MarketDefinition[]) {
-  if (type === "future" || type === "option") {
-    return Array.from(
-      new Set(
-        marketDefinitions
-          .filter((marketDefinition) => marketDefinition.type === type && marketDefinition.contractLabel)
-          .map((marketDefinition) => marketDefinition.contractLabel as string),
-      ),
-    ).map((label) => ({ label }));
-  }
-
-  return [];
-}
-
-function getMarketIdForSelection(
-  type: MarketDefinition["type"],
-  contract: string,
-  marketDefinitions: MarketDefinition[],
-  fallbackMarketId: MarketId,
-) {
-  return (
-    marketDefinitions.find((marketDefinition) => {
-      return marketDefinition.type === type && marketDefinition.contractLabel === contract;
-    })?.id ?? fallbackMarketId
-  );
-}
-
 function getChartUpdateInterval(timeframe: (typeof TIMEFRAME_OPTIONS)[number]) {
   if (timeframe === "5m") {
     return 1100;
@@ -415,56 +378,6 @@ function simulateLiveCandles(
   }
 
   return [...candles.slice(0, -1), updatedCurrent];
-}
-
-function buildLiveInfoBar(
-  infoBar: MarketStat[],
-  marketDefinition: MarketDefinition,
-  liveBasis: number | null,
-  marketData: Record<MarketId, { mark: string }>,
-  liveSpotPrice: number,
-) {
-  const marketPrice =
-    marketDefinition.type === "spot"
-      ? liveSpotPrice
-      : parseNumericString(marketData[marketDefinition.id as MarketId].mark);
-  const safeMarketPrice = Number.isFinite(marketPrice) ? marketPrice : null;
-  const liveAnnualizedBasis =
-    marketDefinition.type === "future" && safeMarketPrice !== null
-      ? calculateAnnualizedBasisPercent(
-          safeMarketPrice,
-          liveSpotPrice,
-          marketDefinition.expiryDays,
-        )
-      : null;
-  const liveBasisPercent =
-    marketDefinition.type === "future" && liveBasis !== null && liveSpotPrice > 0 && safeMarketPrice !== null
-      ? (liveBasis / liveSpotPrice) * 100
-      : null;
-
-  return infoBar.map((item: MarketStat) => {
-    if (item.label === "Mark Price") {
-      return { ...item, value: formatPriceDisplay(safeMarketPrice ?? "—") };
-    }
-
-    if (item.label === "Spot") {
-      return { ...item, value: formatPriceDisplay(liveSpotPrice) };
-    }
-
-    if (item.label === "Basis") {
-      return { ...item, value: formatBasis(liveBasis) };
-    }
-
-    if (item.label === "Basis %") {
-      return { ...item, value: liveBasisPercent === null ? "—" : `${liveBasisPercent.toFixed(2)}%` };
-    }
-
-    if (item.label === "Implied Carry") {
-      return { ...item, value: formatAnnualizedBasis(liveAnnualizedBasis) };
-    }
-
-    return item;
-  });
 }
 
 function buildSelectorMetrics(
@@ -1001,13 +914,10 @@ function convertUSDCSizeToSpotInput(
   return (sizeNumber * referencePrice).toFixed(2).replace(TRAILING_ZERO_DECIMALS_PATTERN, "");
 }
 
-type SelectedContract = string;
-
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This component coordinates terminal state across chart, book, order entry, and URL persistence.
 export function OrderBookTradingTerminal({
   chainlinkSpot,
   defaultMarketId,
-  initialContract,
   initialMarketId,
   marketData,
   marketDefinitions,
@@ -1015,7 +925,6 @@ export function OrderBookTradingTerminal({
 }: {
   chainlinkSpot: ChainlinkSpotSnapshot | null;
   defaultMarketId: MarketId;
-  initialContract: string;
   initialMarketId: MarketId;
   marketData: Record<MarketId, ContractMarket>;
   marketDefinitions: MarketDefinition[];
@@ -1025,7 +934,6 @@ export function OrderBookTradingTerminal({
   const searchParams = useSearchParams();
   const requestedMarketParam = searchParams.get("market");
   const [selectedMarketId, setSelectedMarketId] = useState<MarketId>(initialMarketId);
-  const [selectedContract, setSelectedContract] = useState<SelectedContract>(initialContract);
   const [timeframe, setTimeframe] = useState<(typeof TIMEFRAME_OPTIONS)[number]>(DEFAULT_TIMEFRAME);
   const [chartContext, setChartContext] = useState<(typeof CHART_CONTEXT_TABS)[number]>(
     DEFAULT_CHART_CONTEXT,
@@ -1110,13 +1018,6 @@ export function OrderBookTradingTerminal({
     market.candles.at(-1)?.close ?? "close",
   ].join("|");
 
-  const liveInfoBar = buildLiveInfoBar(
-    market.infoBar,
-    selectedMarket,
-    liveBasis,
-    marketData,
-    liveSpotPrice,
-  );
   const { entryPrice, markPrice, pnl: unrealizedPnl, positionOverview, positionValue, exposureLabel, returnLabel, returnValue } =
     getPositionMetrics(marketData, selectedMarket, selectedMarketId, safeLivePrice);
   const dynamicActivityViews = buildActivityViews(
@@ -1207,7 +1108,6 @@ export function OrderBookTradingTerminal({
     }
 
     setSelectedMarketId(resolution.selectedMarketId);
-    setSelectedContract(nextMarket.contractLabel ?? getDefaultContractForMarket(nextMarket));
     setChartContext(getDefaultChartContextForMarket(nextMarket));
     setLimitPrice(getRenderablePriceInput(marketData[resolution.selectedMarketId].mark));
     markSelectionHydrated();
@@ -1267,23 +1167,6 @@ export function OrderBookTradingTerminal({
     return () => window.clearInterval(intervalId);
   }, [selectedMarketId, timeframe, chartContext]);
 
-  function handleContractSelect(contract: string) {
-    startTransition(() => {
-      const nextMarketId = getMarketIdForSelection(
-        selectedMarket.type,
-        contract,
-        marketDefinitions,
-        selectedMarketId,
-      );
-
-      setSelectedContract(contract);
-      setSelectedMarketId(nextMarketId);
-      setChartContext(getDefaultChartContextForMarket(selectedMarket));
-      setLimitPrice(getRenderablePriceInput(marketData[nextMarketId].mark));
-      setLastAction(`Switched to ${formatFxDisplayPair(selectedMarket.pair)} ${getProductDisplayName(selectedMarket.type)} ${contract}`);
-    });
-  }
-
   function handleMarketSelect(marketId: string) {
     const nextMarket = marketDefinitions.find((marketOption) => marketOption.id === marketId);
 
@@ -1293,11 +1176,6 @@ export function OrderBookTradingTerminal({
 
     startTransition(() => {
       setSelectedMarketId(marketId as MarketId);
-      if (nextMarket.contractLabel) {
-        setSelectedContract(nextMarket.contractLabel);
-      } else {
-        setSelectedContract(getDefaultContractForMarket(nextMarket));
-      }
       setChartContext(getDefaultChartContextForMarket(nextMarket));
       setLimitPrice(getRenderablePriceInput(marketData[marketId as MarketId].mark));
       setLastAction(`Switched to ${getDisplayTicker(nextMarket)}`);
@@ -1452,28 +1330,24 @@ export function OrderBookTradingTerminal({
   }
 
   return (
-    <main className="min-h-screen bg-transparent text-[#D7DEE8] xl:h-dvh xl:overflow-hidden">
+    <main className="min-h-screen bg-[#050505] text-[#D7DEE8] xl:h-dvh xl:overflow-hidden">
       <MarketDocumentTitle pair={formatFxDisplayPair(selectedMarket.pair)} price={liveCandles.at(-1)?.close ?? null} />
 
-      <div className="mx-auto flex min-h-screen w-full max-w-none flex-col px-2 py-2.5 xl:h-dvh xl:overflow-hidden xl:px-3">
+      <div className="mx-auto flex min-h-screen w-full max-w-none flex-col gap-3 p-3 xl:h-dvh xl:overflow-hidden xl:px-4">
         <TradingMarketHeader
           atmIvByMarketId={optionAtmIvByMarketId}
           annualizedBasisByMarketId={selectorAnnualizedBasisByMarketId}
           basisByMarketId={selectorBasisByMarketId}
-          contractTabs={getContractTabsForProduct(selectedMarket.type, marketDefinitions)}
-          currentContract={selectedContract}
           currentMarketId={selectedMarketId}
-          infoBar={liveInfoBar}
           lastByMarketId={selectorLastByMarketId}
           marketOptions={marketDefinitions}
           openInterestByMarketId={optionOpenInterestByMarketId}
-          onContractSelect={handleContractSelect}
           onMarketSelect={handleMarketSelect}
           selectedMarket={selectedMarket}
           spotChangeByMarketId={spotChangeByMarketId}
         />
 
-        <section className="mt-2.5 grid grid-cols-1 gap-2.5 xl:h-[460px] xl:min-h-0 xl:flex-none xl:grid-cols-[minmax(0,1fr)_320px] xl:overflow-hidden 2xl:h-[520px] 2xl:grid-cols-[minmax(0,1fr)_340px]">
+        <section className="grid grid-cols-1 gap-3 xl:h-[500px] xl:min-h-0 xl:flex-none xl:grid-cols-[minmax(0,1fr)_360px] xl:overflow-hidden 2xl:h-[560px] 2xl:grid-cols-[minmax(0,1fr)_380px]">
           <div className="min-h-[320px] xl:min-h-0 xl:overflow-hidden">
             <TradingChartPanel
               candles={liveCandles}
@@ -1542,7 +1416,7 @@ export function OrderBookTradingTerminal({
           </div>
         </section>
 
-        <div className="mt-2.5 min-h-[200px] flex-1 xl:min-h-[230px] xl:shrink-0">
+        <div className="min-h-[180px] flex-1 xl:min-h-[190px] xl:shrink-0">
           <TradingActivityPanel
             activityView={dynamicActivityViews[selectedBottomTab]}
             footerLinks={[]}

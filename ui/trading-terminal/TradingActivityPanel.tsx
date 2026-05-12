@@ -14,25 +14,25 @@ export function TradingActivityPanel({
   tabs: ActivityTab[];
   onTabSelect: (tabId: string) => void;
 }) {
-  const minimumVisibleRows = 7;
+  const minimumVisibleRows = 4;
   const isEmpty = activityView.rows.length === 0;
   const fillerRowCount = Math.max(0, minimumVisibleRows - activityView.rows.length);
   const isMetricColumn = (column: string) => column.includes("PnL") || column.includes("%") || column.includes("Return");
 
   return (
-    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-[20px] bg-[#0A1119]/72 ring-1 ring-white/5">
-      <div className="flex flex-wrap items-center gap-1.5 border-white/6 border-b px-3 py-2">
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-white/4 px-2 py-1 font-medium text-[#9CBFF2] text-[8px]">
-            <span className="size-1.5 rounded-full bg-[#3B82F6]" />
-            Online
-          </div>
+    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-[28px] bg-black/72 shadow-[0_24px_80px_rgba(0,0,0,0.28)] ring-1 ring-white/8">
+      <div className="flex flex-wrap items-center gap-2 px-4 py-3">
+        <div className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.035] px-2.5 py-1 font-medium text-[8px] text-white/58">
+          <span className="size-1.5 rounded-full bg-white/70" />
+          Online
+        </div>
 
         <div className="flex flex-wrap gap-1">
           {tabs.map((tab) => (
             <button
               className={cn(
-                "rounded-xl px-2 py-1 font-medium text-[#748195] text-[9px] transition-colors hover:bg-white/5",
-                selectedTab === tab.id && "bg-white/6 text-[#E5ECF5]",
+                "rounded-xl px-3 py-1.5 font-medium text-[10px] text-white/48 transition-colors hover:bg-white/5 hover:text-white/80",
+                selectedTab === tab.id && "bg-white/10 text-white",
               )}
               key={tab.id}
               onClick={() => onTabSelect(tab.id)}
@@ -44,9 +44,9 @@ export function TradingActivityPanel({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto px-3 py-2.5">
+      <div className="min-h-0 flex-1 overflow-auto px-4 pb-4">
         <div
-          className="grid gap-2 text-[#5F6D80] text-[8px] uppercase tracking-[0.16em]"
+          className="grid gap-2 text-[8px] text-white/35 uppercase tracking-[0.16em]"
           style={{ gridTemplateColumns: `repeat(${activityView.columns.length}, minmax(0, 1fr))` }}
         >
           {activityView.columns.map((column) => (
@@ -56,14 +56,14 @@ export function TradingActivityPanel({
           ))}
         </div>
 
-        <div className="mt-2 flex min-h-[180px] flex-1 flex-col overflow-hidden rounded-2xl bg-white/3 xl:min-h-[210px]">
+        <div className="mt-2 flex min-h-[116px] flex-1 flex-col overflow-hidden rounded-[20px] bg-white/2.5 xl:min-h-[132px]">
           {isEmpty ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
               <div>
-                <div className="font-medium text-[#E5ECF5] text-sm">
+                <div className="font-medium text-sm text-white">
                   {selectedTab === "positions" ? "No positions" : "No activity yet"}
                 </div>
-                <div className="mt-1 text-[#738095] text-[11px]">
+                <div className="mt-1 text-[11px] text-white/55">
                   {selectedTab === "positions"
                     ? "Your positions will appear here once orders are filled."
                     : "This panel will populate as trading activity comes in."}
@@ -72,14 +72,14 @@ export function TradingActivityPanel({
 
               <div className="flex flex-wrap justify-center gap-2">
                 <button
-                  className="rounded-xl bg-white/5 px-3 py-1.5 text-[#D7DEE8] text-[11px] transition-colors hover:bg-white/8"
+                  className="rounded-xl bg-white/6 px-3 py-1.5 text-[11px] text-white/80 transition-colors hover:bg-white/10"
                   onClick={() => onTabSelect("open-orders")}
                   type="button"
                 >
                   Open Orders
                 </button>
                 <button
-                  className="rounded-xl bg-white/5 px-3 py-1.5 text-[#D7DEE8] text-[11px] transition-colors hover:bg-white/8"
+                  className="rounded-xl bg-white/6 px-3 py-1.5 text-[11px] text-white/80 transition-colors hover:bg-white/10"
                   onClick={() => onTabSelect("trade-history")}
                   type="button"
                 >
@@ -91,18 +91,18 @@ export function TradingActivityPanel({
             <div className="flex flex-1 flex-col">
               {activityView.rows.map((row, rowIndex) => (
                 <div
-                  className="grid min-h-9 items-center gap-2 border-white/6 border-b px-2.5 py-1.5 text-[11px] last:border-b-0"
+                  className="grid min-h-10 items-center gap-2 border-white/6 border-b px-3 py-1.5 text-[11px] last:border-b-0"
                   key={`${row.cells[0]}-${rowIndex}`}
                   style={{ gridTemplateColumns: `repeat(${activityView.columns.length}, minmax(0, 1fr))` }}
                 >
                   {row.cells.map((cell, cellIndex) => (
                     <span
                       className={cn(
-                        "text-[#C2CCD9]",
-                        cellIndex === 0 && "font-medium text-[#E5ECF5]",
+                        "text-white/70",
+                        cellIndex === 0 && "font-medium text-white/90",
                         isMetricColumn(activityView.columns[cellIndex] ?? "") && "text-right",
-                        cell.startsWith("-") && "text-[#C89393]",
-                        row.positiveCellIndexes?.includes(cellIndex) && "font-medium text-[#8AB899]",
+                        cell.startsWith("-") && "text-white/45",
+                        row.positiveCellIndexes?.includes(cellIndex) && "font-medium text-white",
                       )}
                       key={`${cell}-${cellIndex}`}
                     >
@@ -114,7 +114,7 @@ export function TradingActivityPanel({
 
               {Array.from({ length: fillerRowCount }, (_, rowIndex) => (
                 <div
-                  className="grid min-h-9 items-center gap-2 border-white/6 border-b px-2.5 py-1.5"
+                  className="grid min-h-10 items-center gap-2 border-white/6 border-b px-3 py-1.5"
                   key={`filler-${rowIndex}`}
                   style={{ gridTemplateColumns: `repeat(${activityView.columns.length}, minmax(0, 1fr))` }}
                 >
@@ -136,9 +136,9 @@ export function TradingActivityPanel({
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 border-white/6 border-t px-3 py-2 text-[#5F6D80] text-[10px] sm:flex-row sm:items-center sm:justify-end">
+      <div className="flex flex-col gap-2 px-4 pb-3 text-[10px] text-white/35 sm:flex-row sm:items-center sm:justify-end">
         {footerLinks.map((link) => (
-          <a className="transition-colors hover:text-[#D7DEE8]" href={link.href} key={link.label}>
+          <a className="transition-colors hover:text-white/80" href={link.href} key={link.label}>
             {link.label}
           </a>
         ))}

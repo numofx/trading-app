@@ -120,7 +120,6 @@ export function TradingChartPanel({
   chartContext,
   ticker,
   onChartContextChange,
-  onRangeChange,
 }: {
   candles: Candle[];
   chartContext: (typeof CHART_CONTEXT_TABS)[number];
@@ -143,23 +142,23 @@ export function TradingChartPanel({
   const pairLabel = getPairLabel(ticker);
 
   return (
-    <section className="flex h-full min-h-[320px] flex-col overflow-hidden rounded-[20px] border border-white/10 bg-black/94 p-3 text-white shadow-[0_18px_60px_rgba(0,0,0,0.28)] xl:min-h-0">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-semibold text-[26px] leading-none">{pairLabel}</h2>
-        <div className="flex items-center gap-3">
+    <section className="flex h-full min-h-[320px] flex-col overflow-hidden rounded-[28px] bg-black p-5 text-white shadow-[0_28px_90px_rgba(0,0,0,0.36)] ring-1 ring-white/8 xl:min-h-0">
+      <div className="flex flex-wrap items-center justify-between gap-5">
+        <h2 className="font-semibold text-[32px] leading-none tracking-[-0.03em]">{pairLabel}</h2>
+        <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <SmartImage<string> alt="USDC" className="size-8 rounded-full bg-white/12 p-1" src="/tokens/usdc.svg" />
+            <SmartImage<string> alt="USDC" className="size-8 rounded-full bg-white/12 p-1 contrast-125 grayscale" src="/tokens/usdc.svg" />
             <span className="font-semibold text-[15px]">USDC</span>
           </div>
           <span className="text-[18px] text-white/60">→</span>
           <div className="flex items-center gap-2">
-            <SmartImage<string> alt="cNGN" className="size-8 rounded-full bg-white/12 p-1" src="/tokens/cngn.svg" />
+            <SmartImage<string> alt="cNGN" className="size-8 rounded-full bg-white/12 p-1 contrast-125 grayscale" src="/tokens/cngn.svg" />
             <span className="font-semibold text-[15px]">cNGN</span>
           </div>
         </div>
       </div>
 
-      <div className="mt-3 grid gap-2.5 md:grid-cols-5">
+      <div className="mt-7 grid gap-3 md:grid-cols-5">
         {FORWARD_POINTS.slice(1).map((point) => {
           const sourceIndex = FORWARD_POINTS.findIndex((candidate) => candidate.tenor === point.tenor);
           const isActive = sourceIndex === activeIndex;
@@ -167,8 +166,8 @@ export function TradingChartPanel({
           return (
             <button
               className={cn(
-                "rounded-[10px] border border-white/12 p-2.5 text-left transition-colors hover:bg-white/6",
-                isActive && "border-white bg-white/[0.035]",
+                "rounded-[16px] bg-white/2.5 p-4 text-left ring-1 ring-white/7 transition-colors hover:bg-white/6",
+                isActive && "bg-white/[0.07] ring-white/70",
               )}
               key={point.tenor}
               onClick={() => {
@@ -177,45 +176,17 @@ export function TradingChartPanel({
               }}
               type="button"
             >
-              <div className="font-medium text-[12px] text-white/82">{point.label}</div>
-              <div className="mt-1.5 font-semibold text-[18px]">{formatNaira(point.rate)}</div>
-              <div className="text-[12px] text-white/75">{formatBasis(point.basis)}</div>
+              <div className="font-medium text-[13px] text-white/74">{point.label}</div>
+              <div className="mt-3 font-semibold text-[22px] tracking-[-0.03em]">{formatNaira(point.rate)}</div>
+              <div className="mt-1 text-[13px] text-white/58">{formatBasis(point.basis)}</div>
             </button>
           );
         })}
       </div>
 
-      <div className="mt-3 text-[13px] text-white/82">NGN per USDC</div>
-      <div className="min-h-0 shrink-0">
+      <div className="mt-7 text-[13px] text-white/62">NGN per USDC</div>
+      <div className="min-h-0 flex-1">
         <ForwardCurveChart activeIndex={activeIndex} />
-      </div>
-
-      <div className="mt-2 grid shrink-0 overflow-hidden rounded-[10px] border border-white/10 md:grid-cols-6">
-        <div className="border-white/10 border-r px-3 py-2">
-          <div className="text-[10px] text-white/70 uppercase">Spot</div>
-          <div className="mt-1 font-semibold text-[16px]">{formatNaira(FORWARD_POINTS[0].rate)}</div>
-          <div className="text-[11px] text-white/65">—</div>
-        </div>
-        {FORWARD_POINTS.slice(1).filter((point) => point.tenor !== "2M").map((point) => (
-          <button
-            className="border-white/10 border-r px-3 py-2 text-left transition-colors last:border-r-0 hover:bg-white/6"
-            key={`summary-${point.tenor}`}
-            onClick={() => {
-              setActiveIndex(FORWARD_POINTS.findIndex((candidate) => candidate.tenor === point.tenor));
-              onRangeChange("1d");
-            }}
-            type="button"
-          >
-            <div className="text-[10px] text-white/70 uppercase">{point.tenor} FWD</div>
-            <div className="mt-1 font-semibold text-[16px]">{formatNaira(point.rate)}</div>
-            <div className="text-[11px] text-white/65">{formatBasis(point.basis)}</div>
-          </button>
-        ))}
-        <div className="px-3 py-2">
-          <div className="text-[10px] text-white/70 uppercase">Open Interest</div>
-          <div className="mt-1 font-semibold text-[16px]">$2.1M</div>
-          <div className="text-[11px] text-white/65">Across 184 traders</div>
-        </div>
       </div>
 
       <div className="sr-only">

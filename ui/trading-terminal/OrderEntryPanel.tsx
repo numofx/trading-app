@@ -14,12 +14,12 @@ function LabelValueRow({ label, value }: { label: string; value: string }) {
 
   return (
     <div className="flex items-start justify-between gap-3 text-[11px]">
-      <span className="min-w-0 flex-1 text-[#738095]">{label}</span>
+      <span className="min-w-0 flex-1 text-white/45">{label}</span>
       <span
         className={cn(
-          "wrap-break-word min-w-0 max-w-[60%] text-right font-medium text-[#D7DEE8] leading-snug",
-          isPositive && "text-[#8AB899]",
-          isNegative && "text-[#C89393]",
+          "wrap-break-word min-w-0 max-w-[60%] text-right font-medium text-white/82 leading-snug",
+          isPositive && "text-white",
+          isNegative && "text-white/50",
         )}
       >
         {value}
@@ -200,13 +200,13 @@ export function OrderEntryPanel({
     const fee = displayedAmount * 0.000_75;
     const nextStepSize = displayedAmount >= 1000 ? 1000 : 1;
     return (
-      <section className="flex h-full min-h-[300px] flex-col rounded-[18px] border border-white/10 bg-black/92 p-3 text-[#F5F5F5] shadow-[0_20px_70px_rgba(0,0,0,0.32)] xl:min-h-0">
-        <div className="space-y-3.5 overflow-y-auto">
-          <div className="grid grid-cols-2 overflow-hidden rounded-[12px] border border-white/14">
+      <section className="flex h-full min-h-[300px] flex-col rounded-[28px] bg-black p-4 text-[#F5F5F5] shadow-[0_28px_90px_rgba(0,0,0,0.36)] ring-1 ring-white/8 xl:min-h-0">
+        <div className="space-y-5 overflow-y-auto">
+          <div className="grid grid-cols-2 overflow-hidden rounded-[16px] bg-white/[0.035] p-1 ring-1 ring-white/10">
             <button
               className={cn(
-                "min-h-11 px-3 font-semibold text-[14px] transition-colors",
-                isLong ? "bg-white text-black" : "bg-transparent text-white hover:bg-white/6",
+                "min-h-12 rounded-[12px] px-3 font-semibold text-[14px] transition-colors",
+                isLong ? "bg-white text-black" : "text-white/72 hover:bg-white/6",
               )}
               onClick={() => onSideChange("buy")}
               type="button"
@@ -215,8 +215,8 @@ export function OrderEntryPanel({
             </button>
             <button
               className={cn(
-                "min-h-11 border-white/14 border-l px-3 font-semibold text-[14px] transition-colors",
-                isLong ? "bg-transparent text-white hover:bg-white/6" : "bg-white text-black",
+                "min-h-12 rounded-[12px] px-3 font-semibold text-[14px] transition-colors",
+                isLong ? "text-white/72 hover:bg-white/6" : "bg-white text-black",
               )}
               onClick={() => onSideChange("sell")}
               type="button"
@@ -225,12 +225,12 @@ export function OrderEntryPanel({
             </button>
           </div>
 
-          <div className="grid grid-cols-3 rounded-[14px] bg-white/6 p-1">
+          <div className="grid grid-cols-3 rounded-[16px] bg-white/[0.035] p-1">
             {(["Market", "Limit", "Stop"] as const).map((tab) => (
               <button
                 className={cn(
-                  "rounded-[10px] p-2 font-semibold text-[12px] transition-colors",
-                  orderType === tab ? "bg-white/12 text-white" : "text-white/75 hover:bg-white/7",
+                  "rounded-[12px] p-2.5 font-semibold text-[12px] transition-colors",
+                  orderType === tab ? "bg-white/12 text-white" : "text-white/55 hover:bg-white/7",
                 )}
                 key={tab}
                 onClick={() => onOrderTypeChange(tab)}
@@ -243,33 +243,33 @@ export function OrderEntryPanel({
 
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-3 text-[12px]">
-              <label className="text-white/82" htmlFor="future-trade-size">
+              <label className="text-white/62" htmlFor="future-trade-size">
                 Amount (USDC)
               </label>
-              <span className="text-white/70">Balance: 250,000 USDC</span>
+              <span className="text-white/45">Balance: 250,000 USDC</span>
             </div>
-            <div className="grid grid-cols-[42px_minmax(0,1fr)_66px_42px] overflow-hidden rounded-[12px] border border-white/10 bg-white/6">
+            <div className="grid grid-cols-[44px_minmax(0,1fr)_68px_44px] overflow-hidden rounded-[16px] bg-white/[0.035] ring-1 ring-white/10">
               <button
                 aria-label="Decrease amount"
-                className="flex min-h-11 items-center justify-center border-white/10 border-r text-white transition-colors hover:bg-white/8"
+                className="flex min-h-12 items-center justify-center text-white transition-colors hover:bg-white/8"
                 onClick={() => onSizeChange(String(Math.max(0, displayedAmount - nextStepSize)))}
                 type="button"
               >
                 <Minus className="size-4" />
               </button>
               <input
-                className="min-h-11 bg-transparent px-3 text-center font-semibold text-[18px] text-white outline-none"
+                className="min-h-12 bg-transparent px-3 text-center font-semibold text-[18px] text-white outline-none"
                 id="future-trade-size"
                 inputMode="decimal"
                 onChange={(event) => onSizeChange(event.target.value.replace(/[^\d.]/g, ""))}
                 value={size}
               />
-              <div className="flex min-h-11 items-center justify-center border-white/10 border-l text-[12px] text-white/75">
+              <div className="flex min-h-12 items-center justify-center text-[12px] text-white/55">
                 USDC
               </div>
               <button
                 aria-label="Increase amount"
-                className="flex min-h-11 items-center justify-center border-white/10 border-l text-white transition-colors hover:bg-white/8"
+                className="flex min-h-12 items-center justify-center text-white transition-colors hover:bg-white/8"
                 onClick={() => onSizeChange(String(displayedAmount + nextStepSize))}
                 type="button"
               >
@@ -299,13 +299,13 @@ export function OrderEntryPanel({
           ) : null}
 
           <div className="space-y-2">
-            <div className="text-[12px] text-white/82">Leverage</div>
+            <div className="text-[12px] text-white/62">Leverage</div>
             <div className="grid grid-cols-5 gap-2">
               {FUTURE_LEVERAGE_OPTIONS.map((option) => (
                 <button
                   className={cn(
-                    "min-h-10 rounded-[8px] border border-white/14 font-semibold text-[14px] transition-colors",
-                    leverage === option ? "bg-white text-black" : "bg-transparent text-white hover:bg-white/7",
+                    "min-h-11 rounded-[12px] font-semibold text-[14px] ring-1 ring-white/10 transition-colors",
+                    leverage === option ? "bg-white text-black ring-white" : "bg-white/2.5 text-white/78 hover:bg-white/7",
                   )}
                   key={option}
                   onClick={() => onAllocationChange(option)}
@@ -317,12 +317,12 @@ export function OrderEntryPanel({
             </div>
           </div>
 
-          <section className="space-y-2 rounded-[10px] border border-white/10 bg-white/[0.035] p-3">
+          <section className="space-y-2 rounded-[18px] bg-white/3 p-4 ring-1 ring-white/8">
             <LabelValueRow label="Position Notional" value={formatCompactAmount(displayedAmount, "USDC")} />
             <LabelValueRow label="Forward Rate" value={formatFutureRate(forwardRate)} />
             <LabelValueRow label="Total Notional" value={formatCompactAmount(totalNotional, "cNGN")} />
             <LabelValueRow label="Leverage" value={`${leverage}x`} />
-            <div className="border-white/10 border-t pt-2">
+            <div className="border-white/8 border-t pt-3">
               <LabelValueRow label={`Initial Margin (${Math.round(100 / leverage)}%)`} value={formatCompactAmount(initialMargin, "USDC")} />
               <LabelValueRow label={`Maintenance Margin (${Math.round(50 / leverage)}%)`} value={formatCompactAmount(maintenanceMargin, "USDC")} />
               <LabelValueRow label="Liquidation Price" value={formatFutureRate(liquidationPrice)} />
@@ -331,7 +331,7 @@ export function OrderEntryPanel({
           </section>
 
           <button
-            className="min-h-13 w-full rounded-[10px] bg-white px-3 font-semibold text-[17px] text-black transition-colors hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-14 w-full rounded-[16px] bg-white px-3 font-semibold text-[17px] text-black transition-colors hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={isSubmitting || isSubmitDisabled}
             onClick={() => onSubmit(orderSide)}
             type="button"

@@ -163,21 +163,17 @@ export default async function Home({ searchParams }: HomeProps) {
     liveFutures = [];
   }
 
-  const { defaultContract, defaultMarketId, marketData, marketDefinitions } = buildTradingTerminalMarkets(liveSpot, liveFutures);
+  const { defaultMarketId, marketData, marketDefinitions } = buildTradingTerminalMarkets(liveSpot, liveFutures);
   const marketSelectionAliases = buildMarketSelectionAliasMap(marketDefinitions);
   const requestedMarket = Array.isArray(resolvedSearchParams.market)
     ? resolvedSearchParams.market[0]
     : resolvedSearchParams.market;
   const initialMarketId = resolveInitialMarketSelection(requestedMarket, marketSelectionAliases, defaultMarketId);
-  const initialContract =
-    marketDefinitions.find((marketDefinition) => marketDefinition.id === initialMarketId)?.contractLabel ??
-    defaultContract;
 
   return (
     <OrderBookTradingTerminal
       chainlinkSpot={chainlinkSpot}
       defaultMarketId={defaultMarketId}
-      initialContract={initialContract}
       initialMarketId={initialMarketId}
       marketData={marketData}
       marketDefinitions={marketDefinitions}

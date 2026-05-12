@@ -2,29 +2,23 @@
 
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
-import { ChevronDown, Command, Dot, Search, X } from "lucide-react";
+import { ChevronDown, Command, Search, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatFxDisplayPair, getProductDisplayName, getSelectedInstrumentDisplay } from "@/lib/market-display";
 import { getMarketTokenIcons } from "@/lib/market-token-icons";
 import { buildMarketSelectionAliasMap } from "@/lib/market-selection";
-import type { ContractTab, MarketDefinition, MarketId, MarketStat } from "@/lib/trading.types";
+import type { MarketDefinition, MarketId } from "@/lib/trading.types";
 import { PrivyWalletButton } from "@/ui/PrivyWalletButton";
 import { SmartImage } from "@/ui/SmartImage";
 import { MarketSwitcherRow } from "@/ui/trading-terminal/MarketSwitcherRow";
 import { useMarketSelectorPreferences } from "@/ui/trading-terminal/useMarketSelectorPreferences";
 
-function formatContractLabel(label: string) {
-  const [month, year] = label.split(" ");
-
-  if (!month || !year) {
-    return label;
+function getSelectorTypeLabel(type: MarketDefinition["type"]) {
+  if (type === "future") {
+    return "Futures";
   }
 
-  return `${month[0]}${month.slice(1).toLowerCase()} ${year}`;
-}
-
-function hasAprilLeverageBadge(label: string) {
-  return label.toUpperCase().startsWith("APR ");
+  return getProductDisplayName(type);
 }
 
 function getProductTabLabel(tab: "All" | "spot" | "future" | "option") {
@@ -127,14 +121,10 @@ export function TradingMarketHeader({
   atmIvByMarketId,
   annualizedBasisByMarketId,
   basisByMarketId,
-  contractTabs,
-  currentContract,
   currentMarketId,
   lastByMarketId,
-  infoBar,
   marketOptions,
   openInterestByMarketId,
-  onContractSelect,
   onMarketSelect,
   selectedMarket,
   spotChangeByMarketId,
@@ -142,14 +132,10 @@ export function TradingMarketHeader({
   atmIvByMarketId: Record<string, string | null>;
   annualizedBasisByMarketId: Record<string, number | null>;
   basisByMarketId: Record<string, number | null>;
-  contractTabs: ContractTab[];
-  currentContract: string;
   currentMarketId: string;
-  infoBar: MarketStat[];
   lastByMarketId: Record<string, number | null>;
   marketOptions: MarketDefinition[];
   openInterestByMarketId: Record<string, string | null>;
-  onContractSelect: (contract: string) => void;
   onMarketSelect: (marketId: string) => void;
   selectedMarket: MarketDefinition;
   spotChangeByMarketId: Record<string, string | null>;
@@ -176,6 +162,7 @@ export function TradingMarketHeader({
   const normalizedSearch = marketSearch.trim().toLowerCase();
   const selectedInstrument = getSelectedInstrumentDisplay(selectedMarket);
   const selectedMarketTokenIcons = getMarketTokenIcons(selectedMarket.pair);
+  const primaryTokenIcon = selectedMarketTokenIcons[0] ?? null;
   const matchingMarkets = marketOptions
     .filter((market) => {
     const matchesPrimary =
@@ -389,106 +376,62 @@ export function TradingMarketHeader({
   }
 
   return (
-    <header className="rounded-[22px] bg-[#0C141E]/94 px-3.5 py-2.5 shadow-[0_18px_60px_rgba(0,0,0,0.24)] ring-1 ring-white/6">
-      <div className="flex flex-col gap-2.5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <SmartImage<string>
-              alt="Numo"
-              className="h-5.5 w-20 shrink-0 sm:h-6 sm:w-24"
-              imgClassName="object-left"
-              priority
-              src="/numo_logo_white.png"
-            />
+    <header className="rounded-[26px] bg-black px-4 py-3 shadow-[0_24px_80px_rgba(0,0,0,0.32)] ring-1 ring-white/8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <SmartImage<string>
+            alt="Numo"
+            className="h-5.5 w-20 shrink-0 grayscale sm:h-6 sm:w-24"
+            imgClassName="object-left"
+            priority
+            src="/numo_logo_white.png"
+          />
 
-            <div className="relative">
-              <button
-                aria-expanded={marketSearchOpen}
-                aria-haspopup="dialog"
-                className="inline-flex h-10 items-center gap-2.5 rounded-2xl bg-white/4 px-3.5 font-semibold text-[#E5ECF5] text-[13px] leading-none ring-1 ring-white/6"
-                onClick={openMarketSearch}
-                type="button"
-              >
-                {selectedMarketTokenIcons.length > 0 ? (
-                  <span className="flex shrink-0 items-center -space-x-1">
-                    {selectedMarketTokenIcons.map((tokenIcon) => (
-                      <SmartImage<string>
-                        alt={tokenIcon.symbol}
-                        className="size-5.5 overflow-hidden rounded-full border border-[#1B2430] bg-white"
-                        key={tokenIcon.symbol}
-                        src={tokenIcon.src}
-                      />
-                    ))}
-                  </span>
-                ) : (
-                  <SmartImage<string>
-                    alt="NG"
-                    className="h-3.5 w-5 shrink-0 overflow-hidden rounded-[2px]"
-                    imgClassName="object-cover"
-                    src={selectedMarket.flagSrc}
-                  />
-                )}
-                <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-                  <span className="truncate font-semibold text-[#E5ECF5] text-[13px] leading-none">
-                    {selectedInstrument.pairLabel}
-                  </span>
-                  <span className="shrink-0 rounded-[10px] bg-[#0D4138] px-2 py-0.5 font-semibold text-[#51D0A6] text-[10px] uppercase leading-none tracking-[0.04em]">
-                    {selectedInstrument.typeLabel}
-                  </span>
-                  {selectedInstrument.expiryLabel && hasAprilLeverageBadge(selectedInstrument.expiryLabel) ? (
-                    <span className="shrink-0 rounded-full bg-[#153C2B] px-1.5 py-0.5 font-semibold text-[#6EE7A8] text-[9px] leading-none">
-                      10x
-                    </span>
-                  ) : null}
-                  {selectedInstrument.expiryLabel ? (
-                    <span className="truncate font-semibold text-[#E5ECF5] text-[13px] leading-none">
-                      · {selectedInstrument.expiryLabel}
-                    </span>
-                  ) : null}
+          <div className="relative">
+            <button
+              aria-expanded={marketSearchOpen}
+              aria-haspopup="dialog"
+              className="inline-flex h-11 items-center gap-3 rounded-[16px] bg-white/[0.035] px-3.5 font-semibold text-[#F4F4F5] text-[14px] leading-none shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] ring-1 ring-white/10 transition-colors hover:bg-white/7"
+              onClick={openMarketSearch}
+              type="button"
+            >
+              {primaryTokenIcon ? (
+                <SmartImage<string>
+                  alt={primaryTokenIcon.symbol}
+                  className="size-7 overflow-hidden rounded-full bg-white/10 p-0.5 contrast-125 grayscale"
+                  src={primaryTokenIcon.src}
+                />
+              ) : (
+                <SmartImage<string>
+                  alt="NG"
+                  className="h-4 w-6 shrink-0 overflow-hidden rounded-[3px] grayscale"
+                  imgClassName="object-cover"
+                  src={selectedMarket.flagSrc}
+                />
+              )}
+              <span className="flex min-w-0 items-center gap-2 overflow-hidden">
+                <span className="truncate font-semibold text-[#F4F4F5] text-[15px] leading-none">
+                  {selectedInstrument.pairLabel}
                 </span>
-                <span className="hidden items-center gap-1 rounded-full bg-white/5 px-2 py-1 font-medium text-[#6F7C90] text-[10px] sm:inline-flex">
-                  <Command className="size-2.5" />
-                  K
+                <span className="shrink-0 rounded-md bg-white/10 px-2.5 py-1 font-semibold text-[#F4F4F5] text-[10px] uppercase leading-none tracking-[0.04em]">
+                  {getSelectorTypeLabel(selectedMarket.type)}
                 </span>
-                <ChevronDown className="size-3.5 shrink-0 text-[#6F7C90]" />
-              </button>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {contractTabs.map((tab) => (
-              <button
-                className={cn(
-                  "flex items-center gap-1.5 rounded-xl px-2.5 py-1 font-medium text-[#738095] text-[10px] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]",
-                  currentContract === tab.label && "bg-white/7 text-[#E5ECF5]",
-                )}
-                key={tab.label}
-                onClick={() => onContractSelect(tab.label)}
-                type="button"
-              >
-                <span>{formatContractLabel(tab.label)}</span>
-              </button>
-            ))}
-
-            <PrivyWalletButton />
+                <ChevronDown className="size-4 shrink-0 text-[#A1A1AA]" />
+                {selectedInstrument.expiryLabel ? (
+                  <>
+                    <span className="truncate font-semibold text-[#F4F4F5] text-[15px] leading-none">
+                      {selectedInstrument.expiryLabel}
+                    </span>
+                    <ChevronDown className="size-4 shrink-0 text-[#A1A1AA]" />
+                  </>
+                ) : null}
+              </span>
+            </button>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 border-white/6 border-t pt-2 text-[9px]">
-          {infoBar.map((stat, index) => (
-            <div className="flex items-center gap-1.5" key={stat.label}>
-              {index > 0 ? <Dot className="size-2.5 text-[#324050]" /> : null}
-              <span className="font-medium text-[#738095]">{stat.label}</span>
-              <span
-                className={cn(
-                  "font-semibold text-[#D7DEE8]",
-                  stat.tone === "accent" && "text-[#8EB5F5]",
-                )}
-              >
-                {stat.value}
-              </span>
-            </div>
-          ))}
+        <div className="flex items-center gap-2">
+          <PrivyWalletButton />
         </div>
       </div>
 

@@ -15,7 +15,7 @@ export function PrivyWalletButton() {
     return (
       <button
         aria-disabled="true"
-        className="inline-flex h-10 items-center gap-2 rounded-2xl bg-[#101926] px-3.5 font-medium text-[#738095] text-[12px] ring-1 ring-white/6"
+        className="inline-flex h-10 items-center gap-2 rounded-[10px] bg-white px-4 font-medium text-[#111111] text-[13px] ring-1 ring-black/10"
         title="Set NEXT_PUBLIC_PRIVY_APP_ID to enable wallet login"
         type="button"
       >
@@ -54,10 +54,10 @@ function PrivyWalletButtonInner() {
   return (
     <button
       className={cn(
-        "inline-flex h-10 items-center gap-2 rounded-2xl px-3.5 font-medium text-[12px] transition-colors",
+        "inline-flex h-10 items-center gap-2 rounded-[10px] px-4 font-medium text-[13px] transition-colors",
         authenticated
-          ? "bg-[#101F18] text-[#D8F3E4] ring-1 ring-[#1F5C41] hover:bg-[#143224]"
-          : "bg-[#19356C] text-[#EEF4FF] hover:bg-[#214180]",
+          ? "bg-white text-[#111111] ring-1 ring-black/10 hover:bg-white/90"
+          : "bg-white text-[#111111] ring-1 ring-black/10 hover:bg-white/90",
         (!ready || !walletsReady) && "cursor-wait opacity-80",
       )}
       onClick={() => {
@@ -74,7 +74,7 @@ function PrivyWalletButtonInner() {
       }}
       type="button"
     >
-      <Wallet className="size-3.5" />
+      <Wallet className="size-4" />
       <span>{buttonLabel}</span>
     </button>
   );
