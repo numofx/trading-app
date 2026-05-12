@@ -60,7 +60,7 @@ function ForwardCurveChart({ activeIndex }: { activeIndex: number }) {
   return (
     <svg
       aria-label="USDC/cNGN forward curve"
-      className="h-[170px] w-full"
+      className="h-[214px] w-full"
       role="img"
       viewBox={`0 0 ${width} ${height}`}
     >
@@ -143,18 +143,13 @@ export function TradingChartPanel({
 
   return (
     <section className="flex h-full min-h-[320px] flex-col overflow-hidden rounded-[28px] bg-black p-5 text-white shadow-[0_28px_90px_rgba(0,0,0,0.36)] ring-1 ring-white/8 xl:min-h-0">
-      <div className="flex flex-wrap items-center justify-between gap-5">
-        <h2 className="font-semibold text-[32px] leading-none tracking-[-0.03em]">{pairLabel}</h2>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <SmartImage<string> alt="USDC" className="size-8 rounded-full bg-white/12 p-1 contrast-125 grayscale" src="/tokens/usdc.svg" />
-            <span className="font-semibold text-[15px]">USDC</span>
-          </div>
-          <span className="text-[18px] text-white/60">→</span>
-          <div className="flex items-center gap-2">
-            <SmartImage<string> alt="cNGN" className="size-8 rounded-full bg-white/12 p-1 contrast-125 grayscale" src="/tokens/cngn.svg" />
-            <span className="font-semibold text-[15px]">cNGN</span>
-          </div>
+      <div className="flex flex-wrap items-center gap-5">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex shrink-0 items-center -space-x-1.5">
+            <SmartImage<string> alt="USDC" className="size-7 rounded-full bg-white/12 p-0.5 ring-2 ring-black" src="/tokens/usdc.svg" />
+            <SmartImage<string> alt="cNGN" className="size-7 rounded-full bg-white/12 p-0.5 ring-2 ring-black" src="/tokens/cngn.svg" />
+          </span>
+          <h2 className="truncate font-semibold text-[22px] leading-none tracking-[-0.02em]">{pairLabel}</h2>
         </div>
       </div>
 
@@ -184,7 +179,7 @@ export function TradingChartPanel({
         })}
       </div>
 
-      <div className="mt-7 text-[13px] text-white/62">NGN per USDC</div>
+      <div className="mt-7 text-[13px] text-white/62">cNGN per USDC</div>
       <div className="min-h-0 flex-1">
         <ForwardCurveChart activeIndex={activeIndex} />
       </div>

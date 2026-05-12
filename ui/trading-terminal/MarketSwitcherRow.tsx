@@ -28,19 +28,13 @@ export function MarketSwitcherRow({
   onSelect,
   onToggleFavorite,
 }: {
-  atmIv: string | null;
-  annualizedBasis: number | null;
-  basis: number | null;
   isActive: boolean;
   isFavorite: boolean;
   isSelected: boolean;
-  last: number | null;
   market: MarketDefinition;
-  openInterest: string | null;
   onHover: () => void;
   onSelect: () => void;
   onToggleFavorite: () => void;
-  spotChange: string | null;
 }) {
   const marketTokenIcons = getMarketTokenIcons(market.pair);
   const instrumentDetail = getInstrumentDetailDisplay(market);
@@ -69,7 +63,7 @@ export function MarketSwitcherRow({
               {marketTokenIcons.map((tokenIcon) => (
                 <SmartImage<string>
                   alt={tokenIcon.symbol}
-                  className="size-7 overflow-hidden rounded-full bg-white/12 p-0.5 ring-1 ring-black/30 contrast-125 grayscale"
+                  className="size-7 overflow-hidden rounded-full bg-white/12 p-0.5 ring-1 ring-black/30"
                   key={tokenIcon.symbol}
                   src={tokenIcon.src}
                 />
@@ -78,7 +72,7 @@ export function MarketSwitcherRow({
           ) : (
             <SmartImage<string>
               alt={`${market.pair} flag`}
-              className="h-6 w-9 shrink-0 overflow-hidden rounded-[4px] grayscale"
+              className="h-6 w-9 shrink-0 overflow-hidden rounded-[4px]"
               imgClassName="object-cover"
               src={market.flagSrc}
             />

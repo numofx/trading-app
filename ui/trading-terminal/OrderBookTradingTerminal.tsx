@@ -1,7 +1,7 @@
 "use client";
 
 import { useWallets } from "@privy-io/react-auth";
-import { startTransition, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { createWalletClient, custom } from "viem";
 import { base } from "viem/chains";
@@ -990,12 +990,7 @@ export function OrderBookTradingTerminal({
     liveBasis = calculateBasis(safeLivePrice, liveSpotPrice);
   }
   const {
-    optionAtmIvByMarketId,
-    optionOpenInterestByMarketId,
     selectorAnnualizedBasisByMarketId,
-    selectorBasisByMarketId,
-    selectorLastByMarketId,
-    spotChangeByMarketId,
   } = buildSelectorMetrics(liveSpotPrice, marketDefinitions, marketData);
   const liveCarry = selectorAnnualizedBasisByMarketId[selectedMarket.id] ?? null;
   const displayCandles = getDisplayCandles(
@@ -1167,21 +1162,6 @@ export function OrderBookTradingTerminal({
     return () => window.clearInterval(intervalId);
   }, [selectedMarketId, timeframe, chartContext]);
 
-  function handleMarketSelect(marketId: string) {
-    const nextMarket = marketDefinitions.find((marketOption) => marketOption.id === marketId);
-
-    if (!nextMarket) {
-      return;
-    }
-
-    startTransition(() => {
-      setSelectedMarketId(marketId as MarketId);
-      setChartContext(getDefaultChartContextForMarket(nextMarket));
-      setLimitPrice(getRenderablePriceInput(marketData[marketId as MarketId].mark));
-      setLastAction(`Switched to ${getDisplayTicker(nextMarket)}`);
-    });
-  }
-
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Spot execution needs wallet, env, signing, and backend submission checks in one submit path.
   async function handleSubmit(orderSide: "buy" | "sell") {
     setOrderSide(orderSide);
@@ -1334,18 +1314,7 @@ export function OrderBookTradingTerminal({
       <MarketDocumentTitle pair={formatFxDisplayPair(selectedMarket.pair)} price={liveCandles.at(-1)?.close ?? null} />
 
       <div className="mx-auto flex min-h-screen w-full max-w-none flex-col gap-3 p-3 xl:h-dvh xl:overflow-hidden xl:px-4">
-        <TradingMarketHeader
-          atmIvByMarketId={optionAtmIvByMarketId}
-          annualizedBasisByMarketId={selectorAnnualizedBasisByMarketId}
-          basisByMarketId={selectorBasisByMarketId}
-          currentMarketId={selectedMarketId}
-          lastByMarketId={selectorLastByMarketId}
-          marketOptions={marketDefinitions}
-          openInterestByMarketId={optionOpenInterestByMarketId}
-          onMarketSelect={handleMarketSelect}
-          selectedMarket={selectedMarket}
-          spotChangeByMarketId={spotChangeByMarketId}
-        />
+        <TradingMarketHeader />
 
         <section className="grid grid-cols-1 gap-3 xl:h-[500px] xl:min-h-0 xl:flex-none xl:grid-cols-[minmax(0,1fr)_360px] xl:overflow-hidden 2xl:h-[560px] 2xl:grid-cols-[minmax(0,1fr)_380px]">
           <div className="min-h-[320px] xl:min-h-0 xl:overflow-hidden">

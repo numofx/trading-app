@@ -1,7 +1,9 @@
 import { formatFxDisplayPair } from "@/lib/market-display";
 
 const TOKEN_ICON_BY_SYMBOL = {
+  brz: "/tokens/brz.png",
   cngn: "/tokens/cngn.svg",
+  eurc: "/tokens/eurc.png",
   usdc: "/tokens/usdc.svg",
 } as const;
 
