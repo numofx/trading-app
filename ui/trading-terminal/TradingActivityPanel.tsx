@@ -22,11 +22,6 @@ export function TradingActivityPanel({
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-[28px] bg-black/72 shadow-[0_24px_80px_rgba(0,0,0,0.28)] ring-1 ring-white/8">
       <div className="flex flex-wrap items-center gap-2 px-4 py-3">
-        <div className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.035] px-2.5 py-1 font-medium text-[8px] text-white/58">
-          <span className="size-1.5 rounded-full bg-white/70" />
-          Online
-        </div>
-
         <div className="flex flex-wrap gap-1">
           {tabs.map((tab) => (
             <button

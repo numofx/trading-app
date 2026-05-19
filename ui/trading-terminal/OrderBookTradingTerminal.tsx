@@ -28,9 +28,7 @@ import { buildFutureOrderEnvelope, canSubmitFutureOrder } from "@/lib/future-ord
 import { buildSpotOrderEnvelope, canSubmitSpotOrder } from "@/lib/spot-order-submission";
 import { isUSDCCNGNSpotMarket } from "@/lib/usdccngn-spot-order";
 import {
-  ACTIVITY_VIEWS,
   CHART_TOOLS,
-  DEFAULT_BOTTOM_TAB,
   DEFAULT_CHART_CONTEXT,
   DEFAULT_ORDER_TYPE,
   DEFAULT_SYMBOL,
@@ -38,7 +36,7 @@ import {
 } from "@/lib/mock-orderbook-terminal-data";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import { OrderEntryPanel } from "@/ui/trading-terminal/OrderEntryPanel";
-import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
+
 import { TradingChartPanel } from "@/ui/trading-terminal/TradingChartPanel";
 import { TradingMarketHeader } from "@/ui/trading-terminal/TradingMarketHeader";
 import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
@@ -213,37 +211,6 @@ function shiftCandles(candles: Candle[], targetClose: number) {
     low: Number((candle.low + delta).toFixed(2)),
     open: Number((candle.open + delta).toFixed(2)),
   }));
-}
-
-function buildActivityViews(
-  buyDirection: string,
-  sellDirection: string,
-  ticker: string,
-  positionValue: string,
-  entryPrice: string,
-  markPrice: string,
-  pnl: string,
-  returnValue: string,
-) {
-  const positiveMetricIndexes = [pnl, returnValue].flatMap((value, index) => (value.startsWith("+") ? [index + 4] : []));
-
-  return {
-    "open-orders": {
-      ...ACTIVITY_VIEWS["open-orders"],
-      rows: [{ cells: [ticker, buyDirection, "Limit", "5 contracts", entryPrice] }],
-    },
-    positions: {
-      ...ACTIVITY_VIEWS.positions,
-      rows: [{ cells: [ticker, positionValue, entryPrice, markPrice, pnl, returnValue], positiveCellIndexes: positiveMetricIndexes }],
-    },
-    "trade-history": {
-      ...ACTIVITY_VIEWS["trade-history"],
-      rows: [
-        { cells: ["10:08:14", ticker, buyDirection, "5 contracts", markPrice] },
-        { cells: ["10:08:06", ticker, sellDirection, "3 contracts", entryPrice] },
-      ],
-    },
-  };
 }
 
 function getDisplayTicker(marketDefinition: MarketDefinition) {
@@ -951,8 +918,7 @@ export function OrderBookTradingTerminal({
   const [allocation, setAllocation] = useState(10);
   const [postOnly, setPostOnly] = useState(false);
   const [atExpiryDeliver, setAtExpiryDeliver] = useState(true);
-  const [selectedBottomTab, setSelectedBottomTab] =
-    useState<keyof typeof ACTIVITY_VIEWS>(DEFAULT_BOTTOM_TAB);
+
   const [lastAction, setLastAction] = useState("Ready");
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const [hasHydratedSelection, setHasHydratedSelection] = useState(false);
@@ -1015,16 +981,7 @@ export function OrderBookTradingTerminal({
 
   const { entryPrice, markPrice, pnl: unrealizedPnl, positionOverview, positionValue, exposureLabel, returnLabel, returnValue } =
     getPositionMetrics(marketData, selectedMarket, selectedMarketId, safeLivePrice);
-  const dynamicActivityViews = buildActivityViews(
-    getDirectionalLabel("buy", selectedMarket),
-    getDirectionalLabel("sell", selectedMarket),
-    getDisplayTicker(selectedMarket),
-    positionValue,
-    entryPrice,
-    markPrice,
-    unrealizedPnl,
-    returnValue,
-  );
+
   const spotSizeReferencePrice = getSpotSizeReferencePrice(orderType, limitPrice, safeLivePrice, orderSide);
   const canonicalSpotSize = convertSpotSizeInputToUSDC(size, spotSizeCurrency, spotSizeReferencePrice);
   const effectiveSize = isUSDCCNGNSpotMarket(selectedMarket) ? String(canonicalSpotSize) : size;
@@ -1385,19 +1342,7 @@ export function OrderBookTradingTerminal({
           </div>
         </section>
 
-        <div className="min-h-[180px] flex-1 xl:min-h-[190px] xl:shrink-0">
-          <TradingActivityPanel
-            activityView={dynamicActivityViews[selectedBottomTab]}
-            footerLinks={[]}
-            selectedTab={selectedBottomTab}
-            tabs={[
-              { id: "positions", label: "Positions" },
-              { id: "open-orders", label: "Open Orders" },
-              { id: "trade-history", label: "Trade History" },
-            ]}
-            onTabSelect={(tabId) => setSelectedBottomTab(tabId as keyof typeof ACTIVITY_VIEWS)}
-          />
-        </div>
+
       </div>
     </main>
   );
