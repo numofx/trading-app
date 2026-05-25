@@ -20,7 +20,7 @@ export function AppPrivyProvider({
       clientId={clientId || undefined}
       config={{
         appearance: {
-          accentColor: "#19356C",
+          accentColor: "#38bdf8",
           logo: "/numo_logo_white.png",
           theme: "dark",
         },

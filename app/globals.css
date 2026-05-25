@@ -150,3 +150,151 @@ input {
   font: inherit;
 }
 
+/* --- Premium Web3 Privy Modal Custom Overrides --- */
+
+body {
+  /* Privy style overrides to match dark Web3 theme */
+  --privy-color-background: rgba(0, 0, 0, 0.78) !important;
+  --privy-color-background-2: rgba(8, 8, 8, 0.9) !important;
+  --privy-color-background-3: rgba(12, 12, 12, 0.6) !important;
+  --privy-color-foreground: #ffffff !important;
+  --privy-color-foreground-2: #f1f5f9 !important;
+  --privy-color-foreground-3: #94a3b8 !important;
+  --privy-color-foreground-4: #64748b !important;
+  --privy-color-border-default: rgba(255, 255, 255, 0.08) !important;
+  --privy-color-border-hover: rgba(56, 189, 248, 0.3) !important;
+  --privy-color-border-focus: rgba(56, 189, 248, 0.5) !important;
+  --privy-color-accent: #38bdf8 !important; /* Vibrant light blue brand logo accent color */
+  --privy-color-accent-light: rgba(56, 189, 248, 0.1) !important;
+  --privy-border-radius-sm: 8px !important;
+  --privy-border-radius-md: 10px !important;
+  --privy-border-radius-lg: 20px !important;
+}
+
+/* 1. Backdrop Styling - Soft dimming and very light blur to keep charts legible */
+#privy-dialog-backdrop {
+  background-color: rgba(3, 7, 18, 0.35) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+  transition: all 0.3s ease !important;
+}
+
+/* 2. Modal Card Container Styling - Glassmorphism, charcoal, and faint blue gradient border */
+#privy-modal-content {
+  /* Semi-transparent pure black background to match trading app */
+  background: rgba(0, 0, 0, 0.78) !important;
+  
+  /* Heavy glassmorphism blur effect */
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  
+  /* Razor-thin 1px border with faint gradient hinting at light blue accent (#38bdf8) */
+  border: 1px solid transparent !important;
+  background-image: 
+    linear-gradient(rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.78)) padding-box,
+    linear-gradient(135deg, rgba(56, 189, 248, 0.22) 0%, rgba(25, 53, 108, 0.05) 50%, rgba(56, 189, 248, 0.15) 100%) border-box !important;
+  
+  border-radius: 20px !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.85) !important;
+  transition: all 0.3s ease !important;
+}
+
+@media (max-width: 440px) {
+  #privy-modal-content {
+    border-radius: 20px 20px 0 0 !important;
+  }
+}
+
+/* 3. Text Inputs & Containers - Dark matte fill and high-contrast typography */
+/* Target Privy input wrapper div */
+#privy-modal-content div:has(> input) {
+  background-color: rgba(5, 8, 14, 0.85) !important; /* Dark matte fill */
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 10px !important;
+  padding: 2px 4px !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+#privy-modal-content div:has(> input):focus-within {
+  border-color: rgba(56, 189, 248, 0.45) !important; /* Subtle glow of light blue */
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.12) !important;
+  background-color: rgba(3, 5, 8, 0.95) !important;
+}
+
+/* Direct input style */
+#privy-modal-content input {
+  background: transparent !important;
+  border: none !important;
+  color: #ffffff !important; /* High-contrast white */
+  font-weight: 500 !important;
+  font-family: inherit !important;
+  font-size: 14px !important;
+  transition: color 0.2s ease !important;
+}
+
+/* Placeholder style */
+#privy-modal-content input::placeholder {
+  color: #64748b !important;
+  opacity: 0.85 !important;
+  font-weight: 400 !important;
+}
+
+/* 4. Wallet Connector & Other Option Buttons - Premium hover and styling */
+#privy-modal-content button,
+#privy-modal-content [role="button"] {
+  background-color: rgba(255, 255, 255, 0.02) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  color: #ffffff !important; /* High-contrast white */
+  font-weight: 500 !important;
+  border-radius: 10px !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+#privy-modal-content button:hover,
+#privy-modal-content [role="button"]:hover {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(56, 189, 248, 0.22) !important;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* The Submit Button inside Email input */
+#privy-modal-content button[type="submit"] {
+  background-color: #38bdf8 !important; /* Premium light blue */
+  color: #081019 !important; /* Deep dark contrast text */
+  font-weight: 600 !important;
+  border: none !important;
+  padding: 8px 16px !important;
+  border-radius: 6px !important;
+}
+
+#privy-modal-content button[type="submit"]:hover {
+  background-color: #0ea5e9 !important;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.35) !important;
+}
+
+/* Ensure the Close button remains clean and neat */
+#privy-modal-content button[aria-label="Close"],
+#privy-modal-content button[class*="close"] {
+  background: transparent !important;
+  border: none !important;
+  color: #64748b !important;
+}
+
+#privy-modal-content button[aria-label="Close"]:hover,
+#privy-modal-content button[class*="close"]:hover {
+  color: #ffffff !important;
+}
+
+/* Typography Enhancements for maximum Web3 vibe */
+#privy-modal-content h3, 
+#privy-dialog-title {
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.025em !important;
+}
+
+#privy-modal-content p,
+#privy-modal-content span {
+  color: #cbd5e1 !important;
+}
+
