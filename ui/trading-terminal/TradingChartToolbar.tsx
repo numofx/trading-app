@@ -17,8 +17,8 @@ function ToolbarButton({
   return (
     <button
       className={cn(
-        "inline-flex h-7 items-center gap-1.5 rounded-xl px-2 font-medium text-[#8391A7] text-[10px] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]",
-        active && "bg-[#16233A] text-[#D7E7FF]",
+        "inline-flex h-7 items-center gap-1.5 rounded-xl px-2 font-medium text-[10px] text-panel-text-muted transition-colors hover:bg-input-hover hover:text-panel-text-active",
+        active && "bg-toolbar-active-bg text-toolbar-active-fg",
         className,
       )}
       onClick={onClick}
@@ -52,15 +52,15 @@ export function TradingChartToolbar({
 }) {
   if (mode === "side") {
     return (
-      <div className="flex w-10 shrink-0 flex-col items-center gap-1 border-white/6 border-r px-1 py-2.5">
+      <div className="flex w-10 shrink-0 flex-col items-center gap-1 border-toolbar-border border-r px-1 py-2.5">
         {CHART_TOOLS.map((tool) => {
           const Icon = CHART_TOOL_ICONS[tool.id];
 
           return (
             <button
               className={cn(
-                "flex size-6.5 items-center justify-center rounded-lg text-[#6F7C90] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]",
-                selectedTool === tool.id && "bg-white/7 text-[#D7E7FF]",
+                "flex size-6.5 items-center justify-center rounded-lg text-panel-text-muted transition-colors hover:bg-input-hover hover:text-panel-text-active",
+                selectedTool === tool.id && "bg-toolbar-active-bg text-toolbar-active-fg",
               )}
               key={tool.id}
               onClick={() => onToolSelect(tool.id)}
@@ -76,7 +76,7 @@ export function TradingChartToolbar({
   }
 
   return (
-    <div className="flex items-center justify-between border-white/6 border-b px-3 py-2">
+    <div className="flex items-center justify-between border-toolbar-border border-b px-3 py-2">
       <div className="flex flex-wrap items-center gap-1.5">
         {TIMEFRAME_OPTIONS.map((range) => (
           <ToolbarButton

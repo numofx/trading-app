@@ -1,10 +1,89 @@
 @import "tailwindcss";
 
+@variant dark (&:where(.dark, .dark *));
+
 @source "../node_modules/tw-next-image/dist";
 
 :root {
   --background: #081019;
   --foreground: #d7dee8;
+  
+  --terminal-bg: #050505;
+  --panel-bg: #000000;
+  --panel-bg-muted: rgba(11, 18, 27, 0.76);
+  --panel-bg-darker: rgba(13, 20, 30, 0.96);
+  --panel-ring: rgba(255, 255, 255, 0.08);
+  --panel-border: rgba(255, 255, 255, 0.1);
+  --panel-shadow: rgba(0, 0, 0, 0.36);
+  
+  --panel-text: #d7dee8;
+  --panel-text-muted: #728095;
+  --panel-text-active: #e7edf6;
+
+  --input-bg: rgba(255, 255, 255, 0.035);
+  --input-border: rgba(255, 255, 255, 0.1);
+  --input-hover: rgba(255, 255, 255, 0.06);
+
+  --toolbar-active-bg: #16233a;
+  --toolbar-active-fg: #d7e7ff;
+  --toolbar-border: rgba(255, 255, 255, 0.06);
+
+  --ask-text: #d7a8a8;
+  --bid-text: #9cc7a9;
+  --ask-bg: rgba(90, 38, 40, 0.38);
+  --bid-bg: rgba(23, 56, 42, 0.38);
+  --ask-label: #b78787;
+  --bid-label: #7da189;
+  --mid-price: #dce9ff;
+  --spread-percent: #7ba7f4;
+
+  --chart-curve: #ffffff;
+  --chart-grid-stroke: rgba(255, 255, 255, 0.16);
+  --chart-axis-stroke: rgba(255, 255, 255, 0.5);
+  --chart-label-fill: #d8d8d8;
+  --chart-area-stop-0: rgba(255, 255, 255, 0.32);
+  --chart-area-stop-100: rgba(255, 255, 255, 0.02);
+}
+
+.light {
+  --background: #f8fafc;
+  --foreground: #1e293b;
+
+  --terminal-bg: #f1f5f9;
+  --panel-bg: #ffffff;
+  --panel-bg-muted: rgba(255, 255, 255, 0.92);
+  --panel-bg-darker: rgba(255, 255, 255, 0.98);
+  --panel-ring: rgba(15, 23, 42, 0.08);
+  --panel-border: rgba(15, 23, 42, 0.08);
+  --panel-shadow: rgba(15, 23, 42, 0.04);
+
+  --panel-text: #1e293b;
+  --panel-text-muted: #64748b;
+  --panel-text-active: #0f172a;
+
+  --input-bg: rgba(15, 23, 42, 0.04);
+  --input-border: rgba(15, 23, 42, 0.08);
+  --input-hover: rgba(15, 23, 42, 0.07);
+
+  --toolbar-active-bg: #e2e8f0;
+  --toolbar-active-fg: #0f172a;
+  --toolbar-border: rgba(15, 23, 42, 0.08);
+
+  --ask-text: #b91c1c;
+  --bid-text: #15803d;
+  --ask-bg: rgba(239, 68, 68, 0.06);
+  --bid-bg: rgba(34, 197, 94, 0.06);
+  --ask-label: #b91c1c;
+  --bid-label: #15803d;
+  --mid-price: #1e3a8a;
+  --spread-percent: #2563eb;
+
+  --chart-curve: #0f172a;
+  --chart-grid-stroke: rgba(15, 23, 42, 0.08);
+  --chart-axis-stroke: rgba(15, 23, 42, 0.25);
+  --chart-label-fill: #64748b;
+  --chart-area-stop-0: rgba(15, 23, 42, 0.12);
+  --chart-area-stop-100: rgba(15, 23, 42, 0.01);
 }
 
 @theme inline {
@@ -12,6 +91,30 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --color-terminal-bg: var(--terminal-bg);
+  --color-panel-bg: var(--panel-bg);
+  --color-panel-bg-muted: var(--panel-bg-muted);
+  --color-panel-bg-darker: var(--panel-bg-darker);
+  --color-panel-ring: var(--panel-ring);
+  --color-panel-border: var(--panel-border);
+  --color-panel-text: var(--panel-text);
+  --color-panel-text-muted: var(--panel-text-muted);
+  --color-panel-text-active: var(--panel-text-active);
+  --color-input-bg: var(--input-bg);
+  --color-input-border: var(--input-border);
+  --color-input-hover: var(--input-hover);
+  --color-toolbar-active-bg: var(--toolbar-active-bg);
+  --color-toolbar-active-fg: var(--toolbar-active-fg);
+  --color-toolbar-border: var(--toolbar-border);
+  --color-ask-text: var(--ask-text);
+  --color-bid-text: var(--bid-text);
+  --color-ask-bg: var(--ask-bg);
+  --color-bid-bg: var(--bid-bg);
+  --color-ask-label: var(--ask-label);
+  --color-bid-label: var(--bid-label);
+  --color-mid-price: var(--mid-price);
+  --color-spread-percent: var(--spread-percent);
 }
 
 * {
@@ -22,6 +125,10 @@ html {
   color-scheme: dark;
 }
 
+html.light {
+  color-scheme: light;
+}
+
 body {
   background:
     radial-gradient(circle at top, rgba(24, 47, 78, 0.28), transparent 34%),
@@ -29,9 +136,17 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), sans-serif;
   min-height: 100vh;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+html.light body {
+  background:
+    radial-gradient(circle at top, rgba(14, 165, 233, 0.08), transparent 50%),
+    linear-gradient(180deg, #fafafa 0%, #f4f6f9 100%);
 }
 
 button,
 input {
   font: inherit;
 }
+

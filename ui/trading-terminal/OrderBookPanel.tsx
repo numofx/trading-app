@@ -31,20 +31,20 @@ function OrderRow({
       <div
         className={cn(
           "absolute inset-y-0 right-0 rounded-l-xl",
-          side === "ask" ? "bg-[#5A2628]/38" : "bg-[#17382A]/38",
+          side === "ask" ? "bg-ask-bg" : "bg-bid-bg",
         )}
         style={{ width }}
       />
       <span
         className={cn(
           "relative z-10 font-semibold",
-          side === "ask" ? "text-[#D7A8A8]" : "text-[#9CC7A9]",
+          side === "ask" ? "text-ask-text" : "text-bid-text",
         )}
       >
         {formatPrice(level.price)}
       </span>
-      <span className="relative z-10 text-right font-medium text-[#C2CCD9]">{formatSize(level.size)}</span>
-      <span className="relative z-10 text-right text-[#788699]">{formatSize(level.total)}</span>
+      <span className="relative z-10 text-right font-medium text-panel-text">{formatSize(level.size)}</span>
+      <span className="relative z-10 text-right text-panel-text-muted">{formatSize(level.total)}</span>
     </div>
   );
 }
@@ -73,13 +73,13 @@ export function OrderBookPanel({
   const spreadPercent = midPrice && spread !== null ? (spread / midPrice) * 100 : null;
 
   return (
-    <section className="flex h-full min-h-[300px] flex-col overflow-hidden rounded-[20px] bg-[#0B121B]/76 ring-1 ring-white/5 xl:min-h-0">
-      <div className="flex items-center justify-between border-white/6 border-b px-3 py-2">
+    <section className="flex h-full min-h-[300px] flex-col overflow-hidden rounded-[20px] bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 xl:min-h-0">
+      <div className="flex items-center justify-between border-panel-border border-b px-3 py-2">
         <div className="flex items-center gap-1.5 font-medium text-[11px]">
           <button
             className={cn(
               "rounded-xl px-2 py-1",
-              view === "Order Book" ? "bg-white/6 text-[#E7EDF6]" : "text-[#728095]",
+              view === "Order Book" ? "bg-input-bg text-panel-text-active" : "text-panel-text-muted",
             )}
             onClick={() => onViewChange("Order Book")}
             type="button"
@@ -89,7 +89,7 @@ export function OrderBookPanel({
           <button
             className={cn(
               "rounded-xl px-2 py-1",
-              view === "Trades" ? "bg-white/6 text-[#E7EDF6]" : "text-[#728095]",
+              view === "Trades" ? "bg-input-bg text-panel-text-active" : "text-panel-text-muted",
             )}
             onClick={() => onViewChange("Trades")}
             type="button"
@@ -99,16 +99,16 @@ export function OrderBookPanel({
         </div>
 
         <div className="flex items-center gap-1.5">
-          <button className="rounded-xl p-1 text-[#728095] transition-colors hover:bg-white/5 hover:text-[#D7DEE8]" type="button">
+          <button className="rounded-xl p-1 text-panel-text-muted transition-colors hover:bg-input-hover hover:text-panel-text-active" type="button">
             <MoreHorizontal className="size-3.5" />
           </button>
-          <button className="rounded-xl bg-white/5 px-2 py-1 text-[#C3CFDD] text-[10px]" type="button">
+          <button className="rounded-xl bg-input-bg px-2 py-1 text-[10px] text-panel-text" type="button">
             {contractLabel}
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 border-white/6 border-b px-3 py-1.5 text-[#5E6B7F] text-[8px] uppercase tracking-[0.16em]">
+      <div className="grid grid-cols-3 border-panel-border border-b px-3 py-1.5 text-[8px] text-panel-text-muted uppercase tracking-[0.16em]">
         <span>Price</span>
         <span className="text-right">Size</span>
         <span className="text-right">Total</span>
@@ -116,7 +116,7 @@ export function OrderBookPanel({
 
       {view === "Order Book" ? (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="px-3 py-1 text-[#B78787] text-[8px] uppercase tracking-[0.16em]">
+          <div className="px-3 py-1 text-[8px] text-ask-label uppercase tracking-[0.16em]">
             Asks
           </div>
           <div className="overflow-hidden">
@@ -125,27 +125,27 @@ export function OrderBookPanel({
             ))}
           </div>
 
-          <div className="mx-2 my-1.5 rounded-2xl bg-white/3 px-3 py-2">
+          <div className="mx-2 my-1.5 rounded-2xl bg-input-bg px-3 py-2">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <div className="font-medium text-[#5E6B7F] text-[8px] uppercase tracking-[0.16em]">Spread</div>
-                <div className="mt-1 font-semibold text-[#E7EDF6] text-[13px]">
+                <div className="font-medium text-[8px] text-panel-text-muted uppercase tracking-[0.16em]">Spread</div>
+                <div className="mt-1 font-semibold text-[13px] text-panel-text-active">
                   {spread === null ? "—" : formatPrice(spread)} cNGN
                 </div>
               </div>
               <div className="text-center">
-                <div className="font-medium text-[#5E6B7F] text-[8px] uppercase tracking-[0.16em]">Mid Price</div>
-                <div className="mt-1 font-semibold text-[#DCE9FF] text-[15px]">
+                <div className="font-medium text-[8px] text-panel-text-muted uppercase tracking-[0.16em]">Mid Price</div>
+                <div className="mt-1 font-semibold text-[15px] text-mid-price">
                   {midPrice === null ? "—" : formatPrice(midPrice)}
                 </div>
-                <div className="text-[#7BA7F4] text-[8px]">
+                <div className="text-[8px] text-spread-percent">
                   {spreadPercent === null ? "—" : `${spreadPercent.toFixed(3)}%`}
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="px-3 py-1 text-[#7DA189] text-[8px] uppercase tracking-[0.16em]">
+          <div className="px-3 py-1 text-[8px] text-bid-label uppercase tracking-[0.16em]">
             Bids
           </div>
           <div className="overflow-hidden">
@@ -158,11 +158,11 @@ export function OrderBookPanel({
         <div className="flex min-h-0 flex-1 flex-col">
           {trades.map((trade) => (
             <div className="grid grid-cols-3 px-3 py-1 text-[9px]" key={`${trade.time}-${trade.price}`}>
-              <span className={cn("font-semibold", trade.side === "buy" ? "text-[#86AE95]" : "text-[#C48F8F]")}>
+              <span className={cn("font-semibold", trade.side === "buy" ? "text-bid-text" : "text-ask-text")}>
                 {formatPrice(trade.price)}
               </span>
-              <span className="text-right text-[#BCC7D3]">{formatSize(trade.size)}</span>
-              <span className="text-right text-[#6F7C90]">{trade.time}</span>
+              <span className="text-right text-panel-text">{formatSize(trade.size)}</span>
+              <span className="text-right text-panel-text-muted">{trade.time}</span>
             </div>
           ))}
         </div>

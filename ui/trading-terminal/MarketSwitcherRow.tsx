@@ -44,9 +44,9 @@ export function MarketSwitcherRow({
     <div
       data-market-row={market.id}
       className={cn(
-        "flex w-full items-center gap-4 rounded-[20px] p-4 text-left transition-colors hover:bg-white/4.5",
-        isActive && "bg-white/5.5",
-        isSelected && "bg-white/9 ring-1 ring-white/25",
+        "flex w-full items-center gap-4 rounded-[20px] p-4 text-left transition-colors hover:bg-input-hover",
+        isActive && "bg-input-bg",
+        isSelected && "bg-toolbar-active-bg ring-1 ring-panel-border",
       )}
     >
       <button
@@ -63,7 +63,7 @@ export function MarketSwitcherRow({
               {marketTokenIcons.map((tokenIcon) => (
                 <SmartImage<string>
                   alt={tokenIcon.symbol}
-                  className="size-7 overflow-hidden rounded-full bg-white/12 p-0.5 ring-1 ring-black/30"
+                  className="size-7 overflow-hidden rounded-full bg-input-bg p-0.5 ring-1 ring-panel-border"
                   key={tokenIcon.symbol}
                   src={tokenIcon.src}
                 />
@@ -79,16 +79,16 @@ export function MarketSwitcherRow({
           )}
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-x-3">
-              <span className="truncate font-semibold text-[15px] text-white leading-tight">
+              <span className="truncate font-semibold text-[15px] text-panel-text-active leading-tight">
                 {formatFxDisplayPair(market.pair)}
               </span>
               <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
                 {instrumentTypePillLabel ? (
-                  <span className="shrink-0 rounded-md bg-white/10 px-2 py-0.5 font-semibold text-[10px] text-white/78 uppercase leading-none tracking-[0.04em]">
+                  <span className="shrink-0 rounded-md bg-input-bg px-2 py-0.5 font-semibold text-[10px] text-panel-text-active uppercase leading-none tracking-[0.04em]">
                     {instrumentTypePillLabel}
                   </span>
                 ) : null}
-                <span className="truncate font-medium text-[14px] text-white/50 leading-tight">
+                <span className="truncate font-medium text-[14px] text-panel-text-muted leading-tight">
                   {market.type === "future" ? market.expiryLabel ?? instrumentDetail : instrumentDetail}
                 </span>
               </span>
@@ -102,8 +102,8 @@ export function MarketSwitcherRow({
         className={cn(
           "rounded-full p-2 transition-colors",
           isFavorite
-            ? "bg-white text-black hover:bg-white/90"
-            : "bg-transparent text-white/28 hover:bg-white/7 hover:text-white/75",
+            ? "bg-foreground text-background hover:bg-foreground/90"
+            : "bg-transparent text-panel-text-muted hover:bg-input-hover hover:text-panel-text-active",
         )}
         onClick={(event) => {
           event.stopPropagation();

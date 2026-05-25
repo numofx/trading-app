@@ -6,13 +6,11 @@ import type { CHART_CONTEXT_TABS, CHART_RANGE_BUTTONS, TIMEFRAME_OPTIONS } from 
 import { cn } from "@/lib/cn";
 import { SmartImage } from "@/ui/SmartImage";
 
-const FORWARD_POINTS = [
+export const FORWARD_POINTS = [
   { basis: null, label: "Spot", rate: 1500, tenor: "Spot" },
   { basis: 3.2, label: "Jun 2026", rate: 1545, tenor: "1M" },
-  { basis: 4.1, label: "Jul 2026", rate: 1585, tenor: "2M" },
-  { basis: 5.3, label: "Sep 2026", rate: 1630, tenor: "3M" },
-  { basis: 7.3, label: "Dec 2026", rate: 1720, tenor: "6M" },
-  { basis: 9.6, label: "Mar 2027", rate: 1820, tenor: "12M" },
+  { basis: 7.3, label: "Nov 2026", rate: 1720, tenor: "6M" },
+  { basis: 9.6, label: "May 2027", rate: 1820, tenor: "12M" },
 ] as const;
 
 function formatNaira(value: number) {
@@ -46,7 +44,7 @@ function ForwardCurveChart({ activeIndex }: { activeIndex: number }) {
   const minRate = 1300;
   const maxRate = 1850;
   const rateRange = maxRate - minRate;
-  const visiblePoints = [FORWARD_POINTS[0], FORWARD_POINTS[1], FORWARD_POINTS[3], FORWARD_POINTS[4], FORWARD_POINTS[5]];
+  const visiblePoints = FORWARD_POINTS;
   const chartPoints = visiblePoints.map((point, index) => {
     const x = plotLeft + (index / (visiblePoints.length - 1)) * (plotRight - plotLeft);
     const y = plotBottom - ((point.rate - minRate) / rateRange) * (plotBottom - plotTop);
@@ -66,8 +64,8 @@ function ForwardCurveChart({ activeIndex }: { activeIndex: number }) {
     >
       <defs>
         <linearGradient id="forwardCurveFill" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.32" />
-          <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0.02" />
+          <stop offset="0%" stopColor="var(--chart-area-stop-0)" />
+          <stop offset="100%" stopColor="var(--chart-area-stop-100)" />
         </linearGradient>
       </defs>
 
@@ -76,8 +74,8 @@ function ForwardCurveChart({ activeIndex }: { activeIndex: number }) {
 
         return (
           <g key={rate}>
-            <line stroke="#FFFFFF" strokeDasharray="5 9" strokeOpacity="0.16" x1={plotLeft - 28} x2={plotRight + 20} y1={y} y2={y} />
-            <text fill="#D5D5D5" fontSize="12" textAnchor="end" x={plotLeft - 44} y={y + 4}>
+            <line stroke="var(--chart-grid-stroke)" strokeDasharray="5 9" x1={plotLeft - 28} x2={plotRight + 20} y1={y} y2={y} />
+            <text fill="var(--chart-label-fill)" fontSize="12" textAnchor="end" x={plotLeft - 44} y={y + 4}>
               {rate.toLocaleString("en-US")}
             </text>
           </g>
@@ -85,7 +83,7 @@ function ForwardCurveChart({ activeIndex }: { activeIndex: number }) {
       })}
 
       <path d={areaPath} fill="url(#forwardCurveFill)" />
-      <path d={path} fill="none" stroke="#F5F5F5" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" />
+      <path d={path} fill="none" stroke="var(--chart-curve)" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" />
 
       {chartPoints.map((point) => {
         const sourceIndex = FORWARD_POINTS.findIndex((candidate) => candidate.tenor === point.tenor);
@@ -96,19 +94,19 @@ function ForwardCurveChart({ activeIndex }: { activeIndex: number }) {
             <circle
               cx={point.x}
               cy={point.y}
-              fill={isActive ? "#FFFFFF" : "#F5F5F5"}
+              fill={isActive ? "var(--chart-curve)" : "var(--chart-label-fill)"}
               r={isActive ? 7 : 5.5}
-              stroke={isActive ? "#FFFFFF" : "#E8E8E8"}
+              stroke={isActive ? "var(--chart-curve)" : "var(--chart-axis-stroke)"}
               strokeWidth="2"
             />
           </g>
         );
       })}
 
-      <line stroke="#FFFFFF" strokeOpacity="0.5" x1={plotLeft - 28} x2={plotRight + 20} y1={plotBottom} y2={plotBottom} />
+      <line stroke="var(--chart-axis-stroke)" x1={plotLeft - 28} x2={plotRight + 20} y1={plotBottom} y2={plotBottom} />
 
       {chartPoints.map((point) => (
-        <text fill="#D8D8D8" fontSize="13" key={`axis-${point.tenor}`} textAnchor="middle" x={point.x} y={plotBottom + 27}>
+        <text fill="var(--chart-label-fill)" fontSize="13" key={`axis-${point.tenor}`} textAnchor="middle" x={point.x} y={plotBottom + 27}>
           {point.tenor}
         </text>
       ))}
@@ -120,6 +118,8 @@ export function TradingChartPanel({
   chartContext,
   ticker,
   onChartContextChange,
+  activeIndex,
+  onActiveIndexChange,
 }: {
   candles: Candle[];
   chartContext: (typeof CHART_CONTEXT_TABS)[number];
@@ -137,23 +137,24 @@ export function TradingChartPanel({
   onRangeChange: (range: (typeof CHART_RANGE_BUTTONS)[number]) => void;
   onTimeframeChange: (timeframe: (typeof TIMEFRAME_OPTIONS)[number]) => void;
   onToolSelect: (toolId: string) => void;
+  activeIndex: number;
+  onActiveIndexChange: (index: number) => void;
 }) {
-  const [activeIndex, setActiveIndex] = useState(3);
   const pairLabel = getPairLabel(ticker);
 
   return (
-    <section className="flex h-full min-h-[320px] flex-col overflow-hidden rounded-[28px] bg-black p-5 text-white shadow-[0_28px_90px_rgba(0,0,0,0.36)] ring-1 ring-white/8 xl:min-h-0">
+    <section className="flex h-full min-h-[320px] flex-col overflow-hidden rounded-[28px] bg-panel-bg p-5 text-foreground shadow-[0_28px_90px_var(--panel-shadow)] ring-1 ring-panel-ring transition-colors duration-300 xl:min-h-0">
       <div className="flex flex-wrap items-center gap-5">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="flex shrink-0 items-center -space-x-1.5">
-            <SmartImage<string> alt="USDC" className="size-7 rounded-full bg-white/12 p-0.5 ring-2 ring-black" src="/tokens/usdc.svg" />
-            <SmartImage<string> alt="cNGN" className="size-7 rounded-full bg-white/12 p-0.5 ring-2 ring-black" src="/tokens/cngn.svg" />
+          <span className="flex shrink-0 animate-none items-center -space-x-1.5">
+            <SmartImage<string> alt="USDC" className="size-7 animate-none rounded-full bg-input-bg p-0.5 ring-2 ring-panel-bg" src="/tokens/usdc.svg" />
+            <SmartImage<string> alt="cNGN" className="size-7 animate-none rounded-full bg-input-bg p-0.5 ring-2 ring-panel-bg" src="/tokens/cngn.svg" />
           </span>
           <h2 className="truncate font-semibold text-[22px] leading-none tracking-[-0.02em]">{pairLabel}</h2>
         </div>
       </div>
 
-      <div className="mt-7 grid gap-3 md:grid-cols-5">
+      <div className="mt-7 grid gap-3 md:grid-cols-3">
         {FORWARD_POINTS.slice(1).map((point) => {
           const sourceIndex = FORWARD_POINTS.findIndex((candidate) => candidate.tenor === point.tenor);
           const isActive = sourceIndex === activeIndex;
@@ -161,25 +162,27 @@ export function TradingChartPanel({
           return (
             <button
               className={cn(
-                "rounded-[16px] bg-white/2.5 p-4 text-left ring-1 ring-white/7 transition-colors hover:bg-white/6",
-                isActive && "bg-white/[0.07] ring-white/70",
+                "rounded-[16px] bg-input-bg p-4 text-left transition-all duration-300",
+                isActive
+                  ? "ring-2 ring-panel-text-active"
+                  : "ring-1 ring-panel-border hover:ring-panel-text-active/60",
               )}
               key={point.tenor}
               onClick={() => {
-                setActiveIndex(sourceIndex);
+                onActiveIndexChange(sourceIndex);
                 onChartContextChange("Basis");
               }}
               type="button"
             >
-              <div className="font-medium text-[13px] text-white/74">{point.label}</div>
-              <div className="mt-3 font-semibold text-[22px] tracking-[-0.03em]">{formatNaira(point.rate)}</div>
-              <div className="mt-1 text-[13px] text-white/58">{formatBasis(point.basis)}</div>
+              <div className="font-medium text-[13px] text-panel-text">{point.label}</div>
+              <div className="mt-3 font-semibold text-[22px] text-panel-text-active tracking-[-0.03em]">{formatNaira(point.rate)}</div>
+              <div className="mt-1 text-[13px] text-panel-text-muted">{formatBasis(point.basis)}</div>
             </button>
           );
         })}
       </div>
 
-      <div className="mt-7 text-[13px] text-white/62">cNGN per USDC</div>
+      <div className="mt-7 text-[13px] text-panel-text-muted">cNGN per USDC</div>
       <div className="min-h-0 flex-1">
         <ForwardCurveChart activeIndex={activeIndex} />
       </div>

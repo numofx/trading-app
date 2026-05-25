@@ -37,7 +37,7 @@ import {
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import { OrderEntryPanel } from "@/ui/trading-terminal/OrderEntryPanel";
 
-import { TradingChartPanel } from "@/ui/trading-terminal/TradingChartPanel";
+import { FORWARD_POINTS, TradingChartPanel } from "@/ui/trading-terminal/TradingChartPanel";
 import { TradingMarketHeader } from "@/ui/trading-terminal/TradingMarketHeader";
 import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
 
@@ -132,7 +132,7 @@ function getRenderablePriceInput(mark: string) {
   return Number.isFinite(parsedMark) ? mark.replaceAll(",", "") : "";
 }
 
-function getDirectionalLabel(orderSide: "buy" | "sell", marketDefinition: MarketDefinition) {
+function _getDirectionalLabel(orderSide: "buy" | "sell", marketDefinition: MarketDefinition) {
   if (isUSDCCNGNSpotMarket(marketDefinition)) {
     return orderSide === "buy" ? "Buy USDC" : "Sell USDC";
   }
@@ -914,7 +914,8 @@ export function OrderBookTradingTerminal({
   const [orderSide, setOrderSide] = useState<"buy" | "sell">("buy");
   const [size, setSize] = useState("10000");
   const [spotSizeCurrency, setSpotSizeCurrency] = useState<SpotSizeCurrency>("USDC");
-  const [limitPrice, setLimitPrice] = useState("1605.25");
+  const [limitPrice, setLimitPrice] = useState("1545");
+  const [activeIndex, setActiveIndex] = useState(1);
   const [allocation, setAllocation] = useState(10);
   const [postOnly, setPostOnly] = useState(false);
   const [atExpiryDeliver, setAtExpiryDeliver] = useState(true);
@@ -923,6 +924,13 @@ export function OrderBookTradingTerminal({
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const [hasHydratedSelection, setHasHydratedSelection] = useState(false);
   const selectedMarketIdRef = useRef(initialMarketId);
+  const handleActiveIndexChange = (index: number) => {
+    setActiveIndex(index);
+    const point = FORWARD_POINTS[index];
+    if (point) {
+      setLimitPrice(String(point.rate));
+    }
+  };
   const { ready: walletsReady, wallets } = useWallets();
   const primaryWallet = wallets[0] ?? null;
   const {
@@ -979,7 +987,7 @@ export function OrderBookTradingTerminal({
     market.candles.at(-1)?.close ?? "close",
   ].join("|");
 
-  const { entryPrice, markPrice, pnl: unrealizedPnl, positionOverview, positionValue, exposureLabel, returnLabel, returnValue } =
+  const { entryPrice, markPrice, pnl: unrealizedPnl, positionOverview, positionValue: _positionValue, exposureLabel, returnLabel, returnValue } =
     getPositionMetrics(marketData, selectedMarket, selectedMarketId, safeLivePrice);
 
   const spotSizeReferencePrice = getSpotSizeReferencePrice(orderType, limitPrice, safeLivePrice, orderSide);
@@ -1267,7 +1275,7 @@ export function OrderBookTradingTerminal({
   }
 
   return (
-    <main className="min-h-screen bg-[#050505] text-[#D7DEE8] xl:h-dvh xl:overflow-hidden">
+    <main className="min-h-screen bg-terminal-bg text-foreground transition-colors duration-300 xl:h-dvh xl:overflow-hidden">
       <MarketDocumentTitle pair={formatFxDisplayPair(selectedMarket.pair)} price={liveCandles.at(-1)?.close ?? null} />
 
       <div className="mx-auto flex min-h-screen w-full max-w-none flex-col gap-3 p-3 xl:h-dvh xl:overflow-hidden xl:px-4">
@@ -1292,6 +1300,8 @@ export function OrderBookTradingTerminal({
               onRangeChange={setSelectedRange}
               onTimeframeChange={setTimeframe}
               onToolSelect={setSelectedTool}
+              activeIndex={activeIndex}
+              onActiveIndexChange={handleActiveIndexChange}
             />
           </div>
 

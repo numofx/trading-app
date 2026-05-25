@@ -24,5 +24,13 @@
         "noControlCharactersInRegex": "off"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["app/globals.css"],
+      "linter": {
+        "enabled": false
+      }
+    }
+  ]
 }
