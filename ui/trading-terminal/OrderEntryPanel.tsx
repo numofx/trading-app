@@ -313,8 +313,10 @@ export function OrderEntryPanel({
               {FUTURE_LEVERAGE_OPTIONS.map((option) => (
                 <button
                   className={cn(
-                    "min-h-11 rounded-[12px] font-semibold text-[14px] ring-1 ring-panel-border transition-colors",
-                    leverage === option ? "bg-foreground text-background ring-panel-text-active" : "bg-input-bg text-panel-text hover:bg-input-hover",
+                    "min-h-11 rounded-[12px] bg-input-bg font-semibold text-[14px] transition-all",
+                    leverage === option
+                      ? "border-2 border-panel-text-active text-panel-text-active"
+                      : "border border-panel-border text-panel-text hover:border-panel-text-active/60 hover:bg-input-hover",
                   )}
                   key={option}
                   onClick={() => onAllocationChange(option)}

@@ -1281,7 +1281,7 @@ export function OrderBookTradingTerminal({
       <div className="mx-auto flex min-h-screen w-full max-w-none flex-col gap-3 p-3 xl:h-dvh xl:overflow-hidden xl:px-4">
         <TradingMarketHeader />
 
-        <section className="grid grid-cols-1 gap-3 xl:h-[500px] xl:min-h-0 xl:flex-none xl:grid-cols-[minmax(0,1fr)_360px] xl:overflow-hidden 2xl:h-[560px] 2xl:grid-cols-[minmax(0,1fr)_380px]">
+        <section className="grid grid-cols-1 gap-3 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_360px] xl:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_380px]">
           <div className="min-h-[320px] xl:min-h-0 xl:overflow-hidden">
             <TradingChartPanel
               candles={liveCandles}
