@@ -150,7 +150,10 @@ export function TradingChartPanel({
             <SmartImage<string> alt="USDC" className="size-7 animate-none rounded-full bg-input-bg p-0.5 ring-2 ring-panel-bg" src="/tokens/usdc.svg" />
             <SmartImage<string> alt="cNGN" className="size-7 animate-none rounded-full bg-input-bg p-0.5 ring-2 ring-panel-bg" src="/tokens/cngn.svg" />
           </span>
-          <h2 className="truncate font-semibold text-[22px] leading-none tracking-[-0.02em]">{pairLabel}</h2>
+          <div className="flex min-w-0 flex-col gap-1">
+            <h2 className="truncate font-semibold text-[22px] leading-none tracking-[-0.02em]">{pairLabel}</h2>
+            <span className="font-medium text-[13px] text-panel-text-muted leading-none">Nigerian naira futures</span>
+          </div>
         </div>
       </div>
 
