@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   other: {
     "base:app_id": "69c83c9c4e918ceaf56a8408",
   },
-  title: "Trading Terminal",
+  title: "Numo",
 };
 
 export default function RootLayout({

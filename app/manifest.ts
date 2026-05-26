@@ -12,8 +12,8 @@ export default function manifest(): MetadataRoute.Manifest {
         type: "image/x-icon",
       },
     ],
-    name: "Trading Terminal",
-    short_name: "Trading Terminal",
+    name: "Numo",
+    short_name: "Numo",
     start_url: "/",
     theme_color: "#0C141E",
   };
