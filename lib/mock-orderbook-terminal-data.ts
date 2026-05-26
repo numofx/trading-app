@@ -1001,6 +1001,8 @@ export const BOTTOM_TABS = [
   { id: "positions", label: "Positions" },
   { id: "open-orders", label: "Open Orders" },
   { id: "trade-history", label: "Trade History" },
+  { id: "order-history", label: "Order History" },
+  { id: "basis-history", label: "Basis History" },
 ] satisfies ActivityTab[];
 
 export const ACTIVITY_VIEWS = {
@@ -1022,6 +1024,31 @@ export const ACTIVITY_VIEWS = {
     rows: [
       { cells: ["10:08:14", "USDC/cNGN Futures · Jun 2026", "Long cNGN", "5 contracts", "1,605.30 cNGN per USDC"] },
       { cells: ["10:08:06", "USDC/cNGN Futures · Jun 2026", "Short cNGN", "3 contracts", "1,605.20 cNGN per USDC"] },
+    ],
+  },
+  "order-history": {
+    columns: ["Time", "Instrument", "Direction", "Type", "Size", "Price", "Status"],
+    rows: [
+      { cells: ["10:08:14", "USDC/cNGN Futures · Jun 2026", "Long cNGN", "Limit", "5 contracts", "1,605.30 cNGN per USDC", "Filled"] },
+      { cells: ["10:08:06", "USDC/cNGN Futures · Jun 2026", "Short cNGN", "Market", "3 contracts", "1,605.20 cNGN per USDC", "Filled"] },
+      { cells: ["10:05:22", "USDC/cNGN Futures · Jun 2026", "Long cNGN", "Limit", "10 contracts", "1,600.00 cNGN per USDC", "Cancelled"] },
+    ],
+  },
+  "basis-history": {
+    columns: ["Instrument", "Spot Price", "Future Price", "Basis", "Implied Carry %", "Time"],
+    rows: [
+      {
+        cells: ["USDC/cNGN Futures · Jun 2026", "1,500.00 cNGN", "1,545.00 cNGN", "+45.00 cNGN", "+3.20%", "10:08:14"],
+        positiveCellIndexes: [3, 4],
+      },
+      {
+        cells: ["USDC/cNGN Futures · Nov 2026", "1,500.00 cNGN", "1,720.00 cNGN", "+220.00 cNGN", "+7.30%", "10:08:14"],
+        positiveCellIndexes: [3, 4],
+      },
+      {
+        cells: ["USDC/cNGN Futures · May 2027", "1,500.00 cNGN", "1,820.00 cNGN", "+320.00 cNGN", "+9.60%", "10:08:14"],
+        positiveCellIndexes: [3, 4],
+      },
     ],
   },
 } satisfies Record<string, ActivityView>;
