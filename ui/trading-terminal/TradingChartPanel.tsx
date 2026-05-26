@@ -58,7 +58,7 @@ function ForwardCurveChart({ activeIndex }: { activeIndex: number }) {
   return (
     <svg
       aria-label="USDC/cNGN forward curve"
-      className="h-[214px] w-full"
+      className="size-full max-h-[214px] min-h-0"
       role="img"
       viewBox={`0 0 ${width} ${height}`}
     >

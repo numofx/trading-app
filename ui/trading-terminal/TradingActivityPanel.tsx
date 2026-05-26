@@ -14,7 +14,7 @@ export function TradingActivityPanel({
   tabs: ActivityTab[];
   onTabSelect: (tabId: string) => void;
 }) {
-  const minimumVisibleRows = 4;
+  const minimumVisibleRows = 3;
   const isEmpty = activityView.rows.length === 0;
   const fillerRowCount = Math.max(0, minimumVisibleRows - activityView.rows.length);
   const isMetricColumn = (column: string) => column.includes("PnL") || column.includes("%") || column.includes("Return");
@@ -51,7 +51,7 @@ export function TradingActivityPanel({
           ))}
         </div>
 
-        <div className="mt-2 flex min-h-[116px] flex-1 flex-col overflow-hidden rounded-[20px] bg-input-bg/50 xl:min-h-[132px]">
+        <div className="mt-2 flex min-h-[96px] flex-1 flex-col overflow-hidden rounded-[20px] bg-input-bg/50">
           {isEmpty ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
               <div>

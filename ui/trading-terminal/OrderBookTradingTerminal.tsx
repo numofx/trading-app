@@ -1387,7 +1387,7 @@ export function OrderBookTradingTerminal({
 
         <section className="grid grid-cols-1 gap-3 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_360px] xl:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_380px]">
           <div className="flex min-h-[700px] flex-col gap-3 xl:min-h-0 xl:overflow-hidden">
-            <div className="min-h-[320px] flex-3 xl:min-h-0">
+            <div className="min-h-[320px] xl:min-h-0 xl:flex-7">
               <TradingChartPanel
                 activeIndex={activeIndex}
                 candles={liveCandles}
@@ -1410,7 +1410,7 @@ export function OrderBookTradingTerminal({
               />
             </div>
 
-            <div className="min-h-[220px] flex-2 xl:min-h-0">
+            <div className="min-h-[220px] xl:min-h-0 xl:flex-3">
               <TradingActivityPanel
                 activityView={
                   ACTIVITY_VIEWS[selectedActivityTab as keyof typeof ACTIVITY_VIEWS] || {
