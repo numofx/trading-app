@@ -51,7 +51,7 @@ import { isUSDCCNGNSpotMarket } from "@/lib/usdccngn-spot-order";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import { OrderEntryPanel } from "@/ui/trading-terminal/OrderEntryPanel";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
-import { FORWARD_POINTS, TradingChartPanel } from "@/ui/trading-terminal/TradingChartPanel";
+import { CNGN_CONFIG, EURC_CONFIG, FORWARD_POINTS, TradingChartPanel } from "@/ui/trading-terminal/TradingChartPanel";
 import { TradingMarketHeader } from "@/ui/trading-terminal/TradingMarketHeader";
 import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
 
@@ -66,7 +66,17 @@ function parseNumericString(value: string) {
   return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
 
-function formatPriceDisplay(value: number | string | null) {
+function getQuoteCurrency(pairOrLabel: string) {
+  if (pairOrLabel.includes("EURC")) {
+    return "EURC";
+  }
+  if (pairOrLabel.includes("BRZ")) {
+    return "BRZ";
+  }
+  return "cNGN";
+}
+
+function formatPriceDisplay(value: number | string | null, quoteCurrency = "cNGN") {
   if (value === null) {
     return "—";
   }
@@ -77,7 +87,10 @@ function formatPriceDisplay(value: number | string | null) {
     return "—";
   }
 
-  return `${formatMarketPrice(numericValue)} cNGN per USDC`;
+  const digits = quoteCurrency === "EURC" || quoteCurrency === "BRZ" ? 4 : 2;
+  const formatted = numericValue.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+
+  return `${formatted} ${quoteCurrency} per USDC`;
 }
 
 function formatSignedUsd(value: number | null) {
@@ -465,11 +478,12 @@ function getPositionMetrics(
   marketId: MarketId,
   livePrice: number | null
 ) {
+  const quoteCurrency = getQuoteCurrency(marketDefinition.pair);
   const activePosition = marketData[marketId].positionOverview;
   const entryPrice = activePosition.find((item) => item.label === "Entry Price")?.value ?? "—";
   const markPrice =
     activePosition.find((item) => item.label === "Mark Price")?.value ??
-    formatPriceDisplay(livePrice ?? "—");
+    formatPriceDisplay(livePrice ?? "—", quoteCurrency);
   const fallbackReturnValue =
     activePosition.find((item) => item.label === "Return on Margin")?.value ??
     activePosition.find((item) => item.label === "Return %")?.value ??
@@ -495,7 +509,8 @@ function getPositionMetrics(
     entryPrice,
     markPrice,
     livePrice,
-    marketDefinition
+    marketDefinition,
+    quoteCurrency
   );
 }
 
@@ -574,7 +589,8 @@ function buildFuturePositionOverview(
   parsedEntryPrice: number,
   resolvedMarkPrice: number,
   pnl: string,
-  returnValue: string
+  returnValue: string,
+  quoteCurrency: string
 ) {
   return [
     { label: "Side", value: sideLabel },
@@ -584,8 +600,8 @@ function buildFuturePositionOverview(
       value: `${exposure?.formattedMultiplier ?? "—"} ${baseAsset} per contract`,
     },
     { label: "Base Exposure", value: `${exposure?.formattedBaseExposure ?? "—"} notional` },
-    { label: "Entry Price", value: formatPriceDisplay(parsedEntryPrice) },
-    { label: "Mark Price", value: formatPriceDisplay(resolvedMarkPrice) },
+    { label: "Entry Price", value: formatPriceDisplay(parsedEntryPrice, quoteCurrency) },
+    { label: "Mark Price", value: formatPriceDisplay(resolvedMarkPrice, quoteCurrency) },
     { label: "Unrealized PnL", value: pnl },
     { label: "Return on Margin", value: returnValue },
   ];
@@ -596,7 +612,8 @@ function getFuturePositionMetrics(
   entryPrice: string,
   markPrice: string,
   livePrice: number | null,
-  marketDefinition: MarketDefinition
+  marketDefinition: MarketDefinition,
+  quoteCurrency: string
 ) {
   const rawPosition = activePosition.find((item) => item.label === "Position")?.value ?? "";
   const { baseAsset, contractMultiplier, contracts, isShortBase, sideLabel } =
@@ -618,7 +635,8 @@ function getFuturePositionMetrics(
     parsedEntryPrice,
     resolvedMarkPrice,
     metrics.pnl,
-    metrics.returnValue
+    metrics.returnValue,
+    quoteCurrency
   );
 
   return {
@@ -640,6 +658,7 @@ function getOrderSummaryRows({
   initialMargin,
   isSpotUSDIntent,
   liquidationPrice,
+  quoteCurrency,
 }: {
   contracts: number;
   estimatedFill: number | null;
@@ -647,6 +666,7 @@ function getOrderSummaryRows({
   initialMargin: number;
   isSpotUSDIntent: boolean;
   liquidationPrice: number | null;
+  quoteCurrency: string;
 }) {
   if (isSpotUSDIntent) {
     const quoteAmount =
@@ -655,7 +675,7 @@ function getOrderSummaryRows({
         : Number.NaN;
 
     return [
-      { label: "Total", value: `~${formatAssetAmount(quoteAmount, "cNGN", 0)}` },
+      { label: "Total", value: `~${formatAssetAmount(quoteAmount, quoteCurrency, 0)}` },
     ] satisfies DeliveryTerm[];
   }
 
@@ -675,18 +695,20 @@ function getOrderSummaryRows({
     liquidationDistanceLabel = `${liquidationDistancePercent.toFixed(1)}% ${direction}`;
   }
 
+  const digits = quoteCurrency === "EURC" || quoteCurrency === "BRZ" ? 4 : 0;
+
   return [
     {
       label: "Notional",
-      value: `${orderValue.toLocaleString("en-US", { maximumFractionDigits: 0 })} cNGN`,
+      value: `${orderValue.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits })} ${quoteCurrency}`,
     },
     {
       label: "Margin Required",
       value: `$${initialMargin.toLocaleString("en-US", { maximumFractionDigits: 0 })}`,
     },
-    { label: "Est. Fill Price", value: formatPriceDisplay(estimatedFill) },
+    { label: "Est. Fill Price", value: formatPriceDisplay(estimatedFill, quoteCurrency) },
     { label: "Fees", value: `$${fees.toLocaleString("en-US", { maximumFractionDigits: 2 })}` },
-    { label: "Liquidation Price", value: formatPriceDisplay(liquidationPrice) },
+    { label: "Liquidation Price", value: formatPriceDisplay(liquidationPrice, quoteCurrency) },
     { label: "Est. Distance to Liquidation", value: liquidationDistanceLabel },
   ] satisfies DeliveryTerm[];
 }
@@ -695,10 +717,12 @@ function getAdvancedSummaryRows({
   averageExecution,
   buyingPower,
   isSpotUSDIntent,
+  quoteCurrency,
 }: {
   averageExecution: number | null;
   buyingPower: string;
   isSpotUSDIntent: boolean;
+  quoteCurrency: string;
 }) {
   if (isSpotUSDIntent) {
     return [{ label: "Available Buying Power", value: buyingPower }] satisfies DeliveryTerm[];
@@ -706,7 +730,7 @@ function getAdvancedSummaryRows({
 
   return [
     { label: "Available Buying Power", value: buyingPower },
-    { label: "Estimated Avg Execution", value: formatPriceDisplay(averageExecution) },
+    { label: "Estimated Avg Execution", value: formatPriceDisplay(averageExecution, quoteCurrency) },
   ] satisfies DeliveryTerm[];
 }
 
@@ -785,6 +809,9 @@ function getPositionBuilderRows({
     return [] satisfies DeliveryTerm[];
   }
 
+  const quoteCurrency = getQuoteCurrency(marketDefinition.pair);
+  const digits = quoteCurrency === "EURC" || quoteCurrency === "BRZ" ? 2 : 0;
+
   const safeContracts = Number.isFinite(contracts) ? contracts : 0;
   const safeEstimatedFill =
     estimatedFill !== null && Number.isFinite(estimatedFill) ? estimatedFill : null;
@@ -803,7 +830,7 @@ function getPositionBuilderRows({
   const liquidationBufferPercent = getLiquidationBufferPercent(safeEstimatedFill, liquidationPrice);
 
   return [
-    { label: "Est. PnL @ Expiry", value: formatSignedAssetAmount(expiryPnl, "cNGN", 0) },
+    { label: "Est. PnL @ Expiry", value: formatSignedAssetAmount(expiryPnl, quoteCurrency, digits) },
     { label: "Carry Earned (annualized)", value: formatSignedPercent(annualizedCarry) },
     { label: "Liquidation Buffer (% move)", value: formatSignedPercent(liquidationBufferPercent) },
   ] satisfies DeliveryTerm[];
@@ -934,6 +961,22 @@ function convertUSDCSizeToSpotInput(
   return (sizeNumber * referencePrice).toFixed(2).replace(TRAILING_ZERO_DECIMALS_PATTERN, "");
 }
 
+function getActiveIndexForMarket(market: MarketDefinition) {
+  if (market.type === "spot") {
+    return 0;
+  }
+  if (market.contractLabel?.includes("JUN 2026")) {
+    return 1;
+  }
+  if (market.contractLabel?.includes("NOV 2026")) {
+    return 2;
+  }
+  if (market.contractLabel?.includes("MAY 2027")) {
+    return 3;
+  }
+  return 1;
+}
+
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This component coordinates terminal state across chart, book, order entry, and URL persistence.
 export function OrderBookTradingTerminal({
   chainlinkSpot,
@@ -976,11 +1019,74 @@ export function OrderBookTradingTerminal({
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const [hasHydratedSelection, setHasHydratedSelection] = useState(false);
   const selectedMarketIdRef = useRef(initialMarketId);
+
+  const selectedMarket =
+    marketDefinitions.find((marketOption) => marketOption.id === selectedMarketId) ??
+    marketDefinitions[0];
+
   const handleActiveIndexChange = (index: number) => {
     setActiveIndex(index);
-    const point = FORWARD_POINTS[index];
+    const currentPair = selectedMarket.pair;
+    const activeConfig = currentPair === "USDCEURC" ? EURC_CONFIG : CNGN_CONFIG;
+    const point = activeConfig.forwardPoints[index];
     if (point) {
       setLimitPrice(String(point.rate));
+    }
+
+    if (index === 0) {
+      const spotMarket = marketDefinitions.find((m) => m.pair === "USDCcNGN" && m.type === "spot");
+      if (spotMarket) {
+        setSelectedMarketId(spotMarket.id);
+      }
+    } else {
+      let label = "MAY 2027";
+      if (index === 1) {
+        label = "JUN 2026";
+      } else if (index === 2) {
+        label = "NOV 2026";
+      }
+      const targetFuture = marketDefinitions.find(
+        (m) => m.pair === currentPair && m.type === "future" && m.contractLabel === label
+      );
+      if (targetFuture) {
+        setSelectedMarketId(targetFuture.id);
+      }
+    }
+  };
+
+  const handlePairChange = (newPair: "USDCcNGN" | "USDCEURC") => {
+    const isFuture = selectedMarket.type === "future";
+
+    if (newPair === "USDCEURC") {
+      const targetFuture = marketDefinitions.find(
+        (m) => m.pair === "USDCEURC" && m.type === "future" && (!isFuture || m.contractLabel === selectedMarket.contractLabel)
+      ) || marketDefinitions.find((m) => m.pair === "USDCEURC" && m.type === "future");
+
+      if (targetFuture) {
+        setSelectedMarketId(targetFuture.id);
+        setLimitPrice(getRenderablePriceInput(marketData[targetFuture.id].mark));
+        setActiveIndex(getActiveIndexForMarket(targetFuture));
+      }
+    } else {
+      if (selectedMarket.type === "spot") {
+        const targetSpot = marketDefinitions.find((m) => m.pair === "USDCcNGN" && m.type === "spot");
+        if (targetSpot) {
+          setSelectedMarketId(targetSpot.id);
+          setLimitPrice(getRenderablePriceInput(marketData[targetSpot.id].mark));
+          setActiveIndex(0);
+          return;
+        }
+      }
+
+      const targetFuture = marketDefinitions.find(
+        (m) => m.pair === "USDCcNGN" && m.type === "future" && (!isFuture || m.contractLabel === selectedMarket.contractLabel)
+      ) || marketDefinitions.find((m) => m.pair === "USDCcNGN" && m.type === "future");
+
+      if (targetFuture) {
+        setSelectedMarketId(targetFuture.id);
+        setLimitPrice(getRenderablePriceInput(marketData[targetFuture.id].mark));
+        setActiveIndex(getActiveIndexForMarket(targetFuture));
+      }
     }
   };
   const { ready: walletsReady, wallets } = useWallets();
@@ -991,9 +1097,6 @@ export function OrderBookTradingTerminal({
     subaccountId: tradingSubaccountId,
   } = useTradingSubaccount(primaryWallet?.address ?? null);
 
-  const selectedMarket =
-    marketDefinitions.find((marketOption) => marketOption.id === selectedMarketId) ??
-    marketDefinitions[0];
   const market = marketData[selectedMarketId];
   const isLiveSpotExecutionAvailable =
     !isUSDCCNGNSpotMarket(selectedMarket) || canSubmitSpotOrder(selectedMarket);
@@ -1075,6 +1178,8 @@ export function OrderBookTradingTerminal({
       safeLivePrice,
       orderSide
     );
+  const quoteCurrency = getQuoteCurrency(selectedMarket.pair);
+
   const orderSummaryRows = getOrderSummaryRows({
     contracts: isUSDCCNGNSpotMarket(selectedMarket)
       ? canonicalSpotSize
@@ -1084,11 +1189,13 @@ export function OrderBookTradingTerminal({
     initialMargin,
     isSpotUSDIntent: isUSDCCNGNSpotMarket(selectedMarket),
     liquidationPrice,
+    quoteCurrency,
   });
   const advancedSummaryRows = getAdvancedSummaryRows({
     averageExecution,
     buyingPower: "$250,000",
     isSpotUSDIntent: isUSDCCNGNSpotMarket(selectedMarket),
+    quoteCurrency,
   });
   const positionBuilderRows = getPositionBuilderRows({
     contracts: isUSDCCNGNSpotMarket(selectedMarket)
@@ -1149,6 +1256,7 @@ export function OrderBookTradingTerminal({
     setSelectedMarketId(resolution.selectedMarketId);
     setChartContext(getDefaultChartContextForMarket(nextMarket));
     setLimitPrice(getRenderablePriceInput(marketData[resolution.selectedMarketId].mark));
+    setActiveIndex(getActiveIndexForMarket(nextMarket));
     markSelectionHydrated();
   }, [defaultMarketId, hasHydratedSelection, marketData, marketDefinitions, requestedMarketParam]);
 
@@ -1379,7 +1487,7 @@ export function OrderBookTradingTerminal({
     <main className="min-h-screen bg-terminal-bg text-foreground transition-colors duration-300 xl:h-dvh xl:overflow-hidden">
       <MarketDocumentTitle
         pair={formatFxDisplayPair(selectedMarket.pair)}
-        price={liveCandles.at(-1)?.close ?? null}
+        price={safeLivePrice}
       />
 
       <div className="mx-auto flex min-h-screen w-full max-w-none flex-col gap-3 p-3 xl:h-dvh xl:overflow-hidden xl:px-4">
@@ -1407,6 +1515,7 @@ export function OrderBookTradingTerminal({
                 selectedTimeframe={timeframe}
                 selectedTool={selectedTool}
                 ticker={getDisplayTicker(selectedMarket)}
+                onPairChange={handlePairChange}
               />
             </div>
 
@@ -1435,10 +1544,7 @@ export function OrderBookTradingTerminal({
               contractLabel={getDisplayTicker(selectedMarket)}
               exposureLabel={exposureLabel}
               futureSizeUnit={selectedMarket.type === "future" ? "USDC" : undefined}
-              isFXFuture={
-                selectedMarket.type === "future" &&
-                formatFxDisplayPair(selectedMarket.pair) === "USDC/cNGN"
-              }
+              isFXFuture={selectedMarket.type === "future"}
               isSpotUSDIntent={isUSDCCNGNSpotMarket(selectedMarket)}
               isSubmitDisabled={!isLiveSpotExecutionAvailable}
               isSubmitting={isSubmittingOrder || isResolvingTradingSubaccount}

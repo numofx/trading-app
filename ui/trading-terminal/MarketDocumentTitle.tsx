@@ -2,6 +2,34 @@
 
 import { useEffect, useRef } from "react";
 
+function getCurrencySymbol(pair: string) {
+  if (pair.includes("EURC") || pair.includes("EUR")) {
+    return "€";
+  }
+  if (pair.includes("cNGN") || pair.includes("NGN")) {
+    return "₦";
+  }
+  if (pair.includes("BRZ")) {
+    return "R$";
+  }
+  return "$";
+}
+
+function getPrecisionDigits(pair: string) {
+  return pair.includes("EURC") || pair.includes("EUR") || pair.includes("BRZ") ? 4 : 2;
+}
+
+function formatPrice(price: number | null, pair: string) {
+  if (price === null) {
+    return "--";
+  }
+  const digits = getPrecisionDigits(pair);
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(price);
+}
+
 export function MarketDocumentTitle({
   pair,
   price,
@@ -12,12 +40,8 @@ export function MarketDocumentTitle({
   const prevPriceRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const formatted =
-      price === null
-        ? "--"
-        : new Intl.NumberFormat("en-US", {
-            maximumFractionDigits: 2,
-          }).format(price);
+    const currencySymbol = getCurrencySymbol(pair);
+    const formatted = formatPrice(price, pair);
 
     let prefix = "";
 
@@ -29,7 +53,7 @@ export function MarketDocumentTitle({
       }
     }
 
-    document.title = `${prefix}$${formatted} ${pair} | Numo`;
+    document.title = `${prefix}${currencySymbol}${formatted} ${pair} | Numo`;
 
     prevPriceRef.current = price;
   }, [pair, price]);

@@ -299,17 +299,6 @@ function buildSpotTrades(mark: string) {
   ] satisfies TradePrint[];
 }
 
-function buildFuturesTrades(mark: string, basis: number) {
-  const markNumber = parseNumber(mark);
-
-  return [
-    { price: markNumber + 0.05, side: "buy", size: 50_000, time: "10:08:14" },
-    { price: markNumber, side: "sell", size: 35_000, time: "10:08:06" },
-    { price: markNumber - 0.05, side: "sell", size: 75_000, time: "10:07:53" },
-    { price: markNumber + basis / 10, side: "buy", size: 20_000, time: "10:07:41" },
-    { price: markNumber, side: "buy", size: 15_000, time: "10:07:17" },
-  ] satisfies TradePrint[];
-}
 
 function formatPriceWithConvention(value: string) {
   return `${value} cNGN per USDC`;
@@ -668,11 +657,94 @@ export function buildSpotDefinition(config: LiveSpotConfig) {
   } satisfies MarketDefinition;
 }
 
+function getMockPricesForDefinitionId(id: string) {
+  if (id.includes("eurc")) {
+    if (id.includes("jun-2026")) { return { spot: "0.9000", mark: "0.9150" }; }
+    if (id.includes("nov-2026")) { return { spot: "0.9000", mark: "0.9400" }; }
+    if (id.includes("may-2027")) { return { spot: "0.9000", mark: "0.9700" }; }
+    return { spot: "0.9000", mark: "0.9250" };
+  }
+  if (id.includes("brz")) {
+    if (id.includes("jun-2026")) { return { spot: "5.0000", mark: "5.1500" }; }
+    if (id.includes("nov-2026")) { return { spot: "5.0000", mark: "5.4000" }; }
+    if (id.includes("may-2027")) { return { spot: "5.0000", mark: "5.7000" }; }
+    return { spot: "5.0000", mark: "5.2500" };
+  }
+  // Default cNGN
+  if (id.includes("jun-2026")) { return { spot: "1,500.00", mark: "1,545.00" }; }
+  if (id.includes("nov-2026")) { return { spot: "1,500.00", mark: "1,720.00" }; }
+  if (id.includes("may-2027")) { return { spot: "1,500.00", mark: "1,820.00" }; }
+  return { spot: "1,500.00", mark: "1,605.25" };
+}
+
+function buildBookForPair(
+  levels: readonly { price: number; size: number; total: number }[],
+  mark: number,
+  side: "ask" | "bid",
+  pair: string,
+) {
+  let step = 0.1;
+  let digits = 2;
+  if (pair === "USDCEURC") {
+    step = 0.0001;
+    digits = 4;
+  } else if (pair === "USDCBRZ") {
+    step = 0.001;
+    digits = 4;
+  }
+
+  return levels.map((level, index) => {
+    const multiplier = index + 1;
+    const price = side === "ask" ? mark + multiplier * step : mark - multiplier * step;
+    return {
+      price: Number(price.toFixed(digits)),
+      size: level.size,
+      total: level.total,
+    };
+  });
+}
+
+function buildCandlesForPair(
+  baseCandles: readonly (readonly [number, number, number, number, number])[],
+  mark: number,
+  pair: string,
+) {
+  const lastBaseCandle = baseCandles.at(-1);
+  const lastBaseClose = lastBaseCandle ? lastBaseCandle[3] : 1600;
+  const scale = mark / lastBaseClose;
+  
+  let digits = 2;
+  if (pair === "USDCEURC" || pair === "USDCBRZ") {
+    digits = 4;
+  }
+
+  return baseCandles.map(([open, high, low, close, volume], index) => ({
+    close: Number((close * scale).toFixed(digits)),
+    high: Number((high * scale).toFixed(digits)),
+    low: Number((low * scale).toFixed(digits)),
+    open: Number((open * scale).toFixed(digits)),
+    time: `${String((index + 8) % 24).padStart(2, "0")}:00`,
+    volume,
+  })) satisfies Candle[];
+}
+
+function buildFuturesTradesForPair(mark: string, basis: number, pair: string) {
+  const markNumber = parseNumber(mark);
+  const step = pair === "USDCEURC" || pair === "USDCBRZ" ? 0.0005 : 0.05;
+
+  return [
+    { price: markNumber + step, side: "buy", size: 50_000, time: "10:08:14" },
+    { price: markNumber, side: "sell", size: 35_000, time: "10:08:06" },
+    { price: markNumber - step, side: "sell", size: 75_000, time: "10:07:53" },
+    { price: markNumber + basis / 10, side: "buy", size: 20_000, time: "10:07:41" },
+    { price: markNumber, side: "buy", size: 15_000, time: "10:07:17" },
+  ] satisfies TradePrint[];
+}
+
 export function buildDeliverableFutureMarket(definition: MarketDefinition) {
   const displayPair = formatFxDisplayPair(definition.pair);
   const displayLabel = definition.expiryLabel ?? "—";
-  const mark = "1,605.25";
-  const spot = SPOT_MARKET_META.mark;
+  const { spot, mark } = getMockPricesForDefinitionId(definition.id);
   const basis = parseNumber(mark) - parseNumber(spot);
   const annualizedBasis = calculateAnnualizedBasisPercent(
     parseNumber(mark),
@@ -680,45 +752,62 @@ export function buildDeliverableFutureMarket(definition: MarketDefinition) {
     definition.expiryDays,
   );
 
+  let quote = "cNGN";
+  if (definition.pair.includes("EURC")) {
+    quote = "EURC";
+  } else if (definition.pair.includes("BRZ")) {
+    quote = "BRZ";
+  }
+  const digits = definition.pair === "USDCEURC" || definition.pair === "USDCBRZ" ? 4 : 2;
+
+  const formatLocalPrice = (value: string | number) => {
+    const num = typeof value === "string" ? parseNumber(value) : value;
+    return `${num.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits })} ${quote} per USDC`;
+  };
+
+  const formatLocalBasis = (value: number) => {
+    return `${value > 0 ? "+" : ""}${value.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits })} ${quote}`;
+  };
+
   return {
     availability: {
       bookAvailable: true,
       markAvailable: true,
       tradesAvailable: true,
     },
-    candles: buildCandles(BASE_FUTURES_CANDLES, 0, 2),
+    candles: buildCandlesForPair(BASE_FUTURES_CANDLES, parseNumber(mark), definition.pair),
     contractDetails: [
       { label: "Contract", value: `${displayPair} Futures · ${displayLabel}` },
       { label: "Settlement", value: "Physical delivery" },
       { label: "Manager", value: "Dedicated DeliverableFXManager" },
       { label: "Contract Size", value: `${definition.contractMultiplier ?? "10000"} USDC` },
       { label: "Min Size", value: `${definition.minSize ?? "0.001"} contracts` },
-      { label: "Tick Size", value: `${definition.tickSize ?? "1"} cNGN per USDC` },
-      { label: "Mark Price", value: formatPriceWithConvention(mark) },
+      { label: "Tick Size", value: `${definition.tickSize ?? (digits === 4 ? "0.0001" : "1")} ${quote} per USDC` },
+      { label: "Mark Price", value: formatLocalPrice(mark) },
     ],
     id: definition.id,
     infoBar: [
-      { label: "Mark Price", value: formatPriceWithConvention(mark) },
-      { label: "Spot", value: formatPriceWithConvention(spot) },
-      { label: "Basis", tone: "accent", value: formatBasis(basis) },
+      { label: "Mark Price", value: formatLocalPrice(mark) },
+      { label: "Spot", value: formatLocalPrice(spot) },
+      { label: "Basis", tone: "accent", value: formatLocalBasis(basis) },
       { label: "Basis %", tone: "accent", value: `${((basis / parseNumber(spot)) * 100).toFixed(2)}%` },
       { label: "Implied Carry", tone: "accent", value: formatAnnualizedBasis(annualizedBasis) },
       { label: "Expiry", value: displayLabel },
     ],
     mark,
-    orderBookAsks: buildBook(BASE_FUTURES_ASKS, 0, 1, 2),
-    orderBookBids: buildBook(BASE_FUTURES_BIDS, 0, 1, 2),
+    orderBookAsks: buildBookForPair(BASE_FUTURES_ASKS, parseNumber(mark), "ask", definition.pair),
+    orderBookBids: buildBookForPair(BASE_FUTURES_BIDS, parseNumber(mark), "bid", definition.pair),
     positionOverview: [
       { label: "Position", value: "Long USDC · 0.500 contracts" },
-      { label: "Entry Price", value: formatPriceWithConvention("1,600.00") },
-      { label: "Mark Price", value: formatPriceWithConvention(mark) },
+      { label: "Entry Price", value: formatLocalPrice(parseNumber(mark) - 5 * (digits === 4 ? 0.001 : 1)) },
+      { label: "Mark Price", value: formatLocalPrice(mark) },
       { label: "Unrealized PnL", value: "+$156" },
       { label: "Return on Margin", value: "+0.64%" },
     ],
     referencePrice: spot,
     ticker: `${displayPair} Futures`,
     timeToExpiry: `${definition.expiryDays ?? 0}d`,
-    trades: buildFuturesTrades(mark, basis),
+    trades: buildFuturesTradesForPair(mark, basis, definition.pair),
   } satisfies ContractMarket;
 }
 

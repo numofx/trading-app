@@ -37,15 +37,15 @@ function LabelValueRow({
   );
 }
 
-function getDirectionCopy(isSpotUSDIntent: boolean, isLong: boolean) {
+function getDirectionCopy(isSpotUSDIntent: boolean, isLong: boolean, quoteCurrency: string) {
   if (isSpotUSDIntent) {
-    return isLong ? "Buy USDC / sell cNGN" : "Sell USDC / buy cNGN";
+    return isLong ? `Buy USDC / sell ${quoteCurrency}` : `Sell USDC / buy ${quoteCurrency}`;
   }
 
-  return isLong ? "Buy cNGN / sell USDC" : "Sell cNGN / buy USDC";
+  return isLong ? `Buy ${quoteCurrency} / sell USDC` : `Sell ${quoteCurrency} / buy USDC`;
 }
 
-function getSubmitLabel(isSubmitting: boolean, isSpotUSDIntent: boolean, isLong: boolean, isFXFuture: boolean) {
+function getSubmitLabel(isSubmitting: boolean, isSpotUSDIntent: boolean, isLong: boolean, isFXFuture: boolean, quoteCurrency: string) {
   if (isSubmitting) {
     return "Submitting...";
   }
@@ -58,11 +58,22 @@ function getSubmitLabel(isSubmitting: boolean, isSpotUSDIntent: boolean, isLong:
     return isLong ? "Buy" : "Sell";
   }
 
-  return isLong ? "Long cNGN" : "Short cNGN";
+  return isLong ? `Long ${quoteCurrency}` : `Short ${quoteCurrency}`;
 }
 
 function parseDisplayNumber(value: string) {
-  const parsed = Number(value.replaceAll(",", "").replaceAll("$", "").replaceAll("₦", "").replaceAll("cNGN", "").replaceAll("USDC", ""));
+  const parsed = Number(
+    value
+      .replaceAll(",", "")
+      .replaceAll("$", "")
+      .replaceAll("₦", "")
+      .replaceAll("€", "")
+      .replaceAll("R$", "")
+      .replaceAll("cNGN", "")
+      .replaceAll("EURC", "")
+      .replaceAll("BRZ", "")
+      .replaceAll("USDC", "")
+  );
 
   return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
@@ -78,12 +89,19 @@ function formatCompactAmount(value: number, unit: string, maximumFractionDigits 
   })} ${unit}`;
 }
 
-function formatFutureRate(value: number) {
+function formatFutureRate(value: number, quoteCurrency: string) {
   if (!Number.isFinite(value)) {
     return "— / USDC";
   }
 
-  return `₦${value.toLocaleString("en-US", { maximumFractionDigits: 0 })} / USDC`;
+  let symbol = "₦";
+  if (quoteCurrency === "EURC") {
+    symbol = "€";
+  } else if (quoteCurrency === "BRZ") {
+    symbol = "R$";
+  }
+  const digits = quoteCurrency === "EURC" || quoteCurrency === "BRZ" ? 4 : 0;
+  return `${symbol}${value.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits })} / USDC`;
 }
 
 function getSummaryRowValue(rows: DeliveryTerm[], label: string) {
@@ -166,11 +184,17 @@ export function OrderEntryPanel({
   const [sizeCurrencyPickerOpen, setSizeCurrencyPickerOpen] = useState(false);
   const isLong = orderSide === "buy";
   const needsLimitPrice = orderType !== "Market";
-  let directionCopy = getDirectionCopy(isSpotUSDIntent, isLong);
+  let quoteCurrency = "cNGN";
+  if (contractLabel.includes("EURC")) {
+    quoteCurrency = "EURC";
+  } else if (contractLabel.includes("BRZ")) {
+    quoteCurrency = "BRZ";
+  }
+  let directionCopy = getDirectionCopy(isSpotUSDIntent, isLong, quoteCurrency);
   if (isFXFuture) {
     directionCopy = isLong ? "Long" : "Short";
   }
-  const submitLabel = getSubmitLabel(Boolean(isSubmitting), isSpotUSDIntent, isLong, isFXFuture);
+  const submitLabel = getSubmitLabel(Boolean(isSubmitting), isSpotUSDIntent, isLong, isFXFuture, quoteCurrency);
   let buyDirectionLabel = isSpotUSDIntent ? "Buy" : "Long";
   let sellDirectionLabel = isSpotUSDIntent ? "Sell" : "Short";
   if (isFXFuture) {
@@ -203,9 +227,10 @@ export function OrderEntryPanel({
     const initialMargin = displayedAmount / leverage;
     const maintenanceMargin = initialMargin / 2;
     const summaryLiquidationPrice = parseDisplayNumber(getSummaryRowValue(orderSummaryRows, "Liquidation Price") ?? "");
+    const liquidationOffset = quoteCurrency === "EURC" || quoteCurrency === "BRZ" ? 0.09 : 160;
     const liquidationPrice = Number.isFinite(summaryLiquidationPrice)
       ? summaryLiquidationPrice
-      : forwardRate - (isLong ? 160 : -160);
+      : forwardRate - (isLong ? liquidationOffset : -liquidationOffset);
     const fee = displayedAmount * 0.0025;
     const nextStepSize = displayedAmount >= 1000 ? 1000 : 1;
     return (
@@ -301,7 +326,7 @@ export function OrderEntryPanel({
                   value={limitPrice}
                 />
                 <div className="flex min-h-10 items-center border-input-border border-l px-3 text-[11px] text-panel-text-muted">
-                  cNGN / USDC
+                  {quoteCurrency} / USDC
                 </div>
               </div>
             </div>
@@ -330,13 +355,13 @@ export function OrderEntryPanel({
 
           <section className="space-y-2 rounded-[18px] bg-input-bg p-4 ring-1 ring-panel-border">
             <LabelValueRow label="Position Notional" value={formatCompactAmount(displayedAmount, "USDC")} />
-            <LabelValueRow label="Forward Rate" value={formatFutureRate(forwardRate)} />
-            <LabelValueRow label="Total Notional" value={formatCompactAmount(totalNotional, "cNGN")} />
+            <LabelValueRow label="Forward Rate" value={formatFutureRate(forwardRate, quoteCurrency)} />
+            <LabelValueRow label="Total Notional" value={formatCompactAmount(totalNotional, quoteCurrency)} />
             <LabelValueRow label="Leverage" value={`${leverage}x`} />
             <div className="space-y-2 border-panel-border border-t pt-3">
               <LabelValueRow label="Initial Margin" value={formatCompactAmount(initialMargin, "USDC")} />
               <LabelValueRow label="Maintenance Margin" value={formatCompactAmount(maintenanceMargin, "USDC")} />
-              <LabelValueRow label="Liquidation Price" value={formatFutureRate(liquidationPrice)} />
+              <LabelValueRow label="Liquidation Price" value={formatFutureRate(liquidationPrice, quoteCurrency)} />
               <LabelValueRow label="Taker Fee" value={formatCompactAmount(fee, "USDC", 1)} />
               <LabelValueRow label="Maker Fee" value="Free" valueClassName="font-bold text-panel-text-active" />
             </div>
@@ -475,11 +500,11 @@ export function OrderEntryPanel({
                     className="h-9.5 flex-1 bg-transparent px-3 text-[12px] text-panel-text outline-none placeholder:text-panel-text-muted"
                     id="trade-limit-price"
                     onChange={(event) => onLimitPriceChange(event.target.value.replace(/[^\d.]/g, ""))}
-                    placeholder="1,605.25"
+                    placeholder={quoteCurrency === "EURC" || quoteCurrency === "BRZ" ? "0.9250" : "1,605.25"}
                     value={limitPrice}
                   />
                   <div className="flex h-9.5 items-center border-panel-border border-l px-3 text-[8px] text-panel-text-muted uppercase tracking-[0.14em]">
-                    cNGN / USDC
+                    {quoteCurrency} / USDC
                   </div>
                 </div>
               </div>

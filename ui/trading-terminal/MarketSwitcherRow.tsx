@@ -63,7 +63,11 @@ export function MarketSwitcherRow({
               {marketTokenIcons.map((tokenIcon) => (
                 <SmartImage<string>
                   alt={tokenIcon.symbol}
-                  className="size-7 overflow-hidden rounded-full bg-input-bg p-0.5 ring-1 ring-panel-border"
+                  className={cn(
+                    "size-7 overflow-hidden rounded-full bg-input-bg ring-1 ring-panel-border",
+                    tokenIcon.symbol === "EURC" ? "p-0" : "p-0.5"
+                  )}
+                  imgClassName={cn(tokenIcon.symbol === "EURC" && "scale-125")}
                   key={tokenIcon.symbol}
                   src={tokenIcon.src}
                 />
