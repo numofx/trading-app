@@ -12,7 +12,13 @@ const DEFAULT_TRADE_MODULE_ADDRESS = "0x0AAE65AaA66Fe7f54486cDbD007956d3De611990
 const DEFAULT_SUBACCOUNT_CREATOR_ADDRESS = "0x5448B304AD283f24A741B54AE9b3a71C8d7DCDF2";
 const DEFAULT_USDCCNGN_MANAGER_ADDRESS = "0x1917960763BF3a0DfA10a05f0a112E828C1A934f";
 const DEFAULT_USDC_DELIVERABLE_BASE_ASSET_ADDRESS = "0x8b3C43D2b2555ca3fc4Fa1BC34544133B8576110";
-const LOG_QUERY_BLOCK_RANGE = 10_000n;
+// The public Base Sepolia RPC caps eth_getLogs at a 2000-block span per query.
+const LOG_QUERY_BLOCK_RANGE = 2000n;
+// Block at which the Matching contract (DEFAULT_MATCHING_ADDRESS) was deployed on
+// Base Sepolia. Used as the scan floor so subaccount lookups terminate here
+// instead of walking back to genesis (~43M blocks). Update this if
+// NEXT_PUBLIC_MATCHING_ADDRESS is pointed at a different deployment.
+const SUBACCOUNT_EVENT_FLOOR_BLOCK = 40_461_151n;
 
 const depositedSubAccountEvent = parseAbiItem("event DepositedSubAccount(uint indexed accountId, address indexed owner)");
 
@@ -75,8 +81,9 @@ async function findTradingSubaccountId(ownerAddress: string) {
   const normalizedOwnerAddress = getAddress(ownerAddress);
   let windowEnd = latestBlock;
 
-  while (true) {
-    const windowStart = windowEnd > LOG_QUERY_BLOCK_RANGE ? windowEnd - LOG_QUERY_BLOCK_RANGE + 1n : 0n;
+  while (windowEnd >= SUBACCOUNT_EVENT_FLOOR_BLOCK) {
+    const rangeStart = windowEnd > LOG_QUERY_BLOCK_RANGE ? windowEnd - LOG_QUERY_BLOCK_RANGE + 1n : 0n;
+    const windowStart = rangeStart > SUBACCOUNT_EVENT_FLOOR_BLOCK ? rangeStart : SUBACCOUNT_EVENT_FLOOR_BLOCK;
     const logs = await publicClient.getLogs({
       address: getMatchingAddress(),
       args: {
@@ -92,12 +99,14 @@ async function findTradingSubaccountId(ownerAddress: string) {
       return latestLog.args.accountId.toString();
     }
 
-    if (windowStart === 0n) {
+    if (windowStart === SUBACCOUNT_EVENT_FLOOR_BLOCK) {
       return null;
     }
 
     windowEnd = windowStart - 1n;
   }
+
+  return null;
 }
 
 async function createTradingSubaccount(wallet: ConnectedWallet) {
