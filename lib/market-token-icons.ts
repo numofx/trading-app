@@ -5,6 +5,7 @@ const TOKEN_ICON_BY_SYMBOL = {
   cngn: "/tokens/cngn.svg",
   eurc: "/tokens/eurc.png",
   usdc: "/tokens/usdc.svg",
+  usdt: "/tokens/usdt.svg",
 } as const;
 
 export type MarketTokenIcon = {
