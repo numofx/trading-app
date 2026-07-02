@@ -39,10 +39,10 @@ function LabelValueRow({
 
 function getDirectionCopy(isSpotUSDIntent: boolean, isLong: boolean, quoteCurrency: string) {
   if (isSpotUSDIntent) {
-    return isLong ? `Buy USDC / sell ${quoteCurrency}` : `Sell USDC / buy ${quoteCurrency}`;
+    return isLong ? `Buy USDT / sell ${quoteCurrency}` : `Sell USDT / buy ${quoteCurrency}`;
   }
 
-  return isLong ? `Buy ${quoteCurrency} / sell USDC` : `Sell ${quoteCurrency} / buy USDC`;
+  return isLong ? `Buy ${quoteCurrency} / sell USDT` : `Sell ${quoteCurrency} / buy USDT`;
 }
 
 function getSubmitLabel(isSubmitting: boolean, isSpotUSDIntent: boolean, isLong: boolean, isFXFuture: boolean, quoteCurrency: string) {
@@ -72,7 +72,7 @@ function parseDisplayNumber(value: string) {
       .replaceAll("cNGN", "")
       .replaceAll("EURC", "")
       .replaceAll("BRZ", "")
-      .replaceAll("USDC", "")
+      .replaceAll("USDT", "")
   );
 
   return Number.isFinite(parsed) ? parsed : Number.NaN;
@@ -91,7 +91,7 @@ function formatCompactAmount(value: number, unit: string, maximumFractionDigits 
 
 function formatFutureRate(value: number, quoteCurrency: string) {
   if (!Number.isFinite(value)) {
-    return "— / USDC";
+    return "— / USDT";
   }
 
   let symbol = "₦";
@@ -101,7 +101,7 @@ function formatFutureRate(value: number, quoteCurrency: string) {
     symbol = "R$";
   }
   const digits = quoteCurrency === "EURC" || quoteCurrency === "BRZ" ? 4 : 0;
-  return `${symbol}${value.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits })} / USDC`;
+  return `${symbol}${value.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits })} / USDT`;
 }
 
 function getSummaryRowValue(rows: DeliveryTerm[], label: string) {
@@ -166,7 +166,7 @@ export function OrderEntryPanel({
   returnLabel: string;
   returnValue: string;
   size: string;
-  spotSizeCurrency?: "USDC" | "cNGN";
+  spotSizeCurrency?: "USDT" | "cNGN";
   slippageEstimate: string;
   futureSizeUnit?: string;
   orderSide: "buy" | "sell";
@@ -177,7 +177,7 @@ export function OrderEntryPanel({
   onPostOnlyToggle: () => void;
   onSideChange: (side: "buy" | "sell") => void;
   onSizeChange: (value: string) => void;
-  onSpotSizeCurrencyChange?: (value: "USDC" | "cNGN") => void;
+  onSpotSizeCurrencyChange?: (value: "USDT" | "cNGN") => void;
   onSubmit: (side: "buy" | "sell") => void;
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -201,7 +201,7 @@ export function OrderEntryPanel({
     buyDirectionLabel = "Long";
     sellDirectionLabel = "Short";
   }
-  const activeSpotSizeCurrency = spotSizeCurrency ?? "USDC";
+  const activeSpotSizeCurrency = spotSizeCurrency ?? "USDT";
   const isNegativePnl = pnl.startsWith("-");
   const isNegativeReturn = returnValue.startsWith("-");
   let sizeLabel = "Size";
@@ -209,7 +209,7 @@ export function OrderEntryPanel({
 
   if (isSpotUSDIntent) {
     sizeLabel = `Size (${activeSpotSizeCurrency})`;
-    sizePlaceholder = activeSpotSizeCurrency === "USDC" ? "100" : "160,000";
+    sizePlaceholder = activeSpotSizeCurrency === "USDT" ? "100" : "160,000";
   } else if (futureSizeUnit) {
     sizeLabel = `Size (${futureSizeUnit})`;
   }
@@ -278,9 +278,10 @@ export function OrderEntryPanel({
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-3 text-[12px]">
               <label className="text-panel-text-muted" htmlFor="future-trade-size">
-                Amount (USDC)
+                Amount (USDT)
               </label>
-              <span className="text-panel-text-muted/80">Balance: 250,000 USDC</span>
+              {/* TODO: static mock balance. When wiring live Privy/viem balances, map the on-chain USDC balance into this USDT-labeled container so holders don't see 0. */}
+              <span className="text-panel-text-muted/80">Balance: 250,000 USDT</span>
             </div>
             <div className="grid grid-cols-[44px_minmax(0,1fr)_68px_44px] overflow-hidden rounded-[16px] bg-input-bg ring-1 ring-panel-border">
               <button
@@ -299,7 +300,7 @@ export function OrderEntryPanel({
                 value={size}
               />
               <div className="flex min-h-12 items-center justify-center text-[12px] text-panel-text-muted">
-                USDC
+                USDT
               </div>
               <button
                 aria-label="Increase amount"
@@ -326,7 +327,7 @@ export function OrderEntryPanel({
                   value={limitPrice}
                 />
                 <div className="flex min-h-10 items-center border-input-border border-l px-3 text-[11px] text-panel-text-muted">
-                  {quoteCurrency} / USDC
+                  {quoteCurrency} / USDT
                 </div>
               </div>
             </div>
@@ -354,15 +355,15 @@ export function OrderEntryPanel({
           </div>
 
           <section className="space-y-2 rounded-[18px] bg-input-bg p-4 ring-1 ring-panel-border">
-            <LabelValueRow label="Position Notional" value={formatCompactAmount(displayedAmount, "USDC")} />
+            <LabelValueRow label="Position Notional" value={formatCompactAmount(displayedAmount, "USDT")} />
             <LabelValueRow label="Forward Rate" value={formatFutureRate(forwardRate, quoteCurrency)} />
             <LabelValueRow label="Total Notional" value={formatCompactAmount(totalNotional, quoteCurrency)} />
             <LabelValueRow label="Leverage" value={`${leverage}x`} />
             <div className="space-y-2 border-panel-border border-t pt-3">
-              <LabelValueRow label="Initial Margin" value={formatCompactAmount(initialMargin, "USDC")} />
-              <LabelValueRow label="Maintenance Margin" value={formatCompactAmount(maintenanceMargin, "USDC")} />
+              <LabelValueRow label="Initial Margin" value={formatCompactAmount(initialMargin, "USDT")} />
+              <LabelValueRow label="Maintenance Margin" value={formatCompactAmount(maintenanceMargin, "USDT")} />
               <LabelValueRow label="Liquidation Price" value={formatFutureRate(liquidationPrice, quoteCurrency)} />
-              <LabelValueRow label="Taker Fee" value={formatCompactAmount(fee, "USDC", 1)} />
+              <LabelValueRow label="Taker Fee" value={formatCompactAmount(fee, "USDT", 1)} />
               <LabelValueRow label="Maker Fee" value="Free" valueClassName="font-bold text-panel-text-active" />
             </div>
           </section>
@@ -459,7 +460,7 @@ export function OrderEntryPanel({
                     <Popover.Portal>
                       <Popover.Positioner align="end" sideOffset={8}>
                         <Popover.Popup className="z-50 overflow-hidden rounded-2xl border border-panel-border bg-panel-bg-darker p-1 shadow-[0_20px_60px_var(--panel-shadow)] outline-none transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
-                          {(["USDC", "cNGN"] as const).map((currency) => (
+                          {(["USDT", "cNGN"] as const).map((currency) => (
                             <button
                               className={cn(
                                 "flex min-w-20 items-center justify-between rounded-xl px-2.5 py-1.5 text-left text-[11px] transition-colors",
@@ -504,7 +505,7 @@ export function OrderEntryPanel({
                     value={limitPrice}
                   />
                   <div className="flex h-9.5 items-center border-panel-border border-l px-3 text-[8px] text-panel-text-muted uppercase tracking-[0.14em]">
-                    {quoteCurrency} / USDC
+                    {quoteCurrency} / USDT
                   </div>
                 </div>
               </div>
