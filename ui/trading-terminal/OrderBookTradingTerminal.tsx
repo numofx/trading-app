@@ -1010,7 +1010,7 @@ export function OrderBookTradingTerminal({
   const [spotSizeCurrency, setSpotSizeCurrency] = useState<SpotSizeCurrency>("USDT");
   const [limitPrice, setLimitPrice] = useState("1545");
   const [activeIndex, setActiveIndex] = useState(1);
-  const [allocation, setAllocation] = useState(10);
+  const [allocation, setAllocation] = useState(5);
   const [postOnly, setPostOnly] = useState(false);
   const [atExpiryDeliver, setAtExpiryDeliver] = useState(true);
   const [selectedActivityTab, setSelectedActivityTab] = useState<string>("positions");

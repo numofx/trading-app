@@ -6,7 +6,7 @@ import { useState } from "react";
 import type { DeliveryTerm } from "@/lib/trading.types";
 import { cn } from "@/lib/cn";
 
-const FUTURE_LEVERAGE_OPTIONS = [1, 2, 5, 10] as const;
+const FUTURE_LEVERAGE_OPTIONS = [1, 2, 5] as const;
 
 function LabelValueRow({
   label,
@@ -217,7 +217,7 @@ export function OrderEntryPanel({
   if (isFXFuture) {
     const leverage = FUTURE_LEVERAGE_OPTIONS.includes(allocation as (typeof FUTURE_LEVERAGE_OPTIONS)[number])
       ? allocation
-      : 10;
+      : 5;
     const amount = Number(size || "0");
     const displayedAmount = Number.isFinite(amount) ? amount : 0;
     const fallbackRate = parseDisplayNumber(limitPrice);
@@ -335,7 +335,7 @@ export function OrderEntryPanel({
 
           <div className="space-y-2">
             <div className="text-[12px] text-panel-text-muted">Leverage</div>
-            <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}>
+            <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
               {FUTURE_LEVERAGE_OPTIONS.map((option) => (
                 <button
                   className={cn(
