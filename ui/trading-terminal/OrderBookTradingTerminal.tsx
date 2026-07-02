@@ -391,17 +391,17 @@ function buildSelectorMetrics(
   marketData: Record<MarketId, { mark: string; trades: TradePrint[] }>
 ) {
   const spotChangeByMarketId = {
-    "cngn-usdc-jun-2026-options": null,
+    "cngn-usdc-july-2026-options": null,
     "cngn-usdc-mar-2026-options": null,
     "cngn-usdc-spot": "+0.18%",
   } as Record<string, string | null>;
   const optionAtmIvByMarketId = {
-    "cngn-usdc-jun-2026-options": "61.8%",
+    "cngn-usdc-july-2026-options": "61.8%",
     "cngn-usdc-mar-2026-options": "54.2%",
     "cngn-usdc-spot": null,
   } as Record<string, string | null>;
   const optionOpenInterestByMarketId = {
-    "cngn-usdc-jun-2026-options": "$3.1M",
+    "cngn-usdc-july-2026-options": "$3.1M",
     "cngn-usdc-mar-2026-options": "$1.4M",
     "cngn-usdc-spot": null,
   } as Record<string, string | null>;
@@ -965,7 +965,7 @@ function getActiveIndexForMarket(market: MarketDefinition) {
   if (market.type === "spot") {
     return 0;
   }
-  if (market.contractLabel?.includes("JUN 2026")) {
+  if (market.contractLabel?.includes("JULY 2026")) {
     return 1;
   }
   if (market.contractLabel?.includes("NOV 2026")) {
@@ -1041,7 +1041,7 @@ export function OrderBookTradingTerminal({
     } else {
       let label = "MAY 2027";
       if (index === 1) {
-        label = "JUN 2026";
+        label = "JULY 2026";
       } else if (index === 2) {
         label = "NOV 2026";
       }
