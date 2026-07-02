@@ -32,7 +32,7 @@ export const CNGN_CONFIG: PairConfig = {
   quoteCurrency: "cNGN",
   name: "Nigerian naira futures",
   gridLines: [1800, 1700, 1600, 1500, 1400, 1300],
-  tokenIcons: ["/tokens/usdc.svg", "/tokens/cngn.svg"],
+  tokenIcons: ["/tokens/usdc.svg", "/tokens/cngn.png"],
 };
 
 export const EURC_CONFIG: PairConfig = {
@@ -226,7 +226,7 @@ export function TradingChartPanel({
                   >
                     <span className="flex shrink-0 items-center -space-x-1">
                       <SmartImage<string> alt="USDC" className="size-6 rounded-full bg-input-bg p-0.5 ring-1 ring-panel-border" src="/tokens/usdc.svg" />
-                      <SmartImage<string> alt="cNGN" className="size-6 rounded-full bg-input-bg p-0.5 ring-1 ring-panel-border" src="/tokens/cngn.svg" />
+                      <SmartImage<string> alt="cNGN" className="size-6 rounded-full bg-input-bg p-0.5 ring-1 ring-panel-border" src="/tokens/cngn.png" />
                     </span>
                     <div className="flex flex-col gap-0.5">
                       <span className="font-semibold text-[14px] leading-none">USDC/cNGN</span>
