@@ -206,7 +206,7 @@ export const MARKET_DEFINITIONS = [
     id: "cngn-usdc-spot",
     strikeLabel: null,
     type: "spot",
-    pair: "USDCcNGN",
+    pair: "USDTcNGN",
     region: "Africa",
     sortOrder: 0,
   },
@@ -218,7 +218,7 @@ export const MARKET_DEFINITIONS = [
     id: "cngn-usdc-mar-2026-options",
     strikeLabel: null,
     type: "option",
-    pair: "USDCcNGN",
+    pair: "USDTcNGN",
     region: "Africa",
     sortOrder: 1,
   },
@@ -230,14 +230,14 @@ export const MARKET_DEFINITIONS = [
     id: "cngn-usdc-jun-2026-options",
     strikeLabel: null,
     type: "option",
-    pair: "USDCcNGN",
+    pair: "USDTcNGN",
     region: "Africa",
     sortOrder: 2,
   },
 ] satisfies MarketDefinition[];
 
 export const DEFAULT_MARKET_ID = "cngn-usdc-spot" satisfies MarketId;
-export const DEFAULT_SYMBOL = "USDCcNGN";
+export const DEFAULT_SYMBOL = "USDTcNGN";
 export const DEFAULT_CONTRACT = "";
 export const DEFAULT_TIMEFRAME = "1h";
 export const DEFAULT_ORDER_TYPE = "Market";
@@ -301,7 +301,7 @@ function buildSpotTrades(mark: string) {
 
 
 function formatPriceWithConvention(value: string) {
-  return `${value} cNGN per USDC`;
+  return `${value} cNGN per USDT`;
 }
 
 function getMarketAvailability({
@@ -324,7 +324,7 @@ function getMarketAvailability({
 
 function getSpotPositionOverview(mark: string) {
   return [
-    { label: "Position", value: "+80,000 USDC" },
+    { label: "Position", value: "+80,000 USDT" },
     { label: "Entry Price", value: formatPriceWithConvention(Number(parseNumber(mark) - 1.2).toFixed(2)) },
     { label: "Mark Price", value: formatPriceWithConvention(Number(parseNumber(mark)).toFixed(2)) },
     { label: "Unrealized PnL", value: "+$96" },
@@ -342,7 +342,7 @@ function getOptionsPositionOverview(label: keyof typeof OPTIONS_MARKET_META, mar
 }
 
 function buildSpotMarket() {
-  const displayPair = formatFxDisplayPair("USDCcNGN");
+  const displayPair = formatFxDisplayPair("USDTcNGN");
 
   return {
     availability: {
@@ -353,7 +353,7 @@ function buildSpotMarket() {
     candles: buildCandles(BASE_SPOT_CANDLES, 0, 2),
     contractDetails: [
       { label: "Market", value: `${displayPair} Spot` },
-      { label: "Quote Convention", value: "cNGN per USDC" },
+      { label: "Quote Convention", value: "cNGN per USDT" },
       { label: "Price", value: formatPriceWithConvention(SPOT_MARKET_META.mark) },
       { label: "Executable", value: SPOT_MARKET_META.executable },
       { label: "Settlement", value: SPOT_MARKET_META.settlement },
@@ -380,7 +380,7 @@ function buildSpotMarket() {
 function buildOptionsMarket(label: keyof typeof OPTIONS_MARKET_META, offset: number, sizeMultiplier: number) {
   const meta = OPTIONS_MARKET_META[label];
   const displayLabel = getContractDisplayLabel(label);
-  const displayPair = formatFxDisplayPair("USDCcNGN");
+  const displayPair = formatFxDisplayPair("USDTcNGN");
 
   return {
     availability: {
@@ -459,7 +459,7 @@ const PREVIEW_FUTURE_DEFINITIONS = [
     expiryTimestamp: 1_781_654_400,
     flagSrc: "/flags/ng.svg",
     id: "usdc-cngn-jun-2026-future",
-    pair: "USDCcNGN",
+    pair: "USDTcNGN",
     region: "Africa",
     sortOrder: 1_781_654_400,
   },
@@ -470,7 +470,7 @@ const PREVIEW_FUTURE_DEFINITIONS = [
     expiryTimestamp: 1_794_873_600,
     flagSrc: "/flags/ng.svg",
     id: "usdc-cngn-nov-2026-future",
-    pair: "USDCcNGN",
+    pair: "USDTcNGN",
     region: "Africa",
     sortOrder: 1_794_873_600,
   },
@@ -481,7 +481,7 @@ const PREVIEW_FUTURE_DEFINITIONS = [
     expiryTimestamp: 1_811_203_200,
     flagSrc: "/flags/ng.svg",
     id: "usdc-cngn-may-2027-future",
-    pair: "USDCcNGN",
+    pair: "USDTcNGN",
     region: "Africa",
     sortOrder: 1_811_203_200,
   },
@@ -492,7 +492,7 @@ const PREVIEW_FUTURE_DEFINITIONS = [
     expiryTimestamp: 1_781_654_400,
     flagSrc: "/flags/usd.svg",
     id: "usdc-brz-jun-2026-future",
-    pair: "USDCBRZ",
+    pair: "USDTBRZ",
     region: "Brazil",
     sortOrder: 1_781_654_410,
   },
@@ -503,7 +503,7 @@ const PREVIEW_FUTURE_DEFINITIONS = [
     expiryTimestamp: 1_794_873_600,
     flagSrc: "/flags/usd.svg",
     id: "usdc-brz-nov-2026-future",
-    pair: "USDCBRZ",
+    pair: "USDTBRZ",
     region: "Brazil",
     sortOrder: 1_794_873_610,
   },
@@ -514,7 +514,7 @@ const PREVIEW_FUTURE_DEFINITIONS = [
     expiryTimestamp: 1_811_203_200,
     flagSrc: "/flags/usd.svg",
     id: "usdc-brz-may-2027-future",
-    pair: "USDCBRZ",
+    pair: "USDTBRZ",
     region: "Brazil",
     sortOrder: 1_811_203_210,
   },
@@ -525,7 +525,7 @@ const PREVIEW_FUTURE_DEFINITIONS = [
     expiryTimestamp: 1_781_654_400,
     flagSrc: "/flags/usd.svg",
     id: "usdc-eurc-jun-2026-future",
-    pair: "USDCEURC",
+    pair: "USDTEURC",
     region: "Europe",
     sortOrder: 1_781_654_420,
   },
@@ -536,7 +536,7 @@ const PREVIEW_FUTURE_DEFINITIONS = [
     expiryTimestamp: 1_794_873_600,
     flagSrc: "/flags/usd.svg",
     id: "usdc-eurc-nov-2026-future",
-    pair: "USDCEURC",
+    pair: "USDTEURC",
     region: "Europe",
     sortOrder: 1_794_873_620,
   },
@@ -547,7 +547,7 @@ const PREVIEW_FUTURE_DEFINITIONS = [
     expiryTimestamp: 1_811_203_200,
     flagSrc: "/flags/usd.svg",
     id: "usdc-eurc-may-2027-future",
-    pair: "USDCEURC",
+    pair: "USDTEURC",
     region: "Europe",
     sortOrder: 1_811_203_220,
   },
@@ -620,7 +620,7 @@ export function buildDeliverableFutureDefinition(config: LiveDeliverableFutureCo
     marketSymbol: config.market,
     marketSymbolAliases: getMarketSymbolAliases(config.market),
     minSize: config.minSize ?? "0.001",
-    pair: "USDCcNGN",
+    pair: "USDTcNGN",
     region: "Africa",
     settlementType: "physical_delivery",
     sortOrder: config.expiryTimestamp,
@@ -646,7 +646,7 @@ export function buildSpotDefinition(config: LiveSpotConfig) {
     marketSymbol: config.market,
     marketSymbolAliases: getMarketSymbolAliases(config.market),
     minSize: "0.000001",
-    pair: "USDCcNGN",
+    pair: "USDTcNGN",
     region: "Africa",
     settlementType: "spot",
     sortOrder: 0,
@@ -685,10 +685,10 @@ function buildBookForPair(
 ) {
   let step = 0.1;
   let digits = 2;
-  if (pair === "USDCEURC") {
+  if (pair === "USDTEURC") {
     step = 0.0001;
     digits = 4;
-  } else if (pair === "USDCBRZ") {
+  } else if (pair === "USDTBRZ") {
     step = 0.001;
     digits = 4;
   }
@@ -714,7 +714,7 @@ function buildCandlesForPair(
   const scale = mark / lastBaseClose;
   
   let digits = 2;
-  if (pair === "USDCEURC" || pair === "USDCBRZ") {
+  if (pair === "USDTEURC" || pair === "USDTBRZ") {
     digits = 4;
   }
 
@@ -730,7 +730,7 @@ function buildCandlesForPair(
 
 function buildFuturesTradesForPair(mark: string, basis: number, pair: string) {
   const markNumber = parseNumber(mark);
-  const step = pair === "USDCEURC" || pair === "USDCBRZ" ? 0.0005 : 0.05;
+  const step = pair === "USDTEURC" || pair === "USDTBRZ" ? 0.0005 : 0.05;
 
   return [
     { price: markNumber + step, side: "buy", size: 50_000, time: "10:08:14" },
@@ -758,11 +758,11 @@ export function buildDeliverableFutureMarket(definition: MarketDefinition) {
   } else if (definition.pair.includes("BRZ")) {
     quote = "BRZ";
   }
-  const digits = definition.pair === "USDCEURC" || definition.pair === "USDCBRZ" ? 4 : 2;
+  const digits = definition.pair === "USDTEURC" || definition.pair === "USDTBRZ" ? 4 : 2;
 
   const formatLocalPrice = (value: string | number) => {
     const num = typeof value === "string" ? parseNumber(value) : value;
-    return `${num.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits })} ${quote} per USDC`;
+    return `${num.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits })} ${quote} per USDT`;
   };
 
   const formatLocalBasis = (value: number) => {
@@ -780,9 +780,9 @@ export function buildDeliverableFutureMarket(definition: MarketDefinition) {
       { label: "Contract", value: `${displayPair} Futures · ${displayLabel}` },
       { label: "Settlement", value: "Physical delivery" },
       { label: "Manager", value: "Dedicated DeliverableFXManager" },
-      { label: "Contract Size", value: `${definition.contractMultiplier ?? "10000"} USDC` },
+      { label: "Contract Size", value: `${definition.contractMultiplier ?? "10000"} USDT` },
       { label: "Min Size", value: `${definition.minSize ?? "0.001"} contracts` },
-      { label: "Tick Size", value: `${definition.tickSize ?? (digits === 4 ? "0.0001" : "1")} ${quote} per USDC` },
+      { label: "Tick Size", value: `${definition.tickSize ?? (digits === 4 ? "0.0001" : "1")} ${quote} per USDT` },
       { label: "Mark Price", value: formatLocalPrice(mark) },
     ],
     id: definition.id,
@@ -798,7 +798,7 @@ export function buildDeliverableFutureMarket(definition: MarketDefinition) {
     orderBookAsks: buildBookForPair(BASE_FUTURES_ASKS, parseNumber(mark), "ask", definition.pair),
     orderBookBids: buildBookForPair(BASE_FUTURES_BIDS, parseNumber(mark), "bid", definition.pair),
     positionOverview: [
-      { label: "Position", value: "Long USDC · 0.500 contracts" },
+      { label: "Position", value: "Long USDT · 0.500 contracts" },
       { label: "Entry Price", value: formatLocalPrice(parseNumber(mark) - 5 * (digits === 4 ? 0.001 : 1)) },
       { label: "Mark Price", value: formatLocalPrice(mark) },
       { label: "Unrealized PnL", value: "+$156" },
@@ -844,7 +844,7 @@ export function buildLiveSpotMarketFromBook(
     }),
     contractDetails: [
       { label: "Market", value: `${formatFxDisplayPair(definition.pair)} Spot` },
-      { label: "Quote Convention", value: "cNGN per USDC" },
+      { label: "Quote Convention", value: "cNGN per USDT" },
       { label: "Price", value: derivedMark ? formatPriceWithConvention(derivedMark) : "—" },
       { label: "Executable", value: "Live on orderbook" },
       { label: "Settlement", value: "Immediate spot-style settlement" },
@@ -977,9 +977,9 @@ function buildLiveDeliverableFutureMarket(
       { label: "Contract", value: `${displayPair} Futures · ${displayLabel}` },
       { label: "Settlement", value: "Physical delivery" },
       { label: "Manager", value: "Dedicated DeliverableFXManager" },
-      { label: "Contract Size", value: `${definition.contractMultiplier ?? "10000"} USDC` },
+      { label: "Contract Size", value: `${definition.contractMultiplier ?? "10000"} USDT` },
       { label: "Min Size", value: `${definition.minSize ?? "0.001"} contracts` },
-      { label: "Tick Size", value: `${definition.tickSize ?? "1"} cNGN per USDC` },
+      { label: "Tick Size", value: `${definition.tickSize ?? "1"} cNGN per USDT` },
       { label: "Mark Price", value: markValue },
     ],
     id: definition.id,
@@ -995,7 +995,7 @@ function buildLiveDeliverableFutureMarket(
     orderBookAsks: asks,
     orderBookBids: bids,
     positionOverview: [
-      { label: "Position", value: "Long USDC · 0.500 contracts" },
+      { label: "Position", value: "Long USDT · 0.500 contracts" },
       { label: "Entry Price", value: formatPriceWithConvention("1,600.00") },
       { label: "Mark Price", value: markValue },
       { label: "Unrealized PnL", value: "—" },
@@ -1097,13 +1097,13 @@ export const BOTTOM_TABS = [
 export const ACTIVITY_VIEWS = {
   "open-orders": {
     columns: ["Instrument", "Direction", "Type", "Size", "Price"],
-    rows: [{ cells: ["USDC/cNGN Futures · Jun 2026", "Long cNGN", "Limit", "5 contracts", "1,604.80 cNGN per USDC"] }],
+    rows: [{ cells: ["USDT/cNGN Futures · Jun 2026", "Long cNGN", "Limit", "5 contracts", "1,604.80 cNGN per USDT"] }],
   },
   positions: {
     columns: ["Instrument", "Position", "Entry Price", "Mark Price", "Unrealized PnL", "Return on Margin"],
     rows: [
       {
-        cells: ["USDC/cNGN Futures · Jun 2026", "Long cNGN · 5 contracts", "1,600.00 cNGN per USDC", "1,605.20 cNGN per USDC", "+$156", "+0.64%"],
+        cells: ["USDT/cNGN Futures · Jun 2026", "Long cNGN · 5 contracts", "1,600.00 cNGN per USDT", "1,605.20 cNGN per USDT", "+$156", "+0.64%"],
         positiveCellIndexes: [4, 5],
       },
     ],
@@ -1111,31 +1111,31 @@ export const ACTIVITY_VIEWS = {
   "trade-history": {
     columns: ["Time", "Instrument", "Direction", "Size", "Price"],
     rows: [
-      { cells: ["10:08:14", "USDC/cNGN Futures · Jun 2026", "Long cNGN", "5 contracts", "1,605.30 cNGN per USDC"] },
-      { cells: ["10:08:06", "USDC/cNGN Futures · Jun 2026", "Short cNGN", "3 contracts", "1,605.20 cNGN per USDC"] },
+      { cells: ["10:08:14", "USDT/cNGN Futures · Jun 2026", "Long cNGN", "5 contracts", "1,605.30 cNGN per USDT"] },
+      { cells: ["10:08:06", "USDT/cNGN Futures · Jun 2026", "Short cNGN", "3 contracts", "1,605.20 cNGN per USDT"] },
     ],
   },
   "order-history": {
     columns: ["Time", "Instrument", "Direction", "Type", "Size", "Price", "Status"],
     rows: [
-      { cells: ["10:08:14", "USDC/cNGN Futures · Jun 2026", "Long cNGN", "Limit", "5 contracts", "1,605.30 cNGN per USDC", "Filled"] },
-      { cells: ["10:08:06", "USDC/cNGN Futures · Jun 2026", "Short cNGN", "Market", "3 contracts", "1,605.20 cNGN per USDC", "Filled"] },
-      { cells: ["10:05:22", "USDC/cNGN Futures · Jun 2026", "Long cNGN", "Limit", "10 contracts", "1,600.00 cNGN per USDC", "Cancelled"] },
+      { cells: ["10:08:14", "USDT/cNGN Futures · Jun 2026", "Long cNGN", "Limit", "5 contracts", "1,605.30 cNGN per USDT", "Filled"] },
+      { cells: ["10:08:06", "USDT/cNGN Futures · Jun 2026", "Short cNGN", "Market", "3 contracts", "1,605.20 cNGN per USDT", "Filled"] },
+      { cells: ["10:05:22", "USDT/cNGN Futures · Jun 2026", "Long cNGN", "Limit", "10 contracts", "1,600.00 cNGN per USDT", "Cancelled"] },
     ],
   },
   "basis-history": {
     columns: ["Instrument", "Spot Price", "Future Price", "Basis", "Implied Carry %", "Time"],
     rows: [
       {
-        cells: ["USDC/cNGN Futures · Jun 2026", "1,500.00 cNGN", "1,545.00 cNGN", "+45.00 cNGN", "+3.20%", "10:08:14"],
+        cells: ["USDT/cNGN Futures · Jun 2026", "1,500.00 cNGN", "1,545.00 cNGN", "+45.00 cNGN", "+3.20%", "10:08:14"],
         positiveCellIndexes: [3, 4],
       },
       {
-        cells: ["USDC/cNGN Futures · Nov 2026", "1,500.00 cNGN", "1,720.00 cNGN", "+220.00 cNGN", "+7.30%", "10:08:14"],
+        cells: ["USDT/cNGN Futures · Nov 2026", "1,500.00 cNGN", "1,720.00 cNGN", "+220.00 cNGN", "+7.30%", "10:08:14"],
         positiveCellIndexes: [3, 4],
       },
       {
-        cells: ["USDC/cNGN Futures · May 2027", "1,500.00 cNGN", "1,820.00 cNGN", "+320.00 cNGN", "+9.60%", "10:08:14"],
+        cells: ["USDT/cNGN Futures · May 2027", "1,500.00 cNGN", "1,820.00 cNGN", "+320.00 cNGN", "+9.60%", "10:08:14"],
         positiveCellIndexes: [3, 4],
       },
     ],
