@@ -17,7 +17,7 @@ function assertWithinTolerance(expected: number, actual: number, label: string) 
 }
 
 export function isUSDCCNGNSpotMarket(market: MarketDefinition) {
-  return market.type === "spot" && market.pair === "USDTcNGN";
+  return market.type === "spot" && market.pair === "USDCcNGN";
 }
 
 export function uiToEngineSpotOrder(ui: SpotOrderTranslation["ui"]): SpotOrderTranslation {

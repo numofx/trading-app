@@ -205,7 +205,7 @@ export function buildSpotOrderEnvelope({
   walletAddress: string;
 }) {
   if (!canSubmitSpotOrder(market)) {
-    throw new Error("Spot execution requires a live USDT/cNGN spot market from markets-service");
+    throw new Error("Spot execution requires a live USDC/cNGN spot market from markets-service");
   }
 
   if (!UNSIGNED_INTEGER_PATTERN.test(subaccountId)) {

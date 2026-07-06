@@ -56,7 +56,7 @@ import { TradingMarketHeader } from "@/ui/trading-terminal/TradingMarketHeader";
 import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
 
 const SELECTED_MARKET_STORAGE_KEY = "trading-terminal-selected-market";
-type SpotSizeCurrency = "USDT" | "cNGN";
+type SpotSizeCurrency = "USDC" | "cNGN";
 const TRAILING_ZERO_DECIMALS_PATTERN = /\.?0+$/;
 const CONTRACT_COUNT_PATTERN = /(\d[\d,]*(?:\.\d+)?)\s+contracts/i;
 
@@ -90,7 +90,7 @@ function formatPriceDisplay(value: number | string | null, quoteCurrency = "cNGN
   const digits = quoteCurrency === "EURC" || quoteCurrency === "BRZ" ? 4 : 2;
   const formatted = numericValue.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
-  return `${formatted} ${quoteCurrency} per USDT`;
+  return `${formatted} ${quoteCurrency} per USDC`;
 }
 
 function formatSignedUsd(value: number | null) {
@@ -161,12 +161,12 @@ function getRenderablePriceInput(mark: string) {
 
 function _getDirectionalLabel(orderSide: "buy" | "sell", marketDefinition: MarketDefinition) {
   if (isUSDCCNGNSpotMarket(marketDefinition)) {
-    return orderSide === "buy" ? "Buy USDT" : "Sell USDT";
+    return orderSide === "buy" ? "Buy USDC" : "Sell USDC";
   }
 
   if (
     marketDefinition.type === "future" &&
-    formatFxDisplayPair(marketDefinition.pair) === "USDT/cNGN"
+    formatFxDisplayPair(marketDefinition.pair) === "USDC/cNGN"
   ) {
     return orderSide === "buy" ? "Long" : "Short";
   }
@@ -937,7 +937,7 @@ function convertSpotSizeInputToUSDC(
     return 0;
   }
 
-  if (sizeCurrency === "USDT") {
+  if (sizeCurrency === "USDC") {
     return sizeNumber;
   }
 
@@ -949,7 +949,7 @@ function convertUSDCSizeToSpotInput(
   sizeCurrency: SpotSizeCurrency,
   referencePrice: number
 ) {
-  if (sizeCurrency === "USDT") {
+  if (sizeCurrency === "USDC") {
     return canonicalUSDCSize;
   }
 
@@ -1007,7 +1007,7 @@ export function OrderBookTradingTerminal({
   const [orderType, setOrderType] = useState<"Limit" | "Market" | "Stop">(DEFAULT_ORDER_TYPE);
   const [orderSide, setOrderSide] = useState<"buy" | "sell">("buy");
   const [size, setSize] = useState("10000");
-  const [spotSizeCurrency, setSpotSizeCurrency] = useState<SpotSizeCurrency>("USDT");
+  const [spotSizeCurrency, setSpotSizeCurrency] = useState<SpotSizeCurrency>("USDC");
   const [limitPrice, setLimitPrice] = useState("1545");
   const [activeIndex, setActiveIndex] = useState(1);
   const [allocation, setAllocation] = useState(5);
@@ -1027,14 +1027,14 @@ export function OrderBookTradingTerminal({
   const handleActiveIndexChange = (index: number) => {
     setActiveIndex(index);
     const currentPair = selectedMarket.pair;
-    const activeConfig = currentPair === "USDTEURC" ? EURC_CONFIG : CNGN_CONFIG;
+    const activeConfig = currentPair === "USDCEURC" ? EURC_CONFIG : CNGN_CONFIG;
     const point = activeConfig.forwardPoints[index];
     if (point) {
       setLimitPrice(String(point.rate));
     }
 
     if (index === 0) {
-      const spotMarket = marketDefinitions.find((m) => m.pair === "USDTcNGN" && m.type === "spot");
+      const spotMarket = marketDefinitions.find((m) => m.pair === "USDCcNGN" && m.type === "spot");
       if (spotMarket) {
         setSelectedMarketId(spotMarket.id);
       }
@@ -1054,13 +1054,13 @@ export function OrderBookTradingTerminal({
     }
   };
 
-  const handlePairChange = (newPair: "USDTcNGN" | "USDTEURC") => {
+  const handlePairChange = (newPair: "USDCcNGN" | "USDCEURC") => {
     const isFuture = selectedMarket.type === "future";
 
-    if (newPair === "USDTEURC") {
+    if (newPair === "USDCEURC") {
       const targetFuture = marketDefinitions.find(
-        (m) => m.pair === "USDTEURC" && m.type === "future" && (!isFuture || m.contractLabel === selectedMarket.contractLabel)
-      ) || marketDefinitions.find((m) => m.pair === "USDTEURC" && m.type === "future");
+        (m) => m.pair === "USDCEURC" && m.type === "future" && (!isFuture || m.contractLabel === selectedMarket.contractLabel)
+      ) || marketDefinitions.find((m) => m.pair === "USDCEURC" && m.type === "future");
 
       if (targetFuture) {
         setSelectedMarketId(targetFuture.id);
@@ -1069,7 +1069,7 @@ export function OrderBookTradingTerminal({
       }
     } else {
       if (selectedMarket.type === "spot") {
-        const targetSpot = marketDefinitions.find((m) => m.pair === "USDTcNGN" && m.type === "spot");
+        const targetSpot = marketDefinitions.find((m) => m.pair === "USDCcNGN" && m.type === "spot");
         if (targetSpot) {
           setSelectedMarketId(targetSpot.id);
           setLimitPrice(getRenderablePriceInput(marketData[targetSpot.id].mark));
@@ -1079,8 +1079,8 @@ export function OrderBookTradingTerminal({
       }
 
       const targetFuture = marketDefinitions.find(
-        (m) => m.pair === "USDTcNGN" && m.type === "future" && (!isFuture || m.contractLabel === selectedMarket.contractLabel)
-      ) || marketDefinitions.find((m) => m.pair === "USDTcNGN" && m.type === "future");
+        (m) => m.pair === "USDCcNGN" && m.type === "future" && (!isFuture || m.contractLabel === selectedMarket.contractLabel)
+      ) || marketDefinitions.find((m) => m.pair === "USDCcNGN" && m.type === "future");
 
       if (targetFuture) {
         setSelectedMarketId(targetFuture.id);
@@ -1453,7 +1453,7 @@ export function OrderBookTradingTerminal({
 
       if (!isSpotMarket) {
         setLastAction(
-          `Futures order accepted: ${orderSide.toUpperCase()} ${effectiveSize} USDT notional @ ${executionLimitPrice} cNGN/USDT on ${market.ticker}; position after: ${positionAfter}`
+          `Futures order accepted: ${orderSide.toUpperCase()} ${effectiveSize} USDC notional @ ${executionLimitPrice} cNGN/USDC on ${market.ticker}; position after: ${positionAfter}`
         );
         return;
       }
@@ -1462,13 +1462,13 @@ export function OrderBookTradingTerminal({
 
       if (!translated) {
         setLastAction(
-          `Spot order accepted for ${effectiveSize} USDT @ ${executionLimitPrice} cNGN/USDT`
+          `Spot order accepted for ${effectiveSize} USDC @ ${executionLimitPrice} cNGN/USDC`
         );
         return;
       }
 
       setLastAction(
-        `Spot order accepted: ${translated.ui_intent?.side?.toUpperCase() ?? orderSide.toUpperCase()} ${translated.ui_intent?.size ?? effectiveSize} USDT @ ${translated.ui_intent?.price ?? executionLimitPrice} cNGN/USDT -> engine ${translated.engine_order?.side?.toUpperCase() ?? "—"} ${translated.engine_order?.amount ?? "—"} cNGN @ ${translated.engine_order?.price ?? "—"} USDT/cNGN | dUSDT ${translated.balance_delta?.usdc ?? "—"} | dcNGN ${translated.balance_delta?.cngn ?? "—"}`
+        `Spot order accepted: ${translated.ui_intent?.side?.toUpperCase() ?? orderSide.toUpperCase()} ${translated.ui_intent?.size ?? effectiveSize} USDC @ ${translated.ui_intent?.price ?? executionLimitPrice} cNGN/USDC -> engine ${translated.engine_order?.side?.toUpperCase() ?? "—"} ${translated.engine_order?.amount ?? "—"} cNGN @ ${translated.engine_order?.price ?? "—"} USDC/cNGN | dUSDC ${translated.balance_delta?.usdc ?? "—"} | dcNGN ${translated.balance_delta?.cngn ?? "—"}`
       );
       return;
     } catch (error) {
@@ -1543,7 +1543,7 @@ export function OrderBookTradingTerminal({
               contractDetails={market.contractDetails}
               contractLabel={getDisplayTicker(selectedMarket)}
               exposureLabel={exposureLabel}
-              futureSizeUnit={selectedMarket.type === "future" ? "USDT" : undefined}
+              futureSizeUnit={selectedMarket.type === "future" ? "USDC" : undefined}
               isFXFuture={selectedMarket.type === "future"}
               isSpotUSDIntent={isUSDCCNGNSpotMarket(selectedMarket)}
               isSubmitDisabled={!isLiveSpotExecutionAvailable}
