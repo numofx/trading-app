@@ -438,19 +438,6 @@ type LiveDeliverableFutureRuntime = {
   trades: PresentedTrade[];
 };
 
-type LiveSpotConfig = {
-  assetAddress: string;
-  market: string;
-  subId: string;
-  tickSize?: string | null;
-};
-
-type LiveSpotRuntime = {
-  book: BookResponse | null;
-  definition: MarketDefinition;
-  trades: PresentedTrade[];
-};
-
 const PREVIEW_FUTURE_DEFINITIONS = [
   {
     contractLabel: "JULY 2026",
@@ -595,32 +582,6 @@ export function buildDeliverableFutureDefinition(config: LiveDeliverableFutureCo
     subId: config.subId,
     tickSize: config.tickSize ?? "1",
     type: "future",
-  } satisfies MarketDefinition;
-}
-
-export function buildSpotDefinition(config: LiveSpotConfig) {
-  return {
-    assetAddress: config.assetAddress,
-    contractLabel: null,
-    contractMultiplier: "1",
-    contractType: "spot",
-    expiryDays: null,
-    expiryLabel: null,
-    expiryTimestamp: null,
-    flagSrc: "/flags/ng.svg",
-    id: SPOT_MARKET_META.id,
-    lastTradeTimestamp: null,
-    marketSymbol: config.market,
-    marketSymbolAliases: getMarketSymbolAliases(config.market),
-    minSize: "0.000001",
-    pair: "USDCcNGN",
-    region: "Africa",
-    settlementType: "spot",
-    sortOrder: 0,
-    strikeLabel: null,
-    subId: config.subId,
-    tickSize: config.tickSize ?? "1",
-    type: "spot",
   } satisfies MarketDefinition;
 }
 
@@ -775,72 +736,6 @@ export function buildDeliverableFutureMarket(definition: MarketDefinition) {
     ticker: `${displayPair} Futures`,
     timeToExpiry: `${definition.expiryDays ?? 0}d`,
     trades: buildFuturesTradesForPair(mark, basis, definition.pair),
-  } satisfies ContractMarket;
-}
-
-export function buildLiveSpotMarketFromBook(
-  definition: MarketDefinition,
-  book: BookResponse | null,
-  trades: PresentedTrade[],
-) {
-  const base = buildSpotMarket();
-  const asks = buildLiveBookSide(book?.asks ?? [], "ask");
-  const bids = buildLiveBookSide(book?.bids ?? [], "bid");
-  const derivedMark = deriveMarkFromBook(asks, bids);
-  const liveTrades = trades
-    .map((trade) => ({
-      price: Number(trade.spot_contract?.ui_intent.price ?? decimalStringToNumber(trade.price)),
-      side: trade.spot_contract?.ui_intent.side ?? trade.aggressor_side,
-      size: Math.round(Number(trade.spot_contract?.ui_intent.size ?? decimalStringToNumber(trade.size))),
-      time: new Intl.DateTimeFormat("en-US", {
-        hour: "2-digit",
-        hour12: false,
-        minute: "2-digit",
-        timeZone: "UTC",
-      }).format(new Date(trade.created_at)),
-    }))
-    .filter((trade) => Number.isFinite(trade.price) && trade.price > 0 && Number.isFinite(trade.size) && trade.size > 0);
-
-  return {
-    ...base,
-    availability: getMarketAvailability({
-      asks,
-      bids,
-      mark: derivedMark,
-      trades: liveTrades,
-    }),
-    contractDetails: [
-      { label: "Market", value: `${formatFxDisplayPair(definition.pair)} Spot` },
-      { label: "Quote Convention", value: "cNGN per USDC" },
-      { label: "Price", value: derivedMark ? formatPriceWithConvention(derivedMark) : "—" },
-      { label: "Executable", value: "Live on orderbook" },
-      { label: "Settlement", value: "Immediate spot-style settlement" },
-    ],
-    id: definition.id,
-    infoBar: base.infoBar.map((item) => {
-      if (item.label === "Mark Price") {
-        return {
-          ...item,
-          value: derivedMark ? formatPriceWithConvention(derivedMark) : "—",
-        };
-      }
-
-      return item;
-    }),
-    mark: derivedMark ?? "—",
-    orderBookAsks: asks,
-    orderBookBids: bids,
-    positionOverview: base.positionOverview.map((item) => {
-      if (item.label === "Mark Price") {
-        return {
-          ...item,
-          value: derivedMark ? formatPriceWithConvention(derivedMark) : "—",
-        };
-      }
-
-      return item;
-    }),
-    trades: liveTrades,
   } satisfies ContractMarket;
 }
 
@@ -999,13 +894,8 @@ export function buildDeliverableFutureMarketFromBook(
   return buildLiveDeliverableFutureMarket(definition, asks, bids, liveTrades);
 }
 
-export function buildTradingTerminalMarkets(
-  liveSpot: LiveSpotRuntime | null,
-  liveFutures: LiveDeliverableFutureRuntime[],
-) {
-  const spotMarketData = liveSpot
-    ? buildLiveSpotMarketFromBook(liveSpot.definition, liveSpot.book, liveSpot.trades)
-    : MARKET_DATA["cngn-usdc-spot"];
+export function buildTradingTerminalMarkets(liveFutures: LiveDeliverableFutureRuntime[]) {
+  const spotMarketData = MARKET_DATA["cngn-usdc-spot"];
 
   if (!liveFutures.length) {
     const previewFutureDefinitions = PREVIEW_FUTURE_DEFINITIONS.map(buildPreviewFutureDefinition);

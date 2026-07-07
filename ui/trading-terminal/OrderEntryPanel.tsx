@@ -1,6 +1,5 @@
 "use client";
 
-import { Popover } from "@base-ui/react/popover";
 import { ChevronDown, ChevronUp, Info, Minus, Plus } from "lucide-react";
 import { useState } from "react";
 import type { DeliveryTerm } from "@/lib/trading.types";
@@ -37,25 +36,17 @@ function LabelValueRow({
   );
 }
 
-function getDirectionCopy(isSpotUSDIntent: boolean, isLong: boolean, quoteCurrency: string) {
-  if (isSpotUSDIntent) {
-    return isLong ? `Buy USDC / sell ${quoteCurrency}` : `Sell USDC / buy ${quoteCurrency}`;
-  }
-
+function getDirectionCopy(isLong: boolean, quoteCurrency: string) {
   return isLong ? `Buy ${quoteCurrency} / sell USDC` : `Sell ${quoteCurrency} / buy USDC`;
 }
 
-function getSubmitLabel(isSubmitting: boolean, isSpotUSDIntent: boolean, isLong: boolean, isFXFuture: boolean, quoteCurrency: string) {
+function getSubmitLabel(isSubmitting: boolean, isLong: boolean, isFXFuture: boolean, quoteCurrency: string) {
   if (isSubmitting) {
     return "Submitting...";
   }
 
   if (isFXFuture) {
     return isLong ? "Long" : "Short";
-  }
-
-  if (isSpotUSDIntent) {
-    return isLong ? "Buy" : "Sell";
   }
 
   return isLong ? `Long ${quoteCurrency}` : `Short ${quoteCurrency}`;
@@ -117,7 +108,6 @@ export function OrderEntryPanel({
   contractLabel,
   isSubmitting,
   isSubmitDisabled,
-  isSpotUSDIntent,
   lastAction,
   limitPrice,
   orderSummaryRows,
@@ -131,7 +121,6 @@ export function OrderEntryPanel({
   returnLabel,
   returnValue,
   size,
-  spotSizeCurrency,
   slippageEstimate,
   futureSizeUnit,
   orderSide,
@@ -142,7 +131,6 @@ export function OrderEntryPanel({
   onPostOnlyToggle,
   onSideChange,
   onSizeChange,
-  onSpotSizeCurrencyChange,
   onSubmit,
 }: {
   allocation: number;
@@ -152,7 +140,6 @@ export function OrderEntryPanel({
   contractLabel: string;
   isSubmitting?: boolean;
   isSubmitDisabled?: boolean;
-  isSpotUSDIntent: boolean;
   lastAction: string;
   limitPrice: string;
   orderSummaryRows: DeliveryTerm[];
@@ -166,7 +153,6 @@ export function OrderEntryPanel({
   returnLabel: string;
   returnValue: string;
   size: string;
-  spotSizeCurrency?: "USDC" | "cNGN";
   slippageEstimate: string;
   futureSizeUnit?: string;
   orderSide: "buy" | "sell";
@@ -177,11 +163,9 @@ export function OrderEntryPanel({
   onPostOnlyToggle: () => void;
   onSideChange: (side: "buy" | "sell") => void;
   onSizeChange: (value: string) => void;
-  onSpotSizeCurrencyChange?: (value: "USDC" | "cNGN") => void;
   onSubmit: (side: "buy" | "sell") => void;
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [sizeCurrencyPickerOpen, setSizeCurrencyPickerOpen] = useState(false);
   const isLong = orderSide === "buy";
   const needsLimitPrice = orderType !== "Market";
   let quoteCurrency = "cNGN";
@@ -190,27 +174,19 @@ export function OrderEntryPanel({
   } else if (contractLabel.includes("BRZ")) {
     quoteCurrency = "BRZ";
   }
-  let directionCopy = getDirectionCopy(isSpotUSDIntent, isLong, quoteCurrency);
+  let directionCopy = getDirectionCopy(isLong, quoteCurrency);
   if (isFXFuture) {
     directionCopy = isLong ? "Long" : "Short";
   }
-  const submitLabel = getSubmitLabel(Boolean(isSubmitting), isSpotUSDIntent, isLong, isFXFuture, quoteCurrency);
-  let buyDirectionLabel = isSpotUSDIntent ? "Buy" : "Long";
-  let sellDirectionLabel = isSpotUSDIntent ? "Sell" : "Short";
-  if (isFXFuture) {
-    buyDirectionLabel = "Long";
-    sellDirectionLabel = "Short";
-  }
-  const activeSpotSizeCurrency = spotSizeCurrency ?? "USDC";
+  const submitLabel = getSubmitLabel(Boolean(isSubmitting), isLong, isFXFuture, quoteCurrency);
+  const buyDirectionLabel = "Long";
+  const sellDirectionLabel = "Short";
   const isNegativePnl = pnl.startsWith("-");
   const isNegativeReturn = returnValue.startsWith("-");
   let sizeLabel = "Size";
-  let sizePlaceholder = "5";
+  const sizePlaceholder = "5";
 
-  if (isSpotUSDIntent) {
-    sizeLabel = `Size (${activeSpotSizeCurrency})`;
-    sizePlaceholder = activeSpotSizeCurrency === "USDC" ? "100" : "160,000";
-  } else if (futureSizeUnit) {
+  if (futureSizeUnit) {
     sizeLabel = `Size (${futureSizeUnit})`;
   }
 
@@ -445,49 +421,15 @@ export function OrderEntryPanel({
                   id="trade-size"
                   onChange={(event) =>
                     onSizeChange(
-                      event.target.value.replace(isSpotUSDIntent || futureSizeUnit ? /[^\d.]/g : /[^\d]/g, ""),
+                      event.target.value.replace(futureSizeUnit ? /[^\d.]/g : /[^\d]/g, ""),
                     )
                   }
                   placeholder={sizePlaceholder}
                   value={size}
                 />
-                {isSpotUSDIntent ? (
-                  <Popover.Root onOpenChange={setSizeCurrencyPickerOpen} open={sizeCurrencyPickerOpen}>
-                    <Popover.Trigger className="flex h-9.5 items-center gap-1 border-panel-border border-l px-3 text-[12px] text-panel-text transition-colors hover:bg-input-hover data-popup-open:bg-input-bg">
-                      {activeSpotSizeCurrency}
-                      <ChevronDown className="size-3.5 text-panel-text-muted" />
-                    </Popover.Trigger>
-                    <Popover.Portal>
-                      <Popover.Positioner align="end" sideOffset={8}>
-                        <Popover.Popup className="z-50 overflow-hidden rounded-2xl border border-panel-border bg-panel-bg-darker p-1 shadow-[0_20px_60px_var(--panel-shadow)] outline-none transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
-                          {(["USDC", "cNGN"] as const).map((currency) => (
-                            <button
-                              className={cn(
-                                "flex min-w-20 items-center justify-between rounded-xl px-2.5 py-1.5 text-left text-[11px] transition-colors",
-                                activeSpotSizeCurrency === currency
-                                  ? "bg-input-bg text-panel-text-active"
-                                  : "text-panel-text-muted hover:bg-input-hover hover:text-panel-text-active",
-                              )}
-                              key={currency}
-                              onClick={() => {
-                                onSpotSizeCurrencyChange?.(currency);
-                                setSizeCurrencyPickerOpen(false);
-                              }}
-                              type="button"
-                            >
-                              <span>{currency}</span>
-                              {activeSpotSizeCurrency === currency ? <ChevronUp className="size-3 text-spread-percent" /> : null}
-                            </button>
-                          ))}
-                        </Popover.Popup>
-                      </Popover.Positioner>
-                    </Popover.Portal>
-                  </Popover.Root>
-                ) : (
-                  <div className="flex h-9.5 items-center gap-1 border-panel-border border-l px-3 text-[12px] text-panel-text">
-                    {futureSizeUnit ?? "Contracts"}
-                  </div>
-                )}
+                <div className="flex h-9.5 items-center gap-1 border-panel-border border-l px-3 text-[12px] text-panel-text">
+                  {futureSizeUnit ?? "Contracts"}
+                </div>
               </div>
             </div>
 
@@ -534,7 +476,7 @@ export function OrderEntryPanel({
               <div className="mt-1 text-[9px] text-panel-text-muted">{directionCopy}</div>
             </div>
             <div className="rounded-full border border-panel-border px-2 py-1 text-[8px] text-panel-text-muted">
-              {isSpotUSDIntent ? "Spot settled" : "Physically delivered"}
+              Physically delivered
             </div>
           </div>
           <div className="space-y-2">

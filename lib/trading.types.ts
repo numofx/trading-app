@@ -106,26 +106,3 @@ export type ActivityView = {
   columns: string[];
   rows: ActivityRow[];
 };
-
-export type SpotUIOrderIntent = {
-  price: number;
-  side: "buy" | "sell";
-  size: number;
-};
-
-export type SpotEngineOrder = {
-  amount: number;
-  price: number;
-  side: "buy" | "sell";
-};
-
-export type SpotFillDeltas = {
-  cngn: number;
-  usdc: number;
-};
-
-export type SpotOrderTranslation = {
-  deltas: SpotFillDeltas;
-  engine: SpotEngineOrder;
-  ui: SpotUIOrderIntent;
-};

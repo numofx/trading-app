@@ -1,5 +1,4 @@
 import "server-only";
-import { selectLiveUSDCCNGNSpotMarket } from "@/lib/spot-market-discovery";
 
 export type MarketPresentation = {
   asset_address?: string;
@@ -163,12 +162,6 @@ export async function getLiveDeliverableFXFutures() {
 
       return leftExpiry - rightExpiry;
     });
-}
-
-export async function getLiveUSDCCNGNSpotMarket() {
-  const markets = await getMarketsServiceMarkets();
-
-  return selectLiveUSDCCNGNSpotMarket(markets);
 }
 
 export async function getMarketBook(assetAddress: string, subId: string) {
