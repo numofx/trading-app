@@ -35,22 +35,6 @@ export const CNGN_CONFIG: PairConfig = {
   tokenIcons: ["/tokens/usdc.svg", "/tokens/cngn.svg"],
 };
 
-export const EURC_CONFIG: PairConfig = {
-  forwardPoints: [
-    { basis: null, label: "Spot", rate: 0.9000, tenor: "Spot" },
-    { basis: 1.7, label: "July 2026", rate: 0.9150, tenor: "1M" },
-    { basis: 4.4, label: "Nov 2026", rate: 0.9400, tenor: "6M" },
-    { basis: 7.8, label: "May 2027", rate: 0.9700, tenor: "12M" },
-  ],
-  minRate: 0.85,
-  maxRate: 1.00,
-  formatRate: (val) => `€${val.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`,
-  quoteCurrency: "EURC",
-  name: "Euro futures",
-  gridLines: [1.00, 0.97, 0.94, 0.915, 0.88, 0.85],
-  tokenIcons: ["/tokens/usdc.svg", "/tokens/eurc.png"],
-};
-
 export const FORWARD_POINTS = CNGN_CONFIG.forwardPoints;
 
 function formatBasis(value: number | null) {
@@ -174,11 +158,10 @@ export function TradingChartPanel({
   onToolSelect: (toolId: string) => void;
   activeIndex: number;
   onActiveIndexChange: (index: number) => void;
-  onPairChange?: (pair: "USDCcNGN" | "USDCEURC") => void;
+  onPairChange?: (pair: "USDCcNGN") => void;
 }) {
   const pairLabel = getPairLabel(ticker);
-  const currentPair = pairLabel === "USDC/EURC" ? "USDCEURC" : "USDCcNGN";
-  const activeConfig = currentPair === "USDCEURC" ? EURC_CONFIG : CNGN_CONFIG;
+  const activeConfig = CNGN_CONFIG;
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   return (
@@ -191,11 +174,7 @@ export function TradingChartPanel({
                 <SmartImage<string> alt="USDC" className="size-7 animate-none rounded-full bg-input-bg p-0.5 ring-2 ring-panel-bg" src="/tokens/usdc.svg" />
                 <SmartImage<string>
                   alt={activeConfig.quoteCurrency}
-                  className={cn(
-                    "size-7 animate-none rounded-full bg-input-bg ring-2 ring-panel-bg",
-                    activeConfig.quoteCurrency === "EURC" ? "p-0" : "p-0.5"
-                  )}
-                  imgClassName={cn(activeConfig.quoteCurrency === "EURC" && "scale-125")}
+                  className="size-7 animate-none rounded-full bg-input-bg p-0.5 ring-2 ring-panel-bg"
                   src={activeConfig.tokenIcons[1]}
                 />
               </span>
@@ -216,12 +195,7 @@ export function TradingChartPanel({
                       onPairChange?.("USDCcNGN");
                       setDropdownOpen(false);
                     }}
-                    className={cn(
-                      "flex w-full cursor-pointer items-center gap-3 rounded-xl p-3 text-left transition-colors",
-                      currentPair === "USDCcNGN"
-                        ? "bg-input-bg text-panel-text-active"
-                        : "text-panel-text-muted hover:bg-input-hover hover:text-panel-text-active"
-                    )}
+                    className="flex w-full cursor-pointer items-center gap-3 rounded-xl bg-input-bg p-3 text-left text-panel-text-active transition-colors"
                     type="button"
                   >
                     <span className="flex shrink-0 items-center -space-x-1">
@@ -231,34 +205,6 @@ export function TradingChartPanel({
                     <div className="flex flex-col gap-0.5">
                       <span className="font-semibold text-[14px] leading-none">USDC/cNGN</span>
                       <span className="text-[11px] text-panel-text-muted">Nigerian naira futures</span>
-                    </div>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      onPairChange?.("USDCEURC");
-                      setDropdownOpen(false);
-                    }}
-                    className={cn(
-                      "flex w-full cursor-pointer items-center gap-3 rounded-xl p-3 text-left transition-colors",
-                      currentPair === "USDCEURC"
-                        ? "bg-input-bg text-panel-text-active"
-                        : "text-panel-text-muted hover:bg-input-hover hover:text-panel-text-active"
-                    )}
-                    type="button"
-                  >
-                    <span className="flex shrink-0 items-center -space-x-1">
-                      <SmartImage<string> alt="USDC" className="size-6 rounded-full bg-input-bg p-0.5 ring-1 ring-panel-border" src="/tokens/usdc.svg" />
-                      <SmartImage<string>
-                        alt="EURC"
-                        className="size-6 rounded-full bg-input-bg p-0 ring-1 ring-panel-border"
-                        imgClassName="scale-125"
-                        src="/tokens/eurc.png"
-                      />
-                    </span>
-                    <div className="flex flex-col gap-0.5">
-                      <span className="font-semibold text-[14px] leading-none">USDC/EURC</span>
-                      <span className="text-[11px] text-panel-text-muted">Euro futures</span>
                     </div>
                   </button>
                 </Popover.Popup>

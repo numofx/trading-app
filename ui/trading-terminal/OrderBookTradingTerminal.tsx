@@ -51,7 +51,7 @@ import { isUSDCCNGNSpotMarket } from "@/lib/usdccngn-spot-order";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import { OrderEntryPanel } from "@/ui/trading-terminal/OrderEntryPanel";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
-import { CNGN_CONFIG, EURC_CONFIG, FORWARD_POINTS, TradingChartPanel } from "@/ui/trading-terminal/TradingChartPanel";
+import { CNGN_CONFIG, FORWARD_POINTS, TradingChartPanel } from "@/ui/trading-terminal/TradingChartPanel";
 import { TradingMarketHeader } from "@/ui/trading-terminal/TradingMarketHeader";
 import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
 
@@ -1027,8 +1027,7 @@ export function OrderBookTradingTerminal({
   const handleActiveIndexChange = (index: number) => {
     setActiveIndex(index);
     const currentPair = selectedMarket.pair;
-    const activeConfig = currentPair === "USDCEURC" ? EURC_CONFIG : CNGN_CONFIG;
-    const point = activeConfig.forwardPoints[index];
+    const point = CNGN_CONFIG.forwardPoints[index];
     if (point) {
       setLimitPrice(String(point.rate));
     }
@@ -1054,39 +1053,27 @@ export function OrderBookTradingTerminal({
     }
   };
 
-  const handlePairChange = (newPair: "USDCcNGN" | "USDCEURC") => {
+  const handlePairChange = (_newPair: "USDCcNGN") => {
     const isFuture = selectedMarket.type === "future";
 
-    if (newPair === "USDCEURC") {
-      const targetFuture = marketDefinitions.find(
-        (m) => m.pair === "USDCEURC" && m.type === "future" && (!isFuture || m.contractLabel === selectedMarket.contractLabel)
-      ) || marketDefinitions.find((m) => m.pair === "USDCEURC" && m.type === "future");
-
-      if (targetFuture) {
-        setSelectedMarketId(targetFuture.id);
-        setLimitPrice(getRenderablePriceInput(marketData[targetFuture.id].mark));
-        setActiveIndex(getActiveIndexForMarket(targetFuture));
+    if (selectedMarket.type === "spot") {
+      const targetSpot = marketDefinitions.find((m) => m.pair === "USDCcNGN" && m.type === "spot");
+      if (targetSpot) {
+        setSelectedMarketId(targetSpot.id);
+        setLimitPrice(getRenderablePriceInput(marketData[targetSpot.id].mark));
+        setActiveIndex(0);
+        return;
       }
-    } else {
-      if (selectedMarket.type === "spot") {
-        const targetSpot = marketDefinitions.find((m) => m.pair === "USDCcNGN" && m.type === "spot");
-        if (targetSpot) {
-          setSelectedMarketId(targetSpot.id);
-          setLimitPrice(getRenderablePriceInput(marketData[targetSpot.id].mark));
-          setActiveIndex(0);
-          return;
-        }
-      }
+    }
 
-      const targetFuture = marketDefinitions.find(
-        (m) => m.pair === "USDCcNGN" && m.type === "future" && (!isFuture || m.contractLabel === selectedMarket.contractLabel)
-      ) || marketDefinitions.find((m) => m.pair === "USDCcNGN" && m.type === "future");
+    const targetFuture = marketDefinitions.find(
+      (m) => m.pair === "USDCcNGN" && m.type === "future" && (!isFuture || m.contractLabel === selectedMarket.contractLabel)
+    ) || marketDefinitions.find((m) => m.pair === "USDCcNGN" && m.type === "future");
 
-      if (targetFuture) {
-        setSelectedMarketId(targetFuture.id);
-        setLimitPrice(getRenderablePriceInput(marketData[targetFuture.id].mark));
-        setActiveIndex(getActiveIndexForMarket(targetFuture));
-      }
+    if (targetFuture) {
+      setSelectedMarketId(targetFuture.id);
+      setLimitPrice(getRenderablePriceInput(marketData[targetFuture.id].mark));
+      setActiveIndex(getActiveIndexForMarket(targetFuture));
     }
   };
   const { ready: walletsReady, wallets } = useWallets();
