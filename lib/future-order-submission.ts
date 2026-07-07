@@ -5,6 +5,14 @@ const DEFAULT_MATCHING_CHAIN_ID = 84_532;
 const DEFAULT_MATCHING_ADDRESS = "0x1599636347FD5bA1fBE21D58AfE0b8B9cbe283FF";
 const DEFAULT_TRADE_MODULE_ADDRESS = "0x0AAE65AaA66Fe7f54486cDbD007956d3De611990";
 const ENGINE_DECIMALS = 18;
+
+/**
+ * Taker fee tier as a fraction of USDC notional. markets-service does not expose fee
+ * tiers over the API yet, so this constant is the app-side source of truth and must
+ * track the venue's fee schedule. TradeModule rejects any fill whose realized
+ * fee-per-contract exceeds the signed worstFee, so this bounds what the keeper can charge.
+ */
+export const TAKER_FEE_RATE = "0.0025";
 const DECIMAL_INPUT_PATTERN = /^(\d+(\.\d+)?|\.\d+)$/;
 const TRAILING_ZEROES_PATTERN = /0+$/;
 const UNSIGNED_INTEGER_PATTERN = /^\d+$/;
@@ -137,6 +145,13 @@ function divideRationals(left: Rational, right: Rational): Rational {
   };
 }
 
+function multiplyRationals(left: Rational, right: Rational): Rational {
+  return {
+    denominator: left.denominator * right.denominator,
+    numerator: left.numerator * right.numerator,
+  };
+}
+
 function roundRationalToScaledUnits(value: Rational, decimals: number) {
   const scale = 10n ** BigInt(decimals);
   const scaledNumerator = value.numerator * scale;
@@ -213,6 +228,12 @@ export function buildFutureOrderEnvelope({
     divideRationals(parseDecimalToRational(sanitizedSize), parseDecimalToRational(contractMultiplier)),
     ENGINE_DECIMALS,
   );
+  // TradeModule compares worstFee against fee-per-contract (fee / amountFilled), so the
+  // signed bound is the fee tier scaled by the USDC notional of one engine contract.
+  const worstFeeUnits = roundRationalToScaledUnits(
+    multiplyRationals(parseDecimalToRational(TAKER_FEE_RATE), parseDecimalToRational(contractMultiplier)),
+    ENGINE_DECIMALS,
+  );
 
   if (limitPriceUnits <= 0n) {
     throw new Error("Limit price must be greater than zero");
@@ -250,7 +271,7 @@ export function buildFutureOrderEnvelope({
         limitPrice: limitPriceUnits,
         recipientId,
         subId,
-        worstFee: 0n,
+        worstFee: worstFeeUnits,
       },
     ],
   );
@@ -287,7 +308,7 @@ export function buildFutureOrderEnvelope({
         side,
         size: sanitizedSize,
       },
-      worst_fee: "0",
+      worst_fee: formatFixedPointUnits(worstFeeUnits, ENGINE_DECIMALS),
     },
     typedData: {
       domain: {

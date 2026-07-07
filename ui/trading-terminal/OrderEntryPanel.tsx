@@ -2,6 +2,7 @@
 
 import { ChevronDown, ChevronUp, Info, Minus, Plus } from "lucide-react";
 import { useState } from "react";
+import { TAKER_FEE_RATE } from "@/lib/future-order-submission";
 import type { DeliveryTerm } from "@/lib/trading.types";
 import { cn } from "@/lib/cn";
 
@@ -207,7 +208,7 @@ export function OrderEntryPanel({
     const liquidationPrice = Number.isFinite(summaryLiquidationPrice)
       ? summaryLiquidationPrice
       : forwardRate - (isLong ? liquidationOffset : -liquidationOffset);
-    const fee = displayedAmount * 0.0025;
+    const fee = displayedAmount * Number(TAKER_FEE_RATE);
     const nextStepSize = displayedAmount >= 1000 ? 1000 : 1;
     return (
       <section className="flex h-full min-h-[300px] flex-col rounded-[28px] bg-panel-bg p-4 text-foreground shadow-[0_28px_90px_var(--panel-shadow)] ring-1 ring-panel-ring transition-colors duration-300 xl:min-h-0">
