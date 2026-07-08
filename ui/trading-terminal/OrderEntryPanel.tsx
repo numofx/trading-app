@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronDown, ChevronUp, Info, Minus, Plus } from "lucide-react";
+import type { ReactNode } from "react";
 import { useState } from "react";
 import { TAKER_FEE_RATE } from "@/lib/future-order-submission";
 import type { DeliveryTerm } from "@/lib/trading.types";
@@ -105,8 +106,10 @@ export function OrderEntryPanel({
   allocation,
   advancedSummaryRows,
   atExpiryDeliver,
+  balanceLabel,
   contractDetails,
   contractLabel,
+  depositControl,
   isSubmitting,
   isSubmitDisabled,
   lastAction,
@@ -137,8 +140,10 @@ export function OrderEntryPanel({
   allocation: number;
   advancedSummaryRows: DeliveryTerm[];
   atExpiryDeliver: boolean;
+  balanceLabel?: string | null;
   contractDetails: DeliveryTerm[];
   contractLabel: string;
+  depositControl?: ReactNode;
   isSubmitting?: boolean;
   isSubmitDisabled?: boolean;
   lastAction: string;
@@ -257,8 +262,10 @@ export function OrderEntryPanel({
               <label className="text-panel-text-muted" htmlFor="future-trade-size">
                 Amount (USDC)
               </label>
-              {/* TODO: static mock balance. When wiring live Privy/viem balances, map the on-chain USDC balance into this USDC-labeled container so holders don't see 0. */}
-              <span className="text-panel-text-muted/80">Balance: 250,000 USDC</span>
+              <span className="flex items-center gap-2 text-panel-text-muted/80">
+                Balance: {balanceLabel ?? "—"}
+                {depositControl}
+              </span>
             </div>
             <div className="grid grid-cols-[44px_minmax(0,1fr)_68px_44px] overflow-hidden rounded-[16px] bg-input-bg ring-1 ring-panel-border">
               <button

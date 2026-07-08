@@ -4,7 +4,7 @@ import { useWallets } from "@privy-io/react-auth";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createWalletClient, custom } from "viem";
-import { base } from "viem/chains";
+import { baseSepolia } from "viem/chains";
 import type { ChainlinkSpotSnapshot } from "@/lib/chainlink-ngn-usd";
 import type { SpotHistorySnapshot } from "@/lib/exchange-api-history";
 import { buildFutureOrderEnvelope, canSubmitFutureOrder } from "@/lib/future-order-submission";
@@ -51,7 +51,9 @@ import { OrderEntryPanel } from "@/ui/trading-terminal/OrderEntryPanel";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
 import { CNGN_CONFIG, FORWARD_POINTS, TradingChartPanel } from "@/ui/trading-terminal/TradingChartPanel";
 import { TradingMarketHeader } from "@/ui/trading-terminal/TradingMarketHeader";
+import { DepositDialog } from "@/ui/trading-terminal/DepositDialog";
 import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
+import { formatUsdcBalanceLabel, useUsdcBalance } from "@/ui/trading-terminal/useUsdcBalance";
 
 const SELECTED_MARKET_STORAGE_KEY = "trading-terminal-selected-market";
 const CONTRACT_COUNT_PATTERN = /(\d[\d,]*(?:\.\d+)?)\s+contracts/i;
@@ -947,10 +949,17 @@ export function OrderBookTradingTerminal({
   const { ready: walletsReady, wallets } = useWallets();
   const primaryWallet = wallets[0] ?? null;
   const {
+    adoptSubaccountId,
     ensureTradingSubaccount,
     isLoading: isResolvingTradingSubaccount,
     subaccountId: tradingSubaccountId,
   } = useTradingSubaccount(primaryWallet?.address ?? null);
+  const { balance: usdcBalance, refresh: refreshUsdcBalance } = useUsdcBalance(primaryWallet?.address ?? null);
+
+  function handleDeposited(depositedSubaccountId: string) {
+    adoptSubaccountId(depositedSubaccountId);
+    refreshUsdcBalance();
+  }
 
   const market = marketData[selectedMarketId];
   const referenceSpotPrice = parseNumericString(marketData["cngn-usdc-spot"].mark);
@@ -1201,11 +1210,11 @@ export function OrderBookTradingTerminal({
       const resolvedTradingSubaccountId =
         tradingSubaccountId ?? (await ensureTradingSubaccount(primaryWallet));
 
-      await primaryWallet.switchChain(base.id);
+      await primaryWallet.switchChain(baseSepolia.id);
 
       const provider = await primaryWallet.getEthereumProvider();
       const walletClient = createWalletClient({
-        chain: base,
+        chain: baseSepolia,
         transport: custom(provider),
       });
       const envelope = buildFutureOrderEnvelope({
@@ -1316,8 +1325,16 @@ export function OrderBookTradingTerminal({
               advancedSummaryRows={advancedSummaryRows}
               allocation={allocation}
               atExpiryDeliver={atExpiryDeliver}
+              balanceLabel={formatUsdcBalanceLabel(usdcBalance)}
               contractDetails={market.contractDetails}
               contractLabel={getDisplayTicker(selectedMarket)}
+              depositControl={
+                <DepositDialog
+                  onDeposited={handleDeposited}
+                  subaccountId={tradingSubaccountId}
+                  wallet={primaryWallet}
+                />
+              }
               exposureLabel={exposureLabel}
               futureSizeUnit={selectedMarket.type === "future" ? "USDC" : undefined}
               isFXFuture={selectedMarket.type === "future"}

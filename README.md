@@ -61,7 +61,21 @@ For Base Sepolia frontend execution, the matching stack env should point to depl
 - `NEXT_PUBLIC_MATCHING_ADDRESS=0x1599636347FD5bA1fBE21D58AfE0b8B9cbe283FF`
 - `NEXT_PUBLIC_TRADE_MODULE_ADDRESS=0x0AAE65AaA66Fe7f54486cDbD007956d3De611990`
 - `NEXT_PUBLIC_USDCCNGN_MANAGER_ADDRESS=0x1917960763BF3a0DfA10a05f0a112E828C1A934f`
-- `NEXT_PUBLIC_USDC_DELIVERABLE_BASE_ASSET_ADDRESS=0x8b3C43D2b2555ca3fc4Fa1BC34544133B8576110`
+- `NEXT_PUBLIC_WRAPPED_USDC_ASSET_ADDRESS=0xdC3f31B61a2128B3D1ECB8b6f6d0DE82eBd6c7Ae`
+- `NEXT_PUBLIC_USDC_TOKEN_ADDRESS=0x8b3C43D2b2555ca3fc4Fa1BC34544133B8576110`
+
+Deposit flow address semantics (naming follows the risk-core deployment artifacts and is easy to invert):
+
+- `NEXT_PUBLIC_WRAPPED_USDC_ASSET_ADDRESS` is the `WLWrappedERC20Asset` contract (`base` in
+  `risk-core/deployments/*/WRAPPED_USDC_DELIVERABLE.json`). It receives deposits and is the ERC-20 spender for
+  deposits to an existing subaccount.
+- `NEXT_PUBLIC_USDC_TOKEN_ADDRESS` is the underlying USDC ERC-20 pulled from the wallet (`wrappedAsset` in the same
+  artifact). The legacy `NEXT_PUBLIC_USDC_DELIVERABLE_BASE_ASSET_ADDRESS` env is honored as a fallback alias for the
+  token address.
+- Deposits may be whitelist-gated on-chain (`WLWrappedERC20Asset.wlEnabled`). The app probes for the whitelist at
+  preflight: plain `WrappedERC20Asset` deployments (including the current Base Sepolia one) have no gate and deposits
+  are open; on WL deployments only operator-whitelisted subaccounts can deposit, and the create-and-deposit path
+  cannot activate.
 
 ## Spot Order Contract
 

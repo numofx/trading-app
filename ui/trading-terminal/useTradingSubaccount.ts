@@ -3,15 +3,18 @@
 import { useEffect, useState } from "react";
 import type { ConnectedWallet } from "@privy-io/react-auth";
 import { baseSepolia } from "viem/chains";
-import { createPublicClient, createWalletClient, custom, decodeEventLog, getAddress, http, parseAbiItem } from "viem";
+import { createWalletClient, custom, decodeEventLog, getAddress } from "viem";
+import { createBasePublicClient } from "@/lib/base-public-client";
+import {
+  depositedSubAccountEvent,
+  getMatchingAddress,
+  getSubaccountCreatorAddress,
+  getUsdcCngnManagerAddress,
+  getWrappedUsdcAssetAddress,
+} from "@/lib/subaccount-deposit-config";
 
-const DEFAULT_BASE_RPC_URL = "https://sepolia.base.org";
 const DEFAULT_CHAIN_ID = 84_532;
-const DEFAULT_MATCHING_ADDRESS = "0x1599636347FD5bA1fBE21D58AfE0b8B9cbe283FF";
 const DEFAULT_TRADE_MODULE_ADDRESS = "0x0AAE65AaA66Fe7f54486cDbD007956d3De611990";
-const DEFAULT_SUBACCOUNT_CREATOR_ADDRESS = "0x5448B304AD283f24A741B54AE9b3a71C8d7DCDF2";
-const DEFAULT_USDCCNGN_MANAGER_ADDRESS = "0x1917960763BF3a0DfA10a05f0a112E828C1A934f";
-const DEFAULT_USDC_DELIVERABLE_BASE_ASSET_ADDRESS = "0x8b3C43D2b2555ca3fc4Fa1BC34544133B8576110";
 // The public Base Sepolia RPC caps eth_getLogs at a 2000-block span per query.
 const LOG_QUERY_BLOCK_RANGE = 2000n;
 // Block at which the Matching contract (DEFAULT_MATCHING_ADDRESS) was deployed on
@@ -19,12 +22,6 @@ const LOG_QUERY_BLOCK_RANGE = 2000n;
 // instead of walking back to genesis (~43M blocks). Update this if
 // NEXT_PUBLIC_MATCHING_ADDRESS is pointed at a different deployment.
 const SUBACCOUNT_EVENT_FLOOR_BLOCK = 40_461_151n;
-
-const depositedSubAccountEvent = parseAbiItem("event DepositedSubAccount(uint indexed accountId, address indexed owner)");
-
-function getBaseRpcUrl() {
-  return process.env.NEXT_PUBLIC_BASE_RPC_URL?.trim() || DEFAULT_BASE_RPC_URL;
-}
 
 function getMatchingChainId() {
   const configuredChainId = process.env.NEXT_PUBLIC_MATCHING_CHAIN_ID?.trim();
@@ -46,33 +43,8 @@ function getMatchingChainId() {
   return parsedChainId;
 }
 
-function getMatchingAddress() {
-  return getAddress(process.env.NEXT_PUBLIC_MATCHING_ADDRESS?.trim() || DEFAULT_MATCHING_ADDRESS);
-}
-
-function getSubaccountCreatorAddress() {
-  return getAddress(process.env.NEXT_PUBLIC_SUBACCOUNT_CREATOR_ADDRESS?.trim() || DEFAULT_SUBACCOUNT_CREATOR_ADDRESS);
-}
-
 function getTradeModuleAddress() {
   return getAddress(process.env.NEXT_PUBLIC_TRADE_MODULE_ADDRESS?.trim() || DEFAULT_TRADE_MODULE_ADDRESS);
-}
-
-function getUSDCCNGNManagerAddress() {
-  return getAddress(process.env.NEXT_PUBLIC_USDCCNGN_MANAGER_ADDRESS?.trim() || DEFAULT_USDCCNGN_MANAGER_ADDRESS);
-}
-
-function getUSDCDeliverableBaseAssetAddress() {
-  return getAddress(
-    process.env.NEXT_PUBLIC_USDC_DELIVERABLE_BASE_ASSET_ADDRESS?.trim() || DEFAULT_USDC_DELIVERABLE_BASE_ASSET_ADDRESS,
-  );
-}
-
-function createBasePublicClient() {
-  return createPublicClient({
-    chain: baseSepolia,
-    transport: http(getBaseRpcUrl()),
-  });
 }
 
 async function findTradingSubaccountId(ownerAddress: string) {
@@ -160,7 +132,9 @@ async function createTradingSubaccount(wallet: ConnectedWallet) {
     address: shouldFallbackToMatching ? getMatchingAddress() : subaccountCreatorAddress,
     args: shouldFallbackToMatching
       ? [getTradeModuleAddress()]
-      : [getUSDCDeliverableBaseAssetAddress(), 0n, getUSDCCNGNManagerAddress()],
+      : // The creator expects the WLWrappedERC20Asset contract, not the ERC-20 token:
+        // it calls baseAsset.wrappedAsset() to resolve the token when initDeposit > 0.
+        [getWrappedUsdcAssetAddress(), 0n, getUsdcCngnManagerAddress()],
     functionName: shouldFallbackToMatching ? "createSubAccount" : "createAndDepositSubAccount",
   });
 
@@ -246,7 +220,13 @@ export function useTradingSubaccount(walletAddress: string | null) {
     }
   }
 
+  /** Adopt a subaccount id resolved outside this hook (e.g. created by the deposit flow). */
+  function adoptSubaccountId(nextSubaccountId: string) {
+    setSubaccountId(nextSubaccountId);
+  }
+
   return {
+    adoptSubaccountId,
     ensureTradingSubaccount,
     isLoading,
     subaccountId,
