@@ -1,3 +1,5 @@
+// Unused — Effect/Next scaffolding for future server pages, actions, and API routes.
+// Candidate for removal if not adopted.
 import "server-only";
 
 import { Next } from "@prb/effect-next/handlers";

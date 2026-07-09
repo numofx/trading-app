@@ -1,3 +1,5 @@
+// Unused — Effect schema scaffolding kept alongside lib/effect/base.ts.
+// Candidate for removal if not adopted.
 import { Schema } from "effect";
 
 // Email validation schema (replaces Zod)
