@@ -951,7 +951,24 @@ export const BOTTOM_TABS = [
   { id: "basis-history", label: "Basis History" },
 ] satisfies ActivityTab[];
 
+export const SPOT_BOTTOM_TABS = [
+  { id: "open-orders", label: "Open Orders" },
+  { id: "order-history", label: "Order History" },
+  { id: "positions", label: "Positions" },
+  { id: "assets", label: "Assets" },
+  { id: "trade-history", label: "Trade History" },
+] satisfies ActivityTab[];
+
+export const SPOT_TIMEFRAME_OPTIONS = ["1m", "30m", "1h", "D", "W", "M"] as const;
+
 export const ACTIVITY_VIEWS = {
+  assets: {
+    columns: ["Asset", "Total Balance", "Available", "In Orders"],
+    rows: [
+      { cells: ["USDC", "25,000.00 USDC", "24,500.00 USDC", "500.00 USDC"] },
+      { cells: ["cNGN", "12,450,000 cNGN", "12,450,000 cNGN", "0 cNGN"] },
+    ],
+  },
   "open-orders": {
     columns: ["Instrument", "Direction", "Type", "Size", "Price"],
     rows: [{ cells: ["USDC/cNGN Futures · July 2026", "Long cNGN", "Limit", "5 contracts", "1,604.80 cNGN per USDC"] }],

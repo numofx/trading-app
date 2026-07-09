@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createWalletClient, custom } from "viem";
 import { baseSepolia } from "viem/chains";
+import { simulateLiveCandles } from "@/lib/candle-simulation";
 import type { ChainlinkSpotSnapshot } from "@/lib/chainlink-ngn-usd";
 import type { SpotHistorySnapshot } from "@/lib/exchange-api-history";
 import { buildFutureOrderEnvelope, canSubmitFutureOrder } from "@/lib/future-order-submission";
@@ -46,10 +47,14 @@ import type {
   MarketId,
   TradePrint,
 } from "@/lib/trading.types";
+import type { AppSection } from "@/ui/app-sidebar.types";
+import { AppSidebar } from "@/ui/AppSidebar";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import { OrderEntryPanel } from "@/ui/trading-terminal/OrderEntryPanel";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
 import { CNGN_CONFIG, FORWARD_POINTS, TradingChartPanel } from "@/ui/trading-terminal/TradingChartPanel";
+import { SpotTradingTerminal } from "@/ui/trading-terminal/SpotTradingTerminal";
+import { TerminalSectionPanel } from "@/ui/trading-terminal/TerminalSectionPanel";
 import { TradingMarketHeader } from "@/ui/trading-terminal/TradingMarketHeader";
 import { DepositDialog } from "@/ui/trading-terminal/DepositDialog";
 import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
@@ -274,91 +279,16 @@ function getDefaultChartContextForMarket(marketDefinition: MarketDefinition) {
   return DEFAULT_CHART_CONTEXT;
 }
 
-function getNextCandleTimeLabel(currentLabel: string) {
-  if (currentLabel.includes(":")) {
-    const [hoursString] = currentLabel.split(":");
-    const hours = Number(hoursString);
-    return `${String((hours + 1) % 24).padStart(2, "0")}:00`;
-  }
-
-  const [monthString, dayString] = currentLabel.split("-");
-
-  if (!monthString || !dayString) {
-    return currentLabel;
-  }
-
-  const nextDay = Number(dayString) + 1;
-  return `${monthString}-${String(nextDay).padStart(2, "0")}`;
-}
-
-function simulateLiveCandles(candles: Candle[], timeframe: (typeof TIMEFRAME_OPTIONS)[number]) {
-  const lastCandle = candles.at(-1);
-
-  if (!lastCandle) {
-    return candles;
-  }
-
-  const precision = 2;
-  let timeframeScale = 1;
-
+function getCandleSimulationOptions(timeframe: (typeof TIMEFRAME_OPTIONS)[number]) {
   if (timeframe === "5m") {
-    timeframeScale = 0.7;
-  } else if (timeframe === "D") {
-    timeframeScale = 1.8;
+    return { rollChance: 0.36, timeframeScale: 0.7 };
   }
 
-  const drift = 0.28 * timeframeScale;
-  const volatility = 0.42 * timeframeScale;
-  const directionalBias = Math.random() > 0.5 ? drift : -drift;
-  const delta = directionalBias + (Math.random() - 0.5) * volatility;
-  const nextClose = Number((lastCandle.close + delta).toFixed(precision));
-  const nextHigh = Number(
-    (Math.max(lastCandle.high, nextClose) + Math.random() * volatility * 0.3).toFixed(precision)
-  );
-  const nextLow = Number(
-    (Math.min(lastCandle.low, nextClose) - Math.random() * volatility * 0.3).toFixed(precision)
-  );
-  const nextVolume = Math.max(
-    1,
-    Math.round(lastCandle.volume + (Math.random() - 0.5) * lastCandle.volume * 0.18)
-  );
-
-  const updatedCurrent = {
-    ...lastCandle,
-    close: nextClose,
-    high: nextHigh,
-    low: nextLow,
-    volume: nextVolume,
-  } satisfies Candle;
-
-  let rollChance = 0.28;
-
-  if (timeframe === "5m") {
-    rollChance = 0.36;
-  } else if (timeframe === "D") {
-    rollChance = 0.18;
+  if (timeframe === "D") {
+    return { rollChance: 0.18, timeframeScale: 1.8 };
   }
 
-  if (Math.random() < rollChance) {
-    const nextOpen = nextClose;
-    const seededClose = Number((nextOpen + (Math.random() - 0.5) * volatility).toFixed(precision));
-    const nextCandle = {
-      close: seededClose,
-      high: Number(
-        (Math.max(nextOpen, seededClose) + Math.random() * volatility * 0.35).toFixed(precision)
-      ),
-      low: Number(
-        (Math.min(nextOpen, seededClose) - Math.random() * volatility * 0.35).toFixed(precision)
-      ),
-      open: nextOpen,
-      time: getNextCandleTimeLabel(lastCandle.time),
-      volume: Math.max(1, Math.round(lastCandle.volume * (0.88 + Math.random() * 0.24))),
-    } satisfies Candle;
-
-    return [...candles.slice(1, -1), updatedCurrent, nextCandle];
-  }
-
-  return [...candles.slice(0, -1), updatedCurrent];
+  return {};
 }
 
 function buildSelectorMetrics(
@@ -901,6 +831,8 @@ export function OrderBookTradingTerminal({
   const [postOnly, setPostOnly] = useState(false);
   const [atExpiryDeliver, setAtExpiryDeliver] = useState(true);
   const [selectedActivityTab, setSelectedActivityTab] = useState<string>("positions");
+  const [activeSection, setActiveSection] = useState<AppSection>("spot");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const [lastAction, setLastAction] = useState("Ready");
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
@@ -946,6 +878,49 @@ export function OrderBookTradingTerminal({
       setActiveIndex(getActiveIndexForMarket(targetFuture));
     }
   };
+  const selectMarketForSection = (targetMarket: MarketDefinition) => {
+    if (targetMarket.id === selectedMarketId) {
+      return;
+    }
+
+    setSelectedMarketId(targetMarket.id);
+    setChartContext(getDefaultChartContextForMarket(targetMarket));
+    setLimitPrice(getRenderablePriceInput(marketData[targetMarket.id].mark));
+    setActiveIndex(getActiveIndexForMarket(targetMarket));
+  };
+
+  const handleSectionChange = (section: AppSection) => {
+    setActiveSection(section);
+
+    if (section !== "spot" && section !== "derivatives") {
+      return;
+    }
+
+    const targetMarket =
+      section === "spot"
+        ? marketDefinitions.find((marketOption) => marketOption.type === "spot")
+        : (marketDefinitions.find(
+            (marketOption) => marketOption.id === defaultMarketId && marketOption.type === "future"
+          ) ?? marketDefinitions.find((marketOption) => marketOption.type === "future"));
+
+    if (targetMarket) {
+      selectMarketForSection(targetMarket);
+    }
+  };
+
+  const handleOpenMarketFromSection = (marketId: MarketId) => {
+    const targetMarket = marketDefinitions.find((marketOption) => marketOption.id === marketId);
+
+    if (!targetMarket) {
+      return;
+    }
+
+    setActiveSection(targetMarket.type === "spot" ? "spot" : "derivatives");
+    selectMarketForSection(targetMarket);
+  };
+
+  const isTradingSection = activeSection === "spot" || activeSection === "derivatives";
+
   const { ready: walletsReady, wallets } = useWallets();
   const primaryWallet = wallets[0] ?? null;
   const {
@@ -1161,7 +1136,9 @@ export function OrderBookTradingTerminal({
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
-      setLiveCandles((currentCandles) => simulateLiveCandles(currentCandles, timeframe));
+      setLiveCandles((currentCandles) =>
+        simulateLiveCandles(currentCandles, getCandleSimulationOptions(timeframe))
+      );
     }, getChartUpdateInterval(timeframe));
 
     return () => window.clearInterval(intervalId);
@@ -1268,16 +1245,56 @@ export function OrderBookTradingTerminal({
     }
   }
 
+  const safeLiveSpotPrice = Number.isFinite(liveSpotPrice) ? liveSpotPrice : null;
+  const spotHistorySnapshot = spotHistory?.["NGN/USD"] ?? null;
+  // Only chart the external history series when it agrees with the reconciled spot price;
+  // otherwise fall back to the reference candles so the ticker, book, and chart stay consistent.
+  const isSpotHistoryCompatible =
+    spotHistorySnapshot !== null &&
+    safeLiveSpotPrice !== null &&
+    safeLiveSpotPrice > 0 &&
+    Math.abs(spotHistorySnapshot.latestPrice - safeLiveSpotPrice) / safeLiveSpotPrice <= 0.08;
+  const spotCandles = isSpotHistoryCompatible
+    ? spotHistorySnapshot.series
+    : marketData["cngn-usdc-spot"].candles;
+
   return (
-    <main className="min-h-screen bg-terminal-bg text-foreground transition-colors duration-300 xl:h-dvh xl:overflow-hidden">
+    <main className="flex min-h-screen bg-terminal-bg text-foreground transition-colors duration-300 xl:h-dvh xl:overflow-hidden">
       <MarketDocumentTitle
-        pair={formatFxDisplayPair(selectedMarket.pair)}
-        price={safeLivePrice}
+        pair={activeSection === "spot" ? "USDC/cNGN" : formatFxDisplayPair(selectedMarket.pair)}
+        price={activeSection === "spot" ? safeLiveSpotPrice : safeLivePrice}
       />
 
-      <div className="mx-auto flex min-h-screen w-full max-w-none flex-col gap-3 p-3 xl:h-dvh xl:overflow-hidden xl:px-4">
+      <AppSidebar
+        activeSection={activeSection}
+        collapsed={sidebarCollapsed}
+        onCollapsedToggle={() => setSidebarCollapsed((current) => !current)}
+        onSectionChange={handleSectionChange}
+      />
+
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col gap-3 p-3 xl:h-dvh xl:overflow-hidden xl:px-4">
         <TradingMarketHeader />
 
+        {activeSection === "spot" ? (
+          <SpotTradingTerminal
+            candles={spotCandles}
+            depositControl={
+              <DepositDialog
+                onDeposited={handleDeposited}
+                subaccountId={tradingSubaccountId}
+                wallet={primaryWallet}
+              />
+            }
+            liveSpotPrice={safeLiveSpotPrice}
+            marketDefinitions={marketDefinitions}
+            onManageFunds={() => handleSectionChange("portfolio")}
+            onSelectMarket={handleOpenMarketFromSection}
+            spotMarket={marketData["cngn-usdc-spot"]}
+            usdcBalanceLabel={formatUsdcBalanceLabel(usdcBalance)}
+          />
+        ) : null}
+
+        {activeSection === "derivatives" ? (
         <section className="grid grid-cols-1 gap-3 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_360px] xl:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_380px]">
           <div className="flex min-h-[700px] flex-col gap-3 xl:min-h-0 xl:overflow-hidden">
             <div className="min-h-[320px] xl:min-h-0 xl:flex-7">
@@ -1363,6 +1380,18 @@ export function OrderBookTradingTerminal({
             />
           </div>
         </section>
+        ) : null}
+
+        {isTradingSection ? null : (
+          <section className="min-h-[400px] xl:min-h-0 xl:flex-1 xl:overflow-hidden">
+            <TerminalSectionPanel
+              marketData={marketData}
+              marketDefinitions={marketDefinitions}
+              onOpenMarket={handleOpenMarketFromSection}
+              section={activeSection}
+            />
+          </section>
+        )}
       </div>
     </main>
   );
