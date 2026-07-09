@@ -5,20 +5,26 @@
 @source "../node_modules/tw-next-image/dist";
 
 :root {
-  --background: #081019;
+  --background: #05070a;
   --foreground: #d7dee8;
-  
-  --terminal-bg: #050505;
-  --panel-bg: #000000;
-  --panel-bg-muted: rgba(11, 18, 27, 0.76);
-  --panel-bg-darker: rgba(13, 20, 30, 0.96);
+
+  /* Elevation scale — one base hue stepped up per layer:
+     base (page) → surface (panels/chrome) → raised (popovers, dropdowns). */
+  --terminal-bg: #05070a;
+  --panel-bg: #0c1017;
+  --panel-bg-muted: #0c1017;
+  --panel-bg-darker: #141a23;
   --panel-ring: rgba(255, 255, 255, 0.08);
   --panel-border: rgba(255, 255, 255, 0.1);
   --panel-shadow: rgba(0, 0, 0, 0.36);
-  
+
   --panel-text: #d7dee8;
-  --panel-text-muted: #728095;
+  --panel-text-muted: #8b98ab;
   --panel-text-active: #e7edf6;
+
+  /* Semantic buy/sell pair — the single source for every green/red on the page. */
+  --buy: #1fcb84;
+  --sell: #f6465d;
 
   --input-bg: rgba(255, 255, 255, 0.035);
   --input-border: rgba(255, 255, 255, 0.1);
@@ -28,12 +34,12 @@
   --toolbar-active-fg: #d7e7ff;
   --toolbar-border: rgba(255, 255, 255, 0.06);
 
-  --ask-text: #d7a8a8;
-  --bid-text: #9cc7a9;
-  --ask-bg: rgba(90, 38, 40, 0.38);
-  --bid-bg: rgba(23, 56, 42, 0.38);
-  --ask-label: #b78787;
-  --bid-label: #7da189;
+  --ask-text: var(--sell);
+  --bid-text: var(--buy);
+  --ask-bg: color-mix(in srgb, var(--sell) 9%, transparent);
+  --bid-bg: color-mix(in srgb, var(--buy) 9%, transparent);
+  --ask-label: color-mix(in srgb, var(--sell) 70%, var(--panel-text-muted));
+  --bid-label: color-mix(in srgb, var(--buy) 70%, var(--panel-text-muted));
   --mid-price: #dce9ff;
   --spread-percent: #7ba7f4;
 
@@ -69,12 +75,15 @@
   --toolbar-active-fg: #0f172a;
   --toolbar-border: rgba(15, 23, 42, 0.08);
 
-  --ask-text: #b91c1c;
-  --bid-text: #15803d;
-  --ask-bg: rgba(239, 68, 68, 0.06);
-  --bid-bg: rgba(34, 197, 94, 0.06);
-  --ask-label: #b91c1c;
-  --bid-label: #15803d;
+  --buy: #0f9d63;
+  --sell: #d93848;
+
+  --ask-text: var(--sell);
+  --ask-bg: color-mix(in srgb, var(--sell) 7%, transparent);
+  --bid-text: var(--buy);
+  --bid-bg: color-mix(in srgb, var(--buy) 7%, transparent);
+  --ask-label: var(--sell);
+  --bid-label: var(--buy);
   --mid-price: #1e3a8a;
   --spread-percent: #2563eb;
 
@@ -107,6 +116,8 @@
   --color-toolbar-active-bg: var(--toolbar-active-bg);
   --color-toolbar-active-fg: var(--toolbar-active-fg);
   --color-toolbar-border: var(--toolbar-border);
+  --color-buy: var(--buy);
+  --color-sell: var(--sell);
   --color-ask-text: var(--ask-text);
   --color-bid-text: var(--bid-text);
   --color-ask-bg: var(--ask-bg);
@@ -131,8 +142,8 @@ html.light {
 
 body {
   background:
-    radial-gradient(circle at top, rgba(24, 47, 78, 0.28), transparent 34%),
-    linear-gradient(180deg, #09111b 0%, #081019 42%, #060b12 100%);
+    radial-gradient(circle at top, rgba(24, 47, 78, 0.22), transparent 34%),
+    var(--terminal-bg);
   color: var(--foreground);
   font-family: var(--font-geist-sans), sans-serif;
   min-height: 100vh;

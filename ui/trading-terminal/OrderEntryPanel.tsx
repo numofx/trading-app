@@ -375,7 +375,7 @@ export function OrderEntryPanel({
               className={cn(
                 "flex min-h-10 items-center justify-center rounded-2xl px-2.5 py-2 text-center transition-colors",
                 isLong
-                  ? "bg-[#1FCB84] text-[#081019] ring-1 ring-[#46E6A4]"
+                  ? "bg-buy text-background ring-1 ring-buy/50"
                   : "bg-input-bg text-panel-text ring-1 ring-panel-border hover:bg-input-hover",
               )}
               onClick={() => onSideChange("buy")}
@@ -388,7 +388,7 @@ export function OrderEntryPanel({
                 "flex min-h-10 items-center justify-center rounded-2xl px-2.5 py-2 text-center transition-colors",
                 isLong
                   ? "bg-input-bg text-panel-text ring-1 ring-panel-border hover:bg-input-hover"
-                  : "bg-[#E15B64] text-white ring-1 ring-[#F07C84]",
+                  : "bg-sell text-white ring-1 ring-sell/50",
               )}
               onClick={() => onSideChange("sell")}
               type="button"
@@ -464,7 +464,7 @@ export function OrderEntryPanel({
 
           <div className="flex items-center gap-2.5">
             <input
-              className="h-1.5 flex-1 bg-input-bg accent-[#4277E8]"
+              className="h-1.5 flex-1 bg-input-bg accent-spread-percent"
               max="100"
               min="0"
               onChange={(event) => onAllocationChange(Number(event.target.value))}
@@ -508,8 +508,8 @@ export function OrderEntryPanel({
           className={cn(
             "flex h-12 w-full items-center justify-center rounded-2xl font-semibold text-[13px] shadow-[0_12px_30px_rgba(0,0,0,0.28)] transition-all disabled:cursor-not-allowed disabled:opacity-60",
             isLong
-              ? "bg-[#1FCB84] text-[#081019] ring-1 ring-[#46E6A4] hover:bg-[#31DA95]"
-              : "bg-[#E15B64] text-white ring-1 ring-[#F07C84] hover:bg-[#EA6B74]",
+              ? "bg-buy text-background ring-1 ring-buy/50 hover:bg-buy/90"
+              : "bg-sell text-white ring-1 ring-sell/50 hover:bg-sell/90",
           )}
           onClick={() => onSubmit(orderSide)}
           disabled={isSubmitting || isSubmitDisabled}

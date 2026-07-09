@@ -96,8 +96,8 @@ export function TradingActivityPanel({
                         "text-panel-text",
                         cellIndex === 0 && "font-medium text-panel-text-active",
                         isMetricColumn(activityView.columns[cellIndex] ?? "") && "text-right",
-                        cell.startsWith("-") && "text-panel-text-muted",
-                        row.positiveCellIndexes?.includes(cellIndex) && "font-medium text-panel-text-active",
+                        cell.startsWith("-") && "text-sell",
+                        row.positiveCellIndexes?.includes(cellIndex) && "font-medium text-buy",
                       )}
                       key={`${cell}-${cellIndex}`}
                     >
