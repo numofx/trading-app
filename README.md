@@ -35,8 +35,8 @@ The spot order book panel can display live CNGN-USDC liquidity from the [strails
 
 Set on the frontend deployment:
 
-- `STRAILS_API_URL` — strails API base URL: `https://beta.stablesrail.io/v1` (the live beta environment — currently the **only** environment)
-- `STRAILS_API_KEY` — fintech API key, sent as `x-api-key` (provisioned via strails onboarding)
+- `STRAILS_API_URL` — where to fetch the book. **Production points at fiat-service's passthrough** (`https://fiat-service-production.up.railway.app`), not at strails directly: strails' IP allowlist rejects Vercel's rotating serverless egress IPs, while fiat-service's Railway egress IP is allowlisted. Direct mode (`https://beta.stablesrail.io/v1`, the live beta environment — currently strails' **only** environment) works from static-IP hosts.
+- `STRAILS_API_KEY` — the credential for that URL, sent as both `x-api-key` and `x-internal-auth`: the strails fintech API key in direct mode, or fiat-service's `INTERNAL_AUTH_TOKEN` in proxy mode (the strails key then lives only on fiat-service).
 
 > Per strails (confirmed 2026-07-10): `beta.stablesrail.io/v1` is **not a sandbox** — it is the live environment with real liquidity, full stop. There is no separate production activation; `api.strails.io/v1` becomes relevant only when strails migrates beta → prod in the future, at which point they will issue new keys. Do not treat the beta API as safe-to-break test data.
 

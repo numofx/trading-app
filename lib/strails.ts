@@ -41,7 +41,13 @@ export async function getStrailsOrderBook(): Promise<StrailsOrderBookData> {
       cache: "no-store",
       headers: {
         accept: "application/json",
+        // Dual auth headers so STRAILS_API_URL can point either directly at
+        // strails (x-api-key) or at fiat-service's /fx/orderbook passthrough
+        // (X-Internal-Auth) — the proxy path exists because strails' IP
+        // allowlist rejects Vercel's rotating serverless egress IPs, while
+        // fiat-service's Railway egress IP is allowlisted.
         "x-api-key": config.apiKey,
+        "x-internal-auth": config.apiKey,
       },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     }
