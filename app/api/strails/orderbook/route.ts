@@ -6,6 +6,16 @@ import type { StrailsOrderBookPayload } from "@/lib/strails.types";
 
 export const dynamic = "force-dynamic";
 
+function toErrorDetail(error: unknown) {
+  if (!(error instanceof Error)) {
+    return String(error);
+  }
+
+  // undici reports network failures as "fetch failed" with the real reason in `cause`.
+  const cause = error.cause instanceof Error ? ` (${error.cause.message})` : "";
+  return `${error.message}${cause}`;
+}
+
 function toResponse(payload: StrailsOrderBookPayload) {
   return NextResponse.json(payload, {
     headers: {
@@ -27,8 +37,11 @@ export async function GET() {
   try {
     book = buildStrailsBook(await getStrailsOrderBook());
   } catch (error) {
-    recordStrailsBookStatus("upstream_error", error instanceof Error ? error.message : String(error));
-    return toResponse({ asks: [], bids: [], fetchedAt, pair: STRAILS_PAIR, status: "upstream_error" });
+    // Safe to expose: messages here are our own thrown errors (HTTP status) or
+    // fetch/timeout errors — never credentials or upstream payloads.
+    const detail = toErrorDetail(error);
+    recordStrailsBookStatus("upstream_error", detail);
+    return toResponse({ asks: [], bids: [], detail, fetchedAt, pair: STRAILS_PAIR, status: "upstream_error" });
   }
 
   const detail =
@@ -37,5 +50,5 @@ export async function GET() {
       : undefined;
   recordStrailsBookStatus(book.status, detail);
 
-  return toResponse({ ...book, fetchedAt, pair: STRAILS_PAIR });
+  return toResponse({ ...book, detail, fetchedAt, pair: STRAILS_PAIR });
 }

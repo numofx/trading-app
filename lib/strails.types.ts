@@ -40,6 +40,8 @@ export type StrailsBookStatus =
 export type StrailsOrderBookPayload = {
   asks: OrderBookLevel[];
   bids: OrderBookLevel[];
+  /** Sanitized diagnostic for degraded statuses (e.g. upstream HTTP status, crossed prices). */
+  detail?: string;
   fetchedAt: string;
   pair: string;
   status: StrailsBookStatus;
