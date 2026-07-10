@@ -5,6 +5,7 @@ import { formatNaira } from "@/lib/market-formatting";
 import type { OrderBookLevel, TradePrint } from "@/lib/trading.types";
 
 export type SpotBookTab = "book" | "trades";
+export type SpotBookLiquiditySource = "live" | "preview";
 
 function formatSize(value: number) {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
@@ -40,6 +41,7 @@ export function SpotOrderBookPanel({
   asks,
   bids,
   lastPrice,
+  liquiditySource = "preview",
   onTabChange,
   tab,
   trades,
@@ -47,6 +49,7 @@ export function SpotOrderBookPanel({
   asks: OrderBookLevel[];
   bids: OrderBookLevel[];
   lastPrice: number | null;
+  liquiditySource?: SpotBookLiquiditySource;
   onTabChange: (tab: SpotBookTab) => void;
   tab: SpotBookTab;
   trades: TradePrint[];
@@ -84,6 +87,15 @@ export function SpotOrderBookPanel({
         >
           Recent trades
         </button>
+        {liquiditySource === "live" ? (
+          <span
+            className="ml-auto flex items-center gap-1.5 rounded-xl bg-input-bg px-2 py-1 text-[9px] text-bid-text"
+            title="Available liquidity from strails LP quotes — indicative depth, not resting exchange orders"
+          >
+            <span className="size-1.5 animate-pulse rounded-full bg-bid-text" />
+            Live liquidity
+          </span>
+        ) : null}
       </div>
 
       <div className="grid grid-cols-3 border-panel-border border-b px-3 py-1.5 text-[8px] text-panel-text-muted uppercase tracking-[0.16em]">

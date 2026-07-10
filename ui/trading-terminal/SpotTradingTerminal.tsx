@@ -14,6 +14,7 @@ import { SpotOrderBookPanel } from "@/ui/trading-terminal/SpotOrderBookPanel";
 import { SpotOrderFormPanel } from "@/ui/trading-terminal/SpotOrderFormPanel";
 import { SpotTickerBar } from "@/ui/trading-terminal/SpotTickerBar";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
+import { useStrailsOrderBook } from "@/ui/trading-terminal/useStrailsOrderBook";
 
 const SPOT_SIMULATION_OPTIONS = {
   "1m": { rollChance: 0.4, timeframeScale: 0.45 },
@@ -114,6 +115,12 @@ export function SpotTradingTerminal({
     return () => window.clearInterval(intervalId);
   }, [timeframe]);
 
+  const strailsBook = useStrailsOrderBook();
+  // Fall back to the simulated preview book whenever the strails LP board is
+  // unavailable, one-sided, crossed, or implausibly priced.
+  const bookBids = strailsBook.isLive ? strailsBook.bids : spotMarket.orderBookBids;
+  const bookAsks = strailsBook.isLive ? strailsBook.asks : spotMarket.orderBookAsks;
+
   const lastPrice = liveSpotPrice ?? parseMarkPrice(spotMarket.mark);
   const { changePercent, high, low, volumeLabel } = get24hStats(liveCandles, lastPrice);
   const activityView = ACTIVITY_VIEWS[bottomTab as keyof typeof ACTIVITY_VIEWS] ?? { columns: [], rows: [] };
@@ -149,9 +156,10 @@ export function SpotTradingTerminal({
         />
 
         <SpotOrderBookPanel
-          asks={spotMarket.orderBookAsks}
-          bids={spotMarket.orderBookBids}
+          asks={bookAsks}
+          bids={bookBids}
           lastPrice={lastPrice}
+          liquiditySource={strailsBook.isLive ? "live" : "preview"}
           onTabChange={setBookTab}
           tab={bookTab}
           trades={spotMarket.trades}
