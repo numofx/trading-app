@@ -48,7 +48,10 @@ export async function getStrailsOrderBook(): Promise<StrailsOrderBookData> {
   );
 
   if (!response.ok) {
-    throw new Error(`strails orderbook returned ${response.status}`);
+    // Strails returns JSON validation messages on errors; include a snippet for
+    // diagnostics (no credentials ever appear in these bodies).
+    const body = (await response.text().catch(() => "")).slice(0, 160);
+    throw new Error(`strails orderbook returned ${response.status}${body ? `: ${body}` : ""}`);
   }
 
   const payload = (await response.json()) as { data?: StrailsOrderBookData };
