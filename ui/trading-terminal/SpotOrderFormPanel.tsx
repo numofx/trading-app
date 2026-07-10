@@ -94,7 +94,7 @@ export function SpotOrderFormPanel({
 
   function handleSubmit() {
     setStatusMessage(
-      `${isBuy ? "Buy" : "Sell"} ${amount || "0"} USDC (${orderType}) previewed. Live spot execution is not yet enabled — markets-service currently serves futures only.`
+      `${isBuy ? "Buy" : "Sell"} ${amount || "0"} USDC (${orderType}) previewed. The order book shows live market liquidity, but order execution is not enabled yet.`
     );
   }
 
