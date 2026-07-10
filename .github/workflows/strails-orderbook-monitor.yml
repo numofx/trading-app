@@ -37,16 +37,10 @@ jobs:
             --description "Automated strails orderbook alerts" --force 2>/dev/null || true
           existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --label strails-monitor --state open --json number -q '.[0].number')
           if [ -z "$existing" ]; then
+            body=$(printf 'The spot panel has silently fallen back to the simulated preview book.\n\n- **Status:** `%s`\n- **Detail:** %s\n- **Endpoint:** https://trade.numofx.com/api/strails/orderbook\n- **Runbook:** README section *Strails spot liquidity (read-only)*. If the detail says IP_NOT_ALLOWED, fiat-service'"'"'s Railway egress IP changed - check strails'"'"' /manageipallowlist. If fiat-service is down, check the Railway deployment.\n\nThis issue closes automatically when the monitor sees `ok` again.' "$STATUS" "${DETAIL:-n/a}")
             gh issue create --repo "$GITHUB_REPOSITORY" --label strails-monitor \
               --title "Strails orderbook degraded: users are seeing preview data" \
-              --body "The spot panel has silently fallen back to the simulated preview book.
-
-- **Status:** \`$STATUS\`
-- **Detail:** ${DETAIL:-n/a}
-- **Endpoint:** https://trade.numofx.com/api/strails/orderbook
-- **Runbook:** README → *Strails spot liquidity (read-only)*. If the detail says \`IP_NOT_ALLOWED\`, fiat-service's Railway egress IP changed — check \`/api/strails/egress\` on fiat-service's side and strails' \`/manageipallowlist\`. If fiat-service is down, check the Railway deployment.
-
-This issue closes automatically when the monitor sees \`ok\` again."
+              --body "$body"
           fi
 
       - name: Close alert issue on recovery
