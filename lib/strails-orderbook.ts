@@ -25,9 +25,11 @@ function parseStrailsNumber(value: string | undefined) {
 /**
  * Converts one side of strails' LP quote board into displayable book levels.
  *
- * Strails quotes carry `availableLiquidity` instead of an order size: cNGN-denominated
- * on buy orders and stablecoin-denominated on sell orders. Both are normalized to a
- * USDC size, aggregated per price, and given cumulative totals.
+ * Strails quotes carry `availableLiquidity` instead of an order size, denominated in
+ * the asset the LP receives: USDC on buy orders, cNGN on sell orders. (Verified
+ * empirically against the live beta API on 2026-07-10 via boundary quotes; the strails
+ * docs state the opposite.) Both are normalized to a USDC size, aggregated per price,
+ * and given cumulative totals.
  */
 function toBookLevels(orders: StrailsLpOrder[] | undefined, side: "buy" | "sell") {
   const sizeByPrice = new Map<number, number>();
@@ -49,7 +51,7 @@ function toBookLevels(orders: StrailsLpOrder[] | undefined, side: "buy" | "sell"
       liquidity /= WEI_SCALE;
     }
 
-    const sizeUsdc = side === "buy" ? liquidity / price : liquidity;
+    const sizeUsdc = side === "buy" ? liquidity : liquidity / price;
     sizeByPrice.set(price, (sizeByPrice.get(price) ?? 0) + sizeUsdc);
   }
 
