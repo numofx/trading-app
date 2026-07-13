@@ -23,7 +23,7 @@ type SidebarNavItem = {
 const PRIMARY_NAV_ITEMS = [
   { icon: Globe, id: "markets", label: "Markets" },
   { icon: ChartColumn, id: "spot", label: "Spot" },
-  { icon: Diamond, id: "derivatives", label: "Derivatives" },
+  { icon: Diamond, id: "derivatives", label: "Futures" },
   { icon: ChartPie, id: "portfolio", label: "Portfolio" },
   { icon: FileText, id: "orders", label: "Orders" },
 ] satisfies SidebarNavItem[];

@@ -150,7 +150,7 @@ export function SpotTickerBar({
                       <span className="truncate font-semibold text-[13px] leading-none">
                         {getInstrumentDisplayLabel(marketDefinition)}
                       </span>
-                      <span className="text-[10px] text-panel-text-muted">Deliverable future · Derivatives</span>
+                      <span className="text-[10px] text-panel-text-muted">Deliverable future · Futures</span>
                     </span>
                   </button>
                 ))}
