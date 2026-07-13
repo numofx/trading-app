@@ -5,22 +5,22 @@
 @source "../node_modules/tw-next-image/dist";
 
 :root {
-  --background: #05070a;
-  --foreground: #d7dee8;
+  --background: #050506;
+  --foreground: #d8dade;
 
   /* Elevation scale — one base hue stepped up per layer:
      base (page) → surface (panels/chrome) → raised (popovers, dropdowns). */
-  --terminal-bg: #05070a;
-  --panel-bg: #0c1017;
-  --panel-bg-muted: #0c1017;
-  --panel-bg-darker: #141a23;
+  --terminal-bg: #050506;
+  --panel-bg: #0c0d0f;
+  --panel-bg-muted: #0c0d0f;
+  --panel-bg-darker: #17181b;
   --panel-ring: rgba(255, 255, 255, 0.08);
   --panel-border: rgba(255, 255, 255, 0.1);
   --panel-shadow: rgba(0, 0, 0, 0.36);
 
-  --panel-text: #d7dee8;
-  --panel-text-muted: #8b98ab;
-  --panel-text-active: #e7edf6;
+  --panel-text: #d8dade;
+  --panel-text-muted: #8f959e;
+  --panel-text-active: #eceef1;
 
   /* Semantic buy/sell pair — the single source for every green/red on the page. */
   --buy: #1fcb84;
@@ -30,8 +30,8 @@
   --input-border: rgba(255, 255, 255, 0.1);
   --input-hover: rgba(255, 255, 255, 0.06);
 
-  --toolbar-active-bg: #16233a;
-  --toolbar-active-fg: #d7e7ff;
+  --toolbar-active-bg: #212327;
+  --toolbar-active-fg: #e9ebee;
   --toolbar-border: rgba(255, 255, 255, 0.06);
 
   --ask-text: var(--sell);
@@ -40,8 +40,8 @@
   --bid-bg: color-mix(in srgb, var(--buy) 9%, transparent);
   --ask-label: color-mix(in srgb, var(--sell) 70%, var(--panel-text-muted));
   --bid-label: color-mix(in srgb, var(--buy) 70%, var(--panel-text-muted));
-  --mid-price: #dce9ff;
-  --spread-percent: #7ba7f4;
+  --mid-price: #eceef1;
+  --spread-percent: #9aa1ac;
 
   --chart-curve: #ffffff;
   --chart-grid-stroke: rgba(255, 255, 255, 0.16);
@@ -142,7 +142,7 @@ html.light {
 
 body {
   background:
-    radial-gradient(circle at top, rgba(24, 47, 78, 0.22), transparent 34%),
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.04), transparent 34%),
     var(--terminal-bg);
   color: var(--foreground);
   font-family: var(--font-geist-sans), sans-serif;
