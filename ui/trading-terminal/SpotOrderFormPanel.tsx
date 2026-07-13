@@ -105,13 +105,11 @@ export function SpotOrderFormPanel({
       </div>
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
-        <div className="grid grid-cols-2 gap-1 rounded-[14px] bg-input-bg p-1 ring-1 ring-panel-border">
+        <div className="grid grid-cols-2 gap-1 rounded-[14px] bg-input-bg p-1">
           <button
             className={cn(
-              "h-9 cursor-pointer rounded-[10px] font-semibold text-[12px] ring-1 transition-colors",
-              isBuy
-                ? "bg-buy text-background ring-buy/50"
-                : "text-buy ring-panel-border hover:bg-input-hover"
+              "h-9 cursor-pointer rounded-[10px] font-semibold text-[12px] transition-colors",
+              isBuy ? "bg-buy text-background" : "text-buy hover:bg-input-hover"
             )}
             onClick={() => setSide("buy")}
             type="button"
@@ -120,10 +118,8 @@ export function SpotOrderFormPanel({
           </button>
           <button
             className={cn(
-              "h-9 cursor-pointer rounded-[10px] font-semibold text-[12px] ring-1 transition-colors",
-              isBuy
-                ? "text-sell ring-panel-border hover:bg-input-hover"
-                : "bg-sell text-white ring-sell/50"
+              "h-9 cursor-pointer rounded-[10px] font-semibold text-[12px] transition-colors",
+              isBuy ? "text-sell hover:bg-input-hover" : "bg-sell text-white"
             )}
             onClick={() => setSide("sell")}
             type="button"
