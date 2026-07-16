@@ -1361,7 +1361,7 @@ export function OrderBookTradingTerminal({
           />
         ) : null}
 
-        {activeSection === "derivatives" && tradingLayout === "analytics" ? (
+        {activeSection === "derivatives" && tradingLayout === "advanced" ? (
           <FuturesTradingTerminal
             basisLabel={formatSignedPercent(liveCarry)}
             candles={market.candles}
@@ -1394,7 +1394,7 @@ export function OrderBookTradingTerminal({
           />
         ) : null}
 
-        {activeSection === "derivatives" && tradingLayout === "advanced" ? (
+        {activeSection === "derivatives" && tradingLayout === "analytics" ? (
         <section className="grid grid-cols-1 gap-3 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_360px] xl:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_380px]">
           <div className="flex min-h-[700px] flex-col gap-3 xl:min-h-0 xl:overflow-hidden">
             <div className="min-h-[320px] xl:min-h-0 xl:flex-7">{futuresChartPanel}</div>
