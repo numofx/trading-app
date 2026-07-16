@@ -50,7 +50,7 @@ import type {
 } from "@/lib/trading.types";
 import type { AppSection } from "@/ui/app-sidebar.types";
 import { AppSidebar } from "@/ui/AppSidebar";
-import { FuturesAnalyticsPanel } from "@/ui/trading-terminal/FuturesAnalyticsPanel";
+import { FuturesTradingTerminal } from "@/ui/trading-terminal/FuturesTradingTerminal";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import { OrderEntryPanel } from "@/ui/trading-terminal/OrderEntryPanel";
 import { TradingLayoutMenu } from "@/ui/trading-terminal/TradingLayoutMenu";
@@ -1040,19 +1040,6 @@ export function OrderBookTradingTerminal({
     orderSide,
   });
   const slippageEstimate = getSlippageEstimate(averageExecution, estimatedFill, orderType);
-  const liveBasisPercent =
-    liveBasis !== null && Number.isFinite(liveSpotPrice) && liveSpotPrice > 0
-      ? (liveBasis / liveSpotPrice) * 100
-      : null;
-  const futuresAnalyticsStats = [
-    { label: "Mark Price", value: markPrice },
-    { label: "Spot Reference", value: formatPriceDisplay(liveSpotPrice, quoteCurrency) },
-    { label: "Basis", value: formatSignedAssetAmount(liveBasis, quoteCurrency, 2) },
-    { label: "Basis %", value: formatSignedPercent(liveBasisPercent) },
-    { label: "Annualized Carry", value: formatSignedPercent(liveCarry) },
-    { label: "Expiry", value: selectedMarket.expiryLabel ?? "—" },
-    { label: "Time to Expiry", value: market.timeToExpiry },
-  ] satisfies DeliveryTerm[];
   const [liveCandles, setLiveCandles] = useState<Candle[]>(displayCandles);
   const lastCandleResetKeyRef = useRef<string | null>(null);
 
@@ -1361,6 +1348,7 @@ export function OrderBookTradingTerminal({
               <DepositDialog
                 onDeposited={handleDeposited}
                 subaccountId={tradingSubaccountId}
+                triggerId="spot-deposit-trigger"
                 wallet={primaryWallet}
               />
             }
@@ -1374,20 +1362,36 @@ export function OrderBookTradingTerminal({
         ) : null}
 
         {activeSection === "derivatives" && tradingLayout === "analytics" ? (
-            <section className="flex flex-col gap-3 xl:min-h-0 xl:flex-1 xl:overflow-hidden">
-              <div className="min-h-[320px] xl:min-h-0 xl:flex-7">{futuresChartPanel}</div>
-
-              <div className="grid min-h-[300px] grid-cols-1 gap-3 xl:min-h-0 xl:flex-3 xl:grid-cols-[minmax(0,1fr)_360px] xl:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_380px]">
-                <div className="min-h-[220px] xl:min-h-0 xl:overflow-hidden">{futuresActivityPanel}</div>
-                <div className="min-h-[220px] xl:min-h-0 xl:overflow-hidden">
-                  <FuturesAnalyticsPanel
-                    contractDetails={market.contractDetails}
-                    marketStats={futuresAnalyticsStats}
-                    positionOverview={positionOverview}
-                  />
-                </div>
-              </div>
-            </section>
+          <FuturesTradingTerminal
+            basisLabel={formatSignedPercent(liveCarry)}
+            candles={market.candles}
+            depositControl={
+              <DepositDialog
+                onDeposited={handleDeposited}
+                subaccountId={tradingSubaccountId}
+                triggerId="futures-ticker-deposit-trigger"
+                wallet={primaryWallet}
+              />
+            }
+            isSubmitting={isSubmittingOrder || isResolvingTradingSubaccount}
+            lastAction={lastAction}
+            lastPrice={safeLivePrice}
+            limitPrice={limitPrice}
+            market={market}
+            marketDefinition={selectedMarket}
+            marketDefinitions={marketDefinitions}
+            onLimitPriceChange={setLimitPrice}
+            onOrderTypeChange={setOrderType}
+            onSelectMarket={handleOpenMarketFromSection}
+            onSideChange={setOrderSide}
+            onSizeChange={setSize}
+            onSubmit={handleSubmit}
+            orderSide={orderSide}
+            orderSummaryRows={orderSummaryRows}
+            orderType={orderType}
+            size={size}
+            usdcBalanceLabel={formatUsdcBalanceLabel(usdcBalance)}
+          />
         ) : null}
 
         {activeSection === "derivatives" && tradingLayout === "advanced" ? (
@@ -1410,6 +1414,7 @@ export function OrderBookTradingTerminal({
                 <DepositDialog
                   onDeposited={handleDeposited}
                   subaccountId={tradingSubaccountId}
+                  triggerId="order-entry-deposit-trigger"
                   wallet={primaryWallet}
                 />
               }
