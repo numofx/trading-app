@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
+import type { ReactNode } from "react";
 import { PrivyWalletButton } from "@/ui/PrivyWalletButton";
 import { SmartImage } from "@/ui/SmartImage";
 
-export function TradingMarketHeader() {
+export function TradingMarketHeader({ layoutControl }: { layoutControl?: ReactNode }) {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
@@ -38,6 +39,7 @@ export function TradingMarketHeader() {
         />
 
         <div className="flex items-center gap-3">
+          {layoutControl}
           <button
             onClick={toggleTheme}
             className="flex size-10 cursor-pointer items-center justify-center rounded-full border border-panel-border bg-input-bg text-panel-text-active transition-all duration-300 hover:bg-input-hover"

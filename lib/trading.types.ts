@@ -43,6 +43,8 @@ export type ContractTab = {
 
 export type MarketType = "spot" | "future" | "option" | "perp";
 
+export type TradingLayout = "advanced" | "analytics";
+
 export type MarketId = string;
 
 export type MarketDefinition = {

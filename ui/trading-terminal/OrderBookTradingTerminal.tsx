@@ -46,11 +46,14 @@ import type {
   MarketDefinition,
   MarketId,
   TradePrint,
+  TradingLayout,
 } from "@/lib/trading.types";
 import type { AppSection } from "@/ui/app-sidebar.types";
 import { AppSidebar } from "@/ui/AppSidebar";
+import { FuturesAnalyticsPanel } from "@/ui/trading-terminal/FuturesAnalyticsPanel";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import { OrderEntryPanel } from "@/ui/trading-terminal/OrderEntryPanel";
+import { TradingLayoutMenu } from "@/ui/trading-terminal/TradingLayoutMenu";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
 import { CNGN_CONFIG, FORWARD_POINTS, TradingChartPanel } from "@/ui/trading-terminal/TradingChartPanel";
 import { SpotTradingTerminal } from "@/ui/trading-terminal/SpotTradingTerminal";
@@ -61,6 +64,11 @@ import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount
 import { formatUsdcBalanceLabel, useUsdcBalance } from "@/ui/trading-terminal/useUsdcBalance";
 
 const SELECTED_MARKET_STORAGE_KEY = "trading-terminal-selected-market";
+const TRADING_LAYOUT_STORAGE_KEY = "trading-terminal-futures-layout";
+
+function isTradingLayout(value: string | null): value is TradingLayout {
+  return value === "advanced" || value === "analytics";
+}
 const CONTRACT_COUNT_PATTERN = /(\d[\d,]*(?:\.\d+)?)\s+contracts/i;
 
 function parseNumericString(value: string) {
@@ -832,6 +840,7 @@ export function OrderBookTradingTerminal({
   const [atExpiryDeliver, setAtExpiryDeliver] = useState(true);
   const [selectedActivityTab, setSelectedActivityTab] = useState<string>("positions");
   const [activeSection, setActiveSection] = useState<AppSection>("spot");
+  const [tradingLayout, setTradingLayout] = useState<TradingLayout>("advanced");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const [lastAction, setLastAction] = useState("Ready");
@@ -920,6 +929,11 @@ export function OrderBookTradingTerminal({
   };
 
   const isTradingSection = activeSection === "spot" || activeSection === "derivatives";
+
+  function handleTradingLayoutChange(layout: TradingLayout) {
+    setTradingLayout(layout);
+    window.localStorage.setItem(TRADING_LAYOUT_STORAGE_KEY, layout);
+  }
 
   const { ready: walletsReady, wallets } = useWallets();
   const primaryWallet = wallets[0] ?? null;
@@ -1026,12 +1040,33 @@ export function OrderBookTradingTerminal({
     orderSide,
   });
   const slippageEstimate = getSlippageEstimate(averageExecution, estimatedFill, orderType);
+  const liveBasisPercent =
+    liveBasis !== null && Number.isFinite(liveSpotPrice) && liveSpotPrice > 0
+      ? (liveBasis / liveSpotPrice) * 100
+      : null;
+  const futuresAnalyticsStats = [
+    { label: "Mark Price", value: markPrice },
+    { label: "Spot Reference", value: formatPriceDisplay(liveSpotPrice, quoteCurrency) },
+    { label: "Basis", value: formatSignedAssetAmount(liveBasis, quoteCurrency, 2) },
+    { label: "Basis %", value: formatSignedPercent(liveBasisPercent) },
+    { label: "Annualized Carry", value: formatSignedPercent(liveCarry) },
+    { label: "Expiry", value: selectedMarket.expiryLabel ?? "—" },
+    { label: "Time to Expiry", value: market.timeToExpiry },
+  ] satisfies DeliveryTerm[];
   const [liveCandles, setLiveCandles] = useState<Candle[]>(displayCandles);
   const lastCandleResetKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     selectedMarketIdRef.current = selectedMarketId;
   }, [selectedMarketId]);
+
+  useEffect(() => {
+    const storedLayout = window.localStorage.getItem(TRADING_LAYOUT_STORAGE_KEY);
+
+    if (isTradingLayout(storedLayout)) {
+      setTradingLayout(storedLayout);
+    }
+  }, []);
 
   useEffect(() => {
     function markSelectionHydrated() {
@@ -1258,6 +1293,44 @@ export function OrderBookTradingTerminal({
     ? spotHistorySnapshot.series
     : marketData["cngn-usdc-spot"].candles;
 
+  const futuresChartPanel = (
+    <TradingChartPanel
+      activeIndex={activeIndex}
+      candles={liveCandles}
+      chartContext={chartContext}
+      entryPrice={entryPrice}
+      expandedChart={expandedChart}
+      indicatorsEnabled={indicatorsEnabled}
+      markPrice={markPrice}
+      onActiveIndexChange={handleActiveIndexChange}
+      onChartContextChange={setChartContext}
+      onExpandedToggle={() => setExpandedChart((current) => !current)}
+      onIndicatorsToggle={() => setIndicatorsEnabled((current) => !current)}
+      onRangeChange={setSelectedRange}
+      onTimeframeChange={setTimeframe}
+      onToolSelect={setSelectedTool}
+      selectedRange={selectedRange}
+      selectedTimeframe={timeframe}
+      selectedTool={selectedTool}
+      ticker={getDisplayTicker(selectedMarket)}
+      onPairChange={handlePairChange}
+    />
+  );
+  const futuresActivityPanel = (
+    <TradingActivityPanel
+      activityView={
+        ACTIVITY_VIEWS[selectedActivityTab as keyof typeof ACTIVITY_VIEWS] || {
+          columns: [],
+          rows: [],
+        }
+      }
+      footerLinks={FOOTER_LINKS}
+      onTabSelect={setSelectedActivityTab}
+      selectedTab={selectedActivityTab}
+      tabs={BOTTOM_TABS}
+    />
+  );
+
   return (
     <main className="flex min-h-screen bg-terminal-bg text-foreground transition-colors duration-300 xl:h-dvh xl:overflow-hidden">
       <MarketDocumentTitle
@@ -1273,7 +1346,13 @@ export function OrderBookTradingTerminal({
       />
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col gap-3 p-3 xl:h-dvh xl:overflow-hidden xl:px-4">
-        <TradingMarketHeader />
+        <TradingMarketHeader
+          layoutControl={
+            activeSection === "derivatives" ? (
+              <TradingLayoutMenu layout={tradingLayout} onLayoutChange={handleTradingLayoutChange} />
+            ) : null
+          }
+        />
 
         {activeSection === "spot" ? (
           <SpotTradingTerminal
@@ -1294,47 +1373,29 @@ export function OrderBookTradingTerminal({
           />
         ) : null}
 
-        {activeSection === "derivatives" ? (
+        {activeSection === "derivatives" && tradingLayout === "analytics" ? (
+            <section className="flex flex-col gap-3 xl:min-h-0 xl:flex-1 xl:overflow-hidden">
+              <div className="min-h-[320px] xl:min-h-0 xl:flex-7">{futuresChartPanel}</div>
+
+              <div className="grid min-h-[300px] grid-cols-1 gap-3 xl:min-h-0 xl:flex-3 xl:grid-cols-[minmax(0,1fr)_360px] xl:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_380px]">
+                <div className="min-h-[220px] xl:min-h-0 xl:overflow-hidden">{futuresActivityPanel}</div>
+                <div className="min-h-[220px] xl:min-h-0 xl:overflow-hidden">
+                  <FuturesAnalyticsPanel
+                    contractDetails={market.contractDetails}
+                    marketStats={futuresAnalyticsStats}
+                    positionOverview={positionOverview}
+                  />
+                </div>
+              </div>
+            </section>
+        ) : null}
+
+        {activeSection === "derivatives" && tradingLayout === "advanced" ? (
         <section className="grid grid-cols-1 gap-3 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_360px] xl:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_380px]">
           <div className="flex min-h-[700px] flex-col gap-3 xl:min-h-0 xl:overflow-hidden">
-            <div className="min-h-[320px] xl:min-h-0 xl:flex-7">
-              <TradingChartPanel
-                activeIndex={activeIndex}
-                candles={liveCandles}
-                chartContext={chartContext}
-                entryPrice={entryPrice}
-                expandedChart={expandedChart}
-                indicatorsEnabled={indicatorsEnabled}
-                markPrice={markPrice}
-                onActiveIndexChange={handleActiveIndexChange}
-                onChartContextChange={setChartContext}
-                onExpandedToggle={() => setExpandedChart((current) => !current)}
-                onIndicatorsToggle={() => setIndicatorsEnabled((current) => !current)}
-                onRangeChange={setSelectedRange}
-                onTimeframeChange={setTimeframe}
-                onToolSelect={setSelectedTool}
-                selectedRange={selectedRange}
-                selectedTimeframe={timeframe}
-                selectedTool={selectedTool}
-                ticker={getDisplayTicker(selectedMarket)}
-                onPairChange={handlePairChange}
-              />
-            </div>
+            <div className="min-h-[320px] xl:min-h-0 xl:flex-7">{futuresChartPanel}</div>
 
-            <div className="min-h-[220px] xl:min-h-0 xl:flex-3">
-              <TradingActivityPanel
-                activityView={
-                  ACTIVITY_VIEWS[selectedActivityTab as keyof typeof ACTIVITY_VIEWS] || {
-                    columns: [],
-                    rows: [],
-                  }
-                }
-                footerLinks={FOOTER_LINKS}
-                onTabSelect={setSelectedActivityTab}
-                selectedTab={selectedActivityTab}
-                tabs={BOTTOM_TABS}
-              />
-            </div>
+            <div className="min-h-[220px] xl:min-h-0 xl:flex-3">{futuresActivityPanel}</div>
           </div>
 
           <div className="min-h-[300px] xl:min-h-0 xl:overflow-hidden">
