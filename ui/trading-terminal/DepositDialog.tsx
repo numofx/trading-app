@@ -117,10 +117,13 @@ function DepositProgress({
 export function DepositDialog({
   onDeposited,
   subaccountId,
+  triggerId,
   wallet,
 }: {
   onDeposited: (subaccountId: string) => void;
   subaccountId: string | null;
+  /** Stable DOM id for the trigger so SSR and client markup agree even if hydration re-renders. */
+  triggerId?: string;
   wallet: ConnectedWallet | null;
 }) {
   const [open, setOpen] = useState(false);
@@ -141,6 +144,7 @@ export function DepositDialog({
       <Dialog.Trigger
         className="rounded-lg bg-input-bg px-2 py-0.5 font-semibold text-[11px] text-panel-text-active ring-1 ring-panel-border transition-colors hover:bg-input-hover"
         disabled={wallet === null}
+        id={triggerId}
       >
         Deposit
       </Dialog.Trigger>

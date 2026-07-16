@@ -149,7 +149,10 @@ export function SpotOrderFormPanel({
         <div className="flex items-center justify-between gap-2">
           <span className="text-[11px] text-panel-text-muted">Pay with</span>
           <Popover.Root onOpenChange={setPayWithOpen} open={payWithOpen}>
-            <Popover.Trigger className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-input-bg px-2 py-1 text-[11px] text-panel-text-active ring-1 ring-panel-border transition-colors hover:bg-input-hover">
+            <Popover.Trigger
+              className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-input-bg px-2 py-1 text-[11px] text-panel-text-active ring-1 ring-panel-border transition-colors hover:bg-input-hover"
+              id="spot-pay-with-trigger"
+            >
               <SmartImage<string>
                 alt={payWith}
                 className="size-4 animate-none rounded-full"

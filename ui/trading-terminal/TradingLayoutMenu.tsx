@@ -20,7 +20,10 @@ export function TradingLayoutMenu({
 
   return (
     <Menu.Root>
-      <Menu.Trigger className="flex h-8 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg bg-input-bg px-2.5 font-semibold text-[11px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active focus-visible:ring-2 focus-visible:ring-panel-text-active/50">
+      <Menu.Trigger
+        className="flex h-8 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg bg-input-bg px-2.5 font-semibold text-[11px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active focus-visible:ring-2 focus-visible:ring-panel-text-active/50"
+        id="trading-layout-menu-trigger"
+      >
         <SlidersHorizontal className="size-3.5" />
         {activeOption.label}
       </Menu.Trigger>

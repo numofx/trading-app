@@ -169,7 +169,10 @@ export function TradingChartPanel({
       <div className="flex flex-wrap items-center gap-5">
         <div className="flex min-w-0 items-center gap-3">
           <Popover.Root open={dropdownOpen} onOpenChange={setDropdownOpen}>
-            <Popover.Trigger className="-m-2 flex cursor-pointer items-center gap-3 rounded-[20px] p-2 outline-none transition-colors hover:bg-input-hover focus-visible:ring-2 focus-visible:ring-panel-text-active/50">
+            <Popover.Trigger
+              className="-m-2 flex cursor-pointer items-center gap-3 rounded-[20px] p-2 outline-none transition-colors hover:bg-input-hover focus-visible:ring-2 focus-visible:ring-panel-text-active/50"
+              id="futures-pair-selector-trigger"
+            >
               <span className="flex shrink-0 animate-none items-center -space-x-1.5">
                 <SmartImage<string> alt="USDC" className="size-7 animate-none rounded-full bg-input-bg p-0.5 ring-2 ring-panel-bg" src="/tokens/usdc.svg" />
                 <SmartImage<string>

@@ -72,7 +72,11 @@ export function SpotTickerBar({
     <section className="rounded-[20px] bg-panel-bg px-4 py-2.5 shadow-[0_24px_80px_var(--panel-shadow)] ring-1 ring-panel-ring transition-colors duration-300">
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
         <Popover.Root onOpenChange={setDropdownOpen} open={dropdownOpen}>
-          <Popover.Trigger className="-m-1.5 flex cursor-pointer items-center gap-2.5 rounded-[14px] p-1.5 outline-none transition-colors hover:bg-input-hover focus-visible:ring-2 focus-visible:ring-panel-text-active/50">
+          {/* Stable id: auto-generated useId values can shift when async state (e.g. Privy init) races hydration. */}
+          <Popover.Trigger
+            className="-m-1.5 flex cursor-pointer items-center gap-2.5 rounded-[14px] p-1.5 outline-none transition-colors hover:bg-input-hover focus-visible:ring-2 focus-visible:ring-panel-text-active/50"
+            id="spot-ticker-market-trigger"
+          >
             <span className="flex shrink-0 items-center -space-x-1.5">
               <SmartImage<string>
                 alt="USDC"
