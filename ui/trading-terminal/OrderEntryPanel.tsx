@@ -6,6 +6,11 @@ import { useState } from "react";
 import { TAKER_FEE_RATE } from "@/lib/future-order-submission";
 import type { DeliveryTerm } from "@/lib/trading.types";
 import { cn } from "@/lib/cn";
+import {
+  FUTURES_ORDER_TYPE_LABELS,
+  FUTURES_ORDER_TYPES,
+  OrderTypeTabs,
+} from "@/ui/trading-terminal/OrderTypeTabs";
 
 const FUTURE_LEVERAGE_OPTIONS = [1, 2, 5] as const;
 
@@ -241,21 +246,12 @@ export function OrderEntryPanel({
             </button>
           </div>
 
-          <div className="grid grid-cols-3 rounded-[16px] bg-input-bg p-1">
-            {(["Market", "Limit", "Stop"] as const).map((tab) => (
-              <button
-                className={cn(
-                  "rounded-[12px] p-2.5 font-semibold text-[12px] transition-colors",
-                  orderType === tab ? "bg-toolbar-active-bg text-panel-text-active" : "text-panel-text-muted hover:bg-input-hover",
-                )}
-                key={tab}
-                onClick={() => onOrderTypeChange(tab)}
-                type="button"
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
+          <OrderTypeTabs
+            labels={FUTURES_ORDER_TYPE_LABELS}
+            onSelect={onOrderTypeChange}
+            orderTypes={FUTURES_ORDER_TYPES}
+            selected={orderType}
+          />
 
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-3 text-[12px]">
@@ -400,21 +396,12 @@ export function OrderEntryPanel({
 
         <section className="space-y-2">
           <div className="text-[9px] text-panel-text-muted uppercase tracking-[0.18em]">Order Type</div>
-          <div className="grid grid-cols-3 gap-1 rounded-2xl bg-input-bg p-1">
-          {["Market", "Limit", "Stop"].map((tab) => (
-            <button
-              className={cn(
-                "rounded-xl px-2 py-1 font-medium text-[9px] transition-colors",
-                orderType === tab ? "bg-toolbar-active-bg text-panel-text-active" : "text-panel-text-muted hover:bg-input-hover",
-              )}
-              key={tab}
-              onClick={() => onOrderTypeChange(tab as "Limit" | "Market" | "Stop")}
-              type="button"
-            >
-              {tab}
-            </button>
-          ))}
-          </div>
+          <OrderTypeTabs
+            labels={FUTURES_ORDER_TYPE_LABELS}
+            onSelect={onOrderTypeChange}
+            orderTypes={FUTURES_ORDER_TYPES}
+            selected={orderType}
+          />
         </section>
 
         <section className="space-y-2.5">

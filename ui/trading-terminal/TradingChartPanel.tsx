@@ -22,9 +22,7 @@ export type PairConfig = {
 export const CNGN_CONFIG: PairConfig = {
   forwardPoints: [
     { basis: null, label: "Spot", rate: 1500, tenor: "Spot" },
-    { basis: 3.2, label: "July 2026", rate: 1545, tenor: "1M" },
-    { basis: 7.3, label: "Nov 2026", rate: 1720, tenor: "6M" },
-    { basis: 9.6, label: "May 2027", rate: 1820, tenor: "12M" },
+    { basis: 3.2, label: "Sep 2026", rate: 1545, tenor: "2M" },
   ],
   minRate: 1300,
   maxRate: 1850,

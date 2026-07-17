@@ -2,12 +2,12 @@
 
 import { Popover } from "@base-ui/react/popover";
 import { ChevronDown } from "lucide-react";
-import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import type { CandleSimulationOptions } from "@/lib/candle-simulation";
 import { simulateLiveCandles } from "@/lib/candle-simulation";
 import { cn } from "@/lib/cn";
-import { getInstrumentDisplayLabel } from "@/lib/market-display";
+import { canSubmitFutureOrder } from "@/lib/future-order-submission";
+import { getInstrumentDisplayLabel, getInstrumentSubtext } from "@/lib/market-display";
 import { formatNaira } from "@/lib/market-formatting";
 import {
   ACTIVITY_VIEWS,
@@ -115,7 +115,6 @@ function FuturesTickerBar({
   basisLabel,
   changePercent24h,
   contractSizeLabel,
-  depositControl,
   expiryLabel,
   lastPrice,
   marketDefinition,
@@ -126,7 +125,6 @@ function FuturesTickerBar({
   basisLabel: string;
   changePercent24h: number | null;
   contractSizeLabel: string;
-  depositControl?: ReactNode;
   expiryLabel: string;
   lastPrice: number | null;
   marketDefinition: MarketDefinition;
@@ -160,7 +158,7 @@ function FuturesTickerBar({
                 src="/tokens/cngn.svg"
               />
             </span>
-            <div className="flex flex-col gap-0.5 text-left">
+            <div className="flex flex-col text-left">
               <span className="flex items-center gap-1 font-semibold text-[16px] text-panel-text-active leading-none tracking-[-0.01em]">
                 {getInstrumentDisplayLabel(marketDefinition)}
                 <ChevronDown
@@ -169,9 +167,6 @@ function FuturesTickerBar({
                     dropdownOpen && "rotate-180"
                   )}
                 />
-              </span>
-              <span className="font-medium text-[11px] text-panel-text-muted leading-none">
-                Nigerian naira · Deliverable future
               </span>
             </div>
           </Popover.Trigger>
@@ -210,7 +205,7 @@ function FuturesTickerBar({
                       <span className="truncate font-semibold text-[13px] leading-none">
                         {getInstrumentDisplayLabel(candidate)}
                       </span>
-                      <span className="text-[10px] text-panel-text-muted">Deliverable future · Futures</span>
+                      <span className="text-[10px] text-panel-text-muted">{getInstrumentSubtext(candidate)}</span>
                     </span>
                   </button>
                 ))}
@@ -246,8 +241,6 @@ function FuturesTickerBar({
           <div className="hidden h-8 w-px bg-panel-border sm:block" />
           <TickerStat label="Contract size" value={contractSizeLabel} />
         </div>
-
-        {depositControl ? <div className="flex flex-wrap items-center gap-2">{depositControl}</div> : null}
       </div>
     </section>
   );
@@ -256,7 +249,6 @@ function FuturesTickerBar({
 export function FuturesTradingTerminal({
   basisLabel,
   candles,
-  depositControl,
   isSubmitting,
   lastAction,
   lastPrice,
@@ -278,7 +270,6 @@ export function FuturesTradingTerminal({
 }: {
   basisLabel: string;
   candles: Candle[];
-  depositControl?: ReactNode;
   isSubmitting: boolean;
   lastAction: string;
   lastPrice: number | null;
@@ -322,6 +313,8 @@ export function FuturesTradingTerminal({
 
   const { changePercent, volumeLabel } = get24hStats(liveCandles, lastPrice);
   const activityView = ACTIVITY_VIEWS[bottomTab as keyof typeof ACTIVITY_VIEWS] ?? { columns: [], rows: [] };
+  // Live only when the book came from a markets-service instrument, not the preview fallback.
+  const hasLiveBook = canSubmitFutureOrder(marketDefinition) && market.availability.bookAvailable;
 
   return (
     <div className="flex flex-col gap-3 xl:min-h-0 xl:flex-1 xl:overflow-hidden">
@@ -329,7 +322,6 @@ export function FuturesTradingTerminal({
         basisLabel={basisLabel}
         changePercent24h={changePercent}
         contractSizeLabel={formatContractSize(marketDefinition.contractMultiplier)}
-        depositControl={depositControl}
         expiryLabel={marketDefinition.expiryLabel ?? "—"}
         lastPrice={lastPrice}
         marketDefinition={marketDefinition}
@@ -358,6 +350,8 @@ export function FuturesTradingTerminal({
           asks={market.orderBookAsks}
           bids={market.orderBookBids}
           lastPrice={lastPrice}
+          liquiditySource={hasLiveBook ? "live" : "preview"}
+          liveBadgeTitle="Live order book depth from markets-service"
           onTabChange={setBookTab}
           tab={bookTab}
           trades={market.trades}

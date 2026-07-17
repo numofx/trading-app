@@ -1,11 +1,10 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import type { CandleSimulationOptions } from "@/lib/candle-simulation";
 import { simulateLiveCandles } from "@/lib/candle-simulation";
 import { ACTIVITY_VIEWS, FOOTER_LINKS, SPOT_BOTTOM_TABS, SPOT_TIMEFRAME_OPTIONS } from "@/lib/mock-orderbook-terminal-data";
-import type { Candle, ContractMarket, MarketDefinition, MarketId } from "@/lib/trading.types";
+import type { Candle, ContractMarket } from "@/lib/trading.types";
 import type { SpotChartTab, SpotTimeframe } from "@/ui/trading-terminal/SpotChartPanel";
 import { SpotChartPanel } from "@/ui/trading-terminal/SpotChartPanel";
 import { SpotBalanceSummary } from "@/ui/trading-terminal/SpotBalanceSummary";
@@ -76,20 +75,14 @@ function get24hStats(candles: Candle[], lastPrice: number | null) {
 
 export function SpotTradingTerminal({
   candles,
-  depositControl,
   liveSpotPrice,
-  marketDefinitions,
   onManageFunds,
-  onSelectMarket,
   spotMarket,
   usdcBalanceLabel,
 }: {
   candles: Candle[];
-  depositControl?: ReactNode;
   liveSpotPrice: number | null;
-  marketDefinitions: MarketDefinition[];
   onManageFunds: () => void;
-  onSelectMarket: (marketId: MarketId) => void;
   spotMarket: ContractMarket;
   usdcBalanceLabel: string | null;
 }) {
@@ -98,7 +91,7 @@ export function SpotTradingTerminal({
   const [selectedTool, setSelectedTool] = useState("crosshair");
   const [indicatorsEnabled, setIndicatorsEnabled] = useState(false);
   const [bookTab, setBookTab] = useState<SpotBookTab>("book");
-  const [bottomTab, setBottomTab] = useState<string>("open-orders");
+  const [bottomTab, setBottomTab] = useState<string>("positions");
   const [liveCandles, setLiveCandles] = useState<Candle[]>(candles);
 
   useEffect(() => {
@@ -129,13 +122,10 @@ export function SpotTradingTerminal({
     <div className="flex flex-col gap-3 xl:min-h-0 xl:flex-1 xl:overflow-hidden">
       <SpotTickerBar
         changePercent24h={changePercent}
-        depositControl={depositControl}
         high24h={high}
         lastPrice={lastPrice}
         low24h={low}
-        marketDefinitions={marketDefinitions}
         onManageFunds={onManageFunds}
-        onSelectMarket={onSelectMarket}
         volume24hLabel={volumeLabel}
       />
 

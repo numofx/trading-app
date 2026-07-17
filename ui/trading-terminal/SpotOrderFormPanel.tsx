@@ -6,11 +6,12 @@ import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatNaira } from "@/lib/market-formatting";
 import { SmartImage } from "@/ui/SmartImage";
+import { OrderTypeTabs } from "@/ui/trading-terminal/OrderTypeTabs";
 
-type SpotOrderType = "Limit" | "Market" | "Stop limit";
+type SpotOrderType = "Limit" | "Market" | "Stop Limit";
 type PayCurrency = "cNGN" | "USDC";
 
-const ORDER_TYPES = ["Limit", "Market", "Stop limit"] as const satisfies readonly SpotOrderType[];
+const ORDER_TYPES = ["Limit", "Market", "Stop Limit"] as const satisfies readonly SpotOrderType[];
 const PAY_CURRENCY_ICONS = {
   cNGN: "/tokens/cngn.svg",
   USDC: "/tokens/usdc.svg",
@@ -128,23 +129,7 @@ export function SpotOrderFormPanel({
           </button>
         </div>
 
-        <div className="grid grid-cols-3 gap-1 rounded-[14px] bg-input-bg p-1">
-          {ORDER_TYPES.map((type) => (
-            <button
-              className={cn(
-                "h-8 cursor-pointer rounded-[10px] font-medium text-[10px] transition-colors",
-                orderType === type
-                  ? "bg-toolbar-active-bg text-toolbar-active-fg"
-                  : "text-panel-text-muted hover:bg-input-hover"
-              )}
-              key={type}
-              onClick={() => setOrderType(type)}
-              type="button"
-            >
-              {type}
-            </button>
-          ))}
-        </div>
+        <OrderTypeTabs onSelect={setOrderType} orderTypes={ORDER_TYPES} selected={orderType} />
 
         <div className="flex items-center justify-between gap-2">
           <span className="text-[11px] text-panel-text-muted">Pay with</span>
@@ -196,7 +181,7 @@ export function SpotOrderFormPanel({
           <span className="font-medium text-panel-text">{availableLabel}</span>
         </div>
 
-        {orderType === "Stop limit" ? (
+        {orderType === "Stop Limit" ? (
           <FormInput
             id="spot-stop-price"
             label="Stop price"

@@ -2,10 +2,14 @@
 
 import { cn } from "@/lib/cn";
 import type { DeliveryTerm } from "@/lib/trading.types";
+import { SmartImage } from "@/ui/SmartImage";
+import {
+  FUTURES_ORDER_TYPE_LABELS,
+  FUTURES_ORDER_TYPES,
+  OrderTypeTabs,
+} from "@/ui/trading-terminal/OrderTypeTabs";
 
 type FuturesOrderType = "Limit" | "Market" | "Stop";
-
-const ORDER_TYPES = ["Limit", "Market", "Stop"] as const satisfies readonly FuturesOrderType[];
 
 function FormInput({
   id,
@@ -115,26 +119,23 @@ export function FuturesOrderFormPanel({
           </button>
         </div>
 
-        <div className="grid grid-cols-3 gap-1 rounded-[14px] bg-input-bg p-1">
-          {ORDER_TYPES.map((type) => (
-            <button
-              className={cn(
-                "h-8 cursor-pointer rounded-[10px] font-medium text-[10px] transition-colors",
-                orderType === type
-                  ? "bg-toolbar-active-bg text-toolbar-active-fg"
-                  : "text-panel-text-muted hover:bg-input-hover"
-              )}
-              key={type}
-              onClick={() => onOrderTypeChange(type)}
-              type="button"
-            >
-              {type}
-            </button>
-          ))}
+        <OrderTypeTabs
+          labels={FUTURES_ORDER_TYPE_LABELS}
+          onSelect={onOrderTypeChange}
+          orderTypes={FUTURES_ORDER_TYPES}
+          selected={orderType}
+        />
+
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] text-panel-text-muted">Collateral</span>
+          <span className="flex items-center gap-1.5 rounded-lg bg-input-bg px-2 py-1 text-[11px] text-panel-text-active ring-1 ring-panel-border">
+            <SmartImage<string> alt="USDC" className="size-4 animate-none rounded-full" src="/tokens/usdc.svg" />
+            USDC
+          </span>
         </div>
 
         <div className="flex items-center justify-between gap-2 rounded-[12px] bg-input-bg/60 px-3 py-2 text-[11px]">
-          <span className="text-panel-text-muted">Available (USDC)</span>
+          <span className="text-panel-text-muted">Available</span>
           <span className="font-medium text-panel-text">{availableLabel}</span>
         </div>
 

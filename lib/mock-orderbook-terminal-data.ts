@@ -440,37 +440,15 @@ type LiveDeliverableFutureRuntime = {
 
 const PREVIEW_FUTURE_DEFINITIONS = [
   {
-    contractLabel: "JULY 2026",
-    expiryDays: 29,
-    expiryLabel: "July 2026",
-    expiryTimestamp: 1_785_456_000,
+    contractLabel: "SEP 2026",
+    expiryDays: 61,
+    expiryLabel: "Sep 2026",
+    expiryTimestamp: 1_789_516_800,
     flagSrc: "/flags/ng.svg",
     id: "usdc-cngn-july-2026-future",
     pair: "USDCcNGN",
     region: "Africa",
-    sortOrder: 1_785_456_000,
-  },
-  {
-    contractLabel: "NOV 2026",
-    expiryDays: 184,
-    expiryLabel: "Nov 2026",
-    expiryTimestamp: 1_794_873_600,
-    flagSrc: "/flags/ng.svg",
-    id: "usdc-cngn-nov-2026-future",
-    pair: "USDCcNGN",
-    region: "Africa",
-    sortOrder: 1_794_873_600,
-  },
-  {
-    contractLabel: "MAY 2027",
-    expiryDays: 365,
-    expiryLabel: "May 2027",
-    expiryTimestamp: 1_811_203_200,
-    flagSrc: "/flags/ng.svg",
-    id: "usdc-cngn-may-2027-future",
-    pair: "USDCcNGN",
-    region: "Africa",
-    sortOrder: 1_811_203_200,
+    sortOrder: 1_789_516_800,
   },
   {
     contractLabel: "JULY 2026",
@@ -600,8 +578,6 @@ function getMockPricesForDefinitionId(id: string) {
   }
   // Default cNGN
   if (id.includes("july-2026")) { return { spot: "1,500.00", mark: "1,545.00" }; }
-  if (id.includes("nov-2026")) { return { spot: "1,500.00", mark: "1,720.00" }; }
-  if (id.includes("may-2027")) { return { spot: "1,500.00", mark: "1,820.00" }; }
   return { spot: "1,500.00", mark: "1,605.25" };
 }
 
@@ -943,20 +919,21 @@ export function buildTradingTerminalMarkets(liveFutures: LiveDeliverableFutureRu
   };
 }
 
+// Shared baseline tab order across spot and futures; product-specific tabs append at the end.
 export const BOTTOM_TABS = [
   { id: "positions", label: "Positions" },
   { id: "open-orders", label: "Open Orders" },
-  { id: "trade-history", label: "Trade History" },
   { id: "order-history", label: "Order History" },
+  { id: "trade-history", label: "Trade History" },
   { id: "basis-history", label: "Basis History" },
 ] satisfies ActivityTab[];
 
 export const SPOT_BOTTOM_TABS = [
+  { id: "positions", label: "Positions" },
   { id: "open-orders", label: "Open Orders" },
   { id: "order-history", label: "Order History" },
-  { id: "positions", label: "Positions" },
-  { id: "assets", label: "Assets" },
   { id: "trade-history", label: "Trade History" },
+  { id: "assets", label: "Assets" },
 ] satisfies ActivityTab[];
 
 export const SPOT_TIMEFRAME_OPTIONS = ["1m", "30m", "1h", "D", "W", "M"] as const;
@@ -971,13 +948,13 @@ export const ACTIVITY_VIEWS = {
   },
   "open-orders": {
     columns: ["Instrument", "Direction", "Type", "Size", "Price"],
-    rows: [{ cells: ["USDC/cNGN Futures · July 2026", "Long cNGN", "Limit", "5 contracts", "1,604.80 cNGN per USDC"] }],
+    rows: [{ cells: ["USDC-cNGN 16 SEP 26", "Long cNGN", "Limit", "5 contracts", "1,604.80 cNGN per USDC"] }],
   },
   positions: {
     columns: ["Instrument", "Position", "Entry Price", "Mark Price", "Unrealized PnL", "Return on Margin"],
     rows: [
       {
-        cells: ["USDC/cNGN Futures · July 2026", "Long cNGN · 5 contracts", "1,600.00 cNGN per USDC", "1,605.20 cNGN per USDC", "+$156", "+0.64%"],
+        cells: ["USDC-cNGN 16 SEP 26", "Long cNGN · 5 contracts", "1,600.00 cNGN per USDC", "1,605.20 cNGN per USDC", "+$156", "+0.64%"],
         positiveCellIndexes: [4, 5],
       },
     ],
@@ -985,31 +962,23 @@ export const ACTIVITY_VIEWS = {
   "trade-history": {
     columns: ["Time", "Instrument", "Direction", "Size", "Price"],
     rows: [
-      { cells: ["10:08:14", "USDC/cNGN Futures · July 2026", "Long cNGN", "5 contracts", "1,605.30 cNGN per USDC"] },
-      { cells: ["10:08:06", "USDC/cNGN Futures · July 2026", "Short cNGN", "3 contracts", "1,605.20 cNGN per USDC"] },
+      { cells: ["10:08:14", "USDC-cNGN 16 SEP 26", "Long cNGN", "5 contracts", "1,605.30 cNGN per USDC"] },
+      { cells: ["10:08:06", "USDC-cNGN 16 SEP 26", "Short cNGN", "3 contracts", "1,605.20 cNGN per USDC"] },
     ],
   },
   "order-history": {
     columns: ["Time", "Instrument", "Direction", "Type", "Size", "Price", "Status"],
     rows: [
-      { cells: ["10:08:14", "USDC/cNGN Futures · July 2026", "Long cNGN", "Limit", "5 contracts", "1,605.30 cNGN per USDC", "Filled"] },
-      { cells: ["10:08:06", "USDC/cNGN Futures · July 2026", "Short cNGN", "Market", "3 contracts", "1,605.20 cNGN per USDC", "Filled"] },
-      { cells: ["10:05:22", "USDC/cNGN Futures · July 2026", "Long cNGN", "Limit", "10 contracts", "1,600.00 cNGN per USDC", "Cancelled"] },
+      { cells: ["10:08:14", "USDC-cNGN 16 SEP 26", "Long cNGN", "Limit", "5 contracts", "1,605.30 cNGN per USDC", "Filled"] },
+      { cells: ["10:08:06", "USDC-cNGN 16 SEP 26", "Short cNGN", "Market", "3 contracts", "1,605.20 cNGN per USDC", "Filled"] },
+      { cells: ["10:05:22", "USDC-cNGN 16 SEP 26", "Long cNGN", "Limit", "10 contracts", "1,600.00 cNGN per USDC", "Cancelled"] },
     ],
   },
   "basis-history": {
     columns: ["Instrument", "Spot Price", "Future Price", "Basis", "Implied Carry %", "Time"],
     rows: [
       {
-        cells: ["USDC/cNGN Futures · July 2026", "1,500.00 cNGN", "1,545.00 cNGN", "+45.00 cNGN", "+3.20%", "10:08:14"],
-        positiveCellIndexes: [3, 4],
-      },
-      {
-        cells: ["USDC/cNGN Futures · Nov 2026", "1,500.00 cNGN", "1,720.00 cNGN", "+220.00 cNGN", "+7.30%", "10:08:14"],
-        positiveCellIndexes: [3, 4],
-      },
-      {
-        cells: ["USDC/cNGN Futures · May 2027", "1,500.00 cNGN", "1,820.00 cNGN", "+320.00 cNGN", "+9.60%", "10:08:14"],
+        cells: ["USDC-cNGN 16 SEP 26", "1,500.00 cNGN", "1,545.00 cNGN", "+45.00 cNGN", "+3.20%", "10:08:14"],
         positiveCellIndexes: [3, 4],
       },
     ],

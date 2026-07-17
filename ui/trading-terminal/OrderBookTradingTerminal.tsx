@@ -55,7 +55,7 @@ import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import { OrderEntryPanel } from "@/ui/trading-terminal/OrderEntryPanel";
 import { TradingLayoutMenu } from "@/ui/trading-terminal/TradingLayoutMenu";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
-import { CNGN_CONFIG, FORWARD_POINTS, TradingChartPanel } from "@/ui/trading-terminal/TradingChartPanel";
+import { CNGN_CONFIG, TradingChartPanel } from "@/ui/trading-terminal/TradingChartPanel";
 import { SpotTradingTerminal } from "@/ui/trading-terminal/SpotTradingTerminal";
 import { TerminalSectionPanel } from "@/ui/trading-terminal/TerminalSectionPanel";
 import { TradingMarketHeader } from "@/ui/trading-terminal/TradingMarketHeader";
@@ -64,11 +64,6 @@ import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount
 import { formatUsdcBalanceLabel, useUsdcBalance } from "@/ui/trading-terminal/useUsdcBalance";
 
 const SELECTED_MARKET_STORAGE_KEY = "trading-terminal-selected-market";
-const TRADING_LAYOUT_STORAGE_KEY = "trading-terminal-futures-layout";
-
-function isTradingLayout(value: string | null): value is TradingLayout {
-  return value === "advanced" || value === "analytics";
-}
 const CONTRACT_COUNT_PATTERN = /(\d[\d,]*(?:\.\d+)?)\s+contracts/i;
 
 function parseNumericString(value: string) {
@@ -788,19 +783,7 @@ function getOrderMetrics(
 }
 
 function getActiveIndexForMarket(market: MarketDefinition) {
-  if (market.type === "spot") {
-    return 0;
-  }
-  if (market.contractLabel?.includes("JULY 2026")) {
-    return 1;
-  }
-  if (market.contractLabel?.includes("NOV 2026")) {
-    return 2;
-  }
-  if (market.contractLabel?.includes("MAY 2027")) {
-    return 3;
-  }
-  return 1;
+  return market.type === "spot" ? 0 : 1;
 }
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This component coordinates terminal state across chart, book, order entry, and URL persistence.
@@ -860,14 +843,12 @@ export function OrderBookTradingTerminal({
       setLimitPrice(String(point.rate));
     }
 
-    let label = "MAY 2027";
-    if (index === 1) {
-      label = "JULY 2026";
-    } else if (index === 2) {
-      label = "NOV 2026";
+    if (index !== 1) {
+      return;
     }
+
     const targetFuture = marketDefinitions.find(
-      (m) => m.pair === currentPair && m.type === "future" && m.contractLabel === label
+      (m) => m.pair === currentPair && m.type === "future" && m.contractLabel === "SEP 2026"
     );
     if (targetFuture) {
       setSelectedMarketId(targetFuture.id);
@@ -932,7 +913,6 @@ export function OrderBookTradingTerminal({
 
   function handleTradingLayoutChange(layout: TradingLayout) {
     setTradingLayout(layout);
-    window.localStorage.setItem(TRADING_LAYOUT_STORAGE_KEY, layout);
   }
 
   const { ready: walletsReady, wallets } = useWallets();
@@ -1046,14 +1026,6 @@ export function OrderBookTradingTerminal({
   useEffect(() => {
     selectedMarketIdRef.current = selectedMarketId;
   }, [selectedMarketId]);
-
-  useEffect(() => {
-    const storedLayout = window.localStorage.getItem(TRADING_LAYOUT_STORAGE_KEY);
-
-    if (isTradingLayout(storedLayout)) {
-      setTradingLayout(storedLayout);
-    }
-  }, []);
 
   useEffect(() => {
     function markSelectionHydrated() {
@@ -1334,28 +1306,25 @@ export function OrderBookTradingTerminal({
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col gap-3 p-3 xl:h-dvh xl:overflow-hidden xl:px-4">
         <TradingMarketHeader
+          depositControl={
+            <DepositDialog
+              onDeposited={handleDeposited}
+              subaccountId={tradingSubaccountId}
+              triggerClassName="flex h-8 cursor-pointer items-center whitespace-nowrap rounded-lg bg-input-bg px-2.5 font-semibold text-[11px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active disabled:cursor-not-allowed disabled:opacity-60"
+              triggerId="header-deposit-trigger"
+              wallet={primaryWallet}
+            />
+          }
           layoutControl={
-            activeSection === "derivatives" ? (
-              <TradingLayoutMenu layout={tradingLayout} onLayoutChange={handleTradingLayoutChange} />
-            ) : null
+            <TradingLayoutMenu layout={tradingLayout} onLayoutChange={handleTradingLayoutChange} />
           }
         />
 
         {activeSection === "spot" ? (
           <SpotTradingTerminal
             candles={spotCandles}
-            depositControl={
-              <DepositDialog
-                onDeposited={handleDeposited}
-                subaccountId={tradingSubaccountId}
-                triggerId="spot-deposit-trigger"
-                wallet={primaryWallet}
-              />
-            }
             liveSpotPrice={safeLiveSpotPrice}
-            marketDefinitions={marketDefinitions}
             onManageFunds={() => handleSectionChange("portfolio")}
-            onSelectMarket={handleOpenMarketFromSection}
             spotMarket={marketData["cngn-usdc-spot"]}
             usdcBalanceLabel={formatUsdcBalanceLabel(usdcBalance)}
           />
@@ -1365,14 +1334,6 @@ export function OrderBookTradingTerminal({
           <FuturesTradingTerminal
             basisLabel={formatSignedPercent(liveCarry)}
             candles={market.candles}
-            depositControl={
-              <DepositDialog
-                onDeposited={handleDeposited}
-                subaccountId={tradingSubaccountId}
-                triggerId="futures-ticker-deposit-trigger"
-                wallet={primaryWallet}
-              />
-            }
             isSubmitting={isSubmittingOrder || isResolvingTradingSubaccount}
             lastAction={lastAction}
             lastPrice={safeLivePrice}

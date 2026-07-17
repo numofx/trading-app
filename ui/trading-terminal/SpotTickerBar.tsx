@@ -1,13 +1,11 @@
 "use client";
 
 import { Popover } from "@base-ui/react/popover";
-import { ChevronDown, Plus, SlidersHorizontal, Wallet } from "lucide-react";
+import { ChevronDown, Plus, Wallet } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
-import { getInstrumentDisplayLabel } from "@/lib/market-display";
 import { formatNaira } from "@/lib/market-formatting";
-import type { MarketDefinition, MarketId } from "@/lib/trading.types";
 import { SmartImage } from "@/ui/SmartImage";
 
 function formatChangePercent(value: number | null) {
@@ -42,31 +40,21 @@ function TickerActionButton({ children, onClick }: { children: ReactNode; onClic
 
 export function SpotTickerBar({
   changePercent24h,
-  depositControl,
   high24h,
   lastPrice,
   low24h,
-  marketDefinitions,
   onManageFunds,
-  onSelectMarket,
   volume24hLabel,
 }: {
   changePercent24h: number | null;
-  depositControl?: ReactNode;
   high24h: number | null;
   lastPrice: number | null;
   low24h: number | null;
-  marketDefinitions: MarketDefinition[];
   onManageFunds: () => void;
-  onSelectMarket: (marketId: MarketId) => void;
   volume24hLabel: string;
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const isNegativeChange = changePercent24h !== null && changePercent24h < 0;
-  // The spot market is not part of marketDefinitions (only futures are), so it gets a static row.
-  const selectableFutures = marketDefinitions
-    .filter((marketDefinition) => marketDefinition.pair === "USDCcNGN" && marketDefinition.type === "future")
-    .sort((first, second) => first.sortOrder - second.sortOrder);
 
   return (
     <section className="rounded-[20px] bg-panel-bg px-4 py-2.5 shadow-[0_24px_80px_var(--panel-shadow)] ring-1 ring-panel-ring transition-colors duration-300">
@@ -89,9 +77,9 @@ export function SpotTickerBar({
                 src="/tokens/cngn.svg"
               />
             </span>
-            <div className="flex flex-col gap-0.5 text-left">
+            <div className="flex flex-col text-left">
               <span className="flex items-center gap-1 font-semibold text-[16px] text-panel-text-active leading-none tracking-[-0.01em]">
-                USDC/cNGN
+                USDC-cNGN
                 <ChevronDown
                   className={cn(
                     "size-4 text-panel-text-muted transition-transform duration-200",
@@ -99,7 +87,6 @@ export function SpotTickerBar({
                   )}
                 />
               </span>
-              <span className="font-medium text-[11px] text-panel-text-muted leading-none">Nigerian naira · Spot</span>
             </div>
           </Popover.Trigger>
 
@@ -123,41 +110,10 @@ export function SpotTickerBar({
                       src="/tokens/cngn.svg"
                     />
                   </span>
-                  <span className="flex min-w-0 flex-col gap-0.5">
-                    <span className="truncate font-semibold text-[13px] leading-none">USDC/cNGN Spot</span>
-                    <span className="text-[10px] text-panel-text-muted">Spot market · Current</span>
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate font-semibold text-[13px] leading-none">USDC-cNGN</span>
                   </span>
                 </button>
-                {selectableFutures.map((marketDefinition) => (
-                  <button
-                    className="flex w-full cursor-pointer items-center gap-3 rounded-xl p-2.5 text-left text-panel-text transition-colors hover:bg-input-hover"
-                    key={marketDefinition.id}
-                    onClick={() => {
-                      onSelectMarket(marketDefinition.id);
-                      setDropdownOpen(false);
-                    }}
-                    type="button"
-                  >
-                    <span className="flex shrink-0 items-center -space-x-1">
-                      <SmartImage<string>
-                        alt="USDC"
-                        className="size-5 rounded-full bg-input-bg p-0.5 ring-1 ring-panel-border"
-                        src="/tokens/usdc.svg"
-                      />
-                      <SmartImage<string>
-                        alt="cNGN"
-                        className="size-5 rounded-full bg-input-bg p-0.5 ring-1 ring-panel-border"
-                        src="/tokens/cngn.svg"
-                      />
-                    </span>
-                    <span className="flex min-w-0 flex-col gap-0.5">
-                      <span className="truncate font-semibold text-[13px] leading-none">
-                        {getInstrumentDisplayLabel(marketDefinition)}
-                      </span>
-                      <span className="text-[10px] text-panel-text-muted">Deliverable future · Futures</span>
-                    </span>
-                  </button>
-                ))}
               </Popover.Popup>
             </Popover.Positioner>
           </Popover.Portal>
@@ -191,14 +147,9 @@ export function SpotTickerBar({
 
         <div className="flex flex-wrap items-center gap-2">
           <TickerActionButton>
-            <SlidersHorizontal className="size-3.5" />
-            Advanced
-          </TickerActionButton>
-          <TickerActionButton>
             <Plus className="size-3.5" />
             Add widget
           </TickerActionButton>
-          {depositControl}
           <TickerActionButton onClick={onManageFunds}>
             <Wallet className="size-3.5" />
             Manage funds
