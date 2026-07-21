@@ -2,65 +2,89 @@ import type {
   BookSnapshotData,
   BookUpdateData,
   MarketStreamPresenter,
+  StreamBookOrder,
   StreamTrade,
 } from "@/lib/market-stream.types";
 import type { OrderBookLevel, TradePrint } from "@/lib/trading.types";
 
-/** markets-service presents amounts and prices as fixed-point integer strings scaled by 18
- * decimals (matching the REST `/v1/book` fields the app already parses this way). */
-const ATOMIC_DECIMALS = 18;
-
-/** A resting order tracked in the client-side book, keyed by `order_id`. Prices and amounts are
- * held in engine units; presentation into UI units happens per market at render time. */
+/**
+ * A resting order in the client book, keyed by `order_id`, already translated into the UI's
+ * display units (cNGN-per-USDC price, USDC-notional size). Snapshot and delta frames are both
+ * normalized to this shape at ingestion so aggregation stays market-agnostic.
+ */
 export type RestingOrder = {
   side: "buy" | "sell";
   price: number;
-  open: number;
+  size: number;
 };
 
 export type BookState = Map<string, RestingOrder>;
 
 /**
- * Converts a fixed-point integer string (18 decimals) into a full-precision number. Unlike a
- * truncating parser, this keeps enough fraction digits for spot's sub-cent engine prices
- * (~0.000625 USDC per cNGN), which the UI later inverts back to ~1600 cNGN per USDC.
+ * markets-service presents prices and amounts as plain human-readable decimal strings (e.g.
+ * `limit_price:"1377"`, `desired_amount:"28"`), not fixed-point atomic integers — the presenter
+ * applies the instrument's tick/step, so no client-side rescaling is needed.
  */
-export function parseAtomic(value: string | null | undefined, decimals = ATOMIC_DECIMALS): number {
-  const normalized = (value ?? "").trim();
+export function parseDecimal(value: string | null | undefined): number {
+  const parsed = Number((value ?? "").trim().replaceAll(",", ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
-  if (!normalized) {
-    return 0;
+/**
+ * Translates an engine limit price + resting amount into the UI's display convention.
+ *
+ * - **Future** (`DisplayPriceDirect`): price shown as-is; size is contracts × multiplier.
+ * - **Spot**: UI price is cNGN-per-USDC = 1 / engine price, and UI size is USDC notional = engine
+ *   cNGN amount × engine price (inverse of the documented `engine_amount = ui_size * ui_price`).
+ */
+function toUiQuote(
+  engineLimitPrice: number,
+  restingAmount: number,
+  presenter: MarketStreamPresenter,
+): { price: number; size: number } | null {
+  if (presenter.type === "spot") {
+    if (engineLimitPrice <= 0) {
+      return null;
+    }
+    return { price: 1 / engineLimitPrice, size: restingAmount * engineLimitPrice };
   }
 
-  const negative = normalized.startsWith("-");
-  const digits = (negative ? normalized.slice(1) : normalized).replace(/\D/g, "");
+  return { price: engineLimitPrice, size: restingAmount * presenter.contractMultiplier };
+}
 
-  if (!digits) {
-    return 0;
+/** Normalizes a snapshot order into a UI resting order, preferring spot's server-computed
+ * `ui_intent` when present. Returns null if the order has no positive price/size. */
+function presentSnapshotOrder(
+  order: StreamBookOrder,
+  presenter: MarketStreamPresenter,
+): RestingOrder | null {
+  const uiIntent = presenter.type === "spot" ? order.spot_contract?.ui_intent : undefined;
+  const quote = uiIntent
+    ? { price: parseDecimal(uiIntent.price), size: parseDecimal(uiIntent.size) }
+    : toUiQuote(
+        parseDecimal(order.limit_price),
+        parseDecimal(order.desired_amount) - parseDecimal(order.filled_amount),
+        presenter,
+      );
+
+  if (!(quote && quote.price > 0 && quote.size > 0)) {
+    return null;
   }
 
-  const padded = digits.padStart(decimals + 1, "0");
-  const whole = padded.slice(0, padded.length - decimals);
-  const fraction = padded.slice(padded.length - decimals);
-  const parsed = Number(`${whole}.${fraction}`);
-
-  return negative ? -parsed : parsed;
+  return { price: quote.price, side: order.side, size: quote.size };
 }
 
 /** Rebuilds book state from a `snapshot` frame, replacing any prior state. */
-export function applyBookSnapshot(snapshot: BookSnapshotData): BookState {
+export function applyBookSnapshot(
+  snapshot: BookSnapshotData,
+  presenter: MarketStreamPresenter,
+): BookState {
   const state: BookState = new Map();
-  const orders = [...(snapshot.bids ?? []), ...(snapshot.asks ?? [])];
 
-  for (const order of orders) {
-    const open = parseAtomic(order.desired_amount) - parseAtomic(order.filled_amount);
-
-    if (open > 0) {
-      state.set(order.order_id, {
-        open,
-        price: parseAtomic(order.limit_price),
-        side: order.side,
-      });
+  for (const order of [...(snapshot.bids ?? []), ...(snapshot.asks ?? [])]) {
+    const resting = presentSnapshotOrder(order, presenter);
+    if (resting) {
+      state.set(order.order_id, resting);
     }
   }
 
@@ -68,39 +92,20 @@ export function applyBookSnapshot(snapshot: BookSnapshotData): BookState {
 }
 
 /** Applies one `book` update (a per-order resting-size delta) in place. */
-export function applyBookDelta(state: BookState, delta: BookUpdateData): void {
-  const open = parseAtomic(delta.order_open);
+export function applyBookDelta(
+  state: BookState,
+  delta: BookUpdateData,
+  presenter: MarketStreamPresenter,
+): void {
+  const resting = parseDecimal(delta.order_open);
+  const quote = resting > 0 ? toUiQuote(parseDecimal(delta.limit_price), resting, presenter) : null;
 
-  if (open <= 0) {
+  if (!(quote && quote.price > 0 && quote.size > 0)) {
     state.delete(delta.order_id);
     return;
   }
 
-  state.set(delta.order_id, {
-    open,
-    price: parseAtomic(delta.limit_price),
-    side: delta.side,
-  });
-}
-
-/**
- * Translates an engine price/amount pair into the UI's display convention.
- *
- * - **Future** (`DisplayPriceDirect`): price is shown as-is; size is contracts × multiplier.
- * - **Spot** (`usdc_cngn_spot_v1`): UI price is cNGN-per-USDC = 1 / engine price, and UI size is
- *   USDC notional = engine cNGN amount × engine price (the inverse of the documented
- *   `engine_amount = ui_size * ui_price` contract).
- */
-function presentQuote(enginePrice: number, engineAmount: number, presenter: MarketStreamPresenter) {
-  if (presenter.type === "spot") {
-    if (enginePrice <= 0) {
-      return { price: 0, size: 0 };
-    }
-
-    return { price: 1 / enginePrice, size: engineAmount * enginePrice };
-  }
-
-  return { price: enginePrice, size: engineAmount * presenter.contractMultiplier };
+  state.set(delta.order_id, { price: quote.price, side: delta.side, size: quote.size });
 }
 
 /** Aggregation key so orders at the same displayed (2-dp) price collapse into one ladder level. */
@@ -109,15 +114,11 @@ function priceKey(price: number): number {
 }
 
 /**
- * Builds one side of the display ladder from book state: presents each resting order, aggregates
- * by displayed price, sorts, and computes cumulative depth. Cumulative-total conventions mirror
- * the existing REST book mapper so bar widths render identically.
+ * Builds one side of the display ladder from book state: aggregates by displayed price, sorts, and
+ * computes cumulative depth. Cumulative-total conventions mirror the REST book mapper so bar widths
+ * render identically.
  */
-export function buildBookSide(
-  state: BookState,
-  side: "ask" | "bid",
-  presenter: MarketStreamPresenter,
-): OrderBookLevel[] {
+export function buildBookSide(state: BookState, side: "ask" | "bid"): OrderBookLevel[] {
   const bookSide = side === "ask" ? "sell" : "buy";
   const sizeByPrice = new Map<number, number>();
 
@@ -125,15 +126,8 @@ export function buildBookSide(
     if (order.side !== bookSide) {
       continue;
     }
-
-    const { price, size } = presentQuote(order.price, order.open, presenter);
-
-    if (!(Number.isFinite(price) && price > 0 && Number.isFinite(size) && size > 0)) {
-      continue;
-    }
-
-    const key = priceKey(price);
-    sizeByPrice.set(key, (sizeByPrice.get(key) ?? 0) + size);
+    const key = priceKey(order.price);
+    sizeByPrice.set(key, (sizeByPrice.get(key) ?? 0) + order.size);
   }
 
   const ordered = [...sizeByPrice.entries()]
@@ -167,9 +161,9 @@ export function presentStreamTrade(
   trade: StreamTrade,
   presenter: MarketStreamPresenter,
 ): TradePrint | null {
-  const { price, size } = presentQuote(parseAtomic(trade.price), parseAtomic(trade.size), presenter);
+  const quote = toUiQuote(parseDecimal(trade.price), parseDecimal(trade.size), presenter);
 
-  if (!(Number.isFinite(price) && price > 0 && Number.isFinite(size) && size > 0)) {
+  if (!(quote && quote.price > 0 && quote.size > 0)) {
     return null;
   }
 
@@ -182,5 +176,5 @@ export function presentStreamTrade(
       }).format(new Date(trade.created_at))
     : "";
 
-  return { price, side: trade.aggressor_side, size: Math.round(size), time };
+  return { price: quote.price, side: trade.aggressor_side, size: Math.round(quote.size), time };
 }

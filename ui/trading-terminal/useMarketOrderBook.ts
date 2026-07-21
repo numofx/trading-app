@@ -84,8 +84,8 @@ export function useMarketOrderBook({
     let disposed = false;
 
     function publish(status: MarketStreamStatus) {
-      const asks = buildBookSide(bookState, "ask", presenter);
-      const bids = buildBookSide(bookState, "bid", presenter);
+      const asks = buildBookSide(bookState, "ask");
+      const bids = buildBookSide(bookState, "bid");
       let resolvedStatus = status;
 
       if (status === "ok") {
@@ -107,14 +107,14 @@ export function useMarketOrderBook({
 
     function handleBookFrame(frame: MarketStreamFrame) {
       if (frame.type === "snapshot") {
-        const next = applyBookSnapshot((frame.data ?? {}) as BookSnapshotData);
+        const next = applyBookSnapshot((frame.data ?? {}) as BookSnapshotData, presenter);
         bookState.clear();
         for (const [id, order] of next) {
           bookState.set(id, order);
         }
         hasBookSnapshot = true;
       } else if (frame.type === "update" && hasBookSnapshot) {
-        applyBookDelta(bookState, (frame.data ?? {}) as BookUpdateData);
+        applyBookDelta(bookState, (frame.data ?? {}) as BookUpdateData, presenter);
       }
       publish("ok");
     }

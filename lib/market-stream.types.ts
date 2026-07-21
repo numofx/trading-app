@@ -23,13 +23,20 @@ export type MarketStreamFrame = {
   message?: string;
 };
 
-/** A resting order as presented in a `book` snapshot (same shape as REST `/v1/book`). */
+/** A resting order as presented in a `book` snapshot (same shape as REST `/v1/book`). Spot orders
+ * additionally carry a `spot_contract.ui_intent` with the human UI price/size the server computed. */
 export type StreamBookOrder = {
   order_id: string;
   side: "buy" | "sell";
   limit_price: string;
   desired_amount: string;
   filled_amount: string;
+  spot_contract?: {
+    ui_intent?: {
+      price: string;
+      size: string;
+    };
+  };
 };
 
 /** `book` snapshot payload. */

@@ -715,31 +715,16 @@ export function buildDeliverableFutureMarket(definition: MarketDefinition) {
   } satisfies ContractMarket;
 }
 
-function decimalStringToNumber(value: string, decimals = 18) {
-  const normalized = value.trim();
-
-  if (!normalized) {
-    return 0;
-  }
-
-  const negative = normalized.startsWith("-");
-  const digits = negative ? normalized.slice(1) : normalized;
-  const padded = digits.padStart(decimals + 1, "0");
-  const whole = padded.slice(0, -decimals);
-  const fraction = padded.slice(-decimals, -decimals + 2);
-  const formatted = `${negative ? "-" : ""}${whole}.${fraction}`;
-
-  return Number(formatted);
-}
-
 function buildLiveBookSide(
   items: NonNullable<BookResponse["asks"]>,
   side: "ask" | "bid",
 ) {
   const levels = items
     .map((item) => ({
-      price: Number(item.spot_contract?.ui_intent.price ?? decimalStringToNumber(item.limit_price)),
-      size: Number(item.spot_contract?.ui_intent.size ?? decimalStringToNumber(item.desired_amount) * 10_000),
+      // markets-service presents prices/amounts as plain human decimals (e.g. "1377", "28"),
+      // not fixed-point atomic; futures size is contracts x the 10,000 multiplier.
+      price: Number(item.spot_contract?.ui_intent.price ?? Number(item.limit_price)),
+      size: Number(item.spot_contract?.ui_intent.size ?? Number(item.desired_amount) * 10_000),
     }))
     .filter((level) => Number.isFinite(level.price) && level.price > 0 && Number.isFinite(level.size) && level.size > 0);
 
@@ -855,9 +840,9 @@ export function buildDeliverableFutureMarketFromBook(
   const bids = buildLiveBookSide(book?.bids ?? [], "bid");
   const liveTrades = trades
     .map((trade) => ({
-      price: decimalStringToNumber(trade.price),
+      price: Number(trade.price),
       side: trade.aggressor_side,
-      size: Math.round(decimalStringToNumber(trade.size) * 10_000),
+      size: Math.round(Number(trade.size) * 10_000),
       time: new Intl.DateTimeFormat("en-US", {
         hour: "2-digit",
         hour12: false,
