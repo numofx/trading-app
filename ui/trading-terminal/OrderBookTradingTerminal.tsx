@@ -1324,7 +1324,6 @@ export function OrderBookTradingTerminal({
           <SpotTradingTerminal
             candles={spotCandles}
             liveSpotPrice={safeLiveSpotPrice}
-            onManageFunds={() => handleSectionChange("portfolio")}
             spotMarket={marketData["cngn-usdc-spot"]}
             usdcBalanceLabel={formatUsdcBalanceLabel(usdcBalance)}
           />
@@ -1411,12 +1410,7 @@ export function OrderBookTradingTerminal({
 
         {isTradingSection ? null : (
           <section className="min-h-[400px] xl:min-h-0 xl:flex-1 xl:overflow-hidden">
-            <TerminalSectionPanel
-              marketData={marketData}
-              marketDefinitions={marketDefinitions}
-              onOpenMarket={handleOpenMarketFromSection}
-              section={activeSection}
-            />
+            <TerminalSectionPanel />
           </section>
         )}
       </div>

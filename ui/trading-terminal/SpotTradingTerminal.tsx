@@ -77,13 +77,11 @@ function get24hStats(candles: Candle[], lastPrice: number | null) {
 export function SpotTradingTerminal({
   candles,
   liveSpotPrice,
-  onManageFunds,
   spotMarket,
   usdcBalanceLabel,
 }: {
   candles: Candle[];
   liveSpotPrice: number | null;
-  onManageFunds: () => void;
   spotMarket: ContractMarket;
   usdcBalanceLabel: string | null;
 }) {
@@ -127,7 +125,6 @@ export function SpotTradingTerminal({
         high24h={high}
         lastPrice={lastPrice}
         low24h={low}
-        onManageFunds={onManageFunds}
         volume24hLabel={volumeLabel}
       />
 

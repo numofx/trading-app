@@ -1,15 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import {
-  ChartColumn,
-  ChartPie,
-  ChevronsLeft,
-  ChevronsRight,
-  Diamond,
-  Ellipsis,
-  Globe,
-} from "lucide-react";
+import { ChartColumn, ChevronsLeft, ChevronsRight, Diamond } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { AppSection } from "@/ui/app-sidebar.types";
 
@@ -20,10 +12,8 @@ type SidebarNavItem = {
 };
 
 const PRIMARY_NAV_ITEMS = [
-  { icon: Globe, id: "markets", label: "Dashboard" },
   { icon: ChartColumn, id: "spot", label: "Spot" },
   { icon: Diamond, id: "derivatives", label: "Futures" },
-  { icon: ChartPie, id: "portfolio", label: "API" },
 ] satisfies SidebarNavItem[];
 
 const MORE_NAV_ITEM = { icon: Ellipsis, id: "more", label: "More" } satisfies SidebarNavItem;

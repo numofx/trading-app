@@ -1,8 +1,7 @@
 "use client";
 
 import { Popover } from "@base-ui/react/popover";
-import { ChevronDown, Plus, Wallet } from "lucide-react";
-import type { ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatNaira } from "@/lib/market-formatting";
@@ -26,31 +25,17 @@ function TickerStat({ label, value, valueClassName }: { label: string; value: st
   );
 }
 
-function TickerActionButton({ children, onClick }: { children: ReactNode; onClick?: () => void }) {
-  return (
-    <button
-      className="flex h-8 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg bg-input-bg px-2.5 font-semibold text-[11px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active"
-      onClick={onClick}
-      type="button"
-    >
-      {children}
-    </button>
-  );
-}
-
 export function SpotTickerBar({
   changePercent24h,
   high24h,
   lastPrice,
   low24h,
-  onManageFunds,
   volume24hLabel,
 }: {
   changePercent24h: number | null;
   high24h: number | null;
   lastPrice: number | null;
   low24h: number | null;
-  onManageFunds: () => void;
   volume24hLabel: string;
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -143,17 +128,6 @@ export function SpotTickerBar({
           <TickerStat label="24H high" value={formatNaira(high24h)} />
           <div className="hidden h-8 w-px bg-panel-border sm:block" />
           <TickerStat label="24H low" value={formatNaira(low24h)} />
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <TickerActionButton>
-            <Plus className="size-3.5" />
-            Add widget
-          </TickerActionButton>
-          <TickerActionButton onClick={onManageFunds}>
-            <Wallet className="size-3.5" />
-            Manage funds
-          </TickerActionButton>
         </div>
       </div>
     </section>
