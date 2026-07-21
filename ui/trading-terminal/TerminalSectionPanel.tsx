@@ -11,7 +11,7 @@ type OverviewSection = Exclude<AppSection, "derivatives" | "spot">;
 const SECTION_COPY = {
   markets: {
     description: "All USDC/cNGN instruments available on Numo.",
-    title: "Markets",
+    title: "Dashboard",
   },
   more: {
     description: "Resources and support.",
@@ -23,7 +23,7 @@ const SECTION_COPY = {
   },
   portfolio: {
     description: "Open positions across your trading account.",
-    title: "Portfolio",
+    title: "API",
   },
 } satisfies Record<OverviewSection, { description: string; title: string }>;
 
