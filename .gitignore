@@ -10,3 +10,4 @@ node_modules/
 next-env.d.ts
 *.tsbuildinfo
 settings.local.json
+.vercel
