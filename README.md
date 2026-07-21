@@ -29,27 +29,15 @@ In production, `MARKETS_SERVICE_URL` must point at the live `markets-service` de
 
 If the frontend is deployed on Railway, encode `MARKETS_SERVICE_URL` in that deploy environment and treat it as required production configuration rather than tribal knowledge.
 
-## Strails spot liquidity (read-only)
+## Live order book stream
 
-The spot order book panel can display live CNGN-USDC liquidity from the [strails FX orderbook](https://docs.strails.co/). This is display-only: strails' LP quotes are mapped into book levels, while order submission, the price chart, recent trades, and 24h stats remain on preview/simulation data.
+The spot and futures order-book panels stream live depth and trades from `markets-service` over its WebSocket API (`GET /v1/ws`). The browser connects **directly** to the socket (no Next.js proxy), so the URL must be client-reachable:
 
-Set on the frontend deployment:
+- `NEXT_PUBLIC_MARKETS_WS_URL` — e.g. `wss://api.numofx.com/v1/ws` in production, `ws://127.0.0.1:8080/v1/ws` locally.
 
-- `STRAILS_API_URL` — where to fetch the book. **Production points at fiat-service's passthrough** (`https://fiat-service-production.up.railway.app`), not at strails directly: strails' IP allowlist rejects Vercel's rotating serverless egress IPs, while fiat-service's Railway egress IP is allowlisted. Direct mode (`https://beta.stablesrail.io/v1`, strails' live production environment) works from static-IP hosts.
-- `STRAILS_API_KEY` — the credential for that URL, sent as both `x-api-key` and `x-internal-auth`: the strails fintech API key in direct mode, or fiat-service's `INTERNAL_AUTH_TOKEN` in proxy mode (the strails key then lives only on fiat-service).
+The client subscribes to the public `book` and `trades` channels for the selected market (spot uses the `USDCcNGN-SPOT` symbol; futures use the market symbol such as `USDCcNGN-SEP16-2026`), seeds from the `snapshot` frame, and applies `update` deltas. Both channels are unauthenticated; the only server-side gate is `WS_ALLOWED_ORIGINS` on the `markets-service` deployment, which **must include the frontend origin** or the browser handshake is rejected. When the socket is unreachable, still connecting, or the book is one-sided/crossed, the panel falls back to the server-rendered snapshot (futures) or preview book (spot), and the "Live liquidity" badge only shows once both sides have depth.
 
-> Per strails (confirmed 2026-07-10): `beta.stablesrail.io/v1` **is the live production environment** — real liquidity, not a sandbox, despite the "beta" hostname. There is no separate production activation and no pending migration to plan around; treat this URL and its key as production. Do not treat it as safe-to-break test data.
-
-Both are server-only (no `NEXT_PUBLIC_` prefix): the browser polls `/api/strails/orderbook`, and the key never reaches the client.
-
-**Go-live blockers** (tracked in the "Strails spot liquidity go-live" GitHub issue):
-
-1. **Verify against strails' live API first.** The integration has only been exercised against a local stub built from docs.strails.co, and the docs contain internal inconsistencies (crossed example books, 10^6-scaled values in some responses). With the API key, confirm `/api/strails/orderbook` returns `status: "ok"` with plausible cNGN-per-USDC prices before enabling for users. Remember this API is production — read-only calls like `GET /fx/orderbook` are safe, but this is real liquidity, not test data.
-2. **IP allowlisting.** Strails rejects requests from non-allowlisted IPs (HTTP 400 `IP_NOT_ALLOWED`), so the deployment's egress IP must be registered (self-service via strails' `/manageipallowlist` endpoint, 30 rpm limit; `{"action":"list"}` shows current entries). If it isn't, the panel silently falls back to preview data with `status: "upstream_error"` — there is no user-visible error. **Runbook:** `GET /api/strails/egress` reports the deployment's current egress IP; if the book degrades with `IP_NOT_ALLOWED`, hit that route and add the new IP via `/manageipallowlist`. **Known limitation (2026-07-10):** Vercel egress rotated between AWS pool IPs (`54.196.174.165`, `18.212.13.134` — both allowlisted) within minutes, so the live book is intermittent until a durable fix lands (strails relaxing the allowlist for this key, a static-IP proxy, or Vercel static egress) — tracked in the go-live GitHub issue.
-
-When the vars are unset, strails is unreachable, either book side is empty, prices fail the cNGN-per-USDC plausibility check, or the LP board is crossed (best bid ≥ best ask — possible because strails is a quote board, not a matched CLOB), the panel falls back to the preview book for that poll. A "Live liquidity" badge marks when real strails depth is shown; sizes are USDC-equivalents derived from each quote's `availableLiquidity`, which is denominated in the asset the LP receives: USDC on buy orders, cNGN on sell orders. (Verified empirically against the live beta API on 2026-07-10 via boundary quotes — strails' docs claim the opposite denomination; the docs are wrong.)
-
-Monitoring: because the fallback is silent in the UI, alert on the backend instead. `GET /api/strails/orderbook` returns a `status` field (`ok` | `empty` | `crossed` | `implausible` | `unconfigured` | `upstream_error`) plus a sanitized `detail` explaining degradations, and the server logs every status transition plus a reminder every 10 minutes while degraded under the greppable `strails-orderbook` prefix. The `strails-orderbook-monitor` GitHub Actions workflow polls the endpoint every 10 minutes: on any non-`ok` status it fails the run (email notification) and opens a `strails-monitor`-labeled issue with the detail and runbook; it closes the issue automatically on recovery.
+`GET /api/strails/egress` remains as an ops diagnostic that reports the deployment's current egress IP (used when registering an IP allowlist upstream).
 
 ## How markets are populated
 

@@ -13,7 +13,8 @@ import { SpotOrderBookPanel } from "@/ui/trading-terminal/SpotOrderBookPanel";
 import { SpotOrderFormPanel } from "@/ui/trading-terminal/SpotOrderFormPanel";
 import { SpotTickerBar } from "@/ui/trading-terminal/SpotTickerBar";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
-import { useStrailsOrderBook } from "@/ui/trading-terminal/useStrailsOrderBook";
+import { CANONICAL_SPOT_SYMBOL } from "@/lib/market-selection";
+import { useMarketOrderBook } from "@/ui/trading-terminal/useMarketOrderBook";
 
 const SPOT_SIMULATION_OPTIONS = {
   "1m": { rollChance: 0.4, timeframeScale: 0.45 },
@@ -108,11 +109,12 @@ export function SpotTradingTerminal({
     return () => window.clearInterval(intervalId);
   }, [timeframe]);
 
-  const strailsBook = useStrailsOrderBook();
-  // Fall back to the simulated preview book whenever the strails LP board is
-  // unavailable, one-sided, crossed, or implausibly priced.
-  const bookBids = strailsBook.isLive ? strailsBook.bids : spotMarket.orderBookBids;
-  const bookAsks = strailsBook.isLive ? strailsBook.asks : spotMarket.orderBookAsks;
+  const spotBook = useMarketOrderBook({ market: CANONICAL_SPOT_SYMBOL, type: "spot" });
+  // Fall back to the simulated preview book whenever the live exchange book is
+  // unavailable, one-sided, crossed, or still connecting.
+  const bookBids = spotBook.isLive ? spotBook.bids : spotMarket.orderBookBids;
+  const bookAsks = spotBook.isLive ? spotBook.asks : spotMarket.orderBookAsks;
+  const bookTrades = spotBook.isLive && spotBook.trades.length > 0 ? spotBook.trades : spotMarket.trades;
 
   const lastPrice = liveSpotPrice ?? parseMarkPrice(spotMarket.mark);
   const { changePercent, high, low, volumeLabel } = get24hStats(liveCandles, lastPrice);
@@ -149,10 +151,11 @@ export function SpotTradingTerminal({
           asks={bookAsks}
           bids={bookBids}
           lastPrice={lastPrice}
-          liquiditySource={strailsBook.isLive ? "live" : "preview"}
+          liquiditySource={spotBook.isLive ? "live" : "preview"}
+          liveBadgeTitle="Live spot order book depth from markets-service"
           onTabChange={setBookTab}
           tab={bookTab}
-          trades={spotMarket.trades}
+          trades={bookTrades}
         />
 
         <div className="flex min-h-[420px] flex-col gap-3 xl:min-h-0 xl:overflow-y-auto">

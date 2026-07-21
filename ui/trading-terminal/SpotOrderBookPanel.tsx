@@ -42,7 +42,7 @@ export function SpotOrderBookPanel({
   bids,
   lastPrice,
   liquiditySource = "preview",
-  liveBadgeTitle = "Available liquidity from strails LP quotes — indicative depth, not resting exchange orders",
+  liveBadgeTitle = "Live order book depth from markets-service",
   onTabChange,
   tab,
   trades,
@@ -51,7 +51,7 @@ export function SpotOrderBookPanel({
   bids: OrderBookLevel[];
   lastPrice: number | null;
   liquiditySource?: SpotBookLiquiditySource;
-  /** Tooltip explaining where the live depth comes from; defaults to the spot strails source. */
+  /** Tooltip explaining where the live depth comes from; defaults to the markets-service book. */
   liveBadgeTitle?: string;
   onTabChange: (tab: SpotBookTab) => void;
   tab: SpotBookTab;

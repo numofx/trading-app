@@ -30,6 +30,7 @@ import { SpotOrderBookPanel } from "@/ui/trading-terminal/SpotOrderBookPanel";
 import type { SpotChartTab, SpotTimeframe } from "@/ui/trading-terminal/SpotChartPanel";
 import { SpotChartPanel } from "@/ui/trading-terminal/SpotChartPanel";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
+import { useMarketOrderBook } from "@/ui/trading-terminal/useMarketOrderBook";
 
 const SIMULATION_OPTIONS = {
   "1m": { rollChance: 0.4, timeframeScale: 0.45 },
@@ -311,10 +312,22 @@ export function FuturesTradingTerminal({
     return () => window.clearInterval(intervalId);
   }, [timeframe]);
 
+  const futuresBook = useMarketOrderBook({
+    contractMultiplier: marketDefinition.contractMultiplier,
+    enabled: Boolean(marketDefinition.marketSymbol),
+    market: marketDefinition.marketSymbol,
+    type: "future",
+  });
+
   const { changePercent, volumeLabel } = get24hStats(liveCandles, lastPrice);
   const activityView = ACTIVITY_VIEWS[bottomTab as keyof typeof ACTIVITY_VIEWS] ?? { columns: [], rows: [] };
-  // Live only when the book came from a markets-service instrument, not the preview fallback.
-  const hasLiveBook = canSubmitFutureOrder(marketDefinition) && market.availability.bookAvailable;
+  // Prefer the live WebSocket book; fall back to the server-rendered snapshot for this market.
+  const bookAsks = futuresBook.isLive ? futuresBook.asks : market.orderBookAsks;
+  const bookBids = futuresBook.isLive ? futuresBook.bids : market.orderBookBids;
+  const bookTrades = futuresBook.isLive && futuresBook.trades.length > 0 ? futuresBook.trades : market.trades;
+  // Live when either the streaming book or the initial markets-service snapshot has depth.
+  const hasLiveBook =
+    futuresBook.isLive || (canSubmitFutureOrder(marketDefinition) && market.availability.bookAvailable);
 
   return (
     <div className="flex flex-col gap-3 xl:min-h-0 xl:flex-1 xl:overflow-hidden">
@@ -332,8 +345,8 @@ export function FuturesTradingTerminal({
 
       <div className="grid grid-cols-1 gap-3 xl:min-h-0 xl:flex-7 xl:grid-cols-[minmax(0,1fr)_270px_320px] xl:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_300px_340px]">
         <SpotChartPanel
-          asks={market.orderBookAsks}
-          bids={market.orderBookBids}
+          asks={bookAsks}
+          bids={bookBids}
           candles={liveCandles}
           chartTab={chartTab}
           indicatorsEnabled={indicatorsEnabled}
@@ -347,14 +360,14 @@ export function FuturesTradingTerminal({
         />
 
         <SpotOrderBookPanel
-          asks={market.orderBookAsks}
-          bids={market.orderBookBids}
+          asks={bookAsks}
+          bids={bookBids}
           lastPrice={lastPrice}
           liquiditySource={hasLiveBook ? "live" : "preview"}
           liveBadgeTitle="Live order book depth from markets-service"
           onTabChange={setBookTab}
           tab={bookTab}
-          trades={market.trades}
+          trades={bookTrades}
         />
 
         <div className="flex min-h-[420px] flex-col gap-3 xl:min-h-0 xl:overflow-y-auto">
