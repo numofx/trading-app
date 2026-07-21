@@ -1,1 +1,1 @@
-export type AppSection = "derivatives" | "markets" | "more" | "orders" | "portfolio" | "spot";
+export type AppSection = "derivatives" | "markets" | "more" | "portfolio" | "spot";

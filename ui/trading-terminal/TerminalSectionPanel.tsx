@@ -17,10 +17,6 @@ const SECTION_COPY = {
     description: "Resources and support.",
     title: "More",
   },
-  orders: {
-    description: "Open orders resting on the book.",
-    title: "Orders",
-  },
   portfolio: {
     description: "Open positions across your trading account.",
     title: "API",
@@ -54,7 +50,6 @@ export function TerminalSectionPanel({
           />
         ) : null}
         {section === "portfolio" ? <SectionTable view={ACTIVITY_VIEWS.positions} /> : null}
-        {section === "orders" ? <SectionTable view={ACTIVITY_VIEWS["open-orders"]} /> : null}
         {section === "more" ? <MoreLinks /> : null}
       </div>
     </section>

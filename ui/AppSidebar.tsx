@@ -8,7 +8,6 @@ import {
   ChevronsRight,
   Diamond,
   Ellipsis,
-  FileText,
   Globe,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -25,7 +24,6 @@ const PRIMARY_NAV_ITEMS = [
   { icon: ChartColumn, id: "spot", label: "Spot" },
   { icon: Diamond, id: "derivatives", label: "Futures" },
   { icon: ChartPie, id: "portfolio", label: "API" },
-  { icon: FileText, id: "orders", label: "Orders" },
 ] satisfies SidebarNavItem[];
 
 const MORE_NAV_ITEM = { icon: Ellipsis, id: "more", label: "More" } satisfies SidebarNavItem;
