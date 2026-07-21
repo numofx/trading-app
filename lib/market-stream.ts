@@ -33,7 +33,7 @@ export function parseDecimal(value: string | null | undefined): number {
 /**
  * Translates an engine limit price + resting amount into the UI's display convention.
  *
- * - **Future** (`DisplayPriceDirect`): price shown as-is; size is contracts × multiplier.
+ * - **Future** (`DisplayPriceDirect`): price shown as-is; size is the resting contract count.
  * - **Spot**: UI price is cNGN-per-USDC = 1 / engine price, and UI size is USDC notional = engine
  *   cNGN amount × engine price (inverse of the documented `engine_amount = ui_size * ui_price`).
  */
@@ -49,7 +49,7 @@ function toUiQuote(
     return { price: 1 / engineLimitPrice, size: restingAmount * engineLimitPrice };
   }
 
-  return { price: engineLimitPrice, size: restingAmount * presenter.contractMultiplier };
+  return { price: engineLimitPrice, size: restingAmount };
 }
 
 /** Normalizes a snapshot order into a UI resting order, preferring spot's server-computed

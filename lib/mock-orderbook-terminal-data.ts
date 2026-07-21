@@ -722,9 +722,9 @@ function buildLiveBookSide(
   const levels = items
     .map((item) => ({
       // markets-service presents prices/amounts as plain human decimals (e.g. "1377", "28"),
-      // not fixed-point atomic; futures size is contracts x the 10,000 multiplier.
+      // not fixed-point atomic; futures size is the resting contract count.
       price: Number(item.spot_contract?.ui_intent.price ?? Number(item.limit_price)),
-      size: Number(item.spot_contract?.ui_intent.size ?? Number(item.desired_amount) * 10_000),
+      size: Number(item.spot_contract?.ui_intent.size ?? Number(item.desired_amount)),
     }))
     .filter((level) => Number.isFinite(level.price) && level.price > 0 && Number.isFinite(level.size) && level.size > 0);
 
@@ -842,7 +842,7 @@ export function buildDeliverableFutureMarketFromBook(
     .map((trade) => ({
       price: Number(trade.price),
       side: trade.aggressor_side,
-      size: Math.round(Number(trade.size) * 10_000),
+      size: Math.round(Number(trade.size)),
       time: new Intl.DateTimeFormat("en-US", {
         hour: "2-digit",
         hour12: false,

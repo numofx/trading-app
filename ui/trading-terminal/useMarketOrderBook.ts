@@ -47,19 +47,13 @@ const EMPTY_VIEW: MarketOrderBookView = { asks: [], bids: [], status: "connectin
 export function useMarketOrderBook({
   market,
   type,
-  contractMultiplier,
   enabled = true,
 }: {
   market: string | null | undefined;
   type: MarketType;
-  contractMultiplier?: string | null;
   enabled?: boolean;
 }) {
   const [view, setView] = useState<MarketOrderBookView>(EMPTY_VIEW);
-
-  // Deltas mutate a live map; a numeric dep keeps the effect from resubscribing on identity churn.
-  const parsedMultiplier = Number((contractMultiplier ?? "10000").replaceAll(",", ""));
-  const multiplier = Number.isFinite(parsedMultiplier) && parsedMultiplier > 0 ? parsedMultiplier : 10_000;
 
   useEffect(() => {
     if (!(enabled && market)) {
@@ -73,7 +67,7 @@ export function useMarketOrderBook({
     }
 
     const marketSymbol: string = market;
-    const presenter: MarketStreamPresenter = { contractMultiplier: multiplier, type };
+    const presenter: MarketStreamPresenter = { type };
     const bookState: BookState = new Map();
     let trades: TradePrint[] = [];
     let hasBookSnapshot = false;
@@ -218,7 +212,7 @@ export function useMarketOrderBook({
         socket.close();
       }
     };
-  }, [enabled, market, type, multiplier]);
+  }, [enabled, market, type]);
 
   const isLive = view.status === "ok" && view.asks.length > 0 && view.bids.length > 0;
 

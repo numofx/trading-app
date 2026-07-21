@@ -75,8 +75,7 @@ export type MarketStreamStatus =
   | "error";
 
 /** Presentation config derived from the selected market. Spot inverts engine price/size into the
- * UI's cNGN-per-USDC / USDC-notional convention; futures scale contracts by the multiplier. */
+ * UI's cNGN-per-USDC / USDC-notional convention; futures show price and contract count directly. */
 export type MarketStreamPresenter = {
   type: MarketType;
-  contractMultiplier: number;
 };

@@ -313,7 +313,6 @@ export function FuturesTradingTerminal({
   }, [timeframe]);
 
   const futuresBook = useMarketOrderBook({
-    contractMultiplier: marketDefinition.contractMultiplier,
     enabled: Boolean(marketDefinition.marketSymbol),
     market: marketDefinition.marketSymbol,
     type: "future",
