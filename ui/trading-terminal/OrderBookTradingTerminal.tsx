@@ -57,7 +57,6 @@ import { TradingLayoutMenu } from "@/ui/trading-terminal/TradingLayoutMenu";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
 import { CNGN_CONFIG, TradingChartPanel } from "@/ui/trading-terminal/TradingChartPanel";
 import { SpotTradingTerminal } from "@/ui/trading-terminal/SpotTradingTerminal";
-import { TerminalSectionPanel } from "@/ui/trading-terminal/TerminalSectionPanel";
 import { TradingMarketHeader } from "@/ui/trading-terminal/TradingMarketHeader";
 import { DepositDialog } from "@/ui/trading-terminal/DepositDialog";
 import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
@@ -909,8 +908,6 @@ export function OrderBookTradingTerminal({
     selectMarketForSection(targetMarket);
   };
 
-  const isTradingSection = activeSection === "spot" || activeSection === "derivatives";
-
   function handleTradingLayoutChange(layout: TradingLayout) {
     setTradingLayout(layout);
   }
@@ -1408,11 +1405,6 @@ export function OrderBookTradingTerminal({
         </section>
         ) : null}
 
-        {isTradingSection ? null : (
-          <section className="min-h-[400px] xl:min-h-0 xl:flex-1 xl:overflow-hidden">
-            <TerminalSectionPanel />
-          </section>
-        )}
       </div>
     </main>
   );

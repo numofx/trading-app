@@ -16,8 +16,6 @@ const PRIMARY_NAV_ITEMS = [
   { icon: Diamond, id: "derivatives", label: "Futures" },
 ] satisfies SidebarNavItem[];
 
-const MORE_NAV_ITEM = { icon: Ellipsis, id: "more", label: "More" } satisfies SidebarNavItem;
-
 export function AppSidebar({
   activeSection,
   collapsed,
@@ -58,13 +56,6 @@ export function AppSidebar({
         >
           {collapsed ? <ChevronsRight className="size-4" /> : <ChevronsLeft className="size-4" />}
         </button>
-
-        <SidebarNavButton
-          active={activeSection === MORE_NAV_ITEM.id}
-          collapsed={collapsed}
-          item={MORE_NAV_ITEM}
-          onSelect={onSectionChange}
-        />
       </div>
     </nav>
   );
