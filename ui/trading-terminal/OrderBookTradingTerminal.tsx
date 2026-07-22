@@ -814,7 +814,7 @@ export function OrderBookTradingTerminal({
   const [expandedChart, setExpandedChart] = useState(false);
   const [orderType, setOrderType] = useState<"Limit" | "Market" | "Stop">(DEFAULT_ORDER_TYPE);
   const [orderSide, setOrderSide] = useState<"buy" | "sell">("buy");
-  const [size, setSize] = useState("10000");
+  const [size, setSize] = useState("1");
   const [limitPrice, setLimitPrice] = useState("1545");
   const [activeIndex, setActiveIndex] = useState(1);
   const [allocation, setAllocation] = useState(5);
@@ -984,19 +984,25 @@ export function OrderBookTradingTerminal({
     returnValue,
   } = getPositionMetrics(marketData, selectedMarket, selectedMarketId, safeLivePrice);
 
+  // The futures ticket is denominated in contracts (matching the order book). Order economics and
+  // on-chain submission work in USDC notional: 1 contract = contractMultiplier USDC.
+  const futureContractMultiplier =
+    Number((selectedMarket.contractMultiplier ?? "10000").replaceAll(",", "")) || 10_000;
+  const sizeUsdcNotional = String((Number(size) || 0) * futureContractMultiplier);
+
   const { averageExecution, estimatedFill, fees, initialMargin, liquidationPrice } =
     getOrderMetrics(
       limitPrice,
       market.mark,
       orderType,
-      size,
+      sizeUsdcNotional,
       safeLivePrice,
       orderSide
     );
   const quoteCurrency = getQuoteCurrency(selectedMarket.pair);
 
   const orderSummaryRows = getOrderSummaryRows({
-    contracts: Number(size || "0"),
+    contracts: Number(sizeUsdcNotional || "0"),
     estimatedFill,
     fees,
     initialMargin,
@@ -1009,7 +1015,7 @@ export function OrderBookTradingTerminal({
     quoteCurrency,
   });
   const positionBuilderRows = getPositionBuilderRows({
-    contracts: Number(size || "0"),
+    contracts: Number(sizeUsdcNotional || "0"),
     estimatedFill,
     liquidationPrice,
     liveSpotPrice,
@@ -1189,7 +1195,7 @@ export function OrderBookTradingTerminal({
         limitPrice: executionLimitPrice,
         market: selectedMarket,
         side: orderSide,
-        size,
+        size: sizeUsdcNotional,
         subaccountId: resolvedTradingSubaccountId,
         walletAddress: primaryWallet.address,
       });
@@ -1223,7 +1229,7 @@ export function OrderBookTradingTerminal({
       }
 
       setLastAction(
-        `Futures order accepted: ${orderSide.toUpperCase()} ${size} USDC notional @ ${executionLimitPrice} cNGN/USDC on ${market.ticker}; position after: ${positionAfter}`
+        `Futures order accepted: ${orderSide.toUpperCase()} ${size} contracts (${sizeUsdcNotional} USDC notional) @ ${executionLimitPrice} cNGN/USDC on ${market.ticker}; position after: ${positionAfter}`
       );
       return;
     } catch (error) {
@@ -1376,7 +1382,7 @@ export function OrderBookTradingTerminal({
                 />
               }
               exposureLabel={exposureLabel}
-              futureSizeUnit={selectedMarket.type === "future" ? "USDC" : undefined}
+              futureSizeUnit={selectedMarket.type === "future" ? "contracts" : undefined}
               isFXFuture={selectedMarket.type === "future"}
               isSubmitting={isSubmittingOrder || isResolvingTradingSubaccount}
               lastAction={lastAction}

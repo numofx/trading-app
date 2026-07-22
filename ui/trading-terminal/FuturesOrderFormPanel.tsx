@@ -154,8 +154,8 @@ export function FuturesOrderFormPanel({
           id="futures-amount"
           label="Amount"
           onChange={onSizeChange}
-          placeholder="10,000"
-          unit="USDC"
+          placeholder="1"
+          unit="contracts"
           value={size}
         />
 
