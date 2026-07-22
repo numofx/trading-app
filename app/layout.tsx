@@ -37,14 +37,14 @@ export default function RootLayout({
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         {/* Google tag (gtag.js) */}
         <Script
-          src="https://www.googletagmanager.com/gtag/js?id=G-Y0H4QJ235G"
+          src="https://www.googletagmanager.com/gtag/js?id=G-N6RNENS36P"
           strategy="afterInteractive"
         />
         <Script id="google-analytics" strategy="afterInteractive">
           {`window.dataLayer = window.dataLayer || [];
             function gtag(){dataLayer.push(arguments);}
             gtag('js', new Date());
-            gtag('config', 'G-Y0H4QJ235G');`}
+            gtag('config', 'G-N6RNENS36P');`}
         </Script>
         <AppPrivyProvider>{children}</AppPrivyProvider>
         {process.env.NODE_ENV === "development" ? (
