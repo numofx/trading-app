@@ -35,6 +35,17 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: `(function() { try { var theme = localStorage.getItem('theme'); if (theme === 'light') { document.documentElement.classList.add('light'); document.documentElement.classList.remove('dark'); } else { document.documentElement.classList.add('dark'); document.documentElement.classList.remove('light'); } } catch (e) {} })();` }} />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        {/* Google tag (gtag.js) */}
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-Y0H4QJ235G"
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-Y0H4QJ235G');`}
+        </Script>
         <AppPrivyProvider>{children}</AppPrivyProvider>
         {process.env.NODE_ENV === "development" ? (
           <Script
