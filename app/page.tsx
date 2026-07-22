@@ -5,6 +5,7 @@ import type { SpotHistorySnapshot } from "@/lib/exchange-api-history";
 import type { BookResponse, PresentedTrade } from "@/lib/markets-service";
 import {
   getLiveDeliverableFXFutures,
+  getLiveSpotMarket,
   getMarketBook,
   getMarketTrades,
 } from "@/lib/markets-service";
@@ -62,6 +63,7 @@ export default async function Home({ searchParams }: HomeProps) {
     trades: PresentedTrade[];
   }[] = [];
   let spotHistory: Record<SpotHistorySnapshot["pair"], SpotHistorySnapshot> | null = null;
+  let liveSpot: { book: BookResponse | null; trades: PresentedTrade[] } | null = null;
 
   try {
     chainlinkSpot = await getChainlinkNgnUsdSpot();
@@ -120,7 +122,32 @@ export default async function Home({ searchParams }: HomeProps) {
     liveFutures = [];
   }
 
-  const { defaultMarketId, marketData, marketDefinitions } = buildTradingTerminalMarkets(liveFutures);
+  try {
+    const spotMarket = await getLiveSpotMarket();
+
+    if (spotMarket?.asset_address && spotMarket.sub_id != null) {
+      let book: BookResponse | null = null;
+      let trades: PresentedTrade[] = [];
+
+      try {
+        book = await getMarketBook(spotMarket.asset_address, spotMarket.sub_id);
+      } catch {
+        book = null;
+      }
+
+      try {
+        trades = await getMarketTrades(spotMarket.asset_address, spotMarket.sub_id);
+      } catch {
+        trades = [];
+      }
+
+      liveSpot = { book, trades };
+    }
+  } catch {
+    liveSpot = null;
+  }
+
+  const { defaultMarketId, marketData, marketDefinitions } = buildTradingTerminalMarkets(liveFutures, liveSpot);
   const marketSelectionAliases = buildMarketSelectionAliasMap(marketDefinitions);
   const requestedMarket = Array.isArray(resolvedSearchParams.market)
     ? resolvedSearchParams.market[0]

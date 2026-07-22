@@ -781,10 +781,11 @@ function buildLiveDeliverableFutureMarket(
   asks: ReturnType<typeof buildLiveBookSide>,
   bids: ReturnType<typeof buildLiveBookSide>,
   trades: TradePrint[],
+  spotMark: string = SPOT_MARKET_META.mark,
 ) {
   const displayPair = formatFxDisplayPair(definition.pair);
   const displayLabel = definition.expiryLabel ?? "—";
-  const spot = SPOT_MARKET_META.mark;
+  const spot = spotMark;
   const derivedMark = deriveMarkFromBook(asks, bids);
   const markValue = derivedMark ? formatPriceWithConvention(derivedMark) : "—";
 
@@ -835,6 +836,7 @@ export function buildDeliverableFutureMarketFromBook(
   definition: MarketDefinition,
   book: BookResponse | null,
   trades: PresentedTrade[],
+  spotMark: string = SPOT_MARKET_META.mark,
 ) {
   const asks = buildLiveBookSide(book?.asks ?? [], "ask");
   const bids = buildLiveBookSide(book?.bids ?? [], "bid");
@@ -852,11 +854,80 @@ export function buildDeliverableFutureMarketFromBook(
     }))
     .filter((trade) => Number.isFinite(trade.price) && trade.price > 0 && Number.isFinite(trade.size) && trade.size > 0);
 
-  return buildLiveDeliverableFutureMarket(definition, asks, bids, liveTrades);
+  return buildLiveDeliverableFutureMarket(definition, asks, bids, liveTrades, spotMark);
 }
 
-export function buildTradingTerminalMarkets(liveFutures: LiveDeliverableFutureRuntime[]) {
-  const spotMarketData = MARKET_DATA["cngn-usdc-spot"];
+export type LiveSpotRuntime = {
+  book: BookResponse | null;
+  trades: PresentedTrade[];
+};
+
+export function buildSpotMarketFromBook(book: BookResponse | null, trades: PresentedTrade[]) {
+  // Spot presents in UI orientation (cNGN per USDC price, USDC size) while the engine
+  // book rests inverted (USDC per cNGN, cNGN amounts). A resting engine ASK (sell cNGN)
+  // is a UI BUY of USDC, so the engine book's asks are the UI bids and vice versa;
+  // buildLiveBookSide already reads the spot_contract.ui_intent presentation.
+  const uiBids = buildLiveBookSide(book?.asks ?? [], "bid");
+  const uiAsks = buildLiveBookSide(book?.bids ?? [], "ask");
+  const liveTrades = trades
+    .map((trade) => ({
+      price: Number(trade.spot_contract?.ui_intent.price ?? trade.price),
+      side: trade.spot_contract?.ui_intent.side ?? trade.aggressor_side,
+      // Spot sizes are USDC notional and can be fractional (e.g. a 0.073 USDC smoke
+      // trade) — keep 3 decimals instead of the futures contract rounding.
+      size: Number(Number(trade.spot_contract?.ui_intent.size ?? trade.size).toFixed(3)),
+      time: new Intl.DateTimeFormat("en-US", {
+        hour: "2-digit",
+        hour12: false,
+        minute: "2-digit",
+        timeZone: "UTC",
+      }).format(new Date(trade.created_at)),
+    }))
+    .filter((trade) => Number.isFinite(trade.price) && trade.price > 0 && Number.isFinite(trade.size) && trade.size > 0);
+  const derivedMark = deriveMarkFromBook(uiAsks, uiBids) ?? liveTrades[0]?.price.toFixed(2) ?? null;
+
+  if (derivedMark === null && liveTrades.length === 0) {
+    // Nothing live on the venue yet — keep the preview market.
+    return buildSpotMarket();
+  }
+
+  const preview = buildSpotMarket();
+  const mark = derivedMark ?? preview.mark;
+  const displayPair = formatFxDisplayPair("USDCcNGN");
+
+  return {
+    ...preview,
+    availability: getMarketAvailability({ asks: uiAsks, bids: uiBids, mark: derivedMark, trades: liveTrades }),
+    contractDetails: [
+      { label: "Market", value: `${displayPair} Spot` },
+      { label: "Quote Convention", value: "cNGN per USDC" },
+      { label: "Price", value: formatPriceWithConvention(mark) },
+      { label: "Executable", value: "Live" },
+      { label: "Settlement", value: SPOT_MARKET_META.settlement },
+    ],
+    infoBar: [
+      { label: "Mark Price", value: formatPriceWithConvention(mark) },
+      { label: "Basis", value: "—" },
+      { label: "Basis %", value: "—" },
+      { label: "Implied Carry", value: "—" },
+      { label: "Expiry", value: "Spot" },
+    ],
+    mark,
+    orderBookAsks: uiAsks,
+    orderBookBids: uiBids,
+    positionOverview: getSpotPositionOverview(mark),
+    referencePrice: mark,
+    trades: liveTrades.length > 0 ? liveTrades : preview.trades,
+  } satisfies ContractMarket;
+}
+
+export function buildTradingTerminalMarkets(
+  liveFutures: LiveDeliverableFutureRuntime[],
+  liveSpot: LiveSpotRuntime | null = null,
+) {
+  const spotMarketData = liveSpot
+    ? buildSpotMarketFromBook(liveSpot.book, liveSpot.trades)
+    : MARKET_DATA["cngn-usdc-spot"];
 
   if (!liveFutures.length) {
     const previewFutureDefinitions = PREVIEW_FUTURE_DEFINITIONS.map(buildPreviewFutureDefinition);
@@ -891,7 +962,7 @@ export function buildTradingTerminalMarkets(liveFutures: LiveDeliverableFutureRu
     ...Object.fromEntries(
       sortedLiveFutures.map((future) => [
         future.definition.id,
-        buildDeliverableFutureMarketFromBook(future.definition, future.book, future.trades),
+        buildDeliverableFutureMarketFromBook(future.definition, future.book, future.trades, spotMarketData.mark),
       ]),
     ),
   } satisfies Record<MarketId, ContractMarket>;

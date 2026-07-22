@@ -164,6 +164,20 @@ export async function getLiveDeliverableFXFutures() {
     });
 }
 
+export async function getLiveSpotMarket() {
+  const markets = await getMarketsServiceMarkets();
+
+  return (
+    markets.find((market) => {
+      return (
+        market.contract_type === "spot" &&
+        market.base_asset_symbol === "USDC" &&
+        market.quote_asset_symbol === "cNGN"
+      );
+    }) ?? null
+  );
+}
+
 export async function getMarketBook(assetAddress: string, subId: string) {
   const response = await fetch(
     `${getMarketsServiceUrl()}/v1/book?asset_address=${assetAddress}&sub_id=${subId}`,
