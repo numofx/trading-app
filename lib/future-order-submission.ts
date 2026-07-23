@@ -1,9 +1,9 @@
 import { encodeAbiParameters, getAddress, parseUnits } from "viem";
+import { getAppChain } from "@/lib/base-public-client";
 import type { MarketDefinition } from "@/lib/trading.types";
 
-const DEFAULT_MATCHING_CHAIN_ID = 84_532;
-const DEFAULT_MATCHING_ADDRESS = "0x1599636347FD5bA1fBE21D58AfE0b8B9cbe283FF";
-const DEFAULT_TRADE_MODULE_ADDRESS = "0x0AAE65AaA66Fe7f54486cDbD007956d3De611990";
+const DEFAULT_MATCHING_ADDRESS = "0x9E90A9cD13d859Bd6a08168082FB1F6F7405F191";
+const DEFAULT_TRADE_MODULE_ADDRESS = "0x44813aD30b2fFC1bB2871Eed9b19F63c8196eD1c";
 const ENGINE_DECIMALS = 18;
 
 /**
@@ -162,23 +162,7 @@ function roundRationalToScaledUnits(value: Rational, decimals: number) {
 }
 
 function getMatchingChainId() {
-  const configuredChainId = process.env.NEXT_PUBLIC_MATCHING_CHAIN_ID?.trim();
-
-  if (!configuredChainId) {
-    return DEFAULT_MATCHING_CHAIN_ID;
-  }
-
-  const parsedChainId = Number(configuredChainId);
-
-  if (!Number.isInteger(parsedChainId) || parsedChainId <= 0) {
-    throw new Error("NEXT_PUBLIC_MATCHING_CHAIN_ID must be a positive integer");
-  }
-
-  if (parsedChainId !== DEFAULT_MATCHING_CHAIN_ID) {
-    throw new Error(`NEXT_PUBLIC_MATCHING_CHAIN_ID must be ${DEFAULT_MATCHING_CHAIN_ID} (Base Sepolia)`);
-  }
-
-  return parsedChainId;
+  return getAppChain().id;
 }
 
 function getMatchingAddress() {

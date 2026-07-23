@@ -79,11 +79,17 @@ export function SpotTradingTerminal({
   liveSpotPrice,
   spotMarket,
   usdcBalanceLabel,
+  onSubmitOrder,
+  isSubmitting = false,
+  lastAction = null,
 }: {
   candles: Candle[];
   liveSpotPrice: number | null;
   spotMarket: ContractMarket;
   usdcBalanceLabel: string | null;
+  onSubmitOrder?: (args: { side: "buy" | "sell"; price: string; size: string; orderType: "Limit" | "Market" | "Stop Limit" }) => void;
+  isSubmitting?: boolean;
+  lastAction?: string | null;
 }) {
   const [chartTab, setChartTab] = useState<SpotChartTab>("price");
   const [timeframe, setTimeframe] = useState<SpotTimeframe>("1h");
@@ -159,7 +165,10 @@ export function SpotTradingTerminal({
           <SpotOrderFormPanel
             availableCngnLabel="0.00 cNGN"
             availableUsdcLabel={usdcBalanceLabel ?? "— USDC"}
+            isSubmitting={isSubmitting}
+            lastAction={lastAction}
             markPrice={lastPrice}
+            onSubmitOrder={onSubmitOrder}
           />
           <SpotBalanceSummary
             cngnBalanceLabel="0.00 cNGN"

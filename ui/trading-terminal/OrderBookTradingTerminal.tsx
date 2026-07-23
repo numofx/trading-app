@@ -10,6 +10,7 @@ import { simulateLiveCandles } from "@/lib/candle-simulation";
 import type { ChainlinkSpotSnapshot } from "@/lib/chainlink-ngn-usd";
 import type { SpotHistorySnapshot } from "@/lib/exchange-api-history";
 import { buildFutureOrderEnvelope, canSubmitFutureOrder } from "@/lib/future-order-submission";
+import { buildSpotOrderEnvelope } from "@/lib/spot-order-submission";
 import {
   formatFxDisplayPair,
   getInstrumentDisplayLabel,
@@ -1292,6 +1293,111 @@ export function OrderBookTradingTerminal({
     }
   }
 
+  async function handleSubmitSpot({
+    side,
+    price,
+    size,
+    orderType,
+  }: {
+    side: "buy" | "sell";
+    price: string;
+    size: string;
+    orderType: "Limit" | "Market" | "Stop Limit";
+  }) {
+    if (!walletsReady) {
+      setLastAction("Wallet is still loading");
+      return;
+    }
+    if (!primaryWallet?.address) {
+      setLastAction("Connect a wallet before submitting an order");
+      return;
+    }
+    // Market spot orders derive a crossing price from the opposing book side.
+    let executionPrice = price;
+    if (orderType === "Market") {
+      const spotMarketData = marketData["cngn-usdc-spot"];
+      const opposing = side === "buy" ? spotMarketData.orderBookAsks[0] : spotMarketData.orderBookBids[0];
+      if (!opposing) {
+        setLastAction("No opposing spot liquidity to cross. Use a limit order.");
+        return;
+      }
+      executionPrice = String(opposing.price);
+    }
+
+    try {
+      setIsSubmittingOrder(true);
+      setLastAction(
+        tradingSubaccountId
+          ? `Submitting spot order on trading account #${tradingSubaccountId}`
+          : "Preparing trading account..."
+      );
+      const resolvedTradingSubaccountId =
+        tradingSubaccountId ?? (await ensureTradingSubaccount(primaryWallet));
+
+      const appChain = getAppChain();
+      await primaryWallet.switchChain(appChain.id);
+      const provider = await primaryWallet.getEthereumProvider();
+      const walletClient = createWalletClient({ chain: appChain, transport: custom(provider) });
+
+      const envelope = buildSpotOrderEnvelope({
+        side,
+        subaccountId: resolvedTradingSubaccountId,
+        uiPrice: executionPrice,
+        uiSize: size,
+        walletAddress: primaryWallet.address,
+      });
+      setLastAction(`Awaiting wallet signature for trading account #${resolvedTradingSubaccountId}`);
+      const signature = await walletClient.signTypedData({
+        account: primaryWallet.address as `0x${string}`,
+        ...envelope.typedData,
+      });
+      const response = await fetch("/api/orders", {
+        body: JSON.stringify({ ...envelope.payload, signature }),
+        method: "POST",
+        headers: { "content-type": "application/json" },
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string;
+        order?: { order_id?: string };
+      } | null;
+      if (!response.ok) {
+        posthog.capture("order_rejected", {
+          market_id: "cngn-usdc-spot",
+          order_side: side,
+          order_type: orderType,
+          size_usdc_notional: size,
+          limit_price: executionPrice,
+          error_message: payload?.error ?? null,
+          http_status: response.status,
+        });
+        setLastAction(payload?.error ?? "Spot order submission failed");
+        return;
+      }
+      posthog.capture("order_submitted", {
+        market_id: "cngn-usdc-spot",
+        order_id: payload?.order?.order_id ?? null,
+        order_side: side,
+        order_type: orderType,
+        size_usdc_notional: size,
+        limit_price: executionPrice,
+      });
+      setLastAction(
+        `Spot order accepted: ${side.toUpperCase()} ${size} USDC @ ${executionPrice} cNGN/USDC`
+      );
+      refreshUsdcBalance();
+      return;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Spot order submission failed";
+      posthog.captureException(error, {
+        properties: { market_id: "cngn-usdc-spot", order_side: side, order_type: orderType },
+      });
+      setLastAction(errorMessage);
+      return;
+    } finally {
+      setIsSubmittingOrder(false);
+    }
+  }
+
   const safeLiveSpotPrice = Number.isFinite(liveSpotPrice) ? liveSpotPrice : null;
   const spotHistorySnapshot = spotHistory?.["NGN/USD"] ?? null;
   // Only chart the external history series when it agrees with the reconciled spot price;
@@ -1376,7 +1482,10 @@ export function OrderBookTradingTerminal({
         {activeSection === "spot" ? (
           <SpotTradingTerminal
             candles={spotCandles}
+            isSubmitting={isSubmittingOrder || isResolvingTradingSubaccount}
+            lastAction={lastAction}
             liveSpotPrice={safeLiveSpotPrice}
+            onSubmitOrder={handleSubmitSpot}
             spotMarket={marketData["cngn-usdc-spot"]}
             usdcBalanceLabel={formatUsdcBalanceLabel(usdcBalance)}
           />

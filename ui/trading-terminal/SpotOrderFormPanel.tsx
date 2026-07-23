@@ -69,10 +69,16 @@ export function SpotOrderFormPanel({
   availableCngnLabel,
   availableUsdcLabel,
   markPrice,
+  onSubmitOrder,
+  isSubmitting = false,
+  lastAction = null,
 }: {
   availableCngnLabel: string;
   availableUsdcLabel: string;
   markPrice: number | null;
+  onSubmitOrder?: (args: { side: "buy" | "sell"; price: string; size: string; orderType: SpotOrderType }) => void;
+  isSubmitting?: boolean;
+  lastAction?: string | null;
 }) {
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [orderType, setOrderType] = useState<SpotOrderType>("Limit");
@@ -94,10 +100,18 @@ export function SpotOrderFormPanel({
   const availableLabel = payWith === "USDC" ? availableUsdcLabel : availableCngnLabel;
 
   function handleSubmit() {
-    setStatusMessage(
-      `${isBuy ? "Buy" : "Sell"} ${amount || "0"} USDC (${orderType}) previewed. The order book shows live market liquidity, but order execution is not enabled yet.`
-    );
+    if (!onSubmitOrder) {
+      setStatusMessage(
+        `${isBuy ? "Buy" : "Sell"} ${amount || "0"} USDC (${orderType}) previewed. Order execution is not enabled yet.`
+      );
+      return;
+    }
+    setStatusMessage(null);
+    const priceForOrder = orderType === "Market" ? (markPrice === null ? "" : String(markPrice)) : limitPrice;
+    onSubmitOrder({ side, price: priceForOrder, size: amount, orderType });
   }
+
+  const statusText = lastAction ?? statusMessage;
 
   return (
     <section className="flex min-h-[430px] shrink-0 flex-col overflow-hidden rounded-[20px] bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 xl:flex-1">
@@ -218,17 +232,19 @@ export function SpotOrderFormPanel({
             "h-11 w-full cursor-pointer rounded-[14px] font-semibold text-[13px] transition-colors",
             isBuy
               ? "bg-buy text-background ring-1 ring-buy/50 hover:bg-buy/90"
-              : "bg-sell text-white ring-1 ring-sell/50 hover:bg-sell/90"
+              : "bg-sell text-white ring-1 ring-sell/50 hover:bg-sell/90",
+            isSubmitting && "cursor-wait opacity-70"
           )}
+          disabled={isSubmitting}
           onClick={handleSubmit}
           type="button"
         >
-          {isBuy ? "Buy USDC" : "Sell USDC"}
+          {isSubmitting ? "Submitting…" : isBuy ? "Buy USDC" : "Sell USDC"}
         </button>
 
-        {statusMessage !== null ? (
+        {statusText !== null ? (
           <p className="rounded-[12px] bg-input-bg px-3 py-2 text-[10px] text-panel-text-muted ring-1 ring-panel-border">
-            {statusMessage}
+            {statusText}
           </p>
         ) : null}
       </div>
