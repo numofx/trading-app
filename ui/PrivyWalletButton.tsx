@@ -2,6 +2,7 @@
 
 import { useLogin, useLogout, usePrivy, useWallets } from "@privy-io/react-auth";
 import { Wallet } from "lucide-react";
+import posthog from "posthog-js";
 import { cn } from "@/lib/cn";
 
 function formatAddress(address: string) {
@@ -31,6 +32,17 @@ export function PrivyWalletButton() {
 function PrivyWalletButtonInner() {
   const { authenticated, ready } = usePrivy();
   const { login } = useLogin({
+    onComplete: ({ user, loginAccount }) => {
+      const walletAddress = loginAccount && "address" in loginAccount ? (loginAccount.address as string) : null;
+      const distinctId = walletAddress ?? user.id;
+      posthog.identify(distinctId);
+      posthog.capture("wallet_connected", {
+        wallet_address_truncated: walletAddress ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : null,
+        login_method: loginAccount?.type ?? null,
+        privy_user_id: user.id,
+        is_new_user: false,
+      });
+    },
     onError: (error) => {
       if (error === "exited_auth_flow") {
         return;
@@ -39,7 +51,12 @@ function PrivyWalletButtonInner() {
       console.error("Privy login error", error);
     },
   });
-  const { logout } = useLogout();
+  const { logout } = useLogout({
+    onSuccess: () => {
+      posthog.capture("wallet_disconnected");
+      posthog.reset();
+    },
+  });
   const { ready: walletsReady, wallets } = useWallets();
   const primaryWallet = wallets[0];
   const walletAddress = primaryWallet?.address ? formatAddress(primaryWallet.address) : null;

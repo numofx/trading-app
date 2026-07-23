@@ -3,6 +3,7 @@
 import { Dialog } from "@base-ui/react/dialog";
 import type { ConnectedWallet } from "@privy-io/react-auth";
 import { useState } from "react";
+import posthog from "posthog-js";
 import { cn } from "@/lib/cn";
 import type { DepositBlockedReason, DepositFlowState } from "@/lib/subaccount-deposit.types";
 import { useSubaccountDeposit } from "@/ui/trading-terminal/useSubaccountDeposit";
@@ -183,6 +184,10 @@ export function DepositDialog({
                 disabled={wallet === null}
                 onClick={() => {
                   if (wallet !== null) {
+                    posthog.capture("deposit_started", {
+                      subaccount_id: subaccountId,
+                      is_new_account: subaccountId === null,
+                    });
                     void startDeposit(wallet, amount, subaccountId);
                   }
                 }}
