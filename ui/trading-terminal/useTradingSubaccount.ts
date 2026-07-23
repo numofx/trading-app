@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import type { ConnectedWallet } from "@privy-io/react-auth";
-import { baseSepolia } from "viem/chains";
+import { base } from "viem/chains";
 import { createWalletClient, custom, decodeEventLog, getAddress } from "viem";
-import { createBasePublicClient } from "@/lib/base-public-client";
+import { createBasePublicClient, getAppChain } from "@/lib/base-public-client";
 import {
   depositedSubAccountEvent,
   getMatchingAddress,
@@ -13,34 +13,23 @@ import {
   getWrappedUsdcAssetAddress,
 } from "@/lib/subaccount-deposit-config";
 
-const DEFAULT_CHAIN_ID = 84_532;
 const DEFAULT_TRADE_MODULE_ADDRESS = "0x0AAE65AaA66Fe7f54486cDbD007956d3De611990";
-// The public Base Sepolia RPC caps eth_getLogs at a 2000-block span per query.
+// The public Base RPCs cap eth_getLogs at a 2000-block span per query.
 const LOG_QUERY_BLOCK_RANGE = 2000n;
-// Block at which the Matching contract (DEFAULT_MATCHING_ADDRESS) was deployed on
-// Base Sepolia. Used as the scan floor so subaccount lookups terminate here
-// instead of walking back to genesis (~43M blocks). Update this if
-// NEXT_PUBLIC_MATCHING_ADDRESS is pointed at a different deployment.
-const SUBACCOUNT_EVENT_FLOOR_BLOCK = 40_461_151n;
+// Block at which the Matching contract was deployed, per chain. Used as the scan
+// floor so subaccount lookups terminate there instead of walking back to genesis.
+// Update if NEXT_PUBLIC_MATCHING_ADDRESS is pointed at a different deployment.
+const SUBACCOUNT_EVENT_FLOOR_BLOCK_SEPOLIA = 40_461_151n;
+const SUBACCOUNT_EVENT_FLOOR_BLOCK_MAINNET = 48_833_365n; // matching 0x9E90…F191
+
+function getSubaccountEventFloorBlock() {
+  return getAppChain().id === base.id
+    ? SUBACCOUNT_EVENT_FLOOR_BLOCK_MAINNET
+    : SUBACCOUNT_EVENT_FLOOR_BLOCK_SEPOLIA;
+}
 
 function getMatchingChainId() {
-  const configuredChainId = process.env.NEXT_PUBLIC_MATCHING_CHAIN_ID?.trim();
-
-  if (!configuredChainId) {
-    return DEFAULT_CHAIN_ID;
-  }
-
-  const parsedChainId = Number(configuredChainId);
-
-  if (!Number.isInteger(parsedChainId) || parsedChainId <= 0) {
-    throw new Error("NEXT_PUBLIC_MATCHING_CHAIN_ID must be a positive integer");
-  }
-
-  if (parsedChainId !== DEFAULT_CHAIN_ID) {
-    throw new Error(`NEXT_PUBLIC_MATCHING_CHAIN_ID must be ${DEFAULT_CHAIN_ID} (Base Sepolia)`);
-  }
-
-  return parsedChainId;
+  return getAppChain().id;
 }
 
 function getTradeModuleAddress() {
@@ -51,11 +40,12 @@ async function findTradingSubaccountId(ownerAddress: string) {
   const publicClient = createBasePublicClient();
   const latestBlock = await publicClient.getBlockNumber();
   const normalizedOwnerAddress = getAddress(ownerAddress);
+  const floorBlock = getSubaccountEventFloorBlock();
   let windowEnd = latestBlock;
 
-  while (windowEnd >= SUBACCOUNT_EVENT_FLOOR_BLOCK) {
+  while (windowEnd >= floorBlock) {
     const rangeStart = windowEnd > LOG_QUERY_BLOCK_RANGE ? windowEnd - LOG_QUERY_BLOCK_RANGE + 1n : 0n;
-    const windowStart = rangeStart > SUBACCOUNT_EVENT_FLOOR_BLOCK ? rangeStart : SUBACCOUNT_EVENT_FLOOR_BLOCK;
+    const windowStart = rangeStart > floorBlock ? rangeStart : floorBlock;
     const logs = await publicClient.getLogs({
       address: getMatchingAddress(),
       args: {
@@ -71,7 +61,7 @@ async function findTradingSubaccountId(ownerAddress: string) {
       return latestLog.args.accountId.toString();
     }
 
-    if (windowStart === SUBACCOUNT_EVENT_FLOOR_BLOCK) {
+    if (windowStart === floorBlock) {
       return null;
     }
 
@@ -88,7 +78,7 @@ async function createTradingSubaccount(wallet: ConnectedWallet) {
 
   const provider = await wallet.getEthereumProvider();
   const walletClient = createWalletClient({
-    chain: baseSepolia,
+    chain: getAppChain(),
     transport: custom(provider),
   });
   const [account] = await walletClient.getAddresses();

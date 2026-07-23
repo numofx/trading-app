@@ -1,10 +1,11 @@
 "use client";
 
+import posthog from "posthog-js";
 import { useWallets } from "@privy-io/react-auth";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createWalletClient, custom } from "viem";
-import { baseSepolia } from "viem/chains";
+import { getAppChain } from "@/lib/base-public-client";
 import { simulateLiveCandles } from "@/lib/candle-simulation";
 import type { ChainlinkSpotSnapshot } from "@/lib/chainlink-ngn-usd";
 import type { SpotHistorySnapshot } from "@/lib/exchange-api-history";
@@ -872,6 +873,13 @@ export function OrderBookTradingTerminal({
       return;
     }
 
+    posthog.capture("market_selected", {
+      market_id: targetMarket.id,
+      market_type: targetMarket.type,
+      market_pair: targetMarket.pair,
+      market_label: getInstrumentDisplayLabel(targetMarket),
+    });
+
     setSelectedMarketId(targetMarket.id);
     setChartContext(getDefaultChartContextForMarket(targetMarket));
     setLimitPrice(getRenderablePriceInput(marketData[targetMarket.id].mark));
@@ -909,6 +917,7 @@ export function OrderBookTradingTerminal({
   };
 
   function handleTradingLayoutChange(layout: TradingLayout) {
+    posthog.capture("trading_layout_changed", { layout });
     setTradingLayout(layout);
   }
 
@@ -1184,11 +1193,12 @@ export function OrderBookTradingTerminal({
       const resolvedTradingSubaccountId =
         tradingSubaccountId ?? (await ensureTradingSubaccount(primaryWallet));
 
-      await primaryWallet.switchChain(baseSepolia.id);
+      const appChain = getAppChain();
+      await primaryWallet.switchChain(appChain.id);
 
       const provider = await primaryWallet.getEthereumProvider();
       const walletClient = createWalletClient({
-        chain: baseSepolia,
+        chain: appChain,
         transport: custom(provider),
       });
       const envelope = buildFutureOrderEnvelope({
@@ -1224,18 +1234,58 @@ export function OrderBookTradingTerminal({
       } | null;
 
       if (!response.ok) {
+        posthog.capture("order_rejected", {
+          order_side: orderSide,
+          order_type: orderType,
+          market_id: selectedMarketId,
+          market_pair: selectedMarket.pair,
+          size_contracts: size,
+          size_usdc_notional: sizeUsdcNotional,
+          limit_price: executionLimitPrice,
+          error_message: payload?.error ?? null,
+          http_status: response.status,
+        });
         setLastAction(payload?.error ?? "Futures order submission failed");
         return;
       }
 
+      posthog.capture("order_submitted", {
+        order_id: payload?.order?.order_id ?? null,
+        order_side: orderSide,
+        order_type: orderType,
+        market_id: selectedMarketId,
+        market_pair: selectedMarket.pair,
+        size_contracts: size,
+        size_usdc_notional: sizeUsdcNotional,
+        limit_price: executionLimitPrice,
+        position_after: positionAfter,
+      });
       setLastAction(
         `Futures order accepted: ${orderSide.toUpperCase()} ${size} contracts (${sizeUsdcNotional} USDC notional) @ ${executionLimitPrice} cNGN/USDC on ${market.ticker}; position after: ${positionAfter}`
       );
       return;
     } catch (error) {
-      setLastAction(
-        error instanceof Error ? error.message : "Futures order submission failed"
-      );
+      const errorMessage = error instanceof Error ? error.message : "Futures order submission failed";
+      posthog.captureException(error, {
+        properties: {
+          order_side: orderSide,
+          order_type: orderType,
+          market_id: selectedMarketId,
+          size_contracts: size,
+          limit_price: executionLimitPrice,
+        },
+      });
+      posthog.capture("order_failed", {
+        order_side: orderSide,
+        order_type: orderType,
+        market_id: selectedMarketId,
+        market_pair: selectedMarket.pair,
+        size_contracts: size,
+        size_usdc_notional: sizeUsdcNotional,
+        limit_price: executionLimitPrice,
+        error_message: errorMessage,
+      });
+      setLastAction(errorMessage);
       return;
     } finally {
       setIsSubmittingOrder(false);

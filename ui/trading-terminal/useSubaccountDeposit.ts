@@ -1,10 +1,10 @@
 "use client";
 
+import posthog from "posthog-js";
 import type { ConnectedWallet } from "@privy-io/react-auth";
 import { useEffect, useEffectEvent, useState } from "react";
 import { createWalletClient, custom, decodeEventLog, erc20Abi, getAddress, parseUnits } from "viem";
-import { baseSepolia } from "viem/chains";
-import { createBasePublicClient } from "@/lib/base-public-client";
+import { createBasePublicClient, getAppChain } from "@/lib/base-public-client";
 import { getDepositEffect, startDepositFlow, transitionDepositFlow } from "@/lib/subaccount-deposit-machine";
 import { depositedSubAccountEvent, getDepositAddresses, getMatchingAddress } from "@/lib/subaccount-deposit-config";
 import type { DepositFlowEvent, DepositFlowState, DepositPreflight } from "@/lib/subaccount-deposit.types";
@@ -57,12 +57,13 @@ function getErrorMessage(error: unknown) {
 }
 
 async function createConnectedWalletClient(wallet: ConnectedWallet) {
-  await wallet.switchChain(baseSepolia.id);
+  const chain = getAppChain();
+  await wallet.switchChain(chain.id);
   const provider = await wallet.getEthereumProvider();
 
   return createWalletClient({
     account: getAddress(wallet.address),
-    chain: baseSepolia,
+    chain,
     transport: custom(provider),
   });
 }
@@ -204,8 +205,20 @@ export function useSubaccountDeposit({ onDeposited }: { onDeposited?: (subaccoun
     }
 
     if (flowState.status === "success") {
+      posthog.capture("deposit_confirmed", {
+        subaccount_id: flowState.subaccountId,
+      });
       notifyDeposited(flowState.subaccountId);
       return;
+    }
+
+    if (flowState.status === "failed") {
+      posthog.captureException(new Error(flowState.error), {
+        properties: { deposit_flow_status: "failed" },
+      });
+      posthog.capture("deposit_failed", {
+        error_message: flowState.error,
+      });
     }
 
     const effect = getDepositEffect(flowState);
