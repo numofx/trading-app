@@ -4,11 +4,33 @@ export const LEGACY_APR_2026_FUTURE_SYMBOL = "USDC/cNGN-APR30-2026";
 export const CANONICAL_APR_2026_FUTURE_SYMBOL = "USDCcNGN-APR30-2026";
 export const LEGACY_SPOT_SYMBOL = "USDC/cNGN";
 export const CANONICAL_SPOT_SYMBOL = "USDCcNGN-SPOT";
+export const SPOT_MARKET_ID = "cngn-usdc-spot";
+
+/**
+ * URL-facing identifier for the spot view. Spot is a view mode rather than a
+ * selectable row in `marketDefinitions` (production serves futures only), so its
+ * `?market=` value is the bare pair — e.g. `?market=USDCcNGN` — instead of a
+ * dated contract symbol.
+ */
+export const SPOT_URL_SLUG = "USDCcNGN";
 
 const URL_SAFE_SYMBOL_PATTERN = /^[a-z0-9-]+$/i;
 
 function normalizeSelectionKey(value: string) {
   return value.trim().toLowerCase();
+}
+
+const SPOT_SELECTION_KEYS = new Set(
+  [SPOT_URL_SLUG, CANONICAL_SPOT_SYMBOL, LEGACY_SPOT_SYMBOL, SPOT_MARKET_ID].map(normalizeSelectionKey),
+);
+
+/**
+ * True when a `?market=` value (or stored selection) refers to the spot view in
+ * any of its forms: the URL slug `USDCcNGN`, the canonical/legacy spot symbols,
+ * or the internal spot market id.
+ */
+export function isSpotMarketSelection(value: string | null | undefined) {
+  return value ? SPOT_SELECTION_KEYS.has(normalizeSelectionKey(value)) : false;
 }
 
 export function buildCanonicalMarketId(assetAddress: string, subId: string) {

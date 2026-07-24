@@ -24,8 +24,10 @@ import {
 import {
   buildMarketSelectionAliasMap,
   buildMarketUrlSlug,
+  isSpotMarketSelection,
   resolveHydratedMarketSelection,
   resolveMarketSelection,
+  SPOT_URL_SLUG,
 } from "@/lib/market-selection";
 import type {
   CHART_CONTEXT_TABS,
@@ -1048,12 +1050,23 @@ export function OrderBookTradingTerminal({
       }
     }
 
+    const storedMarket = window.localStorage.getItem(SELECTED_MARKET_STORAGE_KEY);
+    const selectionToken =
+      requestedMarketParam && requestedMarketParam.trim() !== "" ? requestedMarketParam : storedMarket;
+
+    // Spot is a view mode, not a row in marketDefinitions, so resolve it up front.
+    if (isSpotMarketSelection(selectionToken)) {
+      setActiveSection("spot");
+      markSelectionHydrated();
+      return;
+    }
+
     const marketSelectionAliases = buildMarketSelectionAliasMap(marketDefinitions);
     const resolution = resolveHydratedMarketSelection({
       aliases: marketSelectionAliases,
       defaultMarketId,
       requestedMarket: requestedMarketParam,
-      storedMarket: window.localStorage.getItem(SELECTED_MARKET_STORAGE_KEY),
+      storedMarket,
     });
 
     if (resolution.shouldIgnoreInvalidRequestedMarket) {
@@ -1066,11 +1079,6 @@ export function OrderBookTradingTerminal({
       return;
     }
 
-    if (resolution.selectedMarketId === selectedMarketIdRef.current) {
-      markSelectionHydrated();
-      return;
-    }
-
     const nextMarket = marketDefinitions.find(
       (marketOption) => marketOption.id === resolution.selectedMarketId
     );
@@ -1079,10 +1087,20 @@ export function OrderBookTradingTerminal({
       return;
     }
 
-    setSelectedMarketId(resolution.selectedMarketId);
-    setChartContext(getDefaultChartContextForMarket(nextMarket));
-    setLimitPrice(getRenderablePriceInput(marketData[resolution.selectedMarketId].mark));
-    setActiveIndex(getActiveIndexForMarket(nextMarket));
+    // Only an explicit non-spot selection switches into the futures view; a bare
+    // visit with no token keeps the default spot section.
+    const hasExplicitSelection = Boolean(selectionToken && selectionToken.trim() !== "");
+    if (hasExplicitSelection && nextMarket.type !== "spot") {
+      setActiveSection("derivatives");
+    }
+
+    if (resolution.selectedMarketId !== selectedMarketIdRef.current) {
+      setSelectedMarketId(resolution.selectedMarketId);
+      setChartContext(getDefaultChartContextForMarket(nextMarket));
+      setLimitPrice(getRenderablePriceInput(marketData[resolution.selectedMarketId].mark));
+      setActiveIndex(getActiveIndexForMarket(nextMarket));
+    }
+
     markSelectionHydrated();
   }, [defaultMarketId, hasHydratedSelection, marketData, marketDefinitions, requestedMarketParam]);
 
@@ -1095,30 +1113,38 @@ export function OrderBookTradingTerminal({
     const canonicalMarketId =
       resolveMarketSelection(selectedMarketId, marketSelectionAliases) ?? selectedMarketId;
     const selectedMarketDefinition = marketDefinitions.find((option) => option.id === canonicalMarketId);
-    const marketUrlSlug = buildMarketUrlSlug(selectedMarketDefinition) || canonicalMarketId;
+    // Spot is a view mode with no marketDefinitions row, so its URL is the bare
+    // pair slug; the futures view uses the selected contract's symbol.
+    const viewUrlSlug =
+      activeSection === "spot"
+        ? SPOT_URL_SLUG
+        : buildMarketUrlSlug(selectedMarketDefinition) || canonicalMarketId;
     const currentSearchParams = new URLSearchParams(window.location.search);
     const requestedMarket = currentSearchParams.get("market");
-    const resolvedRequestedMarket =
-      requestedMarket && requestedMarket.trim() !== ""
-        ? resolveMarketSelection(requestedMarket, marketSelectionAliases)
-        : null;
+    const isResolvableRequest =
+      isSpotMarketSelection(requestedMarket) ||
+      Boolean(
+        requestedMarket &&
+          requestedMarket.trim() !== "" &&
+          resolveMarketSelection(requestedMarket, marketSelectionAliases)
+      );
 
-    if (requestedMarket && requestedMarket.trim() !== "" && !resolvedRequestedMarket) {
+    if (requestedMarket && requestedMarket.trim() !== "" && !isResolvableRequest) {
       return;
     }
 
-    window.localStorage.setItem(SELECTED_MARKET_STORAGE_KEY, canonicalMarketId);
+    window.localStorage.setItem(SELECTED_MARKET_STORAGE_KEY, viewUrlSlug);
 
     // Already showing the preferred slug — nothing to do. Any other form (a raw
-    // `address:subId`, a legacy alias, or a different market) gets canonicalized
-    // to the clean slug, so landing on an ugly-but-valid URL beautifies it.
-    if (requestedMarket === marketUrlSlug) {
+    // `address:subId`, a legacy alias, or a dated futures symbol while on spot)
+    // gets canonicalized so the URL always matches the visible view.
+    if (requestedMarket === viewUrlSlug) {
       return;
     }
 
-    currentSearchParams.set("market", marketUrlSlug);
+    currentSearchParams.set("market", viewUrlSlug);
     window.history.replaceState(null, "", `${pathname}?${currentSearchParams.toString()}`);
-  }, [hasHydratedSelection, marketDefinitions, pathname, selectedMarketId]);
+  }, [activeSection, hasHydratedSelection, marketDefinitions, pathname, selectedMarketId]);
 
   useEffect(() => {
     if (lastCandleResetKeyRef.current === candleResetKey) {
