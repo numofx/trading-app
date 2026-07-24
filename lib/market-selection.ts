@@ -5,6 +5,8 @@ export const CANONICAL_APR_2026_FUTURE_SYMBOL = "USDCcNGN-APR30-2026";
 export const LEGACY_SPOT_SYMBOL = "USDC/cNGN";
 export const CANONICAL_SPOT_SYMBOL = "USDCcNGN-SPOT";
 
+const URL_SAFE_SYMBOL_PATTERN = /^[a-z0-9-]+$/i;
+
 function normalizeSelectionKey(value: string) {
   return value.trim().toLowerCase();
 }
@@ -15,6 +17,27 @@ export function buildCanonicalMarketId(assetAddress: string, subId: string) {
 
 export function buildLegacyDerivedMarketId(marketSymbol: string, subId: string) {
   return `${marketSymbol.toLowerCase().replaceAll("/", "-").replaceAll(" ", "-")}-${subId}`;
+}
+
+/**
+ * URL-facing market identifier. Prefers the human-readable market symbol
+ * (e.g. `USDCcNGN-SEP16-2026`) so the raw `address:subId` pair never leaks into
+ * the address bar. Falls back to the canonical `id` when no URL-safe symbol
+ * exists (e.g. the spot market). The symbol is already registered in the
+ * selection alias map, so the slug round-trips through `resolveMarketSelection`
+ * without any extra wiring.
+ */
+export function buildMarketUrlSlug(market: Pick<MarketDefinition, "id" | "marketSymbol"> | null | undefined) {
+  if (!market) {
+    return "";
+  }
+
+  const symbol = market.marketSymbol?.trim();
+  if (symbol && URL_SAFE_SYMBOL_PATTERN.test(symbol)) {
+    return symbol;
+  }
+
+  return market.id;
 }
 
 export function getMarketSymbolAliases(marketSymbol: string) {

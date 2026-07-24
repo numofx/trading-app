@@ -15,7 +15,12 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { formatFxDisplayPair } from "@/lib/market-display";
 import { calculateAnnualizedBasisPercent, formatAnnualizedBasis, formatBasis } from "@/lib/market-formatting";
-import { buildCanonicalMarketId, buildLegacyDerivedMarketId, getMarketSymbolAliases } from "@/lib/market-selection";
+import {
+  buildCanonicalMarketId,
+  buildLegacyDerivedMarketId,
+  CANONICAL_SPOT_SYMBOL,
+  getMarketSymbolAliases,
+} from "@/lib/market-selection";
 import type {
   ActivityTab,
   ActivityView,
@@ -204,6 +209,8 @@ export const MARKET_DEFINITIONS = [
     expiryLabel: null,
     flagSrc: "/flags/ng.svg",
     id: "cngn-usdc-spot",
+    marketSymbol: CANONICAL_SPOT_SYMBOL,
+    marketSymbolAliases: getMarketSymbolAliases(CANONICAL_SPOT_SYMBOL),
     strikeLabel: null,
     type: "spot",
     pair: "USDCcNGN",

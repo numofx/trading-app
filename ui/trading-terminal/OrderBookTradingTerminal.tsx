@@ -23,6 +23,7 @@ import {
 } from "@/lib/market-formatting";
 import {
   buildMarketSelectionAliasMap,
+  buildMarketUrlSlug,
   resolveHydratedMarketSelection,
   resolveMarketSelection,
 } from "@/lib/market-selection";
@@ -1093,6 +1094,8 @@ export function OrderBookTradingTerminal({
     const marketSelectionAliases = buildMarketSelectionAliasMap(marketDefinitions);
     const canonicalMarketId =
       resolveMarketSelection(selectedMarketId, marketSelectionAliases) ?? selectedMarketId;
+    const selectedMarketDefinition = marketDefinitions.find((option) => option.id === canonicalMarketId);
+    const marketUrlSlug = buildMarketUrlSlug(selectedMarketDefinition) || canonicalMarketId;
     const currentSearchParams = new URLSearchParams(window.location.search);
     const requestedMarket = currentSearchParams.get("market");
     const resolvedRequestedMarket =
@@ -1106,11 +1109,14 @@ export function OrderBookTradingTerminal({
 
     window.localStorage.setItem(SELECTED_MARKET_STORAGE_KEY, canonicalMarketId);
 
-    if (currentSearchParams.get("market") === canonicalMarketId) {
+    // Already showing the preferred slug — nothing to do. Any other form (a raw
+    // `address:subId`, a legacy alias, or a different market) gets canonicalized
+    // to the clean slug, so landing on an ugly-but-valid URL beautifies it.
+    if (requestedMarket === marketUrlSlug) {
       return;
     }
 
-    currentSearchParams.set("market", canonicalMarketId);
+    currentSearchParams.set("market", marketUrlSlug);
     window.history.replaceState(null, "", `${pathname}?${currentSearchParams.toString()}`);
   }, [hasHydratedSelection, marketDefinitions, pathname, selectedMarketId]);
 
