@@ -66,6 +66,11 @@ import { TradingMarketHeader } from "@/ui/trading-terminal/TradingMarketHeader";
 import { DepositDialog } from "@/ui/trading-terminal/DepositDialog";
 import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
 import { formatUsdcBalanceLabel, useUsdcBalance } from "@/ui/trading-terminal/useUsdcBalance";
+import {
+  formatSubaccountCngnLabel,
+  formatSubaccountUsdcLabel,
+  useSubaccountBalance,
+} from "@/ui/trading-terminal/useSubaccountBalance";
 
 const SELECTED_MARKET_STORAGE_KEY = "trading-terminal-selected-market";
 const CONTRACT_COUNT_PATTERN = /(\d[\d,]*(?:\.\d+)?)\s+contracts/i;
@@ -934,10 +939,14 @@ export function OrderBookTradingTerminal({
     subaccountId: tradingSubaccountId,
   } = useTradingSubaccount(primaryWallet?.address ?? null);
   const { balance: usdcBalance, refresh: refreshUsdcBalance } = useUsdcBalance(primaryWallet?.address ?? null);
+  const { balance: subaccountBalance, refresh: refreshSubaccountBalance } = useSubaccountBalance(tradingSubaccountId);
+  const accountUsdcLabel = formatSubaccountUsdcLabel(subaccountBalance?.cashUnits ?? null);
+  const accountCngnLabel = formatSubaccountCngnLabel(subaccountBalance?.cngnUnits ?? null);
 
   function handleDeposited(depositedSubaccountId: string) {
     adoptSubaccountId(depositedSubaccountId);
     refreshUsdcBalance();
+    refreshSubaccountBalance();
   }
 
   const market = marketData[selectedMarketId];
@@ -1417,6 +1426,7 @@ export function OrderBookTradingTerminal({
         `Spot order accepted: ${side.toUpperCase()} ${size} USDC @ ${executionPrice} cNGN/USDC`
       );
       refreshUsdcBalance();
+      refreshSubaccountBalance();
       return;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Spot order submission failed";
@@ -1513,6 +1523,8 @@ export function OrderBookTradingTerminal({
 
         {activeSection === "spot" ? (
           <SpotTradingTerminal
+            accountCngnLabel={accountCngnLabel}
+            accountUsdcLabel={accountUsdcLabel}
             candles={spotCandles}
             isSubmitting={isSubmittingOrder || isResolvingTradingSubaccount}
             lastAction={lastAction}
@@ -1525,6 +1537,8 @@ export function OrderBookTradingTerminal({
 
         {activeSection === "derivatives" && tradingLayout === "advanced" ? (
           <FuturesTradingTerminal
+            accountCngnLabel={accountCngnLabel}
+            accountUsdcLabel={accountUsdcLabel}
             basisLabel={formatSignedPercent(liveCarry)}
             candles={market.candles}
             isSubmitting={isSubmittingOrder || isResolvingTradingSubaccount}

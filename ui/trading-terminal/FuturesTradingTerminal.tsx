@@ -268,6 +268,8 @@ export function FuturesTradingTerminal({
   orderType,
   size,
   usdcBalanceLabel,
+  accountUsdcLabel = null,
+  accountCngnLabel = null,
 }: {
   basisLabel: string;
   candles: Candle[];
@@ -288,7 +290,12 @@ export function FuturesTradingTerminal({
   orderSummaryRows: DeliveryTerm[];
   orderType: "Limit" | "Market" | "Stop";
   size: string;
+  /** Wallet USDC balance — what's available to deposit. */
   usdcBalanceLabel: string | null;
+  /** Subaccount USDC cash balance — what's held in the trading account. */
+  accountUsdcLabel?: string | null;
+  /** Subaccount cNGN balance. */
+  accountCngnLabel?: string | null;
 }) {
   const [chartTab, setChartTab] = useState<SpotChartTab>("price");
   const [timeframe, setTimeframe] = useState<SpotTimeframe>("1h");
@@ -387,9 +394,9 @@ export function FuturesTradingTerminal({
             summaryRows={orderSummaryRows}
           />
           <SpotBalanceSummary
-            cngnBalanceLabel="0.00 cNGN"
+            cngnBalanceLabel={accountCngnLabel ?? "0.00 cNGN"}
             marginRatioPercent={0}
-            usdcBalanceLabel={usdcBalanceLabel ?? "— USDC"}
+            usdcBalanceLabel={accountUsdcLabel ?? "— USDC"}
           />
         </div>
       </div>

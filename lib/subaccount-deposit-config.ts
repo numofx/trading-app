@@ -1,4 +1,6 @@
 import { getAddress, parseAbiItem } from "viem";
+import { base } from "viem/chains";
+import { getAppChain } from "@/lib/base-public-client";
 import type { DepositAddresses } from "@/lib/subaccount-deposit.types";
 
 /**
@@ -14,6 +16,23 @@ const DEFAULT_USDC_TOKEN_ADDRESS = "0x8b3C43D2b2555ca3fc4Fa1BC34544133B8576110";
 const DEFAULT_SUBACCOUNT_CREATOR_ADDRESS = "0x5448B304AD283f24A741B54AE9b3a71C8d7DCDF2";
 const DEFAULT_USDCCNGN_MANAGER_ADDRESS = "0x1917960763BF3a0DfA10a05f0a112E828C1A934f";
 const DEFAULT_MATCHING_ADDRESS = "0x1599636347FD5bA1fBE21D58AfE0b8B9cbe283FF";
+
+/**
+ * SubAccounts ERC-721 ledger — holds every subaccount's per-asset balances and is
+ * the source of truth for deposited/traded funds (Matching.subAccounts()). Wallet
+ * ERC-20 balances do NOT reflect deposits; only this ledger does.
+ */
+const DEFAULT_SUBACCOUNTS_ADDRESS_MAINNET = "0x7019244e25fa416e6ca2ed2f3ca25277aef72843";
+const DEFAULT_SUBACCOUNTS_ADDRESS_SEPOLIA = "0xdEEF5903FEfEEde7A4F4369050AFd228dFB3E9c0";
+
+/** Numo CashAsset — deposited USDC is minted into this per-subaccount cash balance. */
+const DEFAULT_CASH_ASSET_ADDRESS_MAINNET = "0x6b232a2155bd0c9bf741db4cf8e7e8a0176a6fc6";
+/** Numo cNGN-side IAsset — held per subaccount after a USDC->cNGN buy. */
+const DEFAULT_CNGN_ASSET_ADDRESS_MAINNET = "0x9d806fd040a719d27a8e5e77dc5ae0ed1e089493";
+
+function isAppMainnet() {
+  return getAppChain().id === base.id;
+}
 
 /** Emitted by Matching when a subaccount is deposited; carries the created account id. */
 export const depositedSubAccountEvent = parseAbiItem(
@@ -48,6 +67,37 @@ export function getSubaccountCreatorAddress() {
 
 export function getUsdcCngnManagerAddress() {
   return getAddress(process.env.NEXT_PUBLIC_USDCCNGN_MANAGER_ADDRESS?.trim() || DEFAULT_USDCCNGN_MANAGER_ADDRESS);
+}
+
+/** SubAccounts ERC-721 ledger address for the active chain (env override wins). */
+export function getSubaccountsAddress() {
+  const override = process.env.NEXT_PUBLIC_SUBACCOUNTS_ADDRESS?.trim();
+  if (override) {
+    return getAddress(override);
+  }
+  return getAddress(isAppMainnet() ? DEFAULT_SUBACCOUNTS_ADDRESS_MAINNET : DEFAULT_SUBACCOUNTS_ADDRESS_SEPOLIA);
+}
+
+/**
+ * CashAsset address used to label the USDC cash leg of a subaccount balance.
+ * Returns null when unknown for the active chain (only mainnet has a baked-in default),
+ * in which case the cash balance is left unlabeled rather than guessed.
+ */
+export function getCashAssetAddress(): `0x${string}` | null {
+  const override = process.env.NEXT_PUBLIC_CASH_ASSET_ADDRESS?.trim();
+  if (override) {
+    return getAddress(override);
+  }
+  return isAppMainnet() ? getAddress(DEFAULT_CASH_ASSET_ADDRESS_MAINNET) : null;
+}
+
+/** cNGN-side IAsset address for labeling the cNGN leg of a subaccount balance, or null if unknown. */
+export function getCngnAssetAddress(): `0x${string}` | null {
+  const override = process.env.NEXT_PUBLIC_CNGN_ASSET_ADDRESS?.trim();
+  if (override) {
+    return getAddress(override);
+  }
+  return isAppMainnet() ? getAddress(DEFAULT_CNGN_ASSET_ADDRESS_MAINNET) : null;
 }
 
 export function getDepositAddresses(): DepositAddresses {

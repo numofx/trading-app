@@ -79,6 +79,8 @@ export function SpotTradingTerminal({
   liveSpotPrice,
   spotMarket,
   usdcBalanceLabel,
+  accountUsdcLabel = null,
+  accountCngnLabel = null,
   onSubmitOrder,
   isSubmitting = false,
   lastAction = null,
@@ -86,7 +88,12 @@ export function SpotTradingTerminal({
   candles: Candle[];
   liveSpotPrice: number | null;
   spotMarket: ContractMarket;
+  /** Wallet USDC balance — what's available to deposit. */
   usdcBalanceLabel: string | null;
+  /** Subaccount USDC cash balance — what's held in the trading account. */
+  accountUsdcLabel?: string | null;
+  /** Subaccount cNGN balance. */
+  accountCngnLabel?: string | null;
   onSubmitOrder?: (args: { side: "buy" | "sell"; price: string; size: string; orderType: "Limit" | "Market" | "Stop Limit" }) => void;
   isSubmitting?: boolean;
   lastAction?: string | null;
@@ -171,9 +178,9 @@ export function SpotTradingTerminal({
             onSubmitOrder={onSubmitOrder}
           />
           <SpotBalanceSummary
-            cngnBalanceLabel="0.00 cNGN"
+            cngnBalanceLabel={accountCngnLabel ?? "0.00 cNGN"}
             marginRatioPercent={0}
-            usdcBalanceLabel={usdcBalanceLabel ?? "— USDC"}
+            usdcBalanceLabel={accountUsdcLabel ?? "— USDC"}
           />
         </div>
       </div>
