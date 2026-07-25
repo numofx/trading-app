@@ -7,12 +7,12 @@ const DEFAULT_TRADE_MODULE_ADDRESS = "0x44813aD30b2fFC1bB2871Eed9b19F63c8196eD1c
 const ENGINE_DECIMALS = 18;
 
 /**
- * Taker fee tier as a fraction of USDC notional. markets-service does not expose fee
- * tiers over the API yet, so this constant is the app-side source of truth and must
- * track the venue's fee schedule. TradeModule rejects any fill whose realized
+ * Taker fee tier as a fraction of USDC notional (15 bps). Makers pay zero. markets-service
+ * does not expose fee tiers over the API yet, so this constant is the app-side source of
+ * truth and must track the venue's fee schedule. TradeModule rejects any fill whose realized
  * fee-per-contract exceeds the signed worstFee, so this bounds what the keeper can charge.
  */
-export const TAKER_FEE_RATE = "0.0025";
+export const TAKER_FEE_RATE = "0.0015";
 const DECIMAL_INPUT_PATTERN = /^(\d+(\.\d+)?|\.\d+)$/;
 const TRAILING_ZEROES_PATTERN = /0+$/;
 const UNSIGNED_INTEGER_PATTERN = /^\d+$/;

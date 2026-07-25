@@ -8,6 +8,15 @@ const DEFAULT_TRADE_MODULE_ADDRESS = "0x44813aD30b2fFC1bB2871Eed9b19F63c8196eD1c
 const DEFAULT_SPOT_ASSET_ADDRESS = "0x9d806fd040a719d27a8e5e77dc5ae0ed1e089493";
 const ENGINE_DECIMALS = 18;
 
+/**
+ * Spot taker fee tier as a fraction of USDC notional (5 bps). Makers pay zero. Deliberately
+ * below the futures taker tier (15 bps) because spot is the single-leg conversion rail, not
+ * the leveraged product. Like the futures rate, this is the app-side source of truth until
+ * markets-service exposes fee tiers; TradeModule rejects any fill whose realized fee-per-unit
+ * exceeds the signed worstFee, so it bounds what the keeper can charge.
+ */
+export const SPOT_TAKER_FEE_RATE = "0.0005";
+
 const DECIMAL_INPUT_PATTERN = /^(\d+(\.\d+)?|\.\d+)$/;
 const TRAILING_ZEROES_PATTERN = /0+$/;
 const UNSIGNED_INTEGER_PATTERN = /^\d+$/;
@@ -140,6 +149,19 @@ export function buildSpotOrderEnvelope({
   const engineSide: "buy" | "sell" = side === "buy" ? "sell" : "buy";
   const isBid = engineSide === "buy";
 
+  // TradeModule compares worstFee against fee-per-cNGN (fee / amountFilled). One whole cNGN is
+  // worth enginePrice = 1 / uiPrice USDC, so the signed bound is the fee tier scaled by that
+  // per-cNGN notional — mirroring the futures worstFee = feeRate × contract notional. Charging
+  // worstFee on every filled cNGN totals SPOT_TAKER_FEE_RATE of the USDC notional.
+  const spotFeeRational = parseDecimalToRational(SPOT_TAKER_FEE_RATE);
+  const worstFeeUnits = roundRationalToScaledUnits(
+    {
+      denominator: spotFeeRational.denominator * priceRational.numerator,
+      numerator: spotFeeRational.numerator * priceRational.denominator,
+    },
+    ENGINE_DECIMALS,
+  );
+
   const ownerAddress = getAddress(walletAddress);
   const matchingAddress = getMatchingAddress();
   const tradeModuleAddress = getTradeModuleAddress();
@@ -173,7 +195,7 @@ export function buildSpotOrderEnvelope({
         limitPrice: enginePriceWei,
         recipientId,
         subId: 0n,
-        worstFee: 0n,
+        worstFee: worstFeeUnits,
       },
     ],
   );
@@ -205,7 +227,7 @@ export function buildSpotOrderEnvelope({
       signer_address: ownerAddress,
       sub_id: "0",
       subaccount_id: subaccountId,
-      worst_fee: "0",
+      worst_fee: formatFixedPointUnits(worstFeeUnits, ENGINE_DECIMALS),
     },
     typedData: {
       domain: {
