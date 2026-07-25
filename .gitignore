@@ -12,3 +12,7 @@ next-env.d.ts
 settings.local.json
 .vercel
 .env.local
+
+# local tooling / reports (not part of the app)
+posthog-setup-report.md
+.claude/skills/
