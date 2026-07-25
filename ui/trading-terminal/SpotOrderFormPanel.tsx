@@ -5,6 +5,7 @@ import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatNaira } from "@/lib/market-formatting";
+import { SPOT_TAKER_FEE_RATE } from "@/lib/spot-order-submission";
 import { SmartImage } from "@/ui/SmartImage";
 import { OrderTypeTabs } from "@/ui/trading-terminal/OrderTypeTabs";
 
@@ -17,9 +18,17 @@ const PAY_CURRENCY_ICONS = {
   USDC: "/tokens/usdc.svg",
 } satisfies Record<PayCurrency, string>;
 
+/** 5 bps taker tier as basis points, derived from the engine-bound rate so the two stay in sync. */
+const SPOT_TAKER_FEE_BPS = Number(SPOT_TAKER_FEE_RATE) * 10_000;
+
 function parseAmount(value: string) {
   const parsed = Number(value.replaceAll(",", ""));
   return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
+/** Taker fee is charged on the USDC notional (the order Amount), matching the signed worstFee bound. */
+function formatSpotFee(usdc: number) {
+  return `${usdc.toLocaleString("en-US", { maximumFractionDigits: 4, minimumFractionDigits: 2 })} USDC`;
 }
 
 function FormInput({
@@ -98,6 +107,7 @@ export function SpotOrderFormPanel({
       ? parsedAmount * effectivePrice
       : null;
   const availableLabel = payWith === "USDC" ? availableUsdcLabel : availableCngnLabel;
+  const takerFee = Number.isFinite(parsedAmount) ? parsedAmount * Number(SPOT_TAKER_FEE_RATE) : 0;
 
   function handleSubmit() {
     if (!onSubmitOrder) {
@@ -226,6 +236,17 @@ export function SpotOrderFormPanel({
           unit="cNGN"
           value={total === null ? "—" : formatNaira(total, 0).replace("₦", "")}
         />
+
+        <div className="space-y-1.5 rounded-[12px] bg-input-bg/60 px-3 py-2 text-[11px]">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-panel-text-muted">Taker fee ({SPOT_TAKER_FEE_BPS} bps)</span>
+            <span className="font-medium text-panel-text">{formatSpotFee(takerFee)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-panel-text-muted">Maker fee</span>
+            <span className="font-semibold text-panel-text-active">Free</span>
+          </div>
+        </div>
 
         <button
           className={cn(
