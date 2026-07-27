@@ -7,7 +7,6 @@ import { useEffect, useRef, useState } from "react";
 import { createWalletClient, custom } from "viem";
 import { getAppChain } from "@/lib/base-public-client";
 import type { ChainlinkSpotSnapshot } from "@/lib/chainlink-ngn-usd";
-import type { SpotHistorySnapshot } from "@/lib/exchange-api-history";
 import { buildFutureOrderEnvelope, canSubmitFutureOrder } from "@/lib/future-order-submission";
 import { buildSpotOrderEnvelope } from "@/lib/spot-order-submission";
 import {
@@ -222,18 +221,6 @@ function getCompatibleSpotPrice(candidatePrice: number | null, referencePrice: n
   return candidatePrice;
 }
 
-function shiftCandles(candles: Candle[], targetClose: number) {
-  const currentClose = candles.at(-1)?.close ?? targetClose;
-  const delta = targetClose - currentClose;
-
-  return candles.map((candle) => ({
-    ...candle,
-    close: Number((candle.close + delta).toFixed(2)),
-    high: Number((candle.high + delta).toFixed(2)),
-    low: Number((candle.low + delta).toFixed(2)),
-    open: Number((candle.open + delta).toFixed(2)),
-  }));
-}
 
 function getDisplayTicker(marketDefinition: MarketDefinition) {
   return getInstrumentDisplayLabel(marketDefinition);
@@ -242,40 +229,20 @@ function getDisplayTicker(marketDefinition: MarketDefinition) {
 
 function getDisplayCandles(
   chartContext: (typeof CHART_CONTEXT_TABS)[number],
-  liveBasis: number | null,
-  liveCarry: number | null,
-  marketCandles: Candle[],
-  marketType: MarketDefinition["type"],
-  selectedSpotHistory: SpotHistorySnapshot | null
+  marketCandles: Candle[]
 ) {
-  if (marketType === "spot") {
-    // Prefer the venue's own fills. selectedSpotHistory is an *external* NGN/USD
-    // reference series (a public FX rate feed), not this exchange's trades, so it
-    // is only a fallback for a market that has not traded yet — and it should be
-    // labelled as a reference rate wherever it is shown.
-    if (marketCandles.length) {
-      return marketCandles;
-    }
-
-    if (selectedSpotHistory?.series) {
-      return selectedSpotHistory.series;
-    }
-  }
-
-  if (chartContext === "Basis") {
-    if (liveBasis === null) {
-      return marketCandles;
-    }
-
-    return shiftCandles(marketCandles, liveBasis);
-  }
-
-  if (chartContext === "Carry") {
-    if (liveCarry === null) {
-      return marketCandles;
-    }
-
-    return shiftCandles(marketCandles, liveCarry);
+  // Every branch returns this venue's own fills, or nothing.
+  //
+  // Two things this deliberately no longer does:
+  //   - substitute `selectedSpotHistory` for spot. That is an *external* NGN/USD
+  //     reference feed, not this exchange's trades, so showing it as the venue
+  //     chart misrepresents where the prices came from.
+  //   - shift the price series to the live basis/carry value. That produced a
+  //     chart with the shape of price history and the label of basis history,
+  //     where only the final point was real. The live basis and carry readouts
+  //     are unaffected — they are computed values, not history.
+  if (chartContext === "Basis" || chartContext === "Carry") {
+    return [];
   }
 
   return marketCandles;
@@ -789,14 +756,16 @@ export function OrderBookTradingTerminal({
   initialMarketId,
   marketData,
   marketDefinitions,
-  spotHistory,
+  spotReferencePrice,
 }: {
   chainlinkSpot: ChainlinkSpotSnapshot | null;
   defaultMarketId: MarketId;
   initialMarketId: MarketId;
   marketData: Record<MarketId, ContractMarket>;
   marketDefinitions: MarketDefinition[];
-  spotHistory: Record<SpotHistorySnapshot["pair"], SpotHistorySnapshot> | null;
+  /** External NGN/USD reference price used only to sanity-check the live spot
+   * mark. Never charted — the chart shows this venue's own fills. */
+  spotReferencePrice: number | null;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -939,11 +908,9 @@ export function OrderBookTradingTerminal({
   const market = marketData[selectedMarketId];
   const referenceSpotPrice = parseNumericString(marketData["cngn-usdc-spot"].mark);
   const liveSpotPrice = getCompatibleSpotPrice(
-    spotHistory?.["NGN/USD"]?.latestPrice ?? chainlinkSpot?.priceNgnPerUsd ?? null,
+    spotReferencePrice ?? chainlinkSpot?.priceNgnPerUsd ?? null,
     referenceSpotPrice
   );
-  const selectedSpotHistory =
-    selectedMarket.type === "spot" ? (spotHistory?.["NGN/USD"] ?? null) : null;
   const livePrice =
     selectedMarket.type === "spot" ? liveSpotPrice : parseNumericString(market.mark);
   const safeLivePrice = Number.isFinite(livePrice) ? livePrice : null;
@@ -962,20 +929,10 @@ export function OrderBookTradingTerminal({
     marketData
   );
   const liveCarry = selectorAnnualizedBasisByMarketId[selectedMarket.id] ?? null;
-  const displayCandles = getDisplayCandles(
-    chartContext,
-    liveBasis,
-    liveCarry,
-    market.candles,
-    selectedMarket.type,
-    selectedSpotHistory
-  );
+  const displayCandles = getDisplayCandles(chartContext, market.candles);
   const candleResetKey = [
     selectedMarketId,
     chartContext,
-    liveBasis ?? "null",
-    liveSpotPrice,
-    selectedSpotHistory?.latestPrice ?? "none",
     market.candles.length,
     market.candles[0]?.time ?? "start",
     market.candles.at(-1)?.time ?? "end",
@@ -1148,25 +1105,11 @@ export function OrderBookTradingTerminal({
     }
 
     lastCandleResetKeyRef.current = candleResetKey;
-    setLiveCandles(
-      getDisplayCandles(
-        chartContext,
-        liveBasis,
-        liveCarry,
-        market.candles,
-        selectedMarket.type,
-        selectedSpotHistory
-      )
-    );
+    setLiveCandles(getDisplayCandles(chartContext, market.candles));
   }, [
     candleResetKey,
     chartContext,
-    liveBasis,
-    liveCarry,
-    liveSpotPrice,
     market.candles,
-    selectedMarket.type,
-    selectedSpotHistory,
   ]);
 
   // Candles come from the venue's own fills via markets-service; there is no
@@ -1422,17 +1365,10 @@ export function OrderBookTradingTerminal({
   }
 
   const safeLiveSpotPrice = Number.isFinite(liveSpotPrice) ? liveSpotPrice : null;
-  const spotHistorySnapshot = spotHistory?.["NGN/USD"] ?? null;
-  // Only chart the external history series when it agrees with the reconciled spot price;
-  // otherwise fall back to the reference candles so the ticker, book, and chart stay consistent.
-  const isSpotHistoryCompatible =
-    spotHistorySnapshot !== null &&
-    safeLiveSpotPrice !== null &&
-    safeLiveSpotPrice > 0 &&
-    Math.abs(spotHistorySnapshot.latestPrice - safeLiveSpotPrice) / safeLiveSpotPrice <= 0.08;
-  const spotCandles = isSpotHistoryCompatible
-    ? spotHistorySnapshot.series
-    : marketData["cngn-usdc-spot"].candles;
+  // The spot chart shows this venue's own fills. It previously charted an external
+  // NGN/USD reference series whenever that series happened to sit within 8% of the
+  // live price — agreeing with the price does not make it this exchange's trades.
+  const spotCandles = marketData["cngn-usdc-spot"].candles;
 
   const futuresChartPanel = (
     <TradingChartPanel

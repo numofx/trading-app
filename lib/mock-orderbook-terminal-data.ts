@@ -876,10 +876,13 @@ export type LiveSpotRuntime = {
   trades: PresentedTrade[];
 };
 
-/** Prefers real venue candles when the market has traded; keeps the synthetic
- * baseline otherwise so the chart is not blank on an untraded market. */
+/** Uses the venue's own OHLCV, including when it is empty.
+ *
+ * An untraded market renders "No chart data" rather than the synthetic baseline:
+ * a chart that invents price action for a market that has never traded is worse
+ * than an empty one. */
 function withRealCandles<T extends { candles: Candle[] }>(market: T, candles: Candle[]): T {
-  return candles.length ? { ...market, candles } : market;
+  return { ...market, candles };
 }
 
 export function buildSpotMarketFromBook(
@@ -942,7 +945,7 @@ export function buildSpotMarketFromBook(
     positionOverview: getSpotPositionOverview(mark),
     referencePrice: mark,
     trades: liveTrades.length > 0 ? liveTrades : preview.trades,
-    ...(candles.length ? { candles } : {}),
+    candles,
   } satisfies ContractMarket;
 }
 

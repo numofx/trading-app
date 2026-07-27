@@ -201,7 +201,7 @@ export default async function Home({ searchParams }: HomeProps) {
       initialMarketId={initialMarketId}
       marketData={marketData}
       marketDefinitions={marketDefinitions}
-      spotHistory={spotHistory}
+      spotReferencePrice={spotHistory?.["NGN/USD"]?.latestPrice ?? null}
     />
   );
 }
