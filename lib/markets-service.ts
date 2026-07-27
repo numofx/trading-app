@@ -214,3 +214,51 @@ export async function getMarketTrades(assetAddress: string, subId: string, limit
   const payload = (await response.json()) as TradesResponse;
   return payload.trades ?? [];
 }
+
+export type PresentedCandle = {
+  bucket_start: string;
+  close: string;
+  high: string;
+  low: string;
+  open: string;
+  quote_volume: string;
+  trade_count: number;
+  volume: string;
+};
+
+export type CandlesResponse = {
+  candles?: PresentedCandle[];
+  interval?: string;
+};
+
+/** Candle bucket widths supported by markets-service `/v1/candles`. */
+export type CandleInterval = "1m" | "5m" | "15m" | "1h" | "4h" | "1d";
+
+/**
+ * Real OHLCV aggregated from the venue's own fills. Prices are raw engine values —
+ * the same convention as `/v1/trades` — so spot still needs the 1/price inversion
+ * applied client-side. Buckets with no trades are absent rather than zero-filled.
+ */
+export async function getMarketCandles(
+  assetAddress: string,
+  subId: string,
+  interval: CandleInterval = "1h",
+  limit = 200,
+) {
+  const response = await fetch(
+    `${getMarketsServiceUrl()}/v1/candles?asset_address=${assetAddress}&sub_id=${subId}&interval=${interval}&limit=${limit}`,
+    {
+      cache: "no-store",
+      headers: {
+        accept: "application/json",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`markets-service candles returned ${response.status}`);
+  }
+
+  const payload = (await response.json()) as CandlesResponse;
+  return payload.candles ?? [];
+}

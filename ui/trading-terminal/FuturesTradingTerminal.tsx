@@ -3,8 +3,6 @@
 import { Popover } from "@base-ui/react/popover";
 import { ChevronDown } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { CandleSimulationOptions } from "@/lib/candle-simulation";
-import { simulateLiveCandles } from "@/lib/candle-simulation";
 import { cn } from "@/lib/cn";
 import { canSubmitFutureOrder } from "@/lib/future-order-submission";
 import { getInstrumentDisplayLabel, getInstrumentSubtext } from "@/lib/market-display";
@@ -31,24 +29,6 @@ import type { SpotChartTab, SpotTimeframe } from "@/ui/trading-terminal/SpotChar
 import { SpotChartPanel } from "@/ui/trading-terminal/SpotChartPanel";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
 import { useMarketOrderBook } from "@/ui/trading-terminal/useMarketOrderBook";
-
-const SIMULATION_OPTIONS = {
-  "1m": { rollChance: 0.4, timeframeScale: 0.45 },
-  "30m": { rollChance: 0.3, timeframeScale: 0.8 },
-  "1h": {},
-  D: { rollChance: 0.18, timeframeScale: 1.8 },
-  W: { rollChance: 0.12, timeframeScale: 2.6 },
-  M: { rollChance: 0.08, timeframeScale: 3.2 },
-} satisfies Record<SpotTimeframe, CandleSimulationOptions>;
-
-const UPDATE_INTERVALS_MS = {
-  "1m": 900,
-  "30m": 1300,
-  "1h": 1700,
-  D: 2400,
-  W: 3000,
-  M: 3600,
-} satisfies Record<SpotTimeframe, number>;
 
 function formatChangePercent(value: number | null) {
   if (value === null || !Number.isFinite(value)) {
@@ -309,15 +289,7 @@ export function FuturesTradingTerminal({
     setLiveCandles(candles);
   }, [candles]);
 
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setLiveCandles((currentCandles) =>
-        simulateLiveCandles(currentCandles, SIMULATION_OPTIONS[timeframe])
-      );
-    }, UPDATE_INTERVALS_MS[timeframe]);
-
-    return () => window.clearInterval(intervalId);
-  }, [timeframe]);
+  // No simulated ticking: candles are real venue OHLCV.
 
   const futuresBook = useMarketOrderBook({
     enabled: Boolean(marketDefinition.marketSymbol),

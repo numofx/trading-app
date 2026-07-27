@@ -2,13 +2,16 @@ import { getChainlinkNgnUsdSpot } from "@/lib/chainlink-ngn-usd";
 import type { ChainlinkSpotSnapshot } from "@/lib/chainlink-ngn-usd";
 import { getSpotHistorySnapshots } from "@/lib/exchange-api-history";
 import type { SpotHistorySnapshot } from "@/lib/exchange-api-history";
-import type { BookResponse, PresentedTrade } from "@/lib/markets-service";
+import type { BookResponse, CandleInterval, PresentedTrade } from "@/lib/markets-service";
+import type { Candle } from "@/lib/trading.types";
 import {
   getLiveDeliverableFXFutures,
   getLiveSpotMarket,
   getMarketBook,
+  getMarketCandles,
   getMarketTrades,
 } from "@/lib/markets-service";
+import { toUiCandles } from "@/lib/market-candles";
 import {
   buildMarketSelectionAliasMap,
   resolveInitialMarketSelection,
@@ -21,6 +24,8 @@ import {
 import { OrderBookTradingTerminal } from "@/ui/trading-terminal/OrderBookTradingTerminal";
 
 const APR_2026_EXPIRY_TIMESTAMP = 1_777_507_200;
+const CHART_CANDLE_INTERVAL: CandleInterval = "1d";
+const CHART_CANDLE_LIMIT = 120;
 const ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
 const UNSIGNED_INTEGER_PATTERN = /^\d+$/;
 
@@ -59,11 +64,13 @@ export default async function Home({ searchParams }: HomeProps) {
   let chainlinkSpot: ChainlinkSpotSnapshot | null = null;
   let liveFutures: {
     book: BookResponse | null;
+    candles: Candle[];
     definition: ReturnType<typeof buildDeliverableFutureDefinition>;
     trades: PresentedTrade[];
   }[] = [];
   let spotHistory: Record<SpotHistorySnapshot["pair"], SpotHistorySnapshot> | null = null;
-  let liveSpot: { book: BookResponse | null; trades: PresentedTrade[] } | null = null;
+  let liveSpot: { book: BookResponse | null; candles: Candle[]; trades: PresentedTrade[] } | null =
+    null;
 
   try {
     chainlinkSpot = await getChainlinkNgnUsdSpot();
@@ -97,12 +104,28 @@ export default async function Home({ searchParams }: HomeProps) {
         });
 
         let book: BookResponse | null = null;
+        let candles: Candle[] = [];
         let trades: PresentedTrade[] = [];
 
         try {
           book = await getMarketBook(liveFuture.asset_address as string, liveFuture.sub_id as string);
         } catch {
           book = null;
+        }
+
+        try {
+          candles = toUiCandles(
+            await getMarketCandles(
+              liveFuture.asset_address as string,
+              liveFuture.sub_id as string,
+              CHART_CANDLE_INTERVAL,
+              CHART_CANDLE_LIMIT,
+            ),
+            "future",
+            CHART_CANDLE_INTERVAL,
+          );
+        } catch {
+          candles = [];
         }
 
         try {
@@ -113,6 +136,7 @@ export default async function Home({ searchParams }: HomeProps) {
 
         return {
           book,
+          candles,
           definition,
           trades,
         };
@@ -127,6 +151,7 @@ export default async function Home({ searchParams }: HomeProps) {
 
     if (spotMarket?.asset_address && spotMarket.sub_id != null) {
       let book: BookResponse | null = null;
+      let candles: Candle[] = [];
       let trades: PresentedTrade[] = [];
 
       try {
@@ -136,12 +161,27 @@ export default async function Home({ searchParams }: HomeProps) {
       }
 
       try {
+        candles = toUiCandles(
+          await getMarketCandles(
+            spotMarket.asset_address,
+            spotMarket.sub_id,
+            CHART_CANDLE_INTERVAL,
+            CHART_CANDLE_LIMIT,
+          ),
+          "spot",
+          CHART_CANDLE_INTERVAL,
+        );
+      } catch {
+        candles = [];
+      }
+
+      try {
         trades = await getMarketTrades(spotMarket.asset_address, spotMarket.sub_id);
       } catch {
         trades = [];
       }
 
-      liveSpot = { book, trades };
+      liveSpot = { book, candles, trades };
     }
   } catch {
     liveSpot = null;

@@ -441,6 +441,8 @@ type LiveDeliverableFutureConfig = {
 
 type LiveDeliverableFutureRuntime = {
   book: BookResponse | null;
+  /** Real OHLCV from markets-service; empty when the market has not traded yet. */
+  candles?: Candle[];
   definition: MarketDefinition;
   trades: PresentedTrade[];
 };
@@ -844,6 +846,7 @@ export function buildDeliverableFutureMarketFromBook(
   book: BookResponse | null,
   trades: PresentedTrade[],
   spotMark: string = SPOT_MARKET_META.mark,
+  candles: Candle[] = [],
 ) {
   const asks = buildLiveBookSide(book?.asks ?? [], "ask");
   const bids = buildLiveBookSide(book?.bids ?? [], "bid");
@@ -861,15 +864,29 @@ export function buildDeliverableFutureMarketFromBook(
     }))
     .filter((trade) => Number.isFinite(trade.price) && trade.price > 0 && Number.isFinite(trade.size) && trade.size > 0);
 
-  return buildLiveDeliverableFutureMarket(definition, asks, bids, liveTrades, spotMark);
+  const market = buildLiveDeliverableFutureMarket(definition, asks, bids, liveTrades, spotMark);
+
+  return withRealCandles(market, candles);
 }
 
 export type LiveSpotRuntime = {
   book: BookResponse | null;
+  /** Real OHLCV from markets-service; empty when the market has not traded yet. */
+  candles?: Candle[];
   trades: PresentedTrade[];
 };
 
-export function buildSpotMarketFromBook(book: BookResponse | null, trades: PresentedTrade[]) {
+/** Prefers real venue candles when the market has traded; keeps the synthetic
+ * baseline otherwise so the chart is not blank on an untraded market. */
+function withRealCandles<T extends { candles: Candle[] }>(market: T, candles: Candle[]): T {
+  return candles.length ? { ...market, candles } : market;
+}
+
+export function buildSpotMarketFromBook(
+  book: BookResponse | null,
+  trades: PresentedTrade[],
+  candles: Candle[] = [],
+) {
   // Spot presents in UI orientation (cNGN per USDC price, USDC size) while the engine
   // book rests inverted (USDC per cNGN, cNGN amounts). A resting engine ASK (sell cNGN)
   // is a UI BUY of USDC, so the engine book's asks are the UI bids and vice versa;
@@ -895,7 +912,7 @@ export function buildSpotMarketFromBook(book: BookResponse | null, trades: Prese
 
   if (derivedMark === null && liveTrades.length === 0) {
     // Nothing live on the venue yet — keep the preview market.
-    return buildSpotMarket();
+    return withRealCandles(buildSpotMarket(), candles);
   }
 
   const preview = buildSpotMarket();
@@ -925,6 +942,7 @@ export function buildSpotMarketFromBook(book: BookResponse | null, trades: Prese
     positionOverview: getSpotPositionOverview(mark),
     referencePrice: mark,
     trades: liveTrades.length > 0 ? liveTrades : preview.trades,
+    ...(candles.length ? { candles } : {}),
   } satisfies ContractMarket;
 }
 
@@ -933,7 +951,7 @@ export function buildTradingTerminalMarkets(
   liveSpot: LiveSpotRuntime | null = null,
 ) {
   const spotMarketData = liveSpot
-    ? buildSpotMarketFromBook(liveSpot.book, liveSpot.trades)
+    ? buildSpotMarketFromBook(liveSpot.book, liveSpot.trades, liveSpot.candles ?? [])
     : MARKET_DATA["cngn-usdc-spot"];
 
   if (!liveFutures.length) {
@@ -969,7 +987,13 @@ export function buildTradingTerminalMarkets(
     ...Object.fromEntries(
       sortedLiveFutures.map((future) => [
         future.definition.id,
-        buildDeliverableFutureMarketFromBook(future.definition, future.book, future.trades, spotMarketData.mark),
+        buildDeliverableFutureMarketFromBook(
+          future.definition,
+          future.book,
+          future.trades,
+          spotMarketData.mark,
+          future.candles ?? [],
+        ),
       ]),
     ),
   } satisfies Record<MarketId, ContractMarket>;

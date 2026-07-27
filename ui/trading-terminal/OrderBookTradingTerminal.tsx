@@ -6,7 +6,6 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createWalletClient, custom } from "viem";
 import { getAppChain } from "@/lib/base-public-client";
-import { simulateLiveCandles } from "@/lib/candle-simulation";
 import type { ChainlinkSpotSnapshot } from "@/lib/chainlink-ngn-usd";
 import type { SpotHistorySnapshot } from "@/lib/exchange-api-history";
 import { buildFutureOrderEnvelope, canSubmitFutureOrder } from "@/lib/future-order-submission";
@@ -240,17 +239,6 @@ function getDisplayTicker(marketDefinition: MarketDefinition) {
   return getInstrumentDisplayLabel(marketDefinition);
 }
 
-function getChartUpdateInterval(timeframe: (typeof TIMEFRAME_OPTIONS)[number]) {
-  if (timeframe === "5m") {
-    return 1100;
-  }
-
-  if (timeframe === "D") {
-    return 2400;
-  }
-
-  return 1700;
-}
 
 function getDisplayCandles(
   chartContext: (typeof CHART_CONTEXT_TABS)[number],
@@ -260,8 +248,18 @@ function getDisplayCandles(
   marketType: MarketDefinition["type"],
   selectedSpotHistory: SpotHistorySnapshot | null
 ) {
-  if (marketType === "spot" && selectedSpotHistory?.series) {
-    return selectedSpotHistory.series;
+  if (marketType === "spot") {
+    // Prefer the venue's own fills. selectedSpotHistory is an *external* NGN/USD
+    // reference series (a public FX rate feed), not this exchange's trades, so it
+    // is only a fallback for a market that has not traded yet — and it should be
+    // labelled as a reference rate wherever it is shown.
+    if (marketCandles.length) {
+      return marketCandles;
+    }
+
+    if (selectedSpotHistory?.series) {
+      return selectedSpotHistory.series;
+    }
   }
 
   if (chartContext === "Basis") {
@@ -291,17 +289,6 @@ function getDefaultChartContextForMarket(marketDefinition: MarketDefinition) {
   return DEFAULT_CHART_CONTEXT;
 }
 
-function getCandleSimulationOptions(timeframe: (typeof TIMEFRAME_OPTIONS)[number]) {
-  if (timeframe === "5m") {
-    return { rollChance: 0.36, timeframeScale: 0.7 };
-  }
-
-  if (timeframe === "D") {
-    return { rollChance: 0.18, timeframeScale: 1.8 };
-  }
-
-  return {};
-}
 
 function buildSelectorMetrics(
   liveSpotPrice: number,
@@ -1182,15 +1169,9 @@ export function OrderBookTradingTerminal({
     selectedSpotHistory,
   ]);
 
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setLiveCandles((currentCandles) =>
-        simulateLiveCandles(currentCandles, getCandleSimulationOptions(timeframe))
-      );
-    }, getChartUpdateInterval(timeframe));
-
-    return () => window.clearInterval(intervalId);
-  }, [selectedMarketId, timeframe, chartContext]);
+  // Candles come from the venue's own fills via markets-service; there is no
+  // client-side ticking. A random walk here would overwrite real price history
+  // with invented movement.
 
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Order submission needs wallet, env, signing, and backend submission checks in one submit path.
   async function handleSubmit(orderSide: "buy" | "sell") {
