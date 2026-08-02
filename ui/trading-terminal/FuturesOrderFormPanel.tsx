@@ -90,12 +90,14 @@ export function FuturesOrderFormPanel({
   }
 
   return (
-    <section className="flex min-h-[430px] shrink-0 flex-col overflow-hidden rounded-[20px] bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 xl:flex-1">
+    // `overflow-clip` (not `hidden`) keeps the rounded corners without creating a
+    // scroll container, so the action footer can stick to the column scroller.
+    <section className="flex shrink-0 flex-col overflow-clip rounded-[20px] bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300">
       <div className="flex items-center border-panel-border border-b px-3 py-2 font-medium text-[11px]">
         <span className="rounded-xl bg-input-bg px-2 py-1 text-panel-text-active">Order form</span>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+      <div className="space-y-3 p-3">
         <div className="grid grid-cols-2 gap-1 rounded-[14px] bg-input-bg p-1">
           <button
             className={cn(
@@ -171,7 +173,10 @@ export function FuturesOrderFormPanel({
             </div>
           ))}
         </div>
+      </div>
 
+      {/* The submit CTA stays pinned so the primary action is never scrolled out of reach. */}
+      <div className="space-y-3 border-panel-border border-t bg-panel-bg-muted px-3 pt-2.5 pb-3 xl:sticky xl:bottom-0">
         <button
           className={cn(
             "h-11 w-full cursor-pointer rounded-[14px] font-semibold text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-60",

@@ -26,7 +26,7 @@ export function SpotBalanceSummary({
   const clampedRatio = Math.min(Math.max(marginRatioPercent, 0), 100);
 
   return (
-    <section className="rounded-[20px] bg-panel-bg-muted p-3 ring-1 ring-panel-ring transition-colors duration-300">
+    <section className="shrink-0 rounded-[20px] bg-panel-bg-muted p-3 ring-1 ring-panel-ring transition-colors duration-300">
       <div className="font-medium text-[11px] text-panel-text-active">Balance summary</div>
 
       <div className="mt-3 space-y-2.5">

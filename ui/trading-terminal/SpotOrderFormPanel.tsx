@@ -124,12 +124,14 @@ export function SpotOrderFormPanel({
   const statusText = lastAction ?? statusMessage;
 
   return (
-    <section className="flex min-h-[430px] shrink-0 flex-col overflow-hidden rounded-[20px] bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 xl:flex-1">
+    // `overflow-clip` (not `hidden`) keeps the rounded corners without creating a
+    // scroll container, so the action footer can stick to the column scroller.
+    <section className="flex shrink-0 flex-col overflow-clip rounded-[20px] bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300">
       <div className="flex items-center border-panel-border border-b px-3 py-2 font-medium text-[11px]">
         <span className="rounded-xl bg-input-bg px-2 py-1 text-panel-text-active">Order form</span>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+      <div className="space-y-3 p-3">
         <div className="grid grid-cols-2 gap-1 rounded-[14px] bg-input-bg p-1">
           <button
             className={cn(
@@ -237,6 +239,10 @@ export function SpotOrderFormPanel({
           value={total === null ? "—" : formatNaira(total, 0).replace("₦", "")}
         />
 
+      </div>
+
+      {/* Fees and the submit CTA stay pinned so the primary action is never scrolled out of reach. */}
+      <div className="space-y-3 border-panel-border border-t bg-panel-bg-muted px-3 pt-2.5 pb-3 xl:sticky xl:bottom-0">
         <div className="space-y-1.5 rounded-[12px] bg-input-bg/60 px-3 py-2 text-[11px]">
           <div className="flex items-center justify-between gap-2">
             <span className="text-panel-text-muted">Taker fee ({SPOT_TAKER_FEE_BPS} bps)</span>
