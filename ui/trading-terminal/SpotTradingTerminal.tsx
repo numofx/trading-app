@@ -133,8 +133,6 @@ export function SpotTradingTerminal({
           asks={bookAsks}
           bids={bookBids}
           lastPrice={lastPrice}
-          liquiditySource={spotBook.isLive ? "live" : "preview"}
-          liveBadgeTitle="Live spot order book depth from markets-service"
           onTabChange={setBookTab}
           tab={bookTab}
           trades={bookTrades}

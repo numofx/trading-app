@@ -4,7 +4,6 @@ import { Popover } from "@base-ui/react/popover";
 import { ChevronDown } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
-import { canSubmitFutureOrder } from "@/lib/future-order-submission";
 import { getInstrumentDisplayLabel, getInstrumentSubtext } from "@/lib/market-display";
 import { formatNaira } from "@/lib/market-formatting";
 import {
@@ -303,9 +302,6 @@ export function FuturesTradingTerminal({
   const bookAsks = futuresBook.isLive ? futuresBook.asks : market.orderBookAsks;
   const bookBids = futuresBook.isLive ? futuresBook.bids : market.orderBookBids;
   const bookTrades = futuresBook.isLive && futuresBook.trades.length > 0 ? futuresBook.trades : market.trades;
-  // Live when either the streaming book or the initial markets-service snapshot has depth.
-  const hasLiveBook =
-    futuresBook.isLive || (canSubmitFutureOrder(marketDefinition) && market.availability.bookAvailable);
 
   return (
     <div className="flex flex-col gap-3 xl:min-h-0 xl:flex-1 xl:overflow-hidden">
@@ -341,8 +337,6 @@ export function FuturesTradingTerminal({
           asks={bookAsks}
           bids={bookBids}
           lastPrice={lastPrice}
-          liquiditySource={hasLiveBook ? "live" : "preview"}
-          liveBadgeTitle="Live order book depth from markets-service"
           onTabChange={setBookTab}
           tab={bookTab}
           trades={bookTrades}
