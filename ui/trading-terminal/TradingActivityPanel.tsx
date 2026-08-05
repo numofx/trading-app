@@ -1,6 +1,27 @@
 import type { ActivityTab, ActivityView } from "@/lib/trading.types";
 import { cn } from "@/lib/cn";
 
+/** Tabs that describe the viewer's own account, so their rows must never render for a signed-out visitor. */
+const ACCOUNT_SCOPED_TABS = new Set(["assets", "open-orders", "order-history", "positions", "trade-history"]);
+
+const EMPTY_STATE_COPY = {
+  assets: { body: "Deposit USDC to fund your trading account.", title: "No assets" },
+  positions: { body: "Your positions will appear here once orders are filled.", title: "No positions" },
+} as const;
+
+function getEmptyStateCopy(selectedTab: string, isSignedIn: boolean) {
+  if (ACCOUNT_SCOPED_TABS.has(selectedTab) && !isSignedIn) {
+    return { body: "Connect your wallet to see your account activity.", title: "Not connected" };
+  }
+
+  return (
+    EMPTY_STATE_COPY[selectedTab as keyof typeof EMPTY_STATE_COPY] ?? {
+      body: "This panel will populate as trading activity comes in.",
+      title: "No activity yet",
+    }
+  );
+}
+
 export function TradingActivityPanel({
   activityView,
   footerLinks,
@@ -18,9 +39,10 @@ export function TradingActivityPanel({
   onTabSelect: (tabId: string) => void;
 }) {
   const minimumVisibleRows = 3;
-  // The positions rows are placeholder data. Showing them to a logged-out visitor reads as a real
-  // open position on an account they don't have, so fall back to the empty state until sign-in.
-  const rows = selectedTab === "positions" && !isSignedIn ? [] : activityView.rows;
+  // Account rows read as the viewer's own balances, orders, and positions. A signed-out visitor has
+  // no account for them to belong to, so they get the empty state instead.
+  const rows = ACCOUNT_SCOPED_TABS.has(selectedTab) && !isSignedIn ? [] : activityView.rows;
+  const emptyStateCopy = getEmptyStateCopy(selectedTab, isSignedIn);
   const isEmpty = rows.length === 0;
   const fillerRowCount = Math.max(0, minimumVisibleRows - rows.length);
   const isMetricColumn = (column: string) => column.includes("PnL") || column.includes("%") || column.includes("Return");
@@ -61,31 +83,8 @@ export function TradingActivityPanel({
           {isEmpty ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
               <div>
-                <div className="font-medium text-panel-text-active text-sm">
-                  {selectedTab === "positions" ? "No positions" : "No activity yet"}
-                </div>
-                <div className="mt-1 text-[11px] text-panel-text-muted">
-                  {selectedTab === "positions"
-                    ? "Your positions will appear here once orders are filled."
-                    : "This panel will populate as trading activity comes in."}
-                </div>
-              </div>
-
-              <div className="flex flex-wrap justify-center gap-2">
-                <button
-                  className="rounded-xl bg-input-bg px-3 py-1.5 text-[11px] text-panel-text transition-colors hover:bg-input-hover"
-                  onClick={() => onTabSelect("open-orders")}
-                  type="button"
-                >
-                  Open Orders
-                </button>
-                <button
-                  className="rounded-xl bg-input-bg px-3 py-1.5 text-[11px] text-panel-text transition-colors hover:bg-input-hover"
-                  onClick={() => onTabSelect("trade-history")}
-                  type="button"
-                >
-                  Recent Trades
-                </button>
+                <div className="font-medium text-panel-text-active text-sm">{emptyStateCopy.title}</div>
+                <div className="mt-1 text-[11px] text-panel-text-muted">{emptyStateCopy.body}</div>
               </div>
             </div>
           ) : (

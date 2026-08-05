@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { buildAssetsActivityView } from "@/lib/account-activity-views";
 import { ACTIVITY_VIEWS, FOOTER_LINKS, SPOT_BOTTOM_TABS, SPOT_TIMEFRAME_OPTIONS } from "@/lib/mock-orderbook-terminal-data";
 import type { Candle, ContractMarket } from "@/lib/trading.types";
 import type { SpotChartTab, SpotTimeframe } from "@/ui/trading-terminal/SpotChartPanel";
@@ -104,7 +105,12 @@ export function SpotTradingTerminal({
 
   const lastPrice = liveSpotPrice ?? parseMarkPrice(spotMarket.mark);
   const { changePercent, high, low, volumeLabel } = get24hStats(liveCandles, lastPrice);
-  const activityView = ACTIVITY_VIEWS[bottomTab as keyof typeof ACTIVITY_VIEWS] ?? { columns: [], rows: [] };
+  // Assets is the one bottom tab with a real data source today, so it's built from live balances
+  // instead of the placeholder-free static views.
+  const activityView =
+    bottomTab === "assets"
+      ? buildAssetsActivityView({ accountCngnLabel, accountUsdcLabel, walletUsdcLabel: usdcBalanceLabel })
+      : (ACTIVITY_VIEWS[bottomTab as keyof typeof ACTIVITY_VIEWS] ?? { columns: [], rows: [] });
 
   return (
     <div className="flex flex-col gap-3 xl:min-h-0 xl:flex-1 xl:overflow-hidden">
