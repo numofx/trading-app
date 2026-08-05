@@ -147,6 +147,66 @@ function getFutureMarketCrossingPrice(
   return bestOpposingLevel.price.toString();
 }
 
+type SpotExecutionPrice = { price: string } | { error: string };
+
+/**
+ * Market spot orders cross the opposing side of the book; every other order type executes at the
+ * entered price. Returns the operator-facing copy rather than throwing, so a missing book side
+ * reads the same as it did inline.
+ */
+function resolveSpotExecutionPrice(
+  orderType: "Limit" | "Market" | "Stop Limit",
+  side: "buy" | "sell",
+  spotMarket: ContractMarket,
+  enteredPrice: string
+): SpotExecutionPrice {
+  if (orderType !== "Market") {
+    return { price: enteredPrice };
+  }
+
+  const opposing = side === "buy" ? spotMarket.orderBookAsks[0] : spotMarket.orderBookBids[0];
+
+  if (!opposing) {
+    return { error: "No opposing spot liquidity to cross. Use a limit order." };
+  }
+
+  return { price: String(opposing.price) };
+}
+
+type SignedOrderResponse = {
+  body: { error?: string; order?: { order_id?: string } } | null;
+  ok: boolean;
+  status: number;
+};
+
+/** POSTs a signed envelope to the order API, tolerating a non-JSON error body. */
+async function postSignedOrder(payload: object, signature: string): Promise<SignedOrderResponse> {
+  const response = await fetch("/api/orders", {
+    body: JSON.stringify({ ...payload, signature }),
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+  const body = (await response.json().catch(() => null)) as SignedOrderResponse["body"];
+
+  return { body, ok: response.ok, status: response.status };
+}
+
+/** Properties shared by every spot order analytics event. */
+function buildSpotOrderEvent(
+  side: "buy" | "sell",
+  orderType: "Limit" | "Market" | "Stop Limit",
+  size: string,
+  executionPrice: string
+) {
+  return {
+    market_id: "cngn-usdc-spot",
+    order_side: side,
+    order_type: orderType,
+    size_usdc_notional: size,
+    limit_price: executionPrice,
+  };
+}
+
 function getCompatibleSpotPrice(candidatePrice: number | null, referencePrice: number) {
   if (candidatePrice === null || !Number.isFinite(candidatePrice) || candidatePrice <= 0) {
     return referencePrice;
@@ -779,17 +839,19 @@ export function OrderBookTradingTerminal({
       setLastAction("Connect a wallet before submitting an order");
       return;
     }
-    // Market spot orders derive a crossing price from the opposing book side.
-    let executionPrice = price;
-    if (orderType === "Market") {
-      const spotMarketData = marketData["cngn-usdc-spot"];
-      const opposing = side === "buy" ? spotMarketData.orderBookAsks[0] : spotMarketData.orderBookBids[0];
-      if (!opposing) {
-        setLastAction("No opposing spot liquidity to cross. Use a limit order.");
-        return;
-      }
-      executionPrice = String(opposing.price);
+    const resolvedPrice = resolveSpotExecutionPrice(
+      orderType,
+      side,
+      marketData["cngn-usdc-spot"],
+      price
+    );
+
+    if ("error" in resolvedPrice) {
+      setLastAction(resolvedPrice.error);
+      return;
     }
+
+    const executionPrice = resolvedPrice.price;
 
     try {
       setIsSubmittingOrder(true);
@@ -818,35 +880,20 @@ export function OrderBookTradingTerminal({
         account: primaryWallet.address as `0x${string}`,
         ...envelope.typedData,
       });
-      const response = await fetch("/api/orders", {
-        body: JSON.stringify({ ...envelope.payload, signature }),
-        method: "POST",
-        headers: { "content-type": "application/json" },
-      });
-      const payload = (await response.json().catch(() => null)) as {
-        error?: string;
-        order?: { order_id?: string };
-      } | null;
-      if (!response.ok) {
+      const { body, ok, status } = await postSignedOrder(envelope.payload, signature);
+
+      if (!ok) {
         posthog.capture("order_rejected", {
-          market_id: "cngn-usdc-spot",
-          order_side: side,
-          order_type: orderType,
-          size_usdc_notional: size,
-          limit_price: executionPrice,
-          error_message: payload?.error ?? null,
-          http_status: response.status,
+          ...buildSpotOrderEvent(side, orderType, size, executionPrice),
+          error_message: body?.error ?? null,
+          http_status: status,
         });
-        setLastAction(payload?.error ?? "Spot order submission failed");
+        setLastAction(body?.error ?? "Spot order submission failed");
         return;
       }
       posthog.capture("order_submitted", {
-        market_id: "cngn-usdc-spot",
-        order_id: payload?.order?.order_id ?? null,
-        order_side: side,
-        order_type: orderType,
-        size_usdc_notional: size,
-        limit_price: executionPrice,
+        ...buildSpotOrderEvent(side, orderType, size, executionPrice),
+        order_id: body?.order?.order_id ?? null,
       });
       setLastAction(
         `Spot order accepted: ${side.toUpperCase()} ${size} USDC @ ${executionPrice} cNGN/USDC`
