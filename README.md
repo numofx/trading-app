@@ -94,6 +94,11 @@ Deposit flow address semantics (naming follows the risk-core deployment artifact
 - `NEXT_PUBLIC_USDC_TOKEN_ADDRESS` is the underlying USDC ERC-20 pulled from the wallet (`wrappedAsset` in the same
   artifact). The legacy `NEXT_PUBLIC_USDC_DELIVERABLE_BASE_ASSET_ADDRESS` env is honored as a fallback alias for the
   token address.
+- `NEXT_PUBLIC_CNGN_TOKEN_ADDRESS` is the underlying cNGN ERC-20 held in the wallet, which the spot terminal's
+  Assets tab reads. It defaults to `0x46C85152bFe9f96829aA94755D9f915F9B10EF5F` on Base mainnet (verified on-chain:
+  name/symbol `cNGN`, 6 decimals) and has no default elsewhere, so set it on Base Sepolia or that balance renders
+  `—`. Do not confuse it with `NEXT_PUBLIC_CNGN_ASSET_ADDRESS`, which is the ledger-side Numo IAsset used to label
+  the cNGN leg of a subaccount balance.
 - Deposits may be whitelist-gated on-chain (`WLWrappedERC20Asset.wlEnabled`). The app probes for the whitelist at
   preflight: plain `WrappedERC20Asset` deployments (including the current Base Sepolia one) have no gate and deposits
   are open; on WL deployments only operator-whitelisted subaccounts can deposit, and the create-and-deposit path
