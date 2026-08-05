@@ -7,7 +7,11 @@ import { useEffect, useRef, useState } from "react";
 import { createWalletClient, custom } from "viem";
 import { getAppChain } from "@/lib/base-public-client";
 import type { ChainlinkSpotSnapshot } from "@/lib/chainlink-ngn-usd";
-import { buildFutureOrderEnvelope, canSubmitFutureOrder } from "@/lib/future-order-submission";
+import {
+  buildFutureOrderEnvelope,
+  canSubmitFutureOrder,
+  TAKER_FEE_RATE,
+} from "@/lib/future-order-submission";
 import { buildSpotOrderEnvelope } from "@/lib/spot-order-submission";
 import {
   formatFxDisplayPair,
@@ -72,6 +76,13 @@ import {
 
 const SELECTED_MARKET_STORAGE_KEY = "trading-terminal-selected-market";
 const CONTRACT_COUNT_PATTERN = /(\d[\d,]*(?:\.\d+)?)\s+contracts/i;
+/**
+ * Initial margin as a fraction of USDC notional (5%, i.e. 20x). Unlike the taker fee this is a
+ * frontend placeholder — the venue's real requirement lives in risk-core and is not exposed over
+ * the markets-service API yet, so the ticket's margin quote is indicative only.
+ */
+// TODO: source the initial margin requirement from markets-service instead of hardcoding it.
+const INITIAL_MARGIN_RATE = 0.05;
 
 function parseNumericString(value: string) {
   const parsed = Number(value.replaceAll(",", "").replaceAll("$", "").replaceAll("+", ""));
@@ -563,10 +574,13 @@ function getOrderSummaryRows({
     },
     {
       label: "Margin Required",
-      value: `$${initialMargin.toLocaleString("en-US", { maximumFractionDigits: 0 })}`,
+      value: `${initialMargin.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC`,
     },
     { label: "Est. Fill Price", value: formatPriceDisplay(estimatedFill, quoteCurrency) },
-    { label: "Fees", value: `$${fees.toLocaleString("en-US", { maximumFractionDigits: 2 })}` },
+    {
+      label: "Fees",
+      value: `${fees.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })} USDC`,
+    },
     { label: "Liquidation Price", value: formatPriceDisplay(liquidationPrice, quoteCurrency) },
     { label: "Est. Distance to Liquidation", value: liquidationDistanceLabel },
   ] satisfies DeliveryTerm[];
@@ -728,20 +742,22 @@ function getOrderMetrics(
   const estimatedFill = getEstimatedFill();
   const averageExecution = getAverageExecution(estimatedFill);
 
-  const orderValue = safeLimitPrice === null ? 0 : sizeNumber * safeLimitPrice;
   let liquidationPrice: number | null = null;
 
   if (safeLimitPrice !== null) {
     liquidationPrice = orderSide === "buy" ? safeLimitPrice - 62.4 : safeLimitPrice + 62.4;
   }
 
+  // Margin is posted as USDC collateral and the taker fee is charged on the USDC notional, so both
+  // are sized off `sizeNumber` (USDC) rather than the quote-currency order value. The fee quote
+  // reuses the same tier that bounds `worstFee` on submission so the ticket cannot under-quote
+  // what the trader signs for.
   return {
     averageExecution,
     estimatedFill,
-    fees: orderValue * 0.0002,
-    initialMargin: orderValue * 0.05,
+    fees: sizeNumber * Number(TAKER_FEE_RATE),
+    initialMargin: sizeNumber * INITIAL_MARGIN_RATE,
     liquidationPrice,
-    orderValue,
   };
 }
 
