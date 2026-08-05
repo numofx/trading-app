@@ -1029,17 +1029,14 @@ export const SPOT_BOTTOM_TABS = [
 export const SPOT_TIMEFRAME_OPTIONS = ["1m", "30m", "1h", "D", "W", "M"] as const;
 
 /**
- * Bottom-panel views. The account-scoped tabs (assets, open orders, positions, trade history, order
- * history) ship with no rows on purpose: there is no per-account API behind them yet, so any row here
- * renders as a trader's own balance, order, or position when it is not. They stay empty until real
- * account data is wired in — the panel's empty state is the honest render.
+ * Bottom-panel views. The account-scoped tabs (open orders, positions, trade history, order history)
+ * ship with no rows on purpose: there is no per-account API behind them yet, so any row here renders
+ * as a trader's own order or position when it is not. They stay empty until real account data is
+ * wired in — the panel's empty state is the honest render. The Assets tab is the exception and is
+ * built from live balances by {@link buildAssetsActivityView}.
  */
 // TODO: populate the account-scoped views from markets-service once it exposes per-account endpoints.
 export const ACTIVITY_VIEWS = {
-  assets: {
-    columns: ["Asset", "Total Balance", "Available", "In Orders"],
-    rows: [],
-  },
   "open-orders": {
     columns: ["Instrument", "Direction", "Type", "Size", "Price"],
     rows: [],
