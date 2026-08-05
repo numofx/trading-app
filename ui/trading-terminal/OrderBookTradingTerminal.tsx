@@ -1,7 +1,7 @@
 "use client";
 
 import posthog from "posthog-js";
-import { useWallets } from "@privy-io/react-auth";
+import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createWalletClient, custom } from "viem";
@@ -508,8 +508,11 @@ export function OrderBookTradingTerminal({
     selectMarketForSection(targetMarket);
   };
 
+  const { authenticated, ready: privyReady } = usePrivy();
   const { ready: walletsReady, wallets } = useWallets();
   const primaryWallet = wallets[0] ?? null;
+  // Stays false while Privy is still restoring a session, so account-scoped panels never flash for visitors.
+  const isSignedIn = privyReady && authenticated;
   const {
     adoptSubaccountId,
     ensureTradingSubaccount,
@@ -951,6 +954,7 @@ export function OrderBookTradingTerminal({
             accountCngnLabel={accountCngnLabel}
             accountUsdcLabel={accountUsdcLabel}
             candles={spotCandles}
+            isSignedIn={isSignedIn}
             isSubmitting={isSubmittingOrder || isResolvingTradingSubaccount}
             lastAction={lastAction}
             liveSpotPrice={safeLiveSpotPrice}
@@ -966,6 +970,7 @@ export function OrderBookTradingTerminal({
             accountUsdcLabel={accountUsdcLabel}
             basisLabel={formatSignedPercent(liveCarry)}
             candles={market.candles}
+            isSignedIn={isSignedIn}
             isSubmitting={isSubmittingOrder || isResolvingTradingSubaccount}
             lastAction={lastAction}
             lastPrice={safeLivePrice}

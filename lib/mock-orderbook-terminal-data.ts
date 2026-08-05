@@ -1028,42 +1028,35 @@ export const SPOT_BOTTOM_TABS = [
 
 export const SPOT_TIMEFRAME_OPTIONS = ["1m", "30m", "1h", "D", "W", "M"] as const;
 
+/**
+ * Bottom-panel views. The account-scoped tabs (assets, open orders, positions, trade history, order
+ * history) ship with no rows on purpose: there is no per-account API behind them yet, so any row here
+ * renders as a trader's own balance, order, or position when it is not. They stay empty until real
+ * account data is wired in — the panel's empty state is the honest render.
+ */
+// TODO: populate the account-scoped views from markets-service once it exposes per-account endpoints.
 export const ACTIVITY_VIEWS = {
   assets: {
     columns: ["Asset", "Total Balance", "Available", "In Orders"],
-    rows: [
-      { cells: ["USDC", "25,000.00 USDC", "24,500.00 USDC", "500.00 USDC"] },
-      { cells: ["cNGN", "12,450,000 cNGN", "12,450,000 cNGN", "0 cNGN"] },
-    ],
+    rows: [],
   },
   "open-orders": {
     columns: ["Instrument", "Direction", "Type", "Size", "Price"],
-    rows: [{ cells: ["USDC-cNGN 16 SEP 26", "Long cNGN", "Limit", "5 contracts", "1,604.80 cNGN per USDC"] }],
+    rows: [],
   },
   positions: {
     columns: ["Instrument", "Position", "Entry Price", "Mark Price", "Unrealized PnL", "Return on Margin"],
-    rows: [
-      {
-        cells: ["USDC-cNGN 16 SEP 26", "Long cNGN · 5 contracts", "1,600.00 cNGN per USDC", "1,605.20 cNGN per USDC", "+$156", "+0.64%"],
-        positiveCellIndexes: [4, 5],
-      },
-    ],
+    rows: [],
   },
   "trade-history": {
     columns: ["Time", "Instrument", "Direction", "Size", "Price"],
-    rows: [
-      { cells: ["10:08:14", "USDC-cNGN 16 SEP 26", "Long cNGN", "5 contracts", "1,605.30 cNGN per USDC"] },
-      { cells: ["10:08:06", "USDC-cNGN 16 SEP 26", "Short cNGN", "3 contracts", "1,605.20 cNGN per USDC"] },
-    ],
+    rows: [],
   },
   "order-history": {
     columns: ["Time", "Instrument", "Direction", "Type", "Size", "Price", "Status"],
-    rows: [
-      { cells: ["10:08:14", "USDC-cNGN 16 SEP 26", "Long cNGN", "Limit", "5 contracts", "1,605.30 cNGN per USDC", "Filled"] },
-      { cells: ["10:08:06", "USDC-cNGN 16 SEP 26", "Short cNGN", "Market", "3 contracts", "1,605.20 cNGN per USDC", "Filled"] },
-      { cells: ["10:05:22", "USDC-cNGN 16 SEP 26", "Long cNGN", "Limit", "10 contracts", "1,600.00 cNGN per USDC", "Cancelled"] },
-    ],
+    rows: [],
   },
+  // Market-level data, not account state — safe to show a sample row.
   "basis-history": {
     columns: ["Instrument", "Spot Price", "Future Price", "Basis", "Implied Carry %", "Time"],
     rows: [

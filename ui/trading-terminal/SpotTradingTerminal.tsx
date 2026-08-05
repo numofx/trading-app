@@ -62,6 +62,7 @@ export function SpotTradingTerminal({
   accountUsdcLabel = null,
   accountCngnLabel = null,
   onSubmitOrder,
+  isSignedIn = false,
   isSubmitting = false,
   lastAction = null,
 }: {
@@ -75,6 +76,8 @@ export function SpotTradingTerminal({
   /** Subaccount cNGN balance. */
   accountCngnLabel?: string | null;
   onSubmitOrder?: (args: { side: "buy" | "sell"; price: string; size: string; orderType: "Limit" | "Market" | "Stop Limit" }) => void;
+  /** Whether a wallet session is active; gates account-scoped rows in the activity panel. */
+  isSignedIn?: boolean;
   isSubmitting?: boolean;
   lastAction?: string | null;
 }) {
@@ -159,6 +162,7 @@ export function SpotTradingTerminal({
         <TradingActivityPanel
           activityView={activityView}
           footerLinks={FOOTER_LINKS}
+          isSignedIn={isSignedIn}
           onTabSelect={setBottomTab}
           selectedTab={bottomTab}
           tabs={SPOT_BOTTOM_TABS}

@@ -4,19 +4,25 @@ import { cn } from "@/lib/cn";
 export function TradingActivityPanel({
   activityView,
   footerLinks,
+  isSignedIn = false,
   selectedTab,
   tabs,
   onTabSelect,
 }: {
   activityView: ActivityView;
   footerLinks: readonly { href: string; label: string }[];
+  /** Whether a wallet session is active. Defaults to false so rows stay hidden unless proven otherwise. */
+  isSignedIn?: boolean;
   selectedTab: string;
   tabs: ActivityTab[];
   onTabSelect: (tabId: string) => void;
 }) {
   const minimumVisibleRows = 3;
-  const isEmpty = activityView.rows.length === 0;
-  const fillerRowCount = Math.max(0, minimumVisibleRows - activityView.rows.length);
+  // The positions rows are placeholder data. Showing them to a logged-out visitor reads as a real
+  // open position on an account they don't have, so fall back to the empty state until sign-in.
+  const rows = selectedTab === "positions" && !isSignedIn ? [] : activityView.rows;
+  const isEmpty = rows.length === 0;
+  const fillerRowCount = Math.max(0, minimumVisibleRows - rows.length);
   const isMetricColumn = (column: string) => column.includes("PnL") || column.includes("%") || column.includes("Return");
 
   return (
@@ -84,7 +90,7 @@ export function TradingActivityPanel({
             </div>
           ) : (
             <div className="flex flex-1 flex-col">
-              {activityView.rows.map((row, rowIndex) => (
+              {rows.map((row, rowIndex) => (
                 <div
                   className="grid min-h-10 items-center gap-2 border-panel-border border-b px-3 py-1.5 text-[11px] last:border-b-0"
                   key={`${row.cells[0]}-${rowIndex}`}

@@ -229,6 +229,7 @@ function FuturesTickerBar({
 export function FuturesTradingTerminal({
   basisLabel,
   candles,
+  isSignedIn = false,
   isSubmitting,
   lastAction,
   lastPrice,
@@ -252,6 +253,8 @@ export function FuturesTradingTerminal({
 }: {
   basisLabel: string;
   candles: Candle[];
+  /** Whether a wallet session is active; gates account-scoped rows in the activity panel. */
+  isSignedIn?: boolean;
   isSubmitting: boolean;
   lastAction: string;
   lastPrice: number | null;
@@ -371,6 +374,7 @@ export function FuturesTradingTerminal({
         <TradingActivityPanel
           activityView={activityView}
           footerLinks={FOOTER_LINKS}
+          isSignedIn={isSignedIn}
           onTabSelect={setBottomTab}
           selectedTab={bottomTab}
           tabs={BOTTOM_TABS}
