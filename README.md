@@ -18,16 +18,22 @@ Local development:
 MARKETS_SERVICE_URL=http://127.0.0.1:8080
 ```
 
-Production must override that local default. For the current Railway backend deployment:
+Production must override that local default:
 
 ```bash
-MARKETS_SERVICE_URL=https://markets-service-production.up.railway.app
+MARKETS_SERVICE_URL=https://api.numofx.com
 ```
+
+`api.numofx.com` is the stable public hostname for `markets-service`; it is a CNAME onto the Railway
+deployment, which also still answers on `markets-service-production.up.railway.app`. Prefer the
+`api.numofx.com` name everywhere — the Railway hostname is a fallback and should not be handed to
+external consumers.
 
 Do not deploy the frontend with `MARKETS_SERVICE_URL=http://127.0.0.1:8080`.
 In production, `MARKETS_SERVICE_URL` must point at the live `markets-service` deployment. The frontend throws at request time if `NODE_ENV=production` and the URL is missing or points at localhost.
 
-If the frontend is deployed on Railway, encode `MARKETS_SERVICE_URL` in that deploy environment and treat it as required production configuration rather than tribal knowledge.
+The frontend is deployed on Vercel; `MARKETS_SERVICE_URL` is encoded in that project's production
+environment and should be treated as required production configuration rather than tribal knowledge.
 
 ## Live order book stream
 
@@ -60,7 +66,13 @@ The frontend consumes markets matching:
 
 ## Spot market status
 
-Spot support was **removed from `markets-service`** (commit `e75d513`, May 2026). The spot USDC/cNGN market shown in the UI is preview data only, and live spot execution cannot activate against the current backend. The spot order translation contract below is retained for when spot returns.
+Spot is **live again**. `markets-service` serves `USDCcNGN-SPOT` (`contract_type=spot`,
+`order_entry_spec=usdc_cngn_spot_v1`) from `GET /v1/markets`, gated on `CNGN_SPOT_ASSET_ADDRESS`
+being set on that deployment. Depth, trades and candles are real, and the spot order translation
+contract below is what the engine actually expects.
+
+> An earlier revision of this section said spot had been removed in `e75d513` (May 2026). That was
+> true at the time and is no longer — verify against `GET /v1/markets` before trusting it again.
 
 Legacy override envs: `NEXT_PUBLIC_USDCCNGN_APR_FUTURE_ASSET_ADDRESS` / `NEXT_PUBLIC_USDCCNGN_APR_FUTURE_SUB_ID` patch metadata only for a market with `expiry_timestamp=1777507200` (APR 30 2026, now expired). They are no-ops against the current registry and can be left unset.
 
