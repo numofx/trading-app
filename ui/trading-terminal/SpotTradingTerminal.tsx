@@ -60,6 +60,7 @@ export function SpotTradingTerminal({
   liveSpotPrice,
   spotMarket,
   usdcBalanceLabel,
+  cngnBalanceLabel = null,
   accountUsdcLabel = null,
   accountCngnLabel = null,
   onSubmitOrder,
@@ -72,6 +73,8 @@ export function SpotTradingTerminal({
   spotMarket: ContractMarket;
   /** Wallet USDC balance — what's available to deposit. */
   usdcBalanceLabel: string | null;
+  /** Wallet cNGN balance, or null when the cNGN token address isn't configured for this chain. */
+  cngnBalanceLabel?: string | null;
   /** Subaccount USDC cash balance — what's held in the trading account. */
   accountUsdcLabel?: string | null;
   /** Subaccount cNGN balance. */
@@ -109,7 +112,12 @@ export function SpotTradingTerminal({
   // instead of the placeholder-free static views.
   const activityView =
     bottomTab === "assets"
-      ? buildAssetsActivityView({ accountCngnLabel, accountUsdcLabel, walletUsdcLabel: usdcBalanceLabel })
+      ? buildAssetsActivityView({
+          accountCngnLabel,
+          accountUsdcLabel,
+          walletCngnLabel: cngnBalanceLabel,
+          walletUsdcLabel: usdcBalanceLabel,
+        })
       : (ACTIVITY_VIEWS[bottomTab as keyof typeof ACTIVITY_VIEWS] ?? { columns: [], rows: [] });
 
   return (

@@ -43,6 +43,7 @@ import { SpotTradingTerminal } from "@/ui/trading-terminal/SpotTradingTerminal";
 import { TradingMarketHeader } from "@/ui/trading-terminal/TradingMarketHeader";
 import { DepositDialog } from "@/ui/trading-terminal/DepositDialog";
 import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
+import { formatCngnBalanceLabel, useCngnBalance } from "@/ui/trading-terminal/useCngnBalance";
 import { formatUsdcBalanceLabel, useUsdcBalance } from "@/ui/trading-terminal/useUsdcBalance";
 import {
   formatSubaccountCngnLabel,
@@ -520,6 +521,7 @@ export function OrderBookTradingTerminal({
     subaccountId: tradingSubaccountId,
   } = useTradingSubaccount(primaryWallet?.address ?? null);
   const { balance: usdcBalance, refresh: refreshUsdcBalance } = useUsdcBalance(primaryWallet?.address ?? null);
+  const { balance: cngnBalance, refresh: refreshCngnBalance } = useCngnBalance(primaryWallet?.address ?? null);
   const { balance: subaccountBalance, refresh: refreshSubaccountBalance } = useSubaccountBalance(tradingSubaccountId);
   const accountUsdcLabel = formatSubaccountUsdcLabel(subaccountBalance?.cashUnits ?? null);
   const accountCngnLabel = formatSubaccountCngnLabel(subaccountBalance?.cngnUnits ?? null);
@@ -527,6 +529,7 @@ export function OrderBookTradingTerminal({
   function handleDeposited(depositedSubaccountId: string) {
     adoptSubaccountId(depositedSubaccountId);
     refreshUsdcBalance();
+    refreshCngnBalance();
     refreshSubaccountBalance();
   }
 
@@ -902,6 +905,7 @@ export function OrderBookTradingTerminal({
         `Spot order accepted: ${side.toUpperCase()} ${size} USDC @ ${executionPrice} cNGN/USDC`
       );
       refreshUsdcBalance();
+      refreshCngnBalance();
       refreshSubaccountBalance();
       return;
     } catch (error) {
@@ -954,6 +958,7 @@ export function OrderBookTradingTerminal({
             accountCngnLabel={accountCngnLabel}
             accountUsdcLabel={accountUsdcLabel}
             candles={spotCandles}
+            cngnBalanceLabel={formatCngnBalanceLabel(cngnBalance)}
             isSignedIn={isSignedIn}
             isSubmitting={isSubmittingOrder || isResolvingTradingSubaccount}
             lastAction={lastAction}

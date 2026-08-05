@@ -13,12 +13,15 @@ const UNKNOWN_BALANCE = "—";
 export function buildAssetsActivityView({
   accountCngnLabel,
   accountUsdcLabel,
+  walletCngnLabel,
   walletUsdcLabel,
 }: {
   /** Subaccount cNGN balance, or null when it hasn't loaded or the asset is unknown for this chain. */
   accountCngnLabel: string | null;
   /** Subaccount USDC cash balance, or null when it hasn't loaded. */
   accountUsdcLabel: string | null;
+  /** Connected wallet's cNGN balance, or null when no wallet is connected or the token is unconfigured. */
+  walletCngnLabel: string | null;
   /** Connected wallet's USDC balance, or null when no wallet is connected. */
   walletUsdcLabel: string | null;
 }): ActivityView {
@@ -26,8 +29,7 @@ export function buildAssetsActivityView({
     columns: ["Asset", "Trading Account", "Wallet"],
     rows: [
       { cells: ["USDC", accountUsdcLabel ?? UNKNOWN_BALANCE, walletUsdcLabel ?? UNKNOWN_BALANCE] },
-      // TODO: read the wallet's cNGN ERC-20 balance so the wallet leg isn't permanently unknown.
-      { cells: ["cNGN", accountCngnLabel ?? UNKNOWN_BALANCE, UNKNOWN_BALANCE] },
+      { cells: ["cNGN", accountCngnLabel ?? UNKNOWN_BALANCE, walletCngnLabel ?? UNKNOWN_BALANCE] },
     ],
   };
 }
