@@ -13,11 +13,7 @@ import {
   TAKER_FEE_RATE,
 } from "@/lib/future-order-submission";
 import { buildSpotOrderEnvelope } from "@/lib/spot-order-submission";
-import {
-  formatFxDisplayPair,
-  getInstrumentDisplayLabel,
-  getProductDisplayName,
-} from "@/lib/market-display";
+import { formatFxDisplayPair, getInstrumentDisplayLabel } from "@/lib/market-display";
 import {
   calculateAnnualizedBasisPercent,
   calculateBasis,
@@ -31,38 +27,18 @@ import {
   resolveMarketSelection,
   SPOT_URL_SLUG,
 } from "@/lib/market-selection";
+import { DEFAULT_ORDER_TYPE } from "@/lib/mock-orderbook-terminal-data";
 import type {
-  CHART_CONTEXT_TABS,
-  CHART_RANGE_BUTTONS,
-  TIMEFRAME_OPTIONS,
-} from "@/lib/mock-orderbook-terminal-data";
-import {
-  ACTIVITY_VIEWS,
-  BOTTOM_TABS,
-  CHART_TOOLS,
-  DEFAULT_CHART_CONTEXT,
-  DEFAULT_ORDER_TYPE,
-  DEFAULT_SYMBOL,
-  DEFAULT_TIMEFRAME,
-  FOOTER_LINKS,
-} from "@/lib/mock-orderbook-terminal-data";
-import type {
-  Candle,
   ContractMarket,
   DeliveryTerm,
   MarketDefinition,
   MarketId,
   TradePrint,
-  TradingLayout,
 } from "@/lib/trading.types";
 import type { AppSection } from "@/ui/app-sidebar.types";
 import { AppSidebar } from "@/ui/AppSidebar";
 import { FuturesTradingTerminal } from "@/ui/trading-terminal/FuturesTradingTerminal";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
-import { OrderEntryPanel } from "@/ui/trading-terminal/OrderEntryPanel";
-import { TradingLayoutMenu } from "@/ui/trading-terminal/TradingLayoutMenu";
-import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
-import { CNGN_CONFIG, TradingChartPanel } from "@/ui/trading-terminal/TradingChartPanel";
 import { SpotTradingTerminal } from "@/ui/trading-terminal/SpotTradingTerminal";
 import { TradingMarketHeader } from "@/ui/trading-terminal/TradingMarketHeader";
 import { DepositDialog } from "@/ui/trading-terminal/DepositDialog";
@@ -75,7 +51,6 @@ import {
 } from "@/ui/trading-terminal/useSubaccountBalance";
 
 const SELECTED_MARKET_STORAGE_KEY = "trading-terminal-selected-market";
-const CONTRACT_COUNT_PATTERN = /(\d[\d,]*(?:\.\d+)?)\s+contracts/i;
 /**
  * Initial margin as a fraction of USDC notional (5%, i.e. 20x). Unlike the taker fee this is a
  * frontend placeholder — the venue's real requirement lives in risk-core and is not exposed over
@@ -117,25 +92,6 @@ function formatPriceDisplay(value: number | string | null, quoteCurrency = "cNGN
   return `${formatted} ${quoteCurrency} per USDC`;
 }
 
-function formatSignedUsd(value: number | null) {
-  if (value === null || !Number.isFinite(value)) {
-    return "—";
-  }
-
-  let sign = "";
-  if (value > 0) {
-    sign = "+";
-  } else if (value < 0) {
-    sign = "-";
-  }
-  const absoluteValue = Math.abs(value);
-
-  return `${sign}$${absoluteValue.toLocaleString("en-US", {
-    maximumFractionDigits: absoluteValue >= 100 ? 0 : 2,
-    minimumFractionDigits: absoluteValue > 0 && absoluteValue < 100 ? 2 : 0,
-  })}`;
-}
-
 function formatSignedPercent(value: number | null) {
   if (value === null || !Number.isFinite(value)) {
     return "—";
@@ -149,33 +105,6 @@ function formatSignedPercent(value: number | null) {
   }
 
   return `${sign}${Math.abs(value).toFixed(2)}%`;
-}
-
-function formatContractQuantity(value: number | null) {
-  if (value === null || !Number.isFinite(value)) {
-    return "—";
-  }
-
-  return value.toLocaleString("en-US", {
-    maximumFractionDigits: 3,
-    minimumFractionDigits: value % 1 === 0 ? 0 : 3,
-  });
-}
-
-function formatAssetAmount(value: number, asset: string, maximumFractionDigits = 2) {
-  if (!Number.isFinite(value)) {
-    return "—";
-  }
-
-  let minimumFractionDigits = 2;
-  if (maximumFractionDigits === 0 || value % 1 === 0) {
-    minimumFractionDigits = 0;
-  }
-
-  return `${value.toLocaleString("en-US", {
-    maximumFractionDigits,
-    minimumFractionDigits,
-  })} ${asset}`;
 }
 
 function getRenderablePriceInput(mark: string) {
@@ -230,41 +159,6 @@ function getCompatibleSpotPrice(candidatePrice: number | null, referencePrice: n
   }
 
   return candidatePrice;
-}
-
-
-function getDisplayTicker(marketDefinition: MarketDefinition) {
-  return getInstrumentDisplayLabel(marketDefinition);
-}
-
-
-function getDisplayCandles(
-  chartContext: (typeof CHART_CONTEXT_TABS)[number],
-  marketCandles: Candle[]
-) {
-  // Every branch returns this venue's own fills, or nothing.
-  //
-  // Two things this deliberately no longer does:
-  //   - substitute `selectedSpotHistory` for spot. That is an *external* NGN/USD
-  //     reference feed, not this exchange's trades, so showing it as the venue
-  //     chart misrepresents where the prices came from.
-  //   - shift the price series to the live basis/carry value. That produced a
-  //     chart with the shape of price history and the label of basis history,
-  //     where only the final point was real. The live basis and carry readouts
-  //     are unaffected — they are computed values, not history.
-  if (chartContext === "Basis" || chartContext === "Carry") {
-    return [];
-  }
-
-  return marketCandles;
-}
-
-function getDefaultChartContextForMarket(marketDefinition: MarketDefinition) {
-  if (marketDefinition.type === "spot") {
-    return "Price" as const;
-  }
-
-  return DEFAULT_CHART_CONTEXT;
 }
 
 
@@ -355,184 +249,6 @@ function buildSelectorMetrics(
   };
 }
 
-function getPositionMetrics(
-  marketData: Record<MarketId, ContractMarket>,
-  marketDefinition: MarketDefinition,
-  marketId: MarketId,
-  livePrice: number | null
-) {
-  const quoteCurrency = getQuoteCurrency(marketDefinition.pair);
-  const activePosition = marketData[marketId].positionOverview;
-  const entryPrice = activePosition.find((item) => item.label === "Entry Price")?.value ?? "—";
-  const markPrice =
-    activePosition.find((item) => item.label === "Mark Price")?.value ??
-    formatPriceDisplay(livePrice ?? "—", quoteCurrency);
-  const fallbackReturnValue =
-    activePosition.find((item) => item.label === "Return on Margin")?.value ??
-    activePosition.find((item) => item.label === "Return %")?.value ??
-    "—";
-
-  if (marketDefinition.type !== "future") {
-    return {
-      entryPrice,
-      exposureLabel: activePosition.find((item) => item.label === "Position")?.value ?? "—",
-      markPrice,
-      pnl: activePosition.find((item) => item.label === "Unrealized PnL")?.value ?? "—",
-      positionOverview: activePosition,
-      positionValue: activePosition.find((item) => item.label === "Position")?.value ?? "—",
-      returnLabel: activePosition.some((item) => item.label === "Return on Margin")
-        ? "Return on Margin"
-        : "Return %",
-      returnValue: fallbackReturnValue,
-    };
-  }
-
-  return getFuturePositionMetrics(
-    activePosition,
-    entryPrice,
-    markPrice,
-    livePrice,
-    marketDefinition,
-    quoteCurrency
-  );
-}
-
-function getResolvedMarkPrice(markPrice: string, livePrice: number | null) {
-  if (livePrice !== null && Number.isFinite(livePrice)) {
-    return livePrice;
-  }
-
-  const fallbackMarkPrice = parseNumericString(markPrice);
-  if (Number.isFinite(fallbackMarkPrice)) {
-    return fallbackMarkPrice;
-  }
-
-  return Number.NaN;
-}
-
-function getFuturePositionContext(rawPosition: string, marketDefinition: MarketDefinition) {
-  const contractsMatch = rawPosition.match(CONTRACT_COUNT_PATTERN);
-  const contracts = contractsMatch ? Number(contractsMatch[1]?.replaceAll(",", "")) : Number.NaN;
-  const contractMultiplier = parseNumericString(marketDefinition.contractMultiplier ?? "1");
-  const pairLabel = formatFxDisplayPair(marketDefinition.pair);
-  const [baseAsset = "Base", quoteAsset = "Quote"] = pairLabel.split("/");
-  const isShortBase = rawPosition.toLowerCase().includes("short");
-  const sideLabel = isShortBase
-    ? `Short ${baseAsset} / Long ${quoteAsset}`
-    : `Long ${baseAsset} / Short ${quoteAsset}`;
-
-  return {
-    baseAsset,
-    contractMultiplier,
-    contracts,
-    isShortBase,
-    sideLabel,
-  };
-}
-
-function getFutureExposureLabel(contracts: number, contractMultiplier: number, baseAsset: string) {
-  const baseExposure = contracts * contractMultiplier;
-  const formattedContracts = formatContractQuantity(contracts);
-  const formattedMultiplier = contractMultiplier.toLocaleString("en-US");
-  const formattedBaseExposure = `${baseExposure.toLocaleString("en-US", { maximumFractionDigits: 0 })} ${baseAsset}`;
-
-  return {
-    baseExposure,
-    exposureLabel: `${formattedContracts} contracts x ${formattedMultiplier} ${baseAsset} = ${formattedBaseExposure} notional`,
-    formattedBaseExposure,
-    formattedContracts,
-    formattedMultiplier,
-  };
-}
-
-function getFuturePnlMetrics(
-  baseExposure: number,
-  isShortBase: boolean,
-  parsedEntryPrice: number,
-  resolvedMarkPrice: number
-) {
-  const directionalDelta = isShortBase
-    ? parsedEntryPrice - resolvedMarkPrice
-    : resolvedMarkPrice - parsedEntryPrice;
-  const pnlInQuote = directionalDelta * baseExposure;
-  const pnlInBase = resolvedMarkPrice > 0 ? pnlInQuote / resolvedMarkPrice : Number.NaN;
-  const initialMargin = baseExposure * 0.05;
-  const returnOnMargin = initialMargin > 0 ? (pnlInBase / initialMargin) * 100 : Number.NaN;
-
-  return {
-    pnl: formatSignedUsd(Number.isFinite(pnlInBase) ? pnlInBase : null),
-    returnValue: formatSignedPercent(Number.isFinite(returnOnMargin) ? returnOnMargin : null),
-  };
-}
-
-function buildFuturePositionOverview(
-  sideLabel: string,
-  exposure: ReturnType<typeof getFutureExposureLabel> | null,
-  baseAsset: string,
-  parsedEntryPrice: number,
-  resolvedMarkPrice: number,
-  pnl: string,
-  returnValue: string,
-  quoteCurrency: string
-) {
-  return [
-    { label: "Side", value: sideLabel },
-    { label: "Contracts", value: `${exposure?.formattedContracts ?? "—"} contracts` },
-    {
-      label: "Contract Multiplier",
-      value: `${exposure?.formattedMultiplier ?? "—"} ${baseAsset} per contract`,
-    },
-    { label: "Base Exposure", value: `${exposure?.formattedBaseExposure ?? "—"} notional` },
-    { label: "Entry Price", value: formatPriceDisplay(parsedEntryPrice, quoteCurrency) },
-    { label: "Mark Price", value: formatPriceDisplay(resolvedMarkPrice, quoteCurrency) },
-    { label: "Unrealized PnL", value: pnl },
-    { label: "Return on Margin", value: returnValue },
-  ];
-}
-
-function getFuturePositionMetrics(
-  activePosition: { label: string; value: string }[],
-  entryPrice: string,
-  markPrice: string,
-  livePrice: number | null,
-  marketDefinition: MarketDefinition,
-  quoteCurrency: string
-) {
-  const rawPosition = activePosition.find((item) => item.label === "Position")?.value ?? "";
-  const { baseAsset, contractMultiplier, contracts, isShortBase, sideLabel } =
-    getFuturePositionContext(rawPosition, marketDefinition);
-  const parsedEntryPrice = parseNumericString(entryPrice);
-  const resolvedMarkPrice = getResolvedMarkPrice(markPrice, livePrice);
-  const exposure =
-    Number.isFinite(contracts) && Number.isFinite(contractMultiplier)
-      ? getFutureExposureLabel(contracts, contractMultiplier, baseAsset)
-      : null;
-  const metrics =
-    exposure && Number.isFinite(parsedEntryPrice) && Number.isFinite(resolvedMarkPrice)
-      ? getFuturePnlMetrics(exposure.baseExposure, isShortBase, parsedEntryPrice, resolvedMarkPrice)
-      : { pnl: "—", returnValue: "—" };
-  const computedPositionOverview = buildFuturePositionOverview(
-    sideLabel,
-    exposure,
-    baseAsset,
-    parsedEntryPrice,
-    resolvedMarkPrice,
-    metrics.pnl,
-    metrics.returnValue,
-    quoteCurrency
-  );
-
-  return {
-    entryPrice: computedPositionOverview[4]?.value ?? "—",
-    exposureLabel: exposure?.exposureLabel ?? "—",
-    markPrice: computedPositionOverview[5]?.value ?? "—",
-    pnl: metrics.pnl,
-    positionOverview: computedPositionOverview,
-    positionValue: computedPositionOverview[0]?.value ?? "—",
-    returnLabel: "Return on Margin",
-    returnValue: metrics.returnValue,
-  };
-}
 
 function getOrderSummaryRows({
   contracts,
@@ -586,20 +302,6 @@ function getOrderSummaryRows({
   ] satisfies DeliveryTerm[];
 }
 
-function getAdvancedSummaryRows({
-  averageExecution,
-  buyingPower,
-  quoteCurrency,
-}: {
-  averageExecution: number | null;
-  buyingPower: string;
-  quoteCurrency: string;
-}) {
-  return [
-    { label: "Available Buying Power", value: buyingPower },
-    { label: "Estimated Avg Execution", value: formatPriceDisplay(averageExecution, quoteCurrency) },
-  ] satisfies DeliveryTerm[];
-}
 
 function getLiquidationBufferPercent(
   estimatedFill: number | null,
@@ -616,91 +318,6 @@ function getLiquidationBufferPercent(
   }
 
   return (Math.abs(estimatedFill - liquidationPrice) / estimatedFill) * 100;
-}
-
-function formatSignedAssetAmount(value: number | null, asset: string, maximumFractionDigits = 0) {
-  if (value === null || !Number.isFinite(value)) {
-    return "—";
-  }
-
-  const absoluteValue = Math.abs(value);
-  const formatted = formatAssetAmount(absoluteValue, asset, maximumFractionDigits);
-
-  if (value > 0) {
-    return `+${formatted}`;
-  }
-
-  if (value < 0) {
-    return `-${formatted}`;
-  }
-
-  return formatted;
-}
-
-function getSlippageEstimate(
-  averageExecution: number | null,
-  estimatedFill: number | null,
-  orderType: "Limit" | "Market" | "Stop"
-) {
-  if (
-    orderType !== "Market" ||
-    averageExecution === null ||
-    estimatedFill === null ||
-    !Number.isFinite(averageExecution) ||
-    !Number.isFinite(estimatedFill) ||
-    estimatedFill <= 0
-  ) {
-    return "0.00% / max 0.25%";
-  }
-
-  const slippagePercent = (Math.abs(averageExecution - estimatedFill) / estimatedFill) * 100;
-  return `${slippagePercent.toFixed(2)}% / max 0.25%`;
-}
-
-function getPositionBuilderRows({
-  contracts,
-  estimatedFill,
-  liquidationPrice,
-  liveSpotPrice,
-  marketDefinition,
-  orderSide,
-}: {
-  contracts: number;
-  estimatedFill: number | null;
-  liquidationPrice: number | null;
-  liveSpotPrice: number;
-  marketDefinition: MarketDefinition;
-  orderSide: "buy" | "sell";
-}) {
-  if (marketDefinition.type !== "future") {
-    return [] satisfies DeliveryTerm[];
-  }
-
-  const quoteCurrency = getQuoteCurrency(marketDefinition.pair);
-  const digits = quoteCurrency === "EURC" || quoteCurrency === "BRZ" ? 2 : 0;
-
-  const safeContracts = Number.isFinite(contracts) ? contracts : 0;
-  const safeEstimatedFill =
-    estimatedFill !== null && Number.isFinite(estimatedFill) ? estimatedFill : null;
-  const directionMultiplier = orderSide === "buy" ? 1 : -1;
-  const expiryPnl =
-    safeEstimatedFill === null
-      ? null
-      : (liveSpotPrice - safeEstimatedFill) * safeContracts * directionMultiplier;
-  const annualizedCarry =
-    safeEstimatedFill === null || !marketDefinition.expiryDays || marketDefinition.expiryDays <= 0
-      ? null
-      : ((liveSpotPrice - safeEstimatedFill) / safeEstimatedFill) *
-        (365 / marketDefinition.expiryDays) *
-        100 *
-        directionMultiplier;
-  const liquidationBufferPercent = getLiquidationBufferPercent(safeEstimatedFill, liquidationPrice);
-
-  return [
-    { label: "Est. PnL @ Expiry", value: formatSignedAssetAmount(expiryPnl, quoteCurrency, digits) },
-    { label: "Carry Earned (annualized)", value: formatSignedPercent(annualizedCarry) },
-    { label: "Liquidation Buffer (% move)", value: formatSignedPercent(liquidationBufferPercent) },
-  ] satisfies DeliveryTerm[];
 }
 
 function getOrderMetrics(
@@ -727,21 +344,7 @@ function getOrderMetrics(
     return livePrice + (orderSide === "buy" ? 0.12 : -0.12);
   }
 
-  function getAverageExecution(estimatedFill: number | null) {
-    if (orderType !== "Market") {
-      return safeLimitPrice;
-    }
-
-    if (estimatedFill === null) {
-      return null;
-    }
-
-    return estimatedFill + (orderSide === "buy" ? 0.05 : -0.05);
-  }
-
   const estimatedFill = getEstimatedFill();
-  const averageExecution = getAverageExecution(estimatedFill);
-
   let liquidationPrice: number | null = null;
 
   if (safeLimitPrice !== null) {
@@ -753,7 +356,6 @@ function getOrderMetrics(
   // reuses the same tier that bounds `worstFee` on submission so the ticket cannot under-quote
   // what the trader signs for.
   return {
-    averageExecution,
     estimatedFill,
     fees: sizeNumber * Number(TAKER_FEE_RATE),
     initialMargin: sizeNumber * INITIAL_MARGIN_RATE,
@@ -761,9 +363,6 @@ function getOrderMetrics(
   };
 }
 
-function getActiveIndexForMarket(market: MarketDefinition) {
-  return market.type === "spot" ? 0 : 1;
-}
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This component coordinates terminal state across chart, book, order entry, and URL persistence.
 export function OrderBookTradingTerminal({
@@ -787,24 +386,11 @@ export function OrderBookTradingTerminal({
   const searchParams = useSearchParams();
   const requestedMarketParam = searchParams.get("market");
   const [selectedMarketId, setSelectedMarketId] = useState<MarketId>(initialMarketId);
-  const [timeframe, setTimeframe] = useState<(typeof TIMEFRAME_OPTIONS)[number]>(DEFAULT_TIMEFRAME);
-  const [chartContext, setChartContext] =
-    useState<(typeof CHART_CONTEXT_TABS)[number]>(DEFAULT_CHART_CONTEXT);
-  const [selectedRange, setSelectedRange] = useState<(typeof CHART_RANGE_BUTTONS)[number]>("1d");
-  const [selectedTool, setSelectedTool] = useState(CHART_TOOLS[0]?.id ?? "crosshair");
-  const [indicatorsEnabled, setIndicatorsEnabled] = useState(false);
-  const [expandedChart, setExpandedChart] = useState(false);
   const [orderType, setOrderType] = useState<"Limit" | "Market" | "Stop">(DEFAULT_ORDER_TYPE);
   const [orderSide, setOrderSide] = useState<"buy" | "sell">("buy");
   const [size, setSize] = useState("1");
   const [limitPrice, setLimitPrice] = useState("1545");
-  const [activeIndex, setActiveIndex] = useState(1);
-  const [allocation, setAllocation] = useState(5);
-  const [postOnly, setPostOnly] = useState(false);
-  const [atExpiryDeliver, setAtExpiryDeliver] = useState(true);
-  const [selectedActivityTab, setSelectedActivityTab] = useState<string>("positions");
   const [activeSection, setActiveSection] = useState<AppSection>("spot");
-  const [tradingLayout, setTradingLayout] = useState<TradingLayout>("advanced");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const [lastAction, setLastAction] = useState("Ready");
@@ -816,39 +402,6 @@ export function OrderBookTradingTerminal({
     marketDefinitions.find((marketOption) => marketOption.id === selectedMarketId) ??
     marketDefinitions[0];
 
-  const handleActiveIndexChange = (index: number) => {
-    setActiveIndex(index);
-    const currentPair = selectedMarket.pair;
-    const point = CNGN_CONFIG.forwardPoints[index];
-    if (point) {
-      setLimitPrice(String(point.rate));
-    }
-
-    if (index !== 1) {
-      return;
-    }
-
-    const targetFuture = marketDefinitions.find(
-      (m) => m.pair === currentPair && m.type === "future" && m.contractLabel === "SEP 2026"
-    );
-    if (targetFuture) {
-      setSelectedMarketId(targetFuture.id);
-    }
-  };
-
-  const handlePairChange = (_newPair: "USDCcNGN") => {
-    const isFuture = selectedMarket.type === "future";
-
-    const targetFuture = marketDefinitions.find(
-      (m) => m.pair === "USDCcNGN" && m.type === "future" && (!isFuture || m.contractLabel === selectedMarket.contractLabel)
-    ) || marketDefinitions.find((m) => m.pair === "USDCcNGN" && m.type === "future");
-
-    if (targetFuture) {
-      setSelectedMarketId(targetFuture.id);
-      setLimitPrice(getRenderablePriceInput(marketData[targetFuture.id].mark));
-      setActiveIndex(getActiveIndexForMarket(targetFuture));
-    }
-  };
   const selectMarketForSection = (targetMarket: MarketDefinition) => {
     if (targetMarket.id === selectedMarketId) {
       return;
@@ -862,9 +415,7 @@ export function OrderBookTradingTerminal({
     });
 
     setSelectedMarketId(targetMarket.id);
-    setChartContext(getDefaultChartContextForMarket(targetMarket));
     setLimitPrice(getRenderablePriceInput(marketData[targetMarket.id].mark));
-    setActiveIndex(getActiveIndexForMarket(targetMarket));
   };
 
   const handleSectionChange = (section: AppSection) => {
@@ -897,11 +448,6 @@ export function OrderBookTradingTerminal({
     selectMarketForSection(targetMarket);
   };
 
-  function handleTradingLayoutChange(layout: TradingLayout) {
-    posthog.capture("trading_layout_changed", { layout });
-    setTradingLayout(layout);
-  }
-
   const { ready: walletsReady, wallets } = useWallets();
   const primaryWallet = wallets[0] ?? null;
   const {
@@ -930,41 +476,12 @@ export function OrderBookTradingTerminal({
   const livePrice =
     selectedMarket.type === "spot" ? liveSpotPrice : parseNumericString(market.mark);
   const safeLivePrice = Number.isFinite(livePrice) ? livePrice : null;
-  let liveBasis: number | null = null;
-
-  if (
-    selectedMarket.type !== "spot" &&
-    selectedMarket.type !== "option" &&
-    safeLivePrice !== null
-  ) {
-    liveBasis = calculateBasis(safeLivePrice, liveSpotPrice);
-  }
   const { selectorAnnualizedBasisByMarketId } = buildSelectorMetrics(
     liveSpotPrice,
     marketDefinitions,
     marketData
   );
   const liveCarry = selectorAnnualizedBasisByMarketId[selectedMarket.id] ?? null;
-  const displayCandles = getDisplayCandles(chartContext, market.candles);
-  const candleResetKey = [
-    selectedMarketId,
-    chartContext,
-    market.candles.length,
-    market.candles[0]?.time ?? "start",
-    market.candles.at(-1)?.time ?? "end",
-    market.candles.at(-1)?.close ?? "close",
-  ].join("|");
-
-  const {
-    entryPrice,
-    markPrice,
-    pnl: unrealizedPnl,
-    positionOverview,
-    positionValue: _positionValue,
-    exposureLabel,
-    returnLabel,
-    returnValue,
-  } = getPositionMetrics(marketData, selectedMarket, selectedMarketId, safeLivePrice);
 
   // The futures ticket is denominated in contracts (matching the order book). Order economics and
   // on-chain submission work in USDC notional: 1 contract = contractMultiplier USDC.
@@ -972,7 +489,7 @@ export function OrderBookTradingTerminal({
     Number((selectedMarket.contractMultiplier ?? "10000").replaceAll(",", "")) || 10_000;
   const sizeUsdcNotional = String((Number(size) || 0) * futureContractMultiplier);
 
-  const { averageExecution, estimatedFill, fees, initialMargin, liquidationPrice } =
+  const { estimatedFill, fees, initialMargin, liquidationPrice } =
     getOrderMetrics(
       limitPrice,
       market.mark,
@@ -991,22 +508,6 @@ export function OrderBookTradingTerminal({
     liquidationPrice,
     quoteCurrency,
   });
-  const advancedSummaryRows = getAdvancedSummaryRows({
-    averageExecution,
-    buyingPower: "$250,000",
-    quoteCurrency,
-  });
-  const positionBuilderRows = getPositionBuilderRows({
-    contracts: Number(sizeUsdcNotional || "0"),
-    estimatedFill,
-    liquidationPrice,
-    liveSpotPrice,
-    marketDefinition: selectedMarket,
-    orderSide,
-  });
-  const slippageEstimate = getSlippageEstimate(averageExecution, estimatedFill, orderType);
-  const [liveCandles, setLiveCandles] = useState<Candle[]>(displayCandles);
-  const lastCandleResetKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     selectedMarketIdRef.current = selectedMarketId;
@@ -1065,9 +566,7 @@ export function OrderBookTradingTerminal({
 
     if (resolution.selectedMarketId !== selectedMarketIdRef.current) {
       setSelectedMarketId(resolution.selectedMarketId);
-      setChartContext(getDefaultChartContextForMarket(nextMarket));
       setLimitPrice(getRenderablePriceInput(marketData[resolution.selectedMarketId].mark));
-      setActiveIndex(getActiveIndexForMarket(nextMarket));
     }
 
     markSelectionHydrated();
@@ -1114,19 +613,6 @@ export function OrderBookTradingTerminal({
     currentSearchParams.set("market", viewUrlSlug);
     window.history.replaceState(null, "", `${pathname}?${currentSearchParams.toString()}`);
   }, [activeSection, hasHydratedSelection, marketDefinitions, pathname, selectedMarketId]);
-
-  useEffect(() => {
-    if (lastCandleResetKeyRef.current === candleResetKey) {
-      return;
-    }
-
-    lastCandleResetKeyRef.current = candleResetKey;
-    setLiveCandles(getDisplayCandles(chartContext, market.candles));
-  }, [
-    candleResetKey,
-    chartContext,
-    market.candles,
-  ]);
 
   // Candles come from the venue's own fills via markets-service; there is no
   // client-side ticking. A random walk here would overwrite real price history
@@ -1386,44 +872,6 @@ export function OrderBookTradingTerminal({
   // live price — agreeing with the price does not make it this exchange's trades.
   const spotCandles = marketData["cngn-usdc-spot"].candles;
 
-  const futuresChartPanel = (
-    <TradingChartPanel
-      activeIndex={activeIndex}
-      candles={liveCandles}
-      chartContext={chartContext}
-      entryPrice={entryPrice}
-      expandedChart={expandedChart}
-      indicatorsEnabled={indicatorsEnabled}
-      markPrice={markPrice}
-      onActiveIndexChange={handleActiveIndexChange}
-      onChartContextChange={setChartContext}
-      onExpandedToggle={() => setExpandedChart((current) => !current)}
-      onIndicatorsToggle={() => setIndicatorsEnabled((current) => !current)}
-      onRangeChange={setSelectedRange}
-      onTimeframeChange={setTimeframe}
-      onToolSelect={setSelectedTool}
-      selectedRange={selectedRange}
-      selectedTimeframe={timeframe}
-      selectedTool={selectedTool}
-      ticker={getDisplayTicker(selectedMarket)}
-      onPairChange={handlePairChange}
-    />
-  );
-  const futuresActivityPanel = (
-    <TradingActivityPanel
-      activityView={
-        ACTIVITY_VIEWS[selectedActivityTab as keyof typeof ACTIVITY_VIEWS] || {
-          columns: [],
-          rows: [],
-        }
-      }
-      footerLinks={FOOTER_LINKS}
-      onTabSelect={setSelectedActivityTab}
-      selectedTab={selectedActivityTab}
-      tabs={BOTTOM_TABS}
-    />
-  );
-
   return (
     <main className="flex min-h-screen bg-terminal-bg text-foreground transition-colors duration-300 xl:h-dvh xl:overflow-hidden">
       <MarketDocumentTitle
@@ -1449,9 +897,6 @@ export function OrderBookTradingTerminal({
               wallet={primaryWallet}
             />
           }
-          layoutControl={
-            <TradingLayoutMenu layout={tradingLayout} onLayoutChange={handleTradingLayoutChange} />
-          }
         />
 
         {activeSection === "spot" ? (
@@ -1468,7 +913,7 @@ export function OrderBookTradingTerminal({
           />
         ) : null}
 
-        {activeSection === "derivatives" && tradingLayout === "advanced" ? (
+        {activeSection === "derivatives" ? (
           <FuturesTradingTerminal
             accountCngnLabel={accountCngnLabel}
             accountUsdcLabel={accountUsdcLabel}
@@ -1494,61 +939,6 @@ export function OrderBookTradingTerminal({
             usdcBalanceLabel={formatUsdcBalanceLabel(usdcBalance)}
           />
         ) : null}
-
-        {activeSection === "derivatives" && tradingLayout === "analytics" ? (
-        <section className="grid grid-cols-1 gap-3 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_360px] xl:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_380px]">
-          <div className="flex min-h-[700px] flex-col gap-3 xl:min-h-0 xl:overflow-hidden">
-            <div className="min-h-[320px] xl:min-h-0 xl:flex-7">{futuresChartPanel}</div>
-
-            <div className="min-h-[220px] xl:min-h-0 xl:flex-3">{futuresActivityPanel}</div>
-          </div>
-
-          <div className="min-h-[300px] xl:min-h-0 xl:overflow-hidden">
-            <OrderEntryPanel
-              advancedSummaryRows={advancedSummaryRows}
-              allocation={allocation}
-              atExpiryDeliver={atExpiryDeliver}
-              balanceLabel={formatUsdcBalanceLabel(usdcBalance)}
-              contractDetails={market.contractDetails}
-              contractLabel={getDisplayTicker(selectedMarket)}
-              depositControl={
-                <DepositDialog
-                  onDeposited={handleDeposited}
-                  subaccountId={tradingSubaccountId}
-                  triggerId="order-entry-deposit-trigger"
-                  wallet={primaryWallet}
-                />
-              }
-              exposureLabel={exposureLabel}
-              futureSizeUnit={selectedMarket.type === "future" ? "contracts" : undefined}
-              isFXFuture={selectedMarket.type === "future"}
-              isSubmitting={isSubmittingOrder || isResolvingTradingSubaccount}
-              lastAction={lastAction}
-              limitPrice={limitPrice}
-              onAllocationChange={setAllocation}
-              onAtExpiryDeliverToggle={() => setAtExpiryDeliver((current) => !current)}
-              onLimitPriceChange={setLimitPrice}
-              onOrderTypeChange={setOrderType}
-              onPostOnlyToggle={() => setPostOnly((current) => !current)}
-              onSideChange={setOrderSide}
-              onSizeChange={setSize}
-              onSubmit={handleSubmit}
-              orderSide={orderSide}
-              orderSummaryRows={orderSummaryRows}
-              orderType={orderType}
-              pnl={unrealizedPnl}
-              positionBuilderRows={positionBuilderRows}
-              positionOverview={positionOverview}
-              postOnly={postOnly}
-              returnLabel={returnLabel}
-              returnValue={returnValue}
-              size={size}
-              slippageEstimate={slippageEstimate}
-            />
-          </div>
-        </section>
-        ) : null}
-
       </div>
     </main>
   );

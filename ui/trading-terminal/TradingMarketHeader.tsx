@@ -6,13 +6,7 @@ import type { ReactNode } from "react";
 import { PrivyWalletButton } from "@/ui/PrivyWalletButton";
 import { SmartImage } from "@/ui/SmartImage";
 
-export function TradingMarketHeader({
-  depositControl,
-  layoutControl,
-}: {
-  depositControl?: ReactNode;
-  layoutControl?: ReactNode;
-}) {
+export function TradingMarketHeader({ depositControl }: { depositControl?: ReactNode }) {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
@@ -45,7 +39,6 @@ export function TradingMarketHeader({
         />
 
         <div className="flex items-center gap-3">
-          {layoutControl}
           {depositControl}
           <button
             onClick={toggleTheme}
