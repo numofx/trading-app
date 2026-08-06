@@ -29,8 +29,9 @@ const DEFAULT_SUBACCOUNTS_ADDRESS_SEPOLIA = "0xdEEF5903FEfEEde7A4F4369050AFd228d
 const DEFAULT_CASH_ASSET_ADDRESS_MAINNET = "0x6b232a2155bd0c9bf741db4cf8e7e8a0176a6fc6";
 /** Numo cNGN-side IAsset — held per subaccount after a USDC->cNGN buy. */
 const DEFAULT_CNGN_ASSET_ADDRESS_MAINNET = "0x9d806fd040a719d27a8e5e77dc5ae0ed1e089493";
-/** cNGN ERC-20 on Base mainnet. Verified on-chain: name/symbol "cNGN", 6 decimals. */
+/** cNGN ERC-20s. Both verified on-chain: name/symbol "cNGN", 6 decimals. */
 const DEFAULT_CNGN_TOKEN_ADDRESS_MAINNET = "0x46C85152bFe9f96829aA94755D9f915F9B10EF5F";
+const DEFAULT_CNGN_TOKEN_ADDRESS_SEPOLIA = "0xe2387F04d3858e7Cb64Ef5Ed6617f9B2fcEEAfa2";
 
 function isAppMainnet() {
   return getAppChain().id === base.id;
@@ -96,16 +97,15 @@ export function getCashAssetAddress(): `0x${string}` | null {
 /**
  * Underlying cNGN ERC-20 token held in the user's wallet — the cNGN counterpart to
  * {@link getUsdcTokenAddress}, and distinct from {@link getCngnAssetAddress}, which is the Numo
- * IAsset wrapper on the ledger side. Only mainnet has a baked-in default; on other chains this
- * returns null unless NEXT_PUBLIC_CNGN_TOKEN_ADDRESS is set, and callers render the balance as
- * unknown rather than guessing at an address and reading off the wrong contract.
+ * IAsset wrapper on the ledger side. Both chains getAppChain() can return have a verified default,
+ * so unlike the ledger-side asset getters this always resolves to an address.
  */
-export function getCngnTokenAddress(): `0x${string}` | null {
+export function getCngnTokenAddress(): `0x${string}` {
   const configured = process.env.NEXT_PUBLIC_CNGN_TOKEN_ADDRESS?.trim();
   if (configured) {
     return getAddress(configured);
   }
-  return isAppMainnet() ? getAddress(DEFAULT_CNGN_TOKEN_ADDRESS_MAINNET) : null;
+  return getAddress(isAppMainnet() ? DEFAULT_CNGN_TOKEN_ADDRESS_MAINNET : DEFAULT_CNGN_TOKEN_ADDRESS_SEPOLIA);
 }
 
 /** cNGN-side IAsset address for labeling the cNGN leg of a subaccount balance, or null if unknown. */

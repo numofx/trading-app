@@ -11,10 +11,9 @@ export type CngnBalance = {
 };
 
 /**
- * Wallet balance of the underlying cNGN token, or null when no wallet is connected, the read
- * fails, or NEXT_PUBLIC_CNGN_TOKEN_ADDRESS is unset for the active chain. Mirrors
- * {@link useUsdcBalance}; unlike {@link useSubaccountBalance} this is wallet-held cNGN, not the
- * deposited ledger leg.
+ * Wallet balance of the underlying cNGN token, or null when no wallet is connected or the read
+ * fails. Mirrors {@link useUsdcBalance}; unlike {@link useSubaccountBalance} this is wallet-held
+ * cNGN, not the deposited ledger leg.
  */
 export function useCngnBalance(walletAddress: string | null) {
   const [balance, setBalance] = useState<CngnBalance | null>(null);
@@ -22,9 +21,8 @@ export function useCngnBalance(walletAddress: string | null) {
 
   useEffect(() => {
     let cancelled = false;
-    const token = getCngnTokenAddress();
 
-    if (!(walletAddress && token)) {
+    if (!walletAddress) {
       setBalance(null);
       return () => {
         cancelled = true;
@@ -53,7 +51,7 @@ export function useCngnBalance(walletAddress: string | null) {
       }
     }
 
-    readBalance(token, getAddress(walletAddress)).catch(() => {
+    readBalance(getCngnTokenAddress(), getAddress(walletAddress)).catch(() => {
       if (!cancelled) {
         setBalance(null);
       }
