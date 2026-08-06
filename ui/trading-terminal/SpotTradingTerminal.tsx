@@ -155,7 +155,12 @@ export function SpotTradingTerminal({
           trades={bookTrades}
         />
 
-        <div className="flex min-h-[420px] flex-col gap-3 xl:min-h-0 xl:overflow-hidden">
+        {/*
+         * `order-first` on phones only: in the stacked single column the ticket would sit
+         * below the chart and order book, putting the submit button ~2.5 screens down the
+         * document. The xl grid places columns explicitly, so order resets there.
+         */}
+        <div className="order-first flex min-h-[420px] flex-col gap-3 xl:order-0 xl:min-h-0 xl:overflow-hidden">
           <SpotOrderFormPanel
             availableCngnLabel="0.00 cNGN"
             availableUsdcLabel={usdcBalanceLabel ?? "— USDC"}

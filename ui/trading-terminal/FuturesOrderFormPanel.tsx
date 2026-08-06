@@ -91,7 +91,12 @@ export function FuturesOrderFormPanel({
     // The panel claims the column height itself so only the field list below can
     // scroll — the header and the submit footer stay in view without scrolling.
     <section className="flex flex-col overflow-clip rounded-[20px] bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 xl:min-h-0 xl:flex-1">
-      <div className="flex shrink-0 items-center border-panel-border border-b px-3 py-2 font-medium text-[11px]">
+      {/*
+       * The panel label only earns its space next to sibling panels. In the stacked
+       * sub-xl layout this is the only form on screen, so the row is dropped there to
+       * keep the submit button within the first screenful.
+       */}
+      <div className="hidden shrink-0 items-center border-panel-border border-b px-3 py-2 font-medium text-[11px] xl:flex">
         <span className="rounded-xl bg-input-bg px-2 py-1 text-panel-text-active">Order form</span>
       </div>
 

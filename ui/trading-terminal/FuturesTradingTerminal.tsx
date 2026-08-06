@@ -212,8 +212,15 @@ function FuturesTickerBar({
             </span>
           </div>
 
-          <div className="hidden h-8 w-px bg-panel-border sm:block" />
-          <TickerStat label="24H volume" value={volume24hLabel} />
+          {/*
+           * Only 24H volume is dropped on phones — the chart panel repeats it directly below.
+           * Basis, expiry and contract size stay: they are contract terms rather than market
+           * stats, and the ticker is the only place contract size is shown.
+           */}
+          <div className="hidden items-center gap-x-5 sm:flex">
+            <div className="h-8 w-px bg-panel-border" />
+            <TickerStat label="24H volume" value={volume24hLabel} />
+          </div>
           <div className="hidden h-8 w-px bg-panel-border sm:block" />
           <TickerStat label="Basis (annualized)" value={basisLabel} />
           <div className="hidden h-8 w-px bg-panel-border sm:block" />
@@ -345,7 +352,12 @@ export function FuturesTradingTerminal({
           trades={bookTrades}
         />
 
-        <div className="flex min-h-[420px] flex-col gap-3 xl:min-h-0 xl:overflow-hidden">
+        {/*
+         * `order-first` on phones only: in the stacked single column the ticket would sit
+         * below the chart and order book, putting the submit button ~2.5 screens down the
+         * document. The xl grid places columns explicitly, so order resets there.
+         */}
+        <div className="order-first flex min-h-[420px] flex-col gap-3 xl:order-0 xl:min-h-0 xl:overflow-hidden">
           <FuturesOrderFormPanel
             availableLabel={usdcBalanceLabel ?? "— USDC"}
             isSubmitting={isSubmitting}

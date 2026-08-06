@@ -122,12 +122,19 @@ export function SpotTickerBar({
             </span>
           </div>
 
-          <div className="hidden h-8 w-px bg-panel-border sm:block" />
-          <TickerStat label="24H volume" value={volume24hLabel} />
-          <div className="hidden h-8 w-px bg-panel-border sm:block" />
-          <TickerStat label="24H high" value={formatNaira(high24h)} />
-          <div className="hidden h-8 w-px bg-panel-border sm:block" />
-          <TickerStat label="24H low" value={formatNaira(low24h)} />
+          {/*
+           * Secondary 24H stats are dropped on phones: they wrap to their own rows there,
+           * pushing the order ticket down the document, and the chart panel immediately
+           * below repeats high/low/volume for the selected interval.
+           */}
+          <div className="hidden min-w-0 flex-wrap items-center gap-x-5 gap-y-2 sm:flex">
+            <div className="h-8 w-px bg-panel-border" />
+            <TickerStat label="24H volume" value={volume24hLabel} />
+            <div className="h-8 w-px bg-panel-border" />
+            <TickerStat label="24H high" value={formatNaira(high24h)} />
+            <div className="h-8 w-px bg-panel-border" />
+            <TickerStat label="24H low" value={formatNaira(low24h)} />
+          </div>
         </div>
       </div>
     </section>
