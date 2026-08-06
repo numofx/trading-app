@@ -256,7 +256,7 @@ export function FuturesTradingTerminal({
   /** Whether a wallet session is active; gates account-scoped rows in the activity panel. */
   isSignedIn?: boolean;
   isSubmitting: boolean;
-  lastAction: string;
+  lastAction: string | null;
   lastPrice: number | null;
   limitPrice: string;
   market: ContractMarket;

@@ -67,7 +67,7 @@ export function FuturesOrderFormPanel({
   availableLabel: string;
   contractSizeLabel: string;
   isSubmitting: boolean;
-  lastAction: string;
+  lastAction: string | null;
   limitPrice: string;
   onLimitPriceChange: (value: string) => void;
   onOrderTypeChange: (orderType: FuturesOrderType) => void;
@@ -191,9 +191,11 @@ export function FuturesOrderFormPanel({
           {getSubmitLabel()}
         </button>
 
-        <p className="rounded-[12px] bg-input-bg px-3 py-2 text-[10px] text-panel-text-muted ring-1 ring-panel-border">
-          {lastAction}
-        </p>
+        {lastAction === null ? null : (
+          <p className="rounded-[12px] bg-input-bg px-3 py-2 text-[10px] text-panel-text-muted ring-1 ring-panel-border">
+            {lastAction}
+          </p>
+        )}
       </div>
     </section>
   );
