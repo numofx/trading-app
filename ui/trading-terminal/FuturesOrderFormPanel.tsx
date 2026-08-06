@@ -128,19 +128,6 @@ export function FuturesOrderFormPanel({
           selected={orderType}
         />
 
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[11px] text-panel-text-muted">Collateral</span>
-          <span className="flex items-center gap-1.5 rounded-lg bg-input-bg px-2 py-1 text-[11px] text-panel-text-active ring-1 ring-panel-border">
-            <SmartImage<string> alt="USDC" className="size-4 animate-none rounded-full" src="/tokens/usdc.svg" />
-            USDC
-          </span>
-        </div>
-
-        <div className="flex items-center justify-between gap-2 rounded-[12px] bg-input-bg/60 px-3 py-2 text-[11px]">
-          <span className="text-panel-text-muted">Available</span>
-          <span className="font-medium text-panel-text">{availableLabel}</span>
-        </div>
-
         {orderType === "Market" ? null : (
           <FormInput
             id="futures-limit-price"
@@ -160,6 +147,19 @@ export function FuturesOrderFormPanel({
           unit="contracts"
           value={size}
         />
+
+        {/*
+         * Collateral and its balance share a row, below the amount field: the
+         * collateral currency is fixed, so it is reference material rather than
+         * something the trader sets on each order.
+         */}
+        <div className="flex items-center justify-between gap-2 rounded-[12px] bg-input-bg/60 py-1.5 pr-3 pl-1.5 text-[11px]">
+          <span className="flex shrink-0 items-center gap-1.5 rounded-lg bg-input-bg px-2 py-1 text-panel-text-active ring-1 ring-panel-border">
+            <SmartImage<string> alt="USDC" className="size-4 animate-none rounded-full" src="/tokens/usdc.svg" />
+            USDC
+          </span>
+          <span className="truncate font-medium text-panel-text">{availableLabel}</span>
+        </div>
 
         <div className="space-y-2 rounded-[12px] bg-input-bg/60 px-3 py-2.5">
           <div className="flex items-center justify-between gap-2 text-[11px]">
