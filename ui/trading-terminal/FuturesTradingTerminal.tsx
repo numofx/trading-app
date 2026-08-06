@@ -320,7 +320,7 @@ export function FuturesTradingTerminal({
         volume24hLabel={volumeLabel}
       />
 
-      <div className="grid grid-cols-1 gap-3 xl:min-h-0 xl:flex-7 xl:grid-cols-[minmax(0,1fr)_270px_320px] xl:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_300px_340px]">
+      <div className="grid grid-cols-1 gap-3 xl:min-h-0 xl:flex-8 xl:grid-cols-[minmax(0,1fr)_270px_320px] xl:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_300px_340px]">
         <SpotChartPanel
           asks={bookAsks}
           bids={bookBids}
@@ -369,7 +369,7 @@ export function FuturesTradingTerminal({
         </div>
       </div>
 
-      <div className="min-h-[200px] xl:min-h-0 xl:flex-3">
+      <div className="min-h-[200px] xl:min-h-0 xl:flex-2">
         <TradingActivityPanel
           activityView={activityView}
           footerLinks={FOOTER_LINKS}
