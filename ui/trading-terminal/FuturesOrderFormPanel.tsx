@@ -50,7 +50,6 @@ function FormInput({
 
 export function FuturesOrderFormPanel({
   availableLabel,
-  contractSizeLabel,
   isSubmitting,
   lastAction,
   limitPrice,
@@ -65,7 +64,6 @@ export function FuturesOrderFormPanel({
   summaryRows,
 }: {
   availableLabel: string;
-  contractSizeLabel: string;
   isSubmitting: boolean;
   lastAction: string | null;
   limitPrice: string;
@@ -160,23 +158,24 @@ export function FuturesOrderFormPanel({
           </span>
           <span className="truncate font-medium text-panel-text">{availableLabel}</span>
         </div>
-
-        <div className="space-y-2 rounded-[12px] bg-input-bg/60 px-3 py-2.5">
-          <div className="flex items-center justify-between gap-2 text-[11px]">
-            <span className="text-panel-text-muted">Contract size</span>
-            <span className="font-medium text-panel-text">{contractSizeLabel}</span>
-          </div>
-          {summaryRows.map((item) => (
-            <div className="flex items-center justify-between gap-2 text-[11px]" key={item.label}>
-              <span className="text-panel-text-muted">{item.label}</span>
-              <span className="text-right font-medium text-panel-text">{item.value}</span>
-            </div>
-          ))}
-        </div>
       </div>
 
       {/* The submit CTA stays pinned so the primary action is never scrolled out of reach. */}
       <div className="shrink-0 space-y-3 border-panel-border border-t bg-panel-bg-muted px-3 pt-2.5 pb-3">
+        {/*
+         * What the order commits and risks belongs next to the button that
+         * commits to it, so these sit in the footer rather than the scrolling
+         * field list. Contract size is omitted — the ticker bar already shows it.
+         */}
+        <div className="space-y-1 rounded-[12px] bg-input-bg/60 px-3 py-2 text-[11px]">
+          {summaryRows.map((item) => (
+            <div className="flex items-center justify-between gap-2" key={item.label}>
+              <span className="truncate text-panel-text-muted">{item.label}</span>
+              <span className="truncate text-right font-medium text-panel-text">{item.value}</span>
+            </div>
+          ))}
+        </div>
+
         <button
           className={cn(
             "h-11 w-full cursor-pointer rounded-[14px] font-semibold text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-60",

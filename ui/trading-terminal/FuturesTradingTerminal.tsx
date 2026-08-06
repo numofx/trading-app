@@ -348,7 +348,6 @@ export function FuturesTradingTerminal({
         <div className="flex min-h-[420px] flex-col gap-3 xl:min-h-0 xl:overflow-hidden">
           <FuturesOrderFormPanel
             availableLabel={usdcBalanceLabel ?? "— USDC"}
-            contractSizeLabel={formatContractSize(marketDefinition.contractMultiplier)}
             isSubmitting={isSubmitting}
             lastAction={lastAction}
             limitPrice={limitPrice}
