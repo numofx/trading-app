@@ -311,74 +311,34 @@ function buildSelectorMetrics(
 }
 
 
+/**
+ * The three numbers the ticket footer keeps permanently in view: what the order
+ * costs to open, what it costs to fill, and where it gets liquidated. Notional
+ * and estimated fill are derivable from the size and price fields above it, so
+ * they are left out to keep the pinned footer short.
+ */
 function getOrderSummaryRows({
-  contracts,
-  estimatedFill,
   fees,
   initialMargin,
   liquidationPrice,
   quoteCurrency,
 }: {
-  contracts: number;
-  estimatedFill: number | null;
   fees: number;
   initialMargin: number;
   liquidationPrice: number | null;
   quoteCurrency: string;
 }) {
-  const orderValue =
-    estimatedFill !== null && Number.isFinite(estimatedFill) ? contracts * estimatedFill : 0;
-  const liquidationDistancePercent = getLiquidationBufferPercent(estimatedFill, liquidationPrice);
-  let liquidationDistanceLabel = "—";
-
-  if (
-    liquidationDistancePercent !== null &&
-    estimatedFill !== null &&
-    liquidationPrice !== null &&
-    Number.isFinite(estimatedFill) &&
-    Number.isFinite(liquidationPrice)
-  ) {
-    const direction = liquidationPrice < estimatedFill ? "below mark" : "above mark";
-    liquidationDistanceLabel = `${liquidationDistancePercent.toFixed(1)}% ${direction}`;
-  }
-
-  const digits = quoteCurrency === "EURC" || quoteCurrency === "BRZ" ? 4 : 0;
-
   return [
-    {
-      label: "Notional",
-      value: `${orderValue.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits })} ${quoteCurrency}`,
-    },
     {
       label: "Margin Required",
       value: `${initialMargin.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC`,
     },
-    { label: "Est. Fill Price", value: formatPriceDisplay(estimatedFill, quoteCurrency) },
     {
       label: "Fees",
       value: `${fees.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })} USDC`,
     },
     { label: "Liquidation Price", value: formatPriceDisplay(liquidationPrice, quoteCurrency) },
-    { label: "Est. Distance to Liquidation", value: liquidationDistanceLabel },
   ] satisfies DeliveryTerm[];
-}
-
-
-function getLiquidationBufferPercent(
-  estimatedFill: number | null,
-  liquidationPrice: number | null
-) {
-  if (
-    estimatedFill === null ||
-    liquidationPrice === null ||
-    !Number.isFinite(estimatedFill) ||
-    !Number.isFinite(liquidationPrice) ||
-    estimatedFill <= 0
-  ) {
-    return null;
-  }
-
-  return (Math.abs(estimatedFill - liquidationPrice) / estimatedFill) * 100;
 }
 
 function getOrderMetrics(
@@ -557,7 +517,7 @@ export function OrderBookTradingTerminal({
     Number((selectedMarket.contractMultiplier ?? "10000").replaceAll(",", "")) || 10_000;
   const sizeUsdcNotional = String((Number(size) || 0) * futureContractMultiplier);
 
-  const { estimatedFill, fees, initialMargin, liquidationPrice } =
+  const { fees, initialMargin, liquidationPrice } =
     getOrderMetrics(
       limitPrice,
       market.mark,
@@ -569,8 +529,6 @@ export function OrderBookTradingTerminal({
   const quoteCurrency = getQuoteCurrency(selectedMarket.pair);
 
   const orderSummaryRows = getOrderSummaryRows({
-    contracts: Number(sizeUsdcNotional || "0"),
-    estimatedFill,
     fees,
     initialMargin,
     liquidationPrice,
