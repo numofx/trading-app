@@ -454,7 +454,9 @@ export function OrderBookTradingTerminal({
   const [activeSection, setActiveSection] = useState<AppSection>("spot");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  const [lastAction, setLastAction] = useState("Ready");
+  // `null` until something actually happens — an idle placeholder would occupy
+  // footer space in the order ticket without telling the trader anything.
+  const [lastAction, setLastAction] = useState<string | null>(null);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const [hasHydratedSelection, setHasHydratedSelection] = useState(false);
   const selectedMarketIdRef = useRef(initialMarketId);

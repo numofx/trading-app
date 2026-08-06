@@ -256,7 +256,7 @@ export function FuturesTradingTerminal({
   /** Whether a wallet session is active; gates account-scoped rows in the activity panel. */
   isSignedIn?: boolean;
   isSubmitting: boolean;
-  lastAction: string;
+  lastAction: string | null;
   lastPrice: number | null;
   limitPrice: string;
   market: ContractMarket;
@@ -345,7 +345,7 @@ export function FuturesTradingTerminal({
           trades={bookTrades}
         />
 
-        <div className="flex min-h-[420px] flex-col gap-3 xl:min-h-0 xl:overflow-y-auto">
+        <div className="flex min-h-[420px] flex-col gap-3 xl:min-h-0 xl:overflow-hidden">
           <FuturesOrderFormPanel
             availableLabel={usdcBalanceLabel ?? "— USDC"}
             contractSizeLabel={formatContractSize(marketDefinition.contractMultiplier)}

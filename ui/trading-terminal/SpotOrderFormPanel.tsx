@@ -108,6 +108,7 @@ export function SpotOrderFormPanel({
       : null;
   const availableLabel = payWith === "USDC" ? availableUsdcLabel : availableCngnLabel;
   const takerFee = Number.isFinite(parsedAmount) ? parsedAmount * Number(SPOT_TAKER_FEE_RATE) : 0;
+  const totalLabel = total === null ? "—" : `${formatNaira(total, 0).replace("₦", "")} cNGN`;
 
   function handleSubmit() {
     if (!onSubmitOrder) {
@@ -124,14 +125,14 @@ export function SpotOrderFormPanel({
   const statusText = lastAction ?? statusMessage;
 
   return (
-    // `overflow-clip` (not `hidden`) keeps the rounded corners without creating a
-    // scroll container, so the action footer can stick to the column scroller.
-    <section className="flex shrink-0 flex-col overflow-clip rounded-[20px] bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300">
-      <div className="flex items-center border-panel-border border-b px-3 py-2 font-medium text-[11px]">
+    // The panel claims the column height itself so only the field list below can
+    // scroll — the header and the submit footer stay in view without scrolling.
+    <section className="flex flex-col overflow-clip rounded-[20px] bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 xl:min-h-0 xl:flex-1">
+      <div className="flex shrink-0 items-center border-panel-border border-b px-3 py-2 font-medium text-[11px]">
         <span className="rounded-xl bg-input-bg px-2 py-1 text-panel-text-active">Order form</span>
       </div>
 
-      <div className="space-y-3 p-3">
+      <div className="space-y-3 p-3 xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
         <div className="grid grid-cols-2 gap-1 rounded-[14px] bg-input-bg p-1">
           <button
             className={cn(
@@ -157,56 +158,6 @@ export function SpotOrderFormPanel({
 
         <OrderTypeTabs onSelect={setOrderType} orderTypes={ORDER_TYPES} selected={orderType} />
 
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[11px] text-panel-text-muted">Pay with</span>
-          <Popover.Root onOpenChange={setPayWithOpen} open={payWithOpen}>
-            <Popover.Trigger
-              className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-input-bg px-2 py-1 text-[11px] text-panel-text-active ring-1 ring-panel-border transition-colors hover:bg-input-hover"
-              id="spot-pay-with-trigger"
-            >
-              <SmartImage<string>
-                alt={payWith}
-                className="size-4 animate-none rounded-full"
-                src={PAY_CURRENCY_ICONS[payWith]}
-              />
-              {payWith}
-              <ChevronDown className={cn("size-3 text-panel-text-muted transition-transform", payWithOpen && "rotate-180")} />
-            </Popover.Trigger>
-            <Popover.Portal>
-              <Popover.Positioner align="end" sideOffset={6}>
-                <Popover.Popup className="z-50 min-w-[140px] overflow-hidden rounded-xl border border-panel-border bg-panel-bg-darker p-1 shadow-[0_20px_60px_var(--panel-shadow)] outline-none transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
-                  {(["cNGN", "USDC"] as const).map((currency) => (
-                    <button
-                      className={cn(
-                        "flex w-full cursor-pointer items-center gap-2 rounded-lg p-2 text-left text-[11px] transition-colors hover:bg-input-hover",
-                        payWith === currency ? "text-panel-text-active" : "text-panel-text"
-                      )}
-                      key={currency}
-                      onClick={() => {
-                        setPayWith(currency);
-                        setPayWithOpen(false);
-                      }}
-                      type="button"
-                    >
-                      <SmartImage<string>
-                        alt={currency}
-                        className="size-4 animate-none rounded-full"
-                        src={PAY_CURRENCY_ICONS[currency]}
-                      />
-                      {currency}
-                    </button>
-                  ))}
-                </Popover.Popup>
-              </Popover.Positioner>
-            </Popover.Portal>
-          </Popover.Root>
-        </div>
-
-        <div className="flex items-center justify-between gap-2 rounded-[12px] bg-input-bg/60 px-3 py-2 text-[11px]">
-          <span className="text-panel-text-muted">Available</span>
-          <span className="font-medium text-panel-text">{availableLabel}</span>
-        </div>
-
         {orderType === "Stop Limit" ? (
           <FormInput
             id="spot-stop-price"
@@ -231,26 +182,84 @@ export function SpotOrderFormPanel({
 
         <FormInput id="spot-amount" label="Amount" onChange={setAmount} placeholder="100" unit="USDC" value={amount} />
 
-        <FormInput
-          id="spot-total"
-          label="Total"
-          readOnly
-          unit="cNGN"
-          value={total === null ? "—" : formatNaira(total, 0).replace("₦", "")}
-        />
+        {/*
+         * Funding source and its balance are one thought — `availableLabel` is
+         * the balance of whichever currency is selected here — so they share a
+         * row. It sits below the amount fields because the trader picks a
+         * funding currency once, but types an amount on every order.
+         */}
+        <div className="flex items-center justify-between gap-2 rounded-[12px] bg-input-bg/60 py-1.5 pr-1.5 pl-3 text-[11px]">
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="shrink-0 text-panel-text-muted">Pay with</span>
+            <Popover.Root onOpenChange={setPayWithOpen} open={payWithOpen}>
+              <Popover.Trigger
+                className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-input-bg px-2 py-1 text-panel-text-active ring-1 ring-panel-border transition-colors hover:bg-input-hover"
+                id="spot-pay-with-trigger"
+              >
+                <SmartImage<string>
+                  alt={payWith}
+                  className="size-4 animate-none rounded-full"
+                  src={PAY_CURRENCY_ICONS[payWith]}
+                />
+                {payWith}
+                <ChevronDown className={cn("size-3 text-panel-text-muted transition-transform", payWithOpen && "rotate-180")} />
+              </Popover.Trigger>
+              <Popover.Portal>
+                <Popover.Positioner align="start" sideOffset={6}>
+                  <Popover.Popup className="z-50 min-w-[140px] overflow-hidden rounded-xl border border-panel-border bg-panel-bg-darker p-1 shadow-[0_20px_60px_var(--panel-shadow)] outline-none transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
+                    {(["cNGN", "USDC"] as const).map((currency) => (
+                      <button
+                        className={cn(
+                          "flex w-full cursor-pointer items-center gap-2 rounded-lg p-2 text-left text-[11px] transition-colors hover:bg-input-hover",
+                          payWith === currency ? "text-panel-text-active" : "text-panel-text"
+                        )}
+                        key={currency}
+                        onClick={() => {
+                          setPayWith(currency);
+                          setPayWithOpen(false);
+                        }}
+                        type="button"
+                      >
+                        <SmartImage<string>
+                          alt={currency}
+                          className="size-4 animate-none rounded-full"
+                          src={PAY_CURRENCY_ICONS[currency]}
+                        />
+                        {currency}
+                      </button>
+                    ))}
+                  </Popover.Popup>
+                </Popover.Positioner>
+              </Popover.Portal>
+            </Popover.Root>
+          </span>
 
+          <span className="truncate font-medium text-panel-text">{availableLabel}</span>
+        </div>
       </div>
 
       {/* Fees and the submit CTA stay pinned so the primary action is never scrolled out of reach. */}
-      <div className="space-y-3 border-panel-border border-t bg-panel-bg-muted px-3 pt-2.5 pb-3 xl:sticky xl:bottom-0">
-        <div className="space-y-1.5 rounded-[12px] bg-input-bg/60 px-3 py-2 text-[11px]">
+      <div className="shrink-0 space-y-3 border-panel-border border-t bg-panel-bg-muted px-3 pt-2.5 pb-3">
+        {/*
+         * Total lives here rather than in the scrolling field list: it is
+         * read-only output, and what the order costs belongs next to the fees
+         * and the button that commits to it.
+         */}
+        <div className="rounded-[12px] bg-input-bg/60 px-3 py-2 text-[11px]">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-panel-text-muted">Taker fee ({SPOT_TAKER_FEE_BPS} bps)</span>
-            <span className="font-medium text-panel-text">{formatSpotFee(takerFee)}</span>
+            <span className="text-panel-text-muted">Total</span>
+            <span className="truncate font-semibold text-[13px] text-panel-text-active">{totalLabel}</span>
           </div>
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-panel-text-muted">Maker fee</span>
-            <span className="font-semibold text-panel-text-active">Free</span>
+
+          <div className="mt-2 space-y-1.5 border-panel-border border-t pt-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-panel-text-muted">Taker fee ({SPOT_TAKER_FEE_BPS} bps)</span>
+              <span className="font-medium text-panel-text">{formatSpotFee(takerFee)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-panel-text-muted">Maker fee</span>
+              <span className="font-semibold text-panel-text-active">Free</span>
+            </div>
           </div>
         </div>
 

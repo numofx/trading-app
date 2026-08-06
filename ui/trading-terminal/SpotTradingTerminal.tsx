@@ -155,7 +155,7 @@ export function SpotTradingTerminal({
           trades={bookTrades}
         />
 
-        <div className="flex min-h-[420px] flex-col gap-3 xl:min-h-0 xl:overflow-y-auto">
+        <div className="flex min-h-[420px] flex-col gap-3 xl:min-h-0 xl:overflow-hidden">
           <SpotOrderFormPanel
             availableCngnLabel="0.00 cNGN"
             availableUsdcLabel={usdcBalanceLabel ?? "— USDC"}

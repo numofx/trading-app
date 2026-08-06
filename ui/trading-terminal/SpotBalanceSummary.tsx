@@ -2,15 +2,12 @@
 
 import { SmartImage } from "@/ui/SmartImage";
 
-function BalanceRow({ icon, label, value }: { icon: string; label: string; value: string }) {
+function BalanceChip({ icon, label, value }: { icon: string; label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-2 text-[11px]">
-      <span className="flex items-center gap-2 text-panel-text-muted">
-        <SmartImage<string> alt={label} className="size-4.5 animate-none rounded-full" src={icon} />
-        {label}
-      </span>
-      <span className="font-medium text-panel-text">{value}</span>
-    </div>
+    <span className="flex min-w-0 items-center gap-1.5 text-[11px]">
+      <SmartImage<string> alt={label} className="size-4 shrink-0 animate-none rounded-full" src={icon} />
+      <span className="truncate font-medium text-panel-text">{value}</span>
+    </span>
   );
 }
 
@@ -26,26 +23,17 @@ export function SpotBalanceSummary({
   const clampedRatio = Math.min(Math.max(marginRatioPercent, 0), 100);
 
   return (
-    <section className="shrink-0 rounded-[20px] bg-panel-bg-muted p-3 ring-1 ring-panel-ring transition-colors duration-300">
-      <div className="font-medium text-[11px] text-panel-text-active">Balance summary</div>
-
-      <div className="mt-3 space-y-2.5">
-        <BalanceRow icon="/tokens/usdc.svg" label="USDC" value={usdcBalanceLabel} />
-        <BalanceRow icon="/tokens/cngn.svg" label="cNGN" value={cngnBalanceLabel} />
+    // A single strip rather than a stacked card: this sits directly under the
+    // order ticket and every row it costs is a row the ticket cannot use.
+    <section className="flex shrink-0 items-center justify-between gap-3 rounded-[20px] bg-panel-bg-muted px-3 py-2.5 ring-1 ring-panel-ring transition-colors duration-300">
+      <div className="flex min-w-0 items-center gap-3">
+        <BalanceChip icon="/tokens/usdc.svg" label="USDC" value={usdcBalanceLabel} />
+        <BalanceChip icon="/tokens/cngn.svg" label="cNGN" value={cngnBalanceLabel} />
       </div>
 
-      <div className="mt-3 border-panel-border border-t pt-3">
-        <div className="flex items-center justify-between text-[11px]">
-          <span className="text-panel-text-muted">Margin ratio</span>
-          <span className="font-medium text-panel-text">{clampedRatio.toFixed(1)}%</span>
-        </div>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-input-bg">
-          <div className="h-full rounded-full bg-spread-percent" style={{ width: `${clampedRatio}%` }} />
-        </div>
-        <p className="mt-2 text-[10px] text-panel-text-muted">
-          {clampedRatio === 0 ? "No margin in use — spot balances are fully available." : "Margin used by open derivatives positions."}
-        </p>
-      </div>
+      <span className="shrink-0 text-[11px] text-panel-text-muted">
+        Margin <span className="font-medium text-panel-text">{clampedRatio.toFixed(1)}%</span>
+      </span>
     </section>
   );
 }

@@ -67,7 +67,7 @@ export function FuturesOrderFormPanel({
   availableLabel: string;
   contractSizeLabel: string;
   isSubmitting: boolean;
-  lastAction: string;
+  lastAction: string | null;
   limitPrice: string;
   onLimitPriceChange: (value: string) => void;
   onOrderTypeChange: (orderType: FuturesOrderType) => void;
@@ -90,14 +90,14 @@ export function FuturesOrderFormPanel({
   }
 
   return (
-    // `overflow-clip` (not `hidden`) keeps the rounded corners without creating a
-    // scroll container, so the action footer can stick to the column scroller.
-    <section className="flex shrink-0 flex-col overflow-clip rounded-[20px] bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300">
-      <div className="flex items-center border-panel-border border-b px-3 py-2 font-medium text-[11px]">
+    // The panel claims the column height itself so only the field list below can
+    // scroll — the header and the submit footer stay in view without scrolling.
+    <section className="flex flex-col overflow-clip rounded-[20px] bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 xl:min-h-0 xl:flex-1">
+      <div className="flex shrink-0 items-center border-panel-border border-b px-3 py-2 font-medium text-[11px]">
         <span className="rounded-xl bg-input-bg px-2 py-1 text-panel-text-active">Order form</span>
       </div>
 
-      <div className="space-y-3 p-3">
+      <div className="space-y-3 p-3 xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
         <div className="grid grid-cols-2 gap-1 rounded-[14px] bg-input-bg p-1">
           <button
             className={cn(
@@ -128,19 +128,6 @@ export function FuturesOrderFormPanel({
           selected={orderType}
         />
 
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[11px] text-panel-text-muted">Collateral</span>
-          <span className="flex items-center gap-1.5 rounded-lg bg-input-bg px-2 py-1 text-[11px] text-panel-text-active ring-1 ring-panel-border">
-            <SmartImage<string> alt="USDC" className="size-4 animate-none rounded-full" src="/tokens/usdc.svg" />
-            USDC
-          </span>
-        </div>
-
-        <div className="flex items-center justify-between gap-2 rounded-[12px] bg-input-bg/60 px-3 py-2 text-[11px]">
-          <span className="text-panel-text-muted">Available</span>
-          <span className="font-medium text-panel-text">{availableLabel}</span>
-        </div>
-
         {orderType === "Market" ? null : (
           <FormInput
             id="futures-limit-price"
@@ -161,6 +148,19 @@ export function FuturesOrderFormPanel({
           value={size}
         />
 
+        {/*
+         * Collateral and its balance share a row, below the amount field: the
+         * collateral currency is fixed, so it is reference material rather than
+         * something the trader sets on each order.
+         */}
+        <div className="flex items-center justify-between gap-2 rounded-[12px] bg-input-bg/60 py-1.5 pr-3 pl-1.5 text-[11px]">
+          <span className="flex shrink-0 items-center gap-1.5 rounded-lg bg-input-bg px-2 py-1 text-panel-text-active ring-1 ring-panel-border">
+            <SmartImage<string> alt="USDC" className="size-4 animate-none rounded-full" src="/tokens/usdc.svg" />
+            USDC
+          </span>
+          <span className="truncate font-medium text-panel-text">{availableLabel}</span>
+        </div>
+
         <div className="space-y-2 rounded-[12px] bg-input-bg/60 px-3 py-2.5">
           <div className="flex items-center justify-between gap-2 text-[11px]">
             <span className="text-panel-text-muted">Contract size</span>
@@ -176,7 +176,7 @@ export function FuturesOrderFormPanel({
       </div>
 
       {/* The submit CTA stays pinned so the primary action is never scrolled out of reach. */}
-      <div className="space-y-3 border-panel-border border-t bg-panel-bg-muted px-3 pt-2.5 pb-3 xl:sticky xl:bottom-0">
+      <div className="shrink-0 space-y-3 border-panel-border border-t bg-panel-bg-muted px-3 pt-2.5 pb-3">
         <button
           className={cn(
             "h-11 w-full cursor-pointer rounded-[14px] font-semibold text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-60",
@@ -191,9 +191,11 @@ export function FuturesOrderFormPanel({
           {getSubmitLabel()}
         </button>
 
-        <p className="rounded-[12px] bg-input-bg px-3 py-2 text-[10px] text-panel-text-muted ring-1 ring-panel-border">
-          {lastAction}
-        </p>
+        {lastAction === null ? null : (
+          <p className="rounded-[12px] bg-input-bg px-3 py-2 text-[10px] text-panel-text-muted ring-1 ring-panel-border">
+            {lastAction}
+          </p>
+        )}
       </div>
     </section>
   );
