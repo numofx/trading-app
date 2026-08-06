@@ -124,14 +124,14 @@ export function SpotOrderFormPanel({
   const statusText = lastAction ?? statusMessage;
 
   return (
-    // `overflow-clip` (not `hidden`) keeps the rounded corners without creating a
-    // scroll container, so the action footer can stick to the column scroller.
-    <section className="flex shrink-0 flex-col overflow-clip rounded-[20px] bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300">
-      <div className="flex items-center border-panel-border border-b px-3 py-2 font-medium text-[11px]">
+    // The panel claims the column height itself so only the field list below can
+    // scroll — the header and the submit footer stay in view without scrolling.
+    <section className="flex flex-col overflow-clip rounded-[20px] bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 xl:min-h-0 xl:flex-1">
+      <div className="flex shrink-0 items-center border-panel-border border-b px-3 py-2 font-medium text-[11px]">
         <span className="rounded-xl bg-input-bg px-2 py-1 text-panel-text-active">Order form</span>
       </div>
 
-      <div className="space-y-3 p-3">
+      <div className="space-y-3 p-3 xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
         <div className="grid grid-cols-2 gap-1 rounded-[14px] bg-input-bg p-1">
           <button
             className={cn(
@@ -242,7 +242,7 @@ export function SpotOrderFormPanel({
       </div>
 
       {/* Fees and the submit CTA stay pinned so the primary action is never scrolled out of reach. */}
-      <div className="space-y-3 border-panel-border border-t bg-panel-bg-muted px-3 pt-2.5 pb-3 xl:sticky xl:bottom-0">
+      <div className="shrink-0 space-y-3 border-panel-border border-t bg-panel-bg-muted px-3 pt-2.5 pb-3">
         <div className="space-y-1.5 rounded-[12px] bg-input-bg/60 px-3 py-2 text-[11px]">
           <div className="flex items-center justify-between gap-2">
             <span className="text-panel-text-muted">Taker fee ({SPOT_TAKER_FEE_BPS} bps)</span>
