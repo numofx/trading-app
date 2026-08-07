@@ -31,7 +31,9 @@ export function AppSidebar({
     <nav
       aria-label="Primary"
       className={cn(
-        "sticky top-0 flex h-dvh shrink-0 flex-col justify-between self-start border-panel-border border-r bg-panel-bg px-2 py-3 transition-all duration-300",
+        // Hidden below `xl`: a fixed rail costs a quarter of a 375px screen. Phones get
+        // `AppSectionSwitcher` instead, so exactly one of the two is ever displayed.
+        "sticky top-0 hidden h-dvh shrink-0 flex-col justify-between self-start border-panel-border border-r bg-panel-bg px-2 py-3 transition-all duration-300 xl:flex",
         collapsed ? "w-16" : "w-24"
       )}
     >
@@ -57,6 +59,49 @@ export function AppSidebar({
           {collapsed ? <ChevronsRight className="size-4" /> : <ChevronsLeft className="size-4" />}
         </button>
       </div>
+    </nav>
+  );
+}
+
+/**
+ * Phone and tablet stand-in for the sidebar rail, which is hidden below `xl`. Shares
+ * `PRIMARY_NAV_ITEMS` with the rail so the two never drift apart, and is itself hidden at
+ * `xl` so only one primary nav is in the accessibility tree at a time.
+ */
+export function AppSectionSwitcher({
+  activeSection,
+  onSectionChange,
+}: {
+  activeSection: AppSection;
+  onSectionChange: (section: AppSection) => void;
+}) {
+  return (
+    <nav
+      aria-label="Primary"
+      className="grid shrink-0 grid-cols-2 gap-1 rounded-[18px] bg-panel-bg p-1 ring-1 ring-panel-ring transition-colors duration-300 xl:hidden"
+    >
+      {PRIMARY_NAV_ITEMS.map((item) => {
+        const Icon = item.icon;
+        const active = activeSection === item.id;
+
+        return (
+          <button
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "flex h-9 cursor-pointer items-center justify-center gap-2 rounded-[14px] font-medium text-[12px] transition-colors duration-200",
+              active
+                ? "bg-toolbar-active-bg text-toolbar-active-fg"
+                : "text-panel-text-muted hover:bg-input-hover hover:text-panel-text"
+            )}
+            key={item.id}
+            onClick={() => onSectionChange(item.id)}
+            type="button"
+          >
+            <Icon className="size-4" />
+            {item.label}
+          </button>
+        );
+      })}
     </nav>
   );
 }
