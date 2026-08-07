@@ -1,6 +1,10 @@
 import type { ReactNode } from "react";
 import { ChevronDown, Expand, Gauge, Redo2 } from "lucide-react";
-import { CHART_TOOL_ICONS, CHART_TOOLS, TIMEFRAME_OPTIONS } from "@/lib/mock-orderbook-terminal-data";
+import {
+  CHART_TOOL_ICONS,
+  CHART_TOOLS,
+  TIMEFRAME_OPTIONS,
+} from "@/lib/mock-orderbook-terminal-data";
 import { cn } from "@/lib/cn";
 
 function ToolbarButton({
@@ -19,7 +23,7 @@ function ToolbarButton({
       className={cn(
         "inline-flex h-7 items-center gap-1.5 rounded-xl px-2 font-medium text-[10px] text-panel-text-muted transition-colors hover:bg-input-hover hover:text-panel-text-active",
         active && "bg-toolbar-active-bg text-toolbar-active-fg",
-        className,
+        className
       )}
       onClick={onClick}
       type="button"
@@ -60,7 +64,7 @@ export function TradingChartToolbar({
             <button
               className={cn(
                 "flex size-6.5 items-center justify-center rounded-lg text-panel-text-muted transition-colors hover:bg-input-hover hover:text-panel-text-active",
-                selectedTool === tool.id && "bg-toolbar-active-bg text-toolbar-active-fg",
+                selectedTool === tool.id && "bg-toolbar-active-bg text-toolbar-active-fg"
               )}
               key={tool.id}
               onClick={() => onToolSelect(tool.id)}
@@ -92,7 +96,11 @@ export function TradingChartToolbar({
           <ChevronDown className="size-3.5" />
         </ToolbarButton>
 
-        <ToolbarButton active={selectedTool === "measure"} className="px-2.5" onClick={() => onToolSelect("measure")}>
+        <ToolbarButton
+          active={selectedTool === "measure"}
+          className="px-2.5"
+          onClick={() => onToolSelect("measure")}
+        >
           <Gauge className="size-3.5" />
         </ToolbarButton>
 

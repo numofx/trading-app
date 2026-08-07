@@ -1,6 +1,18 @@
 import type { MarketDefinition, MarketType } from "@/lib/trading.types";
 
-const KNOWN_QUOTES = ["cNGN", "EURC", "USDC", "USDT", "BRZ", "USD", "EUR", "GBP", "JPY", "KES", "NGN"] as const;
+const KNOWN_QUOTES = [
+  "cNGN",
+  "EURC",
+  "USDC",
+  "USDT",
+  "BRZ",
+  "USD",
+  "EUR",
+  "GBP",
+  "JPY",
+  "KES",
+  "NGN",
+] as const;
 
 export function formatFxDisplayPair(symbol: string) {
   const quote = KNOWN_QUOTES.find((candidate) => symbol.endsWith(candidate));
@@ -113,7 +125,7 @@ export function getInstrumentSubtext(market: MarketDefinition) {
 
 export function getSelectedInstrumentDisplay(market: MarketDefinition) {
   return {
-    expiryLabel: market.type === "spot" ? null : market.expiryLabel ?? "—",
+    expiryLabel: market.type === "spot" ? null : (market.expiryLabel ?? "—"),
     pairLabel: formatFxDisplayPair(market.pair),
     typeLabel: getInstrumentTypeDisplayName(market.type),
   };

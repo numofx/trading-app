@@ -85,7 +85,11 @@ export function useMarketOrderBook({
       if (status === "ok") {
         if (asks.length === 0 && bids.length === 0) {
           resolvedStatus = "empty";
-        } else if (asks.length > 0 && bids.length > 0 && (asks[0]?.price ?? 0) <= (bids[0]?.price ?? 0)) {
+        } else if (
+          asks.length > 0 &&
+          bids.length > 0 &&
+          (asks[0]?.price ?? 0) <= (bids[0]?.price ?? 0)
+        ) {
           resolvedStatus = "crossed";
         }
       }

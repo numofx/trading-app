@@ -3,7 +3,11 @@
 import { useEffect, useState } from "react";
 import { formatUnits, isAddressEqual } from "viem";
 import { createBasePublicClient } from "@/lib/base-public-client";
-import { getCashAssetAddress, getCngnAssetAddress, getSubaccountsAddress } from "@/lib/subaccount-deposit-config";
+import {
+  getCashAssetAddress,
+  getCngnAssetAddress,
+  getSubaccountsAddress,
+} from "@/lib/subaccount-deposit-config";
 
 /**
  * The SubAccounts ledger normalizes every asset's per-account balance to 18 decimals,

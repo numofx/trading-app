@@ -32,7 +32,11 @@ function getPriceScale(candles: Candle[]) {
   return { max: rawMax + padding, min: rawMin - padding };
 }
 
-function buildSmaPoints(candles: Candle[], xForIndex: (index: number) => number, yForPrice: (price: number) => number) {
+function buildSmaPoints(
+  candles: Candle[],
+  xForIndex: (index: number) => number,
+  yForPrice: (price: number) => number
+) {
   const points: string[] = [];
 
   for (let index = SMA_PERIOD - 1; index < candles.length; index += 1) {
@@ -58,7 +62,11 @@ function CandlestickChart({
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   if (candles.length === 0) {
-    return <div className="flex flex-1 items-center justify-center text-[12px] text-panel-text-muted">No chart data</div>;
+    return (
+      <div className="flex flex-1 items-center justify-center text-[12px] text-panel-text-muted">
+        No chart data
+      </div>
+    );
   }
 
   const { max, min } = getPriceScale(candles);
@@ -104,97 +112,128 @@ function CandlestickChart({
       onMouseMove={handleMouseMove}
       ref={containerRef}
     >
-    <svg
-      aria-label="USDC/cNGN candlestick chart"
-      className="size-full"
-      preserveAspectRatio="none"
-      role="img"
-      viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
-    >
-      {Array.from({ length: gridlineCount }, (_, lineIndex) => {
-        const price = min + (priceRange / (gridlineCount - 1)) * lineIndex;
-        const y = yForPrice(price);
+      <svg
+        aria-label="USDC/cNGN candlestick chart"
+        className="size-full"
+        preserveAspectRatio="none"
+        role="img"
+        viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
+      >
+        {Array.from({ length: gridlineCount }, (_, lineIndex) => {
+          const price = min + (priceRange / (gridlineCount - 1)) * lineIndex;
+          const y = yForPrice(price);
 
-        return (
-          <g key={price}>
+          return (
+            <g key={price}>
+              <line
+                stroke="var(--chart-grid-stroke)"
+                strokeDasharray="4 8"
+                x1={PLOT_LEFT}
+                x2={PLOT_RIGHT}
+                y1={y}
+                y2={y}
+              />
+              <text
+                fill="var(--chart-label-fill)"
+                fontSize="11"
+                textAnchor="start"
+                x={PLOT_RIGHT + 10}
+                y={y + 4}
+              >
+                {formatNaira(price, 1)}
+              </text>
+            </g>
+          );
+        })}
+
+        {candles.map((candle, index) => {
+          const isUp = candle.close >= candle.open;
+          const color = isUp ? "var(--bid-text)" : "var(--ask-text)";
+          const x = xForIndex(index);
+          const bodyTop = yForPrice(Math.max(candle.open, candle.close));
+          const bodyBottom = yForPrice(Math.min(candle.open, candle.close));
+          const bodyHeight = Math.max(bodyBottom - bodyTop, 1);
+          const volumeHeight = (candle.volume / maxVolume) * (VOLUME_BOTTOM - VOLUME_TOP);
+          const isDimmed = hoveredIndex !== null && hoveredIndex !== index;
+
+          return (
+            <g key={`${candle.time}-${index}`} opacity={isDimmed ? 0.55 : 1}>
+              <line
+                stroke={color}
+                strokeWidth="1.4"
+                x1={x}
+                x2={x}
+                y1={yForPrice(candle.high)}
+                y2={yForPrice(candle.low)}
+              />
+              <rect
+                fill={color}
+                height={bodyHeight}
+                width={bodyWidth}
+                x={x - bodyWidth / 2}
+                y={bodyTop}
+              />
+              <rect
+                fill={color}
+                height={Math.max(volumeHeight, 1)}
+                opacity="0.45"
+                width={bodyWidth}
+                x={x - bodyWidth / 2}
+                y={VOLUME_BOTTOM - Math.max(volumeHeight, 1)}
+              />
+              {index % timeLabelStep === 0 ? (
+                <text
+                  fill="var(--chart-label-fill)"
+                  fontSize="10"
+                  textAnchor="middle"
+                  x={x}
+                  y={TIME_LABEL_Y}
+                >
+                  {candle.time}
+                </text>
+              ) : null}
+            </g>
+          );
+        })}
+
+        {indicatorsEnabled && candles.length >= SMA_PERIOD ? (
+          <polyline
+            fill="none"
+            points={buildSmaPoints(candles, xForIndex, yForPrice)}
+            stroke="var(--spread-percent)"
+            strokeWidth="2"
+          />
+        ) : null}
+
+        {hoveredIndex !== null ? (
+          <g>
             <line
-              stroke="var(--chart-grid-stroke)"
-              strokeDasharray="4 8"
+              stroke="var(--chart-axis-stroke)"
+              strokeDasharray="3 5"
+              x1={xForIndex(hoveredIndex)}
+              x2={xForIndex(hoveredIndex)}
+              y1={PRICE_TOP}
+              y2={VOLUME_BOTTOM}
+            />
+            <line
+              stroke="var(--chart-axis-stroke)"
+              strokeDasharray="3 5"
               x1={PLOT_LEFT}
               x2={PLOT_RIGHT}
-              y1={y}
-              y2={y}
+              y1={yForPrice(candles[hoveredIndex].close)}
+              y2={yForPrice(candles[hoveredIndex].close)}
             />
-            <text fill="var(--chart-label-fill)" fontSize="11" textAnchor="start" x={PLOT_RIGHT + 10} y={y + 4}>
-              {formatNaira(price, 1)}
-            </text>
           </g>
-        );
-      })}
+        ) : null}
 
-      {candles.map((candle, index) => {
-        const isUp = candle.close >= candle.open;
-        const color = isUp ? "var(--bid-text)" : "var(--ask-text)";
-        const x = xForIndex(index);
-        const bodyTop = yForPrice(Math.max(candle.open, candle.close));
-        const bodyBottom = yForPrice(Math.min(candle.open, candle.close));
-        const bodyHeight = Math.max(bodyBottom - bodyTop, 1);
-        const volumeHeight = (candle.volume / maxVolume) * (VOLUME_BOTTOM - VOLUME_TOP);
-        const isDimmed = hoveredIndex !== null && hoveredIndex !== index;
-
-        return (
-          <g key={`${candle.time}-${index}`} opacity={isDimmed ? 0.55 : 1}>
-            <line stroke={color} strokeWidth="1.4" x1={x} x2={x} y1={yForPrice(candle.high)} y2={yForPrice(candle.low)} />
-            <rect fill={color} height={bodyHeight} width={bodyWidth} x={x - bodyWidth / 2} y={bodyTop} />
-            <rect
-              fill={color}
-              height={Math.max(volumeHeight, 1)}
-              opacity="0.45"
-              width={bodyWidth}
-              x={x - bodyWidth / 2}
-              y={VOLUME_BOTTOM - Math.max(volumeHeight, 1)}
-            />
-            {index % timeLabelStep === 0 ? (
-              <text fill="var(--chart-label-fill)" fontSize="10" textAnchor="middle" x={x} y={TIME_LABEL_Y}>
-                {candle.time}
-              </text>
-            ) : null}
-          </g>
-        );
-      })}
-
-      {indicatorsEnabled && candles.length >= SMA_PERIOD ? (
-        <polyline
-          fill="none"
-          points={buildSmaPoints(candles, xForIndex, yForPrice)}
-          stroke="var(--spread-percent)"
-          strokeWidth="2"
+        <line
+          stroke="var(--chart-axis-stroke)"
+          x1={PLOT_LEFT}
+          x2={PLOT_RIGHT}
+          y1={VOLUME_BOTTOM}
+          y2={VOLUME_BOTTOM}
         />
-      ) : null}
-
-      {hoveredIndex !== null ? (
-        <g>
-          <line
-            stroke="var(--chart-axis-stroke)"
-            strokeDasharray="3 5"
-            x1={xForIndex(hoveredIndex)}
-            x2={xForIndex(hoveredIndex)}
-            y1={PRICE_TOP}
-            y2={VOLUME_BOTTOM}
-          />
-          <line
-            stroke="var(--chart-axis-stroke)"
-            strokeDasharray="3 5"
-            x1={PLOT_LEFT}
-            x2={PLOT_RIGHT}
-            y1={yForPrice(candles[hoveredIndex].close)}
-            y2={yForPrice(candles[hoveredIndex].close)}
-          />
-        </g>
-      ) : null}
-
-      <line stroke="var(--chart-axis-stroke)" x1={PLOT_LEFT} x2={PLOT_RIGHT} y1={VOLUME_BOTTOM} y2={VOLUME_BOTTOM} />
-    </svg>
+      </svg>
     </div>
   );
 }
@@ -213,7 +252,11 @@ function DepthChart({ asks, bids }: { asks: OrderBookLevel[]; bids: OrderBookLev
   const bestAsk = asks[0]?.price ?? null;
 
   if (bestBid === null || bestAsk === null) {
-    return <div className="flex flex-1 items-center justify-center text-[12px] text-panel-text-muted">No book data</div>;
+    return (
+      <div className="flex flex-1 items-center justify-center text-[12px] text-panel-text-muted">
+        No book data
+      </div>
+    );
   }
 
   // Depth accumulates outward from the mid price on both sides.
@@ -244,7 +287,10 @@ function DepthChart({ asks, bids }: { asks: OrderBookLevel[]; bids: OrderBookLev
       return "";
     }
 
-    const segments = [`M ${xForPrice(series[0].price)} ${depthBottom}`, `L ${xForPrice(series[0].price)} ${yForDepth(series[0].cumulative)}`];
+    const segments = [
+      `M ${xForPrice(series[0].price)} ${depthBottom}`,
+      `L ${xForPrice(series[0].price)} ${yForDepth(series[0].cumulative)}`,
+    ];
 
     for (let index = 1; index < series.length; index += 1) {
       const x = xForPrice(series[index].price);
@@ -277,16 +323,39 @@ function DepthChart({ asks, bids }: { asks: OrderBookLevel[]; bids: OrderBookLev
 
         return (
           <g key={depth}>
-            <line stroke="var(--chart-grid-stroke)" strokeDasharray="4 8" x1={PLOT_LEFT} x2={PLOT_RIGHT} y1={y} y2={y} />
-            <text fill="var(--chart-label-fill)" fontSize="11" textAnchor="start" x={PLOT_RIGHT + 10} y={y + 4}>
+            <line
+              stroke="var(--chart-grid-stroke)"
+              strokeDasharray="4 8"
+              x1={PLOT_LEFT}
+              x2={PLOT_RIGHT}
+              y1={y}
+              y2={y}
+            />
+            <text
+              fill="var(--chart-label-fill)"
+              fontSize="11"
+              textAnchor="start"
+              x={PLOT_RIGHT + 10}
+              y={y + 4}
+            >
               {Math.round(depth).toLocaleString("en-US")}
             </text>
           </g>
         );
       })}
 
-      <path d={buildStepPath(bidSeries, minPrice)} fill="var(--bid-bg)" stroke="var(--bid-text)" strokeWidth="2" />
-      <path d={buildStepPath(askSeries, maxPrice)} fill="var(--ask-bg)" stroke="var(--ask-text)" strokeWidth="2" />
+      <path
+        d={buildStepPath(bidSeries, minPrice)}
+        fill="var(--bid-bg)"
+        stroke="var(--bid-text)"
+        strokeWidth="2"
+      />
+      <path
+        d={buildStepPath(askSeries, maxPrice)}
+        fill="var(--ask-bg)"
+        stroke="var(--ask-text)"
+        strokeWidth="2"
+      />
 
       <line
         stroke="var(--chart-axis-stroke)"
@@ -296,11 +365,23 @@ function DepthChart({ asks, bids }: { asks: OrderBookLevel[]; bids: OrderBookLev
         y1={depthTop - 6}
         y2={depthBottom}
       />
-      <text fill="var(--chart-label-fill)" fontSize="11" textAnchor="middle" x={xForPrice(midPrice)} y={depthTop - 10}>
+      <text
+        fill="var(--chart-label-fill)"
+        fontSize="11"
+        textAnchor="middle"
+        x={xForPrice(midPrice)}
+        y={depthTop - 10}
+      >
         Mid {formatNaira(midPrice)}
       </text>
 
-      <line stroke="var(--chart-axis-stroke)" x1={PLOT_LEFT} x2={PLOT_RIGHT} y1={depthBottom} y2={depthBottom} />
+      <line
+        stroke="var(--chart-axis-stroke)"
+        x1={PLOT_LEFT}
+        x2={PLOT_RIGHT}
+        y1={depthBottom}
+        y2={depthBottom}
+      />
 
       {timeLabelPrices.map((price) => (
         <text
@@ -348,7 +429,9 @@ function OhlcReadout({ candle }: { candle: Candle | null }) {
       </span>
       <span className="flex items-center gap-1">
         <span className="text-panel-text-muted">Vol</span>
-        <span className="font-medium text-panel-text">{candle.volume.toLocaleString("en-US")} USDC</span>
+        <span className="font-medium text-panel-text">
+          {candle.volume.toLocaleString("en-US")} USDC
+        </span>
       </span>
     </div>
   );
@@ -382,7 +465,8 @@ export function SpotChartPanel({
   timeframes: readonly SpotTimeframe[];
 }) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const readoutCandle = hoveredIndex !== null ? (candles[hoveredIndex] ?? null) : (candles.at(-1) ?? null);
+  const readoutCandle =
+    hoveredIndex !== null ? (candles[hoveredIndex] ?? null) : (candles.at(-1) ?? null);
 
   return (
     <section className="flex h-full min-h-[380px] flex-col overflow-hidden rounded-[20px] bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 xl:min-h-0">
@@ -391,7 +475,9 @@ export function SpotChartPanel({
           <button
             className={cn(
               "cursor-pointer rounded-xl px-2 py-1 transition-colors",
-              chartTab === "price" ? "bg-input-bg text-panel-text-active" : "text-panel-text-muted hover:text-panel-text"
+              chartTab === "price"
+                ? "bg-input-bg text-panel-text-active"
+                : "text-panel-text-muted hover:text-panel-text"
             )}
             onClick={() => onChartTabChange("price")}
             type="button"
@@ -401,7 +487,9 @@ export function SpotChartPanel({
           <button
             className={cn(
               "cursor-pointer rounded-xl px-2 py-1 transition-colors",
-              chartTab === "depth" ? "bg-input-bg text-panel-text-active" : "text-panel-text-muted hover:text-panel-text"
+              chartTab === "depth"
+                ? "bg-input-bg text-panel-text-active"
+                : "text-panel-text-muted hover:text-panel-text"
             )}
             onClick={() => onChartTabChange("depth")}
             type="button"

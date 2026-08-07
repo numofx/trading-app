@@ -69,7 +69,10 @@ function formatFixedPointUnits(value: bigint, decimals: number) {
   if (fractionPart === 0n) {
     return `${negative ? "-" : ""}${integerPart.toString()}`;
   }
-  const fraction = fractionPart.toString().padStart(decimals, "0").replace(TRAILING_ZEROES_PATTERN, "");
+  const fraction = fractionPart
+    .toString()
+    .padStart(decimals, "0")
+    .replace(TRAILING_ZEROES_PATTERN, "");
   return `${negative ? "-" : ""}${integerPart.toString()}.${fraction}`;
 }
 
@@ -91,11 +94,15 @@ function getMatchingAddress() {
 }
 
 function getTradeModuleAddress() {
-  return getAddress(process.env.NEXT_PUBLIC_TRADE_MODULE_ADDRESS?.trim() || DEFAULT_TRADE_MODULE_ADDRESS);
+  return getAddress(
+    process.env.NEXT_PUBLIC_TRADE_MODULE_ADDRESS?.trim() || DEFAULT_TRADE_MODULE_ADDRESS
+  );
 }
 
 function getSpotAssetAddress() {
-  return getAddress(process.env.NEXT_PUBLIC_SPOT_ASSET_ADDRESS?.trim() || DEFAULT_SPOT_ASSET_ADDRESS);
+  return getAddress(
+    process.env.NEXT_PUBLIC_SPOT_ASSET_ADDRESS?.trim() || DEFAULT_SPOT_ASSET_ADDRESS
+  );
 }
 
 export function buildSpotOrderEnvelope({
@@ -130,7 +137,7 @@ export function buildSpotOrderEnvelope({
   // enginePrice = 1 / uiPrice, as an 18-decimal fixed-point wei value.
   const enginePriceWei = roundRationalToScaledUnits(
     { numerator: priceRational.denominator, denominator: priceRational.numerator },
-    ENGINE_DECIMALS,
+    ENGINE_DECIMALS
   );
 
   // engineAmount = floor(uiSize * uiPrice), in whole cNGN.
@@ -159,7 +166,7 @@ export function buildSpotOrderEnvelope({
       denominator: spotFeeRational.denominator * priceRational.numerator,
       numerator: spotFeeRational.numerator * priceRational.denominator,
     },
-    ENGINE_DECIMALS,
+    ENGINE_DECIMALS
   );
 
   const ownerAddress = getAddress(walletAddress);
@@ -197,7 +204,7 @@ export function buildSpotOrderEnvelope({
         subId: 0n,
         worstFee: worstFeeUnits,
       },
-    ],
+    ]
   );
 
   const actionJson = {

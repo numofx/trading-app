@@ -33,11 +33,14 @@ function PrivyWalletButtonInner() {
   const { authenticated, ready } = usePrivy();
   const { login } = useLogin({
     onComplete: ({ user, loginAccount }) => {
-      const walletAddress = loginAccount && "address" in loginAccount ? (loginAccount.address as string) : null;
+      const walletAddress =
+        loginAccount && "address" in loginAccount ? (loginAccount.address as string) : null;
       const distinctId = walletAddress ?? user.id;
       posthog.identify(distinctId);
       posthog.capture("wallet_connected", {
-        wallet_address_truncated: walletAddress ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : null,
+        wallet_address_truncated: walletAddress
+          ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
+          : null,
         login_method: loginAccount?.type ?? null,
         privy_user_id: user.id,
         is_new_user: false,
@@ -75,7 +78,7 @@ function PrivyWalletButtonInner() {
         authenticated
           ? "bg-white text-[#111111] ring-1 ring-black/10 hover:bg-white/90"
           : "bg-white text-[#111111] ring-1 ring-black/10 hover:bg-white/90",
-        (!ready || !walletsReady) && "cursor-wait opacity-80",
+        (!ready || !walletsReady) && "cursor-wait opacity-80"
       )}
       onClick={() => {
         if (!ready || !walletsReady) {

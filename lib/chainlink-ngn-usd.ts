@@ -14,28 +14,31 @@ export type ChainlinkSpotSnapshot = {
 };
 
 async function callBaseRpc(data: string) {
-  const response = await fetch(process.env.NEXT_PUBLIC_BASE_RPC_URL?.trim() || DEFAULT_BASE_SEPOLIA_RPC_URL, {
-    body: JSON.stringify({
-      id: 1,
-      jsonrpc: "2.0",
-      method: "eth_call",
-      params: [
-        {
-          data,
-          to: CHAINLINK_NGN_USD_FEED_ADDRESS,
-        },
-        "latest",
-      ],
-    }),
-    headers: {
-      "content-type": "application/json",
-    },
-    method: "POST",
-    cache: "force-cache",
-    next: {
-      revalidate: 30,
-    },
-  });
+  const response = await fetch(
+    process.env.NEXT_PUBLIC_BASE_RPC_URL?.trim() || DEFAULT_BASE_SEPOLIA_RPC_URL,
+    {
+      body: JSON.stringify({
+        id: 1,
+        jsonrpc: "2.0",
+        method: "eth_call",
+        params: [
+          {
+            data,
+            to: CHAINLINK_NGN_USD_FEED_ADDRESS,
+          },
+          "latest",
+        ],
+      }),
+      headers: {
+        "content-type": "application/json",
+      },
+      method: "POST",
+      cache: "force-cache",
+      next: {
+        revalidate: 30,
+      },
+    }
+  );
 
   if (!response.ok) {
     throw new Error(`Base RPC request failed with status ${response.status}`);

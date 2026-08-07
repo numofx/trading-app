@@ -90,11 +90,9 @@ async function getHistoricalSeries(pair: "NGN/USD") {
     return formatDate(date);
   });
 
-  const responses = await Promise.all(
-    dates.map((date) => fetchExchangeRate(date, "usd", "ngn")),
-  );
+  const responses = await Promise.all(dates.map((date) => fetchExchangeRate(date, "usd", "ngn")));
   const rates = responses.filter(
-    (response): response is { date: string; rate: number } => response !== null,
+    (response): response is { date: string; rate: number } => response !== null
   );
 
   if (!rates.length) {
@@ -117,7 +115,7 @@ const getCachedSpotHistorySnapshots = unstable_cache(
   ["spot-history-snapshots"],
   {
     revalidate: 86_400,
-  },
+  }
 );
 
 export function getSpotHistorySnapshots() {

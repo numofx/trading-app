@@ -39,7 +39,9 @@ function getAprFutureOverrides() {
   };
 }
 
-function applyAprFutureOverrides<T extends { asset_address?: string; expiry_timestamp?: number; sub_id?: string }>(market: T) {
+function applyAprFutureOverrides<
+  T extends { asset_address?: string; expiry_timestamp?: number; sub_id?: string },
+>(market: T) {
   if (market.expiry_timestamp !== APR_2026_EXPIRY_TIMESTAMP) {
     return market;
   }
@@ -108,7 +110,10 @@ export default async function Home({ searchParams }: HomeProps) {
         let trades: PresentedTrade[] = [];
 
         try {
-          book = await getMarketBook(liveFuture.asset_address as string, liveFuture.sub_id as string);
+          book = await getMarketBook(
+            liveFuture.asset_address as string,
+            liveFuture.sub_id as string
+          );
         } catch {
           book = null;
         }
@@ -119,17 +124,20 @@ export default async function Home({ searchParams }: HomeProps) {
               liveFuture.asset_address as string,
               liveFuture.sub_id as string,
               CHART_CANDLE_INTERVAL,
-              CHART_CANDLE_LIMIT,
+              CHART_CANDLE_LIMIT
             ),
             "future",
-            CHART_CANDLE_INTERVAL,
+            CHART_CANDLE_INTERVAL
           );
         } catch {
           candles = [];
         }
 
         try {
-          trades = await getMarketTrades(liveFuture.asset_address as string, liveFuture.sub_id as string);
+          trades = await getMarketTrades(
+            liveFuture.asset_address as string,
+            liveFuture.sub_id as string
+          );
         } catch {
           trades = [];
         }
@@ -140,7 +148,7 @@ export default async function Home({ searchParams }: HomeProps) {
           definition,
           trades,
         };
-      }),
+      })
     );
   } catch {
     liveFutures = [];
@@ -166,10 +174,10 @@ export default async function Home({ searchParams }: HomeProps) {
             spotMarket.asset_address,
             spotMarket.sub_id,
             CHART_CANDLE_INTERVAL,
-            CHART_CANDLE_LIMIT,
+            CHART_CANDLE_LIMIT
           ),
           "spot",
-          CHART_CANDLE_INTERVAL,
+          CHART_CANDLE_INTERVAL
         );
       } catch {
         candles = [];
@@ -187,12 +195,19 @@ export default async function Home({ searchParams }: HomeProps) {
     liveSpot = null;
   }
 
-  const { defaultMarketId, marketData, marketDefinitions } = buildTradingTerminalMarkets(liveFutures, liveSpot);
+  const { defaultMarketId, marketData, marketDefinitions } = buildTradingTerminalMarkets(
+    liveFutures,
+    liveSpot
+  );
   const marketSelectionAliases = buildMarketSelectionAliasMap(marketDefinitions);
   const requestedMarket = Array.isArray(resolvedSearchParams.market)
     ? resolvedSearchParams.market[0]
     : resolvedSearchParams.market;
-  const initialMarketId = resolveInitialMarketSelection(requestedMarket, marketSelectionAliases, defaultMarketId);
+  const initialMarketId = resolveInitialMarketSelection(
+    requestedMarket,
+    marketSelectionAliases,
+    defaultMarketId
+  );
 
   return (
     <OrderBookTradingTerminal

@@ -89,12 +89,20 @@ function resolvePreflight(context: DepositFlowContext): DepositFlowState {
 }
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: exhaustive state/event matrix reads clearest as one reducer.
-export function transitionDepositFlow(state: DepositFlowState, event: DepositFlowEvent): DepositFlowState {
+export function transitionDepositFlow(
+  state: DepositFlowState,
+  event: DepositFlowEvent
+): DepositFlowState {
   if (event.type === "ERRORED") {
     if (state.status === "success" || state.status === "blocked" || state.status === "failed") {
       return state;
     }
-    return { context: state.context, error: event.error, status: "failed", step: getErrorStep(state.status) };
+    return {
+      context: state.context,
+      error: event.error,
+      status: "failed",
+      step: getErrorStep(state.status),
+    };
   }
 
   switch (state.status) {

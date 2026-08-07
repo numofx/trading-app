@@ -4,7 +4,8 @@ import { getPostHogClient } from "@/lib/posthog-server";
 
 export async function POST(request: Request) {
   const payload = await request.json();
-  const distinctId: string = request.headers.get("x-posthog-distinct-id") ?? payload?.owner_address ?? "anonymous";
+  const distinctId: string =
+    request.headers.get("x-posthog-distinct-id") ?? payload?.owner_address ?? "anonymous";
 
   const response = await fetch(`${getMarketsServiceUrl()}/v1/orders`, {
     body: JSON.stringify(payload),

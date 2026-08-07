@@ -24,14 +24,26 @@ function BookLevelRow({
   return (
     <div className="relative grid grid-cols-3 px-3 py-0.5 text-[10px]">
       <div
-        className={cn("absolute inset-y-0 right-0 rounded-l-lg", side === "ask" ? "bg-ask-bg" : "bg-bid-bg")}
+        className={cn(
+          "absolute inset-y-0 right-0 rounded-l-lg",
+          side === "ask" ? "bg-ask-bg" : "bg-bid-bg"
+        )}
         style={{ width }}
       />
-      <span className={cn("relative z-10 font-semibold", side === "ask" ? "text-ask-text" : "text-bid-text")}>
+      <span
+        className={cn(
+          "relative z-10 font-semibold",
+          side === "ask" ? "text-ask-text" : "text-bid-text"
+        )}
+      >
         {formatNaira(level.price)}
       </span>
-      <span className="relative z-10 text-right font-medium text-panel-text">{formatSize(level.size)}</span>
-      <span className="relative z-10 text-right text-panel-text-muted">{formatSize(level.total)}</span>
+      <span className="relative z-10 text-right font-medium text-panel-text">
+        {formatSize(level.size)}
+      </span>
+      <span className="relative z-10 text-right text-panel-text-muted">
+        {formatSize(level.total)}
+      </span>
     </div>
   );
 }
@@ -67,7 +79,9 @@ export function SpotOrderBookPanel({
         <button
           className={cn(
             "cursor-pointer rounded-xl px-2 py-1 transition-colors",
-            tab === "book" ? "bg-input-bg text-panel-text-active" : "text-panel-text-muted hover:text-panel-text"
+            tab === "book"
+              ? "bg-input-bg text-panel-text-active"
+              : "text-panel-text-muted hover:text-panel-text"
           )}
           onClick={() => onTabChange("book")}
           type="button"
@@ -77,7 +91,9 @@ export function SpotOrderBookPanel({
         <button
           className={cn(
             "cursor-pointer rounded-xl px-2 py-1 transition-colors",
-            tab === "trades" ? "bg-input-bg text-panel-text-active" : "text-panel-text-muted hover:text-panel-text"
+            tab === "trades"
+              ? "bg-input-bg text-panel-text-active"
+              : "text-panel-text-muted hover:text-panel-text"
           )}
           onClick={() => onTabChange("trades")}
           type="button"
@@ -123,8 +139,16 @@ export function SpotOrderBookPanel({
       ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           {trades.map((trade) => (
-            <div className="grid grid-cols-3 px-3 py-1 text-[10px]" key={`${trade.time}-${trade.price}-${trade.size}`}>
-              <span className={cn("font-semibold", trade.side === "buy" ? "text-bid-text" : "text-ask-text")}>
+            <div
+              className="grid grid-cols-3 px-3 py-1 text-[10px]"
+              key={`${trade.time}-${trade.price}-${trade.size}`}
+            >
+              <span
+                className={cn(
+                  "font-semibold",
+                  trade.side === "buy" ? "text-bid-text" : "text-ask-text"
+                )}
+              >
                 {formatNaira(trade.price)}
               </span>
               <span className="text-right text-panel-text">{formatSize(trade.size)}</span>

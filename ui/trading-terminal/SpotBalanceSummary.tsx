@@ -5,7 +5,11 @@ import { SmartImage } from "@/ui/SmartImage";
 function BalanceChip({ icon, label, value }: { icon: string; label: string; value: string }) {
   return (
     <span className="flex min-w-0 items-center gap-1.5 text-[11px]">
-      <SmartImage<string> alt={label} className="size-4 shrink-0 animate-none rounded-full" src={icon} />
+      <SmartImage<string>
+        alt={label}
+        className="size-4 shrink-0 animate-none rounded-full"
+        src={icon}
+      />
       <span className="truncate font-medium text-panel-text">{value}</span>
     </span>
   );

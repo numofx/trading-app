@@ -158,7 +158,11 @@ export function FuturesOrderFormPanel({
          */}
         <div className="flex items-center justify-between gap-2 rounded-[12px] bg-input-bg/60 py-1.5 pr-3 pl-1.5 text-[11px]">
           <span className="flex shrink-0 items-center gap-1.5 rounded-lg bg-input-bg px-2 py-1 text-panel-text-active ring-1 ring-panel-border">
-            <SmartImage<string> alt="USDC" className="size-4 animate-none rounded-full" src="/tokens/usdc.svg" />
+            <SmartImage<string>
+              alt="USDC"
+              className="size-4 animate-none rounded-full"
+              src="/tokens/usdc.svg"
+            />
             USDC
           </span>
           <span className="truncate font-medium text-panel-text">{availableLabel}</span>

@@ -23,7 +23,12 @@ const BASE_URL = urlArgIndex === -1 ? "http://localhost:3111" : process.argv[url
  * cannot clear a 667px fold). If a change makes it true, tighten the expectation.
  */
 const VIEWPORTS = [
-  { ctaVisible: false, height: 667, note: "iPhone SE — known gap, header needs 2 rows", width: 375 },
+  {
+    ctaVisible: false,
+    height: 667,
+    note: "iPhone SE — known gap, header needs 2 rows",
+    width: 375,
+  },
   { ctaVisible: true, height: 711, width: 410 },
   { ctaVisible: true, height: 959, width: 545 },
   { ctaVisible: true, height: 700, width: 1440 },
@@ -81,7 +86,10 @@ const PROBE = `(() => {
 })()`;
 
 function browser(...args) {
-  return execFileSync("agent-browser", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  return execFileSync("agent-browser", args, {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
 }
 
 function probe(width, height) {
@@ -117,14 +125,20 @@ for (const viewport of VIEWPORTS) {
   }
 
   const checks = [
-    [result.ctaVisible === expectCta, `CTA visible expected ${expectCta}, got ${result.ctaVisible} (bottom ${result.ctaBottom})`],
+    [
+      result.ctaVisible === expectCta,
+      `CTA visible expected ${expectCta}, got ${result.ctaVisible} (bottom ${result.ctaBottom})`,
+    ],
     [
       result.ctaVisibleAfterScroll === expectCta,
       `CTA scrolled out of view: expected ${expectCta} after scrolling the ticket, got ${result.ctaVisibleAfterScroll}`,
     ],
     [result.visibleNavCount === 1, `expected exactly 1 visible nav, got ${result.visibleNavCount}`],
     [result.pageHorizontalScroll === false, "page scrolls horizontally"],
-    [result.overflowingCells.length === 0, `grid cells overflow their track: ${result.overflowingCells.join(", ")}`],
+    [
+      result.overflowingCells.length === 0,
+      `grid cells overflow their track: ${result.overflowingCells.join(", ")}`,
+    ],
     [result.blockedBy.length === 0, `submit button covered by: ${result.blockedBy.join(", ")}`],
   ];
 
@@ -134,7 +148,9 @@ for (const viewport of VIEWPORTS) {
   }
 
   const status = failed.length === 0 ? "ok  " : "FAIL";
-  console.log(`${status} ${label.padEnd(9)} cta=${String(result.ctaVisible).padEnd(5)} bottom=${String(result.ctaBottom).padEnd(5)}${note ? `  (${note})` : ""}`);
+  console.log(
+    `${status} ${label.padEnd(9)} cta=${String(result.ctaVisible).padEnd(5)} bottom=${String(result.ctaBottom).padEnd(5)}${note ? `  (${note})` : ""}`
+  );
 }
 
 if (failures.length > 0) {

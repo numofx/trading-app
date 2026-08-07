@@ -41,7 +41,7 @@ export function formatCandleTimeLabel(bucketStart: string, interval: CandleInter
 export function toUiCandle(
   candle: PresentedCandle,
   marketType: MarketType,
-  interval: CandleInterval,
+  interval: CandleInterval
 ): Candle | null {
   const open = toFiniteNumber(candle.open);
   const high = toFiniteNumber(candle.high);
@@ -84,7 +84,7 @@ export function toUiCandle(
 export function toUiCandles(
   candles: PresentedCandle[],
   marketType: MarketType,
-  interval: CandleInterval,
+  interval: CandleInterval
 ): Candle[] {
   return candles
     .map((candle) => toUiCandle(candle, marketType, interval))

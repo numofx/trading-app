@@ -113,7 +113,10 @@ function formatFixedPointUnits(value: bigint, decimals: number) {
     return `${negative ? "-" : ""}${integerPart.toString()}`;
   }
 
-  const fraction = fractionPart.toString().padStart(decimals, "0").replace(TRAILING_ZEROES_PATTERN, "");
+  const fraction = fractionPart
+    .toString()
+    .padStart(decimals, "0")
+    .replace(TRAILING_ZEROES_PATTERN, "");
   return `${negative ? "-" : ""}${integerPart.toString()}.${fraction}`;
 }
 
@@ -170,7 +173,9 @@ function getMatchingAddress() {
 }
 
 function getTradeModuleAddress() {
-  return getAddress(process.env.NEXT_PUBLIC_TRADE_MODULE_ADDRESS?.trim() || DEFAULT_TRADE_MODULE_ADDRESS);
+  return getAddress(
+    process.env.NEXT_PUBLIC_TRADE_MODULE_ADDRESS?.trim() || DEFAULT_TRADE_MODULE_ADDRESS
+  );
 }
 
 export function canSubmitFutureOrder(market: MarketDefinition) {
@@ -193,7 +198,9 @@ export function buildFutureOrderEnvelope({
   walletAddress: string;
 }) {
   if (!canSubmitFutureOrder(market)) {
-    throw new Error("Futures execution requires a live deliverable future market from markets-service");
+    throw new Error(
+      "Futures execution requires a live deliverable future market from markets-service"
+    );
   }
 
   if (!UNSIGNED_INTEGER_PATTERN.test(subaccountId)) {
@@ -207,16 +214,25 @@ export function buildFutureOrderEnvelope({
   const tradeModuleAddress = getTradeModuleAddress();
   const chainId = getMatchingChainId();
   const limitPriceUnits = parseUnits(sanitizedPrice, ENGINE_DECIMALS);
-  const contractMultiplier = sanitizeDecimalInput(market.contractMultiplier ?? "1", "Contract multiplier");
+  const contractMultiplier = sanitizeDecimalInput(
+    market.contractMultiplier ?? "1",
+    "Contract multiplier"
+  );
   const desiredAmountUnits = roundRationalToScaledUnits(
-    divideRationals(parseDecimalToRational(sanitizedSize), parseDecimalToRational(contractMultiplier)),
-    ENGINE_DECIMALS,
+    divideRationals(
+      parseDecimalToRational(sanitizedSize),
+      parseDecimalToRational(contractMultiplier)
+    ),
+    ENGINE_DECIMALS
   );
   // TradeModule compares worstFee against fee-per-contract (fee / amountFilled), so the
   // signed bound is the fee tier scaled by the USDC notional of one engine contract.
   const worstFeeUnits = roundRationalToScaledUnits(
-    multiplyRationals(parseDecimalToRational(TAKER_FEE_RATE), parseDecimalToRational(contractMultiplier)),
-    ENGINE_DECIMALS,
+    multiplyRationals(
+      parseDecimalToRational(TAKER_FEE_RATE),
+      parseDecimalToRational(contractMultiplier)
+    ),
+    ENGINE_DECIMALS
   );
 
   if (limitPriceUnits <= 0n) {
@@ -257,7 +273,7 @@ export function buildFutureOrderEnvelope({
         subId,
         worstFee: worstFeeUnits,
       },
-    ],
+    ]
   );
 
   const actionJson = {

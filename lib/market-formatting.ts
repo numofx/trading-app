@@ -5,7 +5,7 @@ export function calculateBasis(lastPrice: number, spotPrice: number) {
 export function calculateAnnualizedBasisPercent(
   lastPrice: number,
   spotPrice: number,
-  daysToExpiry: number | null,
+  daysToExpiry: number | null
 ) {
   if (!daysToExpiry || daysToExpiry <= 0 || spotPrice <= 0) {
     return null;

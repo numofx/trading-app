@@ -57,12 +57,17 @@ function DepositProgress({
   reset: () => void;
   retry: () => void;
 }) {
-  const isBusy = flowState.status === "preflight" || flowState.status === "approving" || flowState.status === "depositing";
+  const isBusy =
+    flowState.status === "preflight" ||
+    flowState.status === "approving" ||
+    flowState.status === "depositing";
   const stepCopy = getStepCopy(flowState);
 
   return (
     <div className="mt-4 space-y-3">
-      {stepCopy !== null ? <p className={cn("text-[12px] text-panel-text", isBusy && "animate-pulse")}>{stepCopy}</p> : null}
+      {stepCopy !== null ? (
+        <p className={cn("text-[12px] text-panel-text", isBusy && "animate-pulse")}>{stepCopy}</p>
+      ) : null}
 
       {flowState.status === "blocked" ? (
         <p className="text-[12px] text-ask-text">
@@ -109,7 +114,9 @@ function DepositProgress({
           </button>
         ) : null}
 
-        {flowState.status === "success" ? <Dialog.Close className={PRIMARY_BUTTON_CLASSES}>Done</Dialog.Close> : null}
+        {flowState.status === "success" ? (
+          <Dialog.Close className={PRIMARY_BUTTON_CLASSES}>Done</Dialog.Close>
+        ) : null}
       </div>
     </div>
   );
@@ -132,9 +139,10 @@ export function DepositDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState("");
-  const { approve, deposit, flowState, inputError, reset, retry, startDeposit } = useSubaccountDeposit({
-    onDeposited,
-  });
+  const { approve, deposit, flowState, inputError, reset, retry, startDeposit } =
+    useSubaccountDeposit({
+      onDeposited,
+    });
 
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen);
@@ -158,7 +166,9 @@ export function DepositDialog({
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 bg-black/60 transition-opacity data-ending-style:opacity-0 data-starting-style:opacity-0" />
         <Dialog.Popup className="-translate-1/2 fixed top-1/2 left-1/2 w-[min(92vw,380px)] rounded-[20px] bg-panel-bg p-5 text-foreground shadow-[0_28px_90px_var(--panel-shadow)] ring-1 ring-panel-ring transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
-          <Dialog.Title className="font-semibold text-[15px] text-panel-text">Deposit USDC margin</Dialog.Title>
+          <Dialog.Title className="font-semibold text-[15px] text-panel-text">
+            Deposit USDC margin
+          </Dialog.Title>
           <Dialog.Description className="mt-1 text-[12px] text-panel-text-muted">
             {subaccountId === null
               ? "Creates your trading account and funds it in one flow."
@@ -178,7 +188,9 @@ export function DepositDialog({
                 placeholder="1000"
                 value={amount}
               />
-              {inputError !== null ? <p className="text-[11px] text-ask-text">{inputError}</p> : null}
+              {inputError !== null ? (
+                <p className="text-[11px] text-ask-text">{inputError}</p>
+              ) : null}
               <button
                 className="min-h-11 w-full rounded-[12px] bg-foreground font-semibold text-[13px] text-background transition-colors hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={wallet === null}
@@ -197,7 +209,13 @@ export function DepositDialog({
               </button>
             </div>
           ) : (
-            <DepositProgress approve={approve} deposit={deposit} flowState={flowState} reset={reset} retry={retry} />
+            <DepositProgress
+              approve={approve}
+              deposit={deposit}
+              flowState={flowState}
+              reset={reset}
+              retry={retry}
+            />
           )}
         </Dialog.Popup>
       </Dialog.Portal>

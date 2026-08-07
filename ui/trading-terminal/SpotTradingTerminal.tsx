@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { buildAssetsActivityView } from "@/lib/account-activity-views";
-import { ACTIVITY_VIEWS, FOOTER_LINKS, SPOT_BOTTOM_TABS, SPOT_TIMEFRAME_OPTIONS } from "@/lib/mock-orderbook-terminal-data";
+import {
+  ACTIVITY_VIEWS,
+  FOOTER_LINKS,
+  SPOT_BOTTOM_TABS,
+  SPOT_TIMEFRAME_OPTIONS,
+} from "@/lib/mock-orderbook-terminal-data";
 import type { Candle, ContractMarket } from "@/lib/trading.types";
 import type { SpotChartTab, SpotTimeframe } from "@/ui/trading-terminal/SpotChartPanel";
 import { SpotChartPanel } from "@/ui/trading-terminal/SpotChartPanel";
@@ -45,7 +50,8 @@ function get24hStats(candles: Candle[], lastPrice: number | null) {
   }
 
   const resolvedLast = lastPrice ?? lastCandle.close;
-  const changePercent = firstCandle.open > 0 ? ((resolvedLast - firstCandle.open) / firstCandle.open) * 100 : null;
+  const changePercent =
+    firstCandle.open > 0 ? ((resolvedLast - firstCandle.open) / firstCandle.open) * 100 : null;
 
   return {
     changePercent,
@@ -79,7 +85,12 @@ export function SpotTradingTerminal({
   accountUsdcLabel?: string | null;
   /** Subaccount cNGN balance. */
   accountCngnLabel?: string | null;
-  onSubmitOrder?: (args: { side: "buy" | "sell"; price: string; size: string; orderType: "Limit" | "Market" | "Stop Limit" }) => void;
+  onSubmitOrder?: (args: {
+    side: "buy" | "sell";
+    price: string;
+    size: string;
+    orderType: "Limit" | "Market" | "Stop Limit";
+  }) => void;
   /** Whether a wallet session is active; gates account-scoped rows in the activity panel. */
   isSignedIn?: boolean;
   isSubmitting?: boolean;
@@ -104,7 +115,8 @@ export function SpotTradingTerminal({
   // unavailable, one-sided, crossed, or still connecting.
   const bookBids = spotBook.isLive ? spotBook.bids : spotMarket.orderBookBids;
   const bookAsks = spotBook.isLive ? spotBook.asks : spotMarket.orderBookAsks;
-  const bookTrades = spotBook.isLive && spotBook.trades.length > 0 ? spotBook.trades : spotMarket.trades;
+  const bookTrades =
+    spotBook.isLive && spotBook.trades.length > 0 ? spotBook.trades : spotMarket.trades;
 
   const lastPrice = liveSpotPrice ?? parseMarkPrice(spotMarket.mark);
   const { changePercent, high, low, volumeLabel } = get24hStats(liveCandles, lastPrice);

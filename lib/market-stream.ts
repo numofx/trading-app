@@ -40,7 +40,7 @@ export function parseDecimal(value: string | null | undefined): number {
 function toUiQuote(
   engineLimitPrice: number,
   restingAmount: number,
-  presenter: MarketStreamPresenter,
+  presenter: MarketStreamPresenter
 ): { price: number; size: number } | null {
   if (presenter.type === "spot") {
     if (engineLimitPrice <= 0) {
@@ -56,7 +56,7 @@ function toUiQuote(
  * `ui_intent` when present. Returns null if the order has no positive price/size. */
 function presentSnapshotOrder(
   order: StreamBookOrder,
-  presenter: MarketStreamPresenter,
+  presenter: MarketStreamPresenter
 ): RestingOrder | null {
   const uiIntent = presenter.type === "spot" ? order.spot_contract?.ui_intent : undefined;
   const quote = uiIntent
@@ -64,7 +64,7 @@ function presentSnapshotOrder(
     : toUiQuote(
         parseDecimal(order.limit_price),
         parseDecimal(order.desired_amount) - parseDecimal(order.filled_amount),
-        presenter,
+        presenter
       );
 
   if (!(quote && quote.price > 0 && quote.size > 0)) {
@@ -77,7 +77,7 @@ function presentSnapshotOrder(
 /** Rebuilds book state from a `snapshot` frame, replacing any prior state. */
 export function applyBookSnapshot(
   snapshot: BookSnapshotData,
-  presenter: MarketStreamPresenter,
+  presenter: MarketStreamPresenter
 ): BookState {
   const state: BookState = new Map();
 
@@ -95,7 +95,7 @@ export function applyBookSnapshot(
 export function applyBookDelta(
   state: BookState,
   delta: BookUpdateData,
-  presenter: MarketStreamPresenter,
+  presenter: MarketStreamPresenter
 ): void {
   const resting = parseDecimal(delta.order_open);
   const quote = resting > 0 ? toUiQuote(parseDecimal(delta.limit_price), resting, presenter) : null;
@@ -159,7 +159,7 @@ export function buildBookSide(state: BookState, side: "ask" | "bid"): OrderBookL
 /** Presents a stream trade into the UI `TradePrint` shape. */
 export function presentStreamTrade(
   trade: StreamTrade,
-  presenter: MarketStreamPresenter,
+  presenter: MarketStreamPresenter
 ): TradePrint | null {
   const quote = toUiQuote(parseDecimal(trade.price), parseDecimal(trade.size), presenter);
 
