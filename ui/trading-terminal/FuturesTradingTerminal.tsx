@@ -22,10 +22,10 @@ import type {
 import { SmartImage } from "@/ui/SmartImage";
 import { FuturesOrderFormPanel } from "@/ui/trading-terminal/FuturesOrderFormPanel";
 import { SpotBalanceSummary } from "@/ui/trading-terminal/SpotBalanceSummary";
-import type { SpotBookTab } from "@/ui/trading-terminal/SpotOrderBookPanel";
-import { SpotOrderBookPanel } from "@/ui/trading-terminal/SpotOrderBookPanel";
 import type { SpotChartTab, SpotTimeframe } from "@/ui/trading-terminal/SpotChartPanel";
 import { SpotChartPanel } from "@/ui/trading-terminal/SpotChartPanel";
+import type { SpotBookTab } from "@/ui/trading-terminal/SpotOrderBookPanel";
+import { SpotOrderBookPanel } from "@/ui/trading-terminal/SpotOrderBookPanel";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
 import { useMarketOrderBook } from "@/ui/trading-terminal/useMarketOrderBook";
 
@@ -385,9 +385,11 @@ export function FuturesTradingTerminal({
         <div className="order-first flex min-h-[420px] flex-col gap-3 xl:order-0 xl:min-h-0 xl:overflow-hidden">
           <FuturesOrderFormPanel
             availableLabel={usdcBalanceLabel ?? "— USDC"}
+            contractSizeLabel={formatContractSize(marketDefinition.contractMultiplier)}
             isSubmitting={isSubmitting}
             lastAction={lastAction}
             limitPrice={limitPrice}
+            marketLabel={getInstrumentDisplayLabel(marketDefinition)}
             onLimitPriceChange={onLimitPriceChange}
             onOrderTypeChange={onOrderTypeChange}
             onSideChange={onSideChange}
