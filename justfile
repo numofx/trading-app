@@ -61,3 +61,8 @@ alias ew := eslint-write
 [group("app")]
 start: build
     bunx next start
+
+# Check terminal layout invariants against a running dev server (see scripts/check-layout.mjs)
+[group("checks")]
+@check-layout url="http://localhost:3111":
+    node scripts/check-layout.mjs --url {{ url }}
