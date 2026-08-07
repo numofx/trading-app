@@ -46,6 +46,10 @@ export function TradingActivityPanel({
   const isEmpty = rows.length === 0;
   const fillerRowCount = Math.max(0, minimumVisibleRows - rows.length);
   const isMetricColumn = (column: string) => column.includes("PnL") || column.includes("%") || column.includes("Return");
+  // Columns hold a readable floor instead of compressing to nothing: at six columns on a phone an
+  // equal split gives each ~55px, narrower than a header like "UNREALIZED", so they overlapped.
+  // Below the floor the panel scrolls sideways; above it the tracks stay even, as before.
+  const gridTemplateColumns = `repeat(${activityView.columns.length}, minmax(96px, 1fr))`;
 
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-[28px] bg-panel-bg/72 shadow-[0_24px_80px_var(--panel-shadow)] ring-1 ring-panel-ring transition-colors duration-300">
@@ -68,9 +72,11 @@ export function TradingActivityPanel({
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto px-4 pb-4">
+        {/* Header and rows share this wrapper so they scroll sideways together and stay aligned. */}
+        <div className="flex min-w-max flex-col">
         <div
           className="grid gap-2 text-[8px] text-panel-text-muted uppercase tracking-[0.16em]"
-          style={{ gridTemplateColumns: `repeat(${activityView.columns.length}, minmax(0, 1fr))` }}
+          style={{ gridTemplateColumns }}
         >
           {activityView.columns.map((column) => (
             <span className={isMetricColumn(column) ? "text-right" : undefined} key={column}>
@@ -79,21 +85,14 @@ export function TradingActivityPanel({
           ))}
         </div>
 
+        {isEmpty ? null : (
         <div className="mt-2 flex min-h-[96px] flex-1 flex-col overflow-hidden rounded-[20px] bg-input-bg/50">
-          {isEmpty ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
-              <div>
-                <div className="font-medium text-panel-text-active text-sm">{emptyStateCopy.title}</div>
-                <div className="mt-1 text-[11px] text-panel-text-muted">{emptyStateCopy.body}</div>
-              </div>
-            </div>
-          ) : (
             <div className="flex flex-1 flex-col">
               {rows.map((row, rowIndex) => (
                 <div
                   className="grid min-h-10 items-center gap-2 border-panel-border border-b px-3 py-1.5 text-[11px] last:border-b-0"
                   key={`${row.cells[0]}-${rowIndex}`}
-                  style={{ gridTemplateColumns: `repeat(${activityView.columns.length}, minmax(0, 1fr))` }}
+                  style={{ gridTemplateColumns }}
                 >
                   {row.cells.map((cell, cellIndex) => (
                     <span
@@ -116,7 +115,7 @@ export function TradingActivityPanel({
                 <div
                   className="grid min-h-10 items-center gap-2 border-panel-border border-b px-3 py-1.5"
                   key={`filler-${rowIndex}`}
-                  style={{ gridTemplateColumns: `repeat(${activityView.columns.length}, minmax(0, 1fr))` }}
+                  style={{ gridTemplateColumns }}
                 >
                   {activityView.columns.map((column, columnIndex) => (
                     <span
@@ -132,8 +131,22 @@ export function TradingActivityPanel({
                 </div>
               ))}
             </div>
-          )}
         </div>
+        )}
+        </div>
+
+        {/*
+         * The empty state sits outside the scrolled wrapper and is pinned left, so its centred
+         * copy stays centred in the visible area rather than in the wider scrollable width.
+         */}
+        {isEmpty ? (
+          <div className="sticky left-0 mt-2 flex min-h-[96px] flex-col items-center justify-center gap-4 rounded-[20px] bg-input-bg/50 text-center">
+            <div>
+              <div className="font-medium text-panel-text-active text-sm">{emptyStateCopy.title}</div>
+              <div className="mt-1 text-[11px] text-panel-text-muted">{emptyStateCopy.body}</div>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="flex flex-col gap-2 px-4 pb-3 text-[10px] text-panel-text-muted sm:flex-row sm:items-center sm:justify-end">
