@@ -36,7 +36,7 @@ import type {
   TradePrint,
 } from "@/lib/trading.types";
 import type { AppSection } from "@/ui/app-sidebar.types";
-import { AppSidebar } from "@/ui/AppSidebar";
+import { AppSectionSwitcher, AppSidebar } from "@/ui/AppSidebar";
 import { FuturesTradingTerminal } from "@/ui/trading-terminal/FuturesTradingTerminal";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import { SpotTradingTerminal } from "@/ui/trading-terminal/SpotTradingTerminal";
@@ -910,6 +910,9 @@ export function OrderBookTradingTerminal({
               triggerId="header-deposit-trigger"
               wallet={primaryWallet}
             />
+          }
+          sectionControl={
+            <AppSectionSwitcher activeSection={activeSection} onSectionChange={handleSectionChange} />
           }
         />
 

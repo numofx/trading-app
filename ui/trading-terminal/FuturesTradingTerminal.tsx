@@ -84,7 +84,7 @@ function formatContractSize(contractMultiplier: string | null | undefined) {
 
 function TickerStat({ label, value, valueClassName }: { label: string; value: string; valueClassName?: string }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1">
+    <div className="flex min-w-0 shrink-0 flex-col gap-1">
       <span className="whitespace-nowrap text-[10px] text-panel-text-muted">{label}</span>
       <span className={cn("whitespace-nowrap font-medium text-[13px] text-panel-text", valueClassName)}>{value}</span>
     </div>
@@ -194,8 +194,13 @@ function FuturesTickerBar({
           </Popover.Portal>
         </Popover.Root>
 
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-5 gap-y-2">
-          <div className="flex min-w-0 flex-col gap-1">
+        {/*
+         * Futures carries more stats than fit a phone row, and they are contract terms rather
+         * than duplicated market data, so none can be dropped. Below `sm` they stay on one
+         * swipeable row: wrapping them instead costs ~140px of height above the order ticket.
+         */}
+        <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-x-5 overflow-x-auto sm:flex-wrap sm:gap-y-2 sm:overflow-x-visible">
+          <div className="flex min-w-0 shrink-0 flex-col gap-1">
             <span className="whitespace-nowrap text-[10px] text-panel-text-muted">Last price (24H)</span>
             <span className="flex items-baseline gap-2 whitespace-nowrap">
               <span className="font-semibold text-[15px] text-panel-text-active leading-none">

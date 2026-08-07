@@ -6,7 +6,17 @@ import type { ReactNode } from "react";
 import { PrivyWalletButton } from "@/ui/PrivyWalletButton";
 import { SmartImage } from "@/ui/SmartImage";
 
-export function TradingMarketHeader({ depositControl }: { depositControl?: ReactNode }) {
+export function TradingMarketHeader({
+  depositControl,
+  sectionControl,
+}: {
+  depositControl?: ReactNode;
+  /**
+   * Primary nav for phones, where the sidebar rail is hidden. Rendered inside the header's
+   * wrapping row so it rides along on the logo's line instead of costing a row of its own.
+   */
+  sectionControl?: ReactNode;
+}) {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
@@ -37,6 +47,8 @@ export function TradingMarketHeader({ depositControl }: { depositControl?: React
           priority
           src={theme === "light" ? "/numo_logo_black.png" : "/numo_logo_white.png"}
         />
+
+        {sectionControl}
 
         <div className="flex items-center gap-3">
           {depositControl}

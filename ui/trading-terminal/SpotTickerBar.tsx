@@ -18,7 +18,7 @@ function formatChangePercent(value: number | null) {
 
 function TickerStat({ label, value, valueClassName }: { label: string; value: string; valueClassName?: string }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1">
+    <div className="flex min-w-0 shrink-0 flex-col gap-1">
       <span className="whitespace-nowrap text-[10px] text-panel-text-muted">{label}</span>
       <span className={cn("whitespace-nowrap font-medium text-[13px] text-panel-text", valueClassName)}>{value}</span>
     </div>
@@ -104,8 +104,13 @@ export function SpotTickerBar({
           </Popover.Portal>
         </Popover.Root>
 
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-5 gap-y-2">
-          <div className="flex min-w-0 flex-col gap-1">
+        {/*
+         * Below `sm` the stats stay on one swipeable row rather than wrapping: wrapping cost
+         * ~140px of height directly above the order ticket. Scrolling keeps every stat
+         * reachable, so none has to be dropped on phones.
+         */}
+        <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-x-5 overflow-x-auto sm:flex-wrap sm:gap-y-2 sm:overflow-x-visible">
+          <div className="flex min-w-0 shrink-0 flex-col gap-1">
             <span className="whitespace-nowrap text-[10px] text-panel-text-muted">Last price (24H)</span>
             <span className="flex items-baseline gap-2 whitespace-nowrap">
               <span className="font-semibold text-[15px] text-panel-text-active leading-none">
@@ -122,19 +127,12 @@ export function SpotTickerBar({
             </span>
           </div>
 
-          {/*
-           * Secondary 24H stats are dropped on phones: they wrap to their own rows there,
-           * pushing the order ticket down the document, and the chart panel immediately
-           * below repeats high/low/volume for the selected interval.
-           */}
-          <div className="hidden min-w-0 flex-wrap items-center gap-x-5 gap-y-2 sm:flex">
-            <div className="h-8 w-px bg-panel-border" />
-            <TickerStat label="24H volume" value={volume24hLabel} />
-            <div className="h-8 w-px bg-panel-border" />
-            <TickerStat label="24H high" value={formatNaira(high24h)} />
-            <div className="h-8 w-px bg-panel-border" />
-            <TickerStat label="24H low" value={formatNaira(low24h)} />
-          </div>
+          <div className="hidden h-8 w-px shrink-0 bg-panel-border sm:block" />
+          <TickerStat label="24H volume" value={volume24hLabel} />
+          <div className="hidden h-8 w-px shrink-0 bg-panel-border sm:block" />
+          <TickerStat label="24H high" value={formatNaira(high24h)} />
+          <div className="hidden h-8 w-px shrink-0 bg-panel-border sm:block" />
+          <TickerStat label="24H low" value={formatNaira(low24h)} />
         </div>
       </div>
     </section>
