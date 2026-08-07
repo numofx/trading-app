@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { cn } from "@/lib/cn";
 import type { DeliveryTerm } from "@/lib/trading.types";
 import { SmartImage } from "@/ui/SmartImage";
+import { ConfirmOrderDialog } from "@/ui/trading-terminal/ConfirmOrderDialog";
 import {
   FUTURES_ORDER_TYPE_LABELS,
   FUTURES_ORDER_TYPES,
@@ -50,9 +52,11 @@ function FormInput({
 
 export function FuturesOrderFormPanel({
   availableLabel,
+  contractSizeLabel,
   isSubmitting,
   lastAction,
   limitPrice,
+  marketLabel,
   onLimitPriceChange,
   onOrderTypeChange,
   onSideChange,
@@ -64,9 +68,12 @@ export function FuturesOrderFormPanel({
   summaryRows,
 }: {
   availableLabel: string;
+  /** Shown only in the confirmation dialog; the ticker bar carries it for the ticket itself. */
+  contractSizeLabel: string;
   isSubmitting: boolean;
   lastAction: string | null;
   limitPrice: string;
+  marketLabel: string;
   onLimitPriceChange: (value: string) => void;
   onOrderTypeChange: (orderType: FuturesOrderType) => void;
   onSideChange: (side: "buy" | "sell") => void;
@@ -78,6 +85,7 @@ export function FuturesOrderFormPanel({
   summaryRows: DeliveryTerm[];
 }) {
   const isBuy = orderSide === "buy";
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   function getSubmitLabel() {
     if (isSubmitting) {
@@ -85,6 +93,11 @@ export function FuturesOrderFormPanel({
     }
 
     return isBuy ? "Buy now" : "Sell now";
+  }
+
+  function handleConfirm() {
+    setConfirmOpen(false);
+    onSubmit(orderSide);
   }
 
   return (
@@ -193,11 +206,24 @@ export function FuturesOrderFormPanel({
               : "bg-sell text-white ring-1 ring-sell/50 hover:bg-sell/90"
           )}
           disabled={isSubmitting}
-          onClick={() => onSubmit(orderSide)}
+          onClick={() => setConfirmOpen(true)}
           type="button"
         >
           {getSubmitLabel()}
         </button>
+
+        <ConfirmOrderDialog
+          contractSizeLabel={contractSizeLabel}
+          isSubmitting={isSubmitting}
+          marketLabel={marketLabel}
+          onConfirm={handleConfirm}
+          onOpenChange={setConfirmOpen}
+          open={confirmOpen}
+          orderSide={orderSide}
+          orderType={orderType}
+          size={size}
+          summaryRows={summaryRows}
+        />
 
         {lastAction === null ? null : (
           <p className="rounded-[12px] bg-input-bg px-3 py-2 text-[10px] text-panel-text-muted ring-1 ring-panel-border">
