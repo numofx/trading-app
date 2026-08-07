@@ -20,8 +20,45 @@ import {
 } from "@/lib/trading-subaccount-cache";
 
 const DEFAULT_TRADE_MODULE_ADDRESS = "0x0AAE65AaA66Fe7f54486cDbD007956d3De611990";
-// The public Base RPCs cap eth_getLogs at a 2000-block span per query.
-const LOG_QUERY_BLOCK_RANGE = 2000n;
+/**
+ * Blocks per `eth_getLogs` query when scanning for a subaccount.
+ *
+ * The default is what the public Base RPCs accept, and it is slow: covering the ~840k blocks
+ * since the Matching deployment takes ~418 sequential calls, around seven minutes, and grows by
+ * ~22 calls a day. The submit button is disabled for that whole time.
+ *
+ * Providers with a higher limit collapse this. Alchemy serves the entire range in one 1.1s call,
+ * so set `NEXT_PUBLIC_LOG_QUERY_BLOCK_RANGE=1000000` alongside a `NEXT_PUBLIC_BASE_RPC_URL` that
+ * supports it. Too large a value for the configured provider makes it reject every query, so
+ * raise it only to what that endpoint allows.
+ */
+const DEFAULT_LOG_QUERY_BLOCK_RANGE = 2000n;
+
+/**
+ * How far below the last scanned block a cached result is re-scanned, so a reorg near the previous
+ * head cannot drop an event.
+ *
+ * Deliberately independent of the query window. Reorgs are a handful of blocks deep; ~2000 is
+ * roughly an hour on Base and costs one query. Tying this to the window would mean a provider
+ * configured for a 1,000,000-block span re-scanned a million blocks on every visit, which is the
+ * work the cache exists to avoid.
+ */
+const REORG_SAFETY_BLOCKS = 2000n;
+
+function getLogQueryBlockRange() {
+  const configured = process.env.NEXT_PUBLIC_LOG_QUERY_BLOCK_RANGE?.trim();
+  if (!configured) {
+    return DEFAULT_LOG_QUERY_BLOCK_RANGE;
+  }
+
+  try {
+    const parsed = BigInt(configured);
+    return parsed > 0n ? parsed : DEFAULT_LOG_QUERY_BLOCK_RANGE;
+  } catch {
+    // A malformed value must not break the lookup — fall back to the safe span.
+    return DEFAULT_LOG_QUERY_BLOCK_RANGE;
+  }
+}
 // Block at which the Matching contract was deployed, per chain. Used as the scan
 // floor so subaccount lookups terminate there instead of walking back to genesis.
 // Update if NEXT_PUBLIC_MATCHING_ADDRESS is pointed at a different deployment.
@@ -55,11 +92,11 @@ async function scanForSubaccountId(
 ) {
   const publicClient = createBasePublicClient();
   const normalizedOwnerAddress = ownerAddress;
+  const blockRange = getLogQueryBlockRange();
   let windowEnd = latestBlock;
 
   while (windowEnd >= floorBlock) {
-    const rangeStart =
-      windowEnd > LOG_QUERY_BLOCK_RANGE ? windowEnd - LOG_QUERY_BLOCK_RANGE + 1n : 0n;
+    const rangeStart = windowEnd > blockRange ? windowEnd - blockRange + 1n : 0n;
     const windowStart = rangeStart > floorBlock ? rangeStart : floorBlock;
     const logs = await publicClient.getLogs({
       address: getMatchingAddress(),
@@ -110,7 +147,7 @@ async function findTradingSubaccountId(ownerAddress: string) {
     cached,
     floorBlock: getSubaccountEventFloorBlock(),
     latestBlock,
-    reorgMargin: LOG_QUERY_BLOCK_RANGE,
+    reorgMargin: REORG_SAFETY_BLOCKS,
   });
 
   // A hit in the newly scanned range wins: it is a subaccount created since the cache was written.
