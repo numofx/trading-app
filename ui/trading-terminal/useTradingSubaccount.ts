@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import type { ConnectedWallet } from "@privy-io/react-auth";
-import { base } from "viem/chains";
+import { useEffect, useState } from "react";
 import { createWalletClient, custom, decodeEventLog, getAddress } from "viem";
+import { base } from "viem/chains";
 import { createBasePublicClient, getAppChain } from "@/lib/base-public-client";
 import {
   depositedSubAccountEvent,
@@ -12,6 +12,12 @@ import {
   getUsdcCngnManagerAddress,
   getWrappedUsdcAssetAddress,
 } from "@/lib/subaccount-deposit-config";
+import {
+  buildSubaccountCacheKey,
+  readSubaccountCache,
+  resolveScanFloor,
+  writeSubaccountCache,
+} from "@/lib/trading-subaccount-cache";
 
 const DEFAULT_TRADE_MODULE_ADDRESS = "0x0AAE65AaA66Fe7f54486cDbD007956d3De611990";
 // The public Base RPCs cap eth_getLogs at a 2000-block span per query.
@@ -38,11 +44,17 @@ function getTradeModuleAddress() {
   );
 }
 
-async function findTradingSubaccountId(ownerAddress: string) {
+/**
+ * Scans `DepositedSubAccount` logs backwards from `latestBlock` to `floorBlock`, returning the
+ * most recent subaccount for the owner, or null once the floor is reached without a match.
+ */
+async function scanForSubaccountId(
+  ownerAddress: `0x${string}`,
+  latestBlock: bigint,
+  floorBlock: bigint
+) {
   const publicClient = createBasePublicClient();
-  const latestBlock = await publicClient.getBlockNumber();
-  const normalizedOwnerAddress = getAddress(ownerAddress);
-  const floorBlock = getSubaccountEventFloorBlock();
+  const normalizedOwnerAddress = ownerAddress;
   let windowEnd = latestBlock;
 
   while (windowEnd >= floorBlock) {
@@ -51,12 +63,12 @@ async function findTradingSubaccountId(ownerAddress: string) {
     const windowStart = rangeStart > floorBlock ? rangeStart : floorBlock;
     const logs = await publicClient.getLogs({
       address: getMatchingAddress(),
-      args: {
-        owner: normalizedOwnerAddress,
-      },
       event: depositedSubAccountEvent,
       fromBlock: windowStart,
       toBlock: windowEnd,
+      args: {
+        owner: normalizedOwnerAddress,
+      },
     });
     const latestLog = logs.at(-1);
 
@@ -72,6 +84,45 @@ async function findTradingSubaccountId(ownerAddress: string) {
   }
 
   return null;
+}
+
+/**
+ * Resolves the wallet's trading subaccount, scanning only the blocks produced since the last
+ * lookup.
+ *
+ * The first call for a wallet still scans the full range, but it is the only one that does: the
+ * result and the block it was accurate as of are cached, so later calls scan a few hundred blocks
+ * instead of the ~800k (and growing) between the Matching deployment and the chain head. A null
+ * result is cached too — a wallet with no subaccount is the case that scans the whole range.
+ */
+async function findTradingSubaccountId(ownerAddress: string) {
+  const publicClient = createBasePublicClient();
+  const latestBlock = await publicClient.getBlockNumber();
+  const normalizedOwnerAddress = getAddress(ownerAddress);
+
+  const cacheKey = buildSubaccountCacheKey({
+    chainId: getMatchingChainId(),
+    matchingAddress: getMatchingAddress(),
+    ownerAddress: normalizedOwnerAddress,
+  });
+  const cached = readSubaccountCache(cacheKey);
+  const scanFloor = resolveScanFloor({
+    cached,
+    floorBlock: getSubaccountEventFloorBlock(),
+    latestBlock,
+    reorgMargin: LOG_QUERY_BLOCK_RANGE,
+  });
+
+  // A hit in the newly scanned range wins: it is a subaccount created since the cache was written.
+  const found = await scanForSubaccountId(normalizedOwnerAddress, latestBlock, scanFloor);
+  const resolved = found ?? cached?.subaccountId ?? null;
+
+  writeSubaccountCache(cacheKey, {
+    scannedToBlock: latestBlock.toString(),
+    subaccountId: resolved,
+  });
+
+  return resolved;
 }
 
 async function createTradingSubaccount(wallet: ConnectedWallet) {
@@ -110,15 +161,15 @@ async function createTradingSubaccount(wallet: ConnectedWallet) {
         ]
       : [
           {
+            name: "createAndDepositSubAccount",
+            outputs: [{ name: "accountId", type: "uint256" }],
+            stateMutability: "nonpayable",
+            type: "function",
             inputs: [
               { name: "baseAsset", type: "address" },
               { name: "initDeposit", type: "uint256" },
               { name: "manager", type: "address" },
             ],
-            name: "createAndDepositSubAccount",
-            outputs: [{ name: "accountId", type: "uint256" }],
-            stateMutability: "nonpayable",
-            type: "function",
           },
         ],
     account,
