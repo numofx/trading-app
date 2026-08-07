@@ -33,7 +33,9 @@ function getMatchingChainId() {
 }
 
 function getTradeModuleAddress() {
-  return getAddress(process.env.NEXT_PUBLIC_TRADE_MODULE_ADDRESS?.trim() || DEFAULT_TRADE_MODULE_ADDRESS);
+  return getAddress(
+    process.env.NEXT_PUBLIC_TRADE_MODULE_ADDRESS?.trim() || DEFAULT_TRADE_MODULE_ADDRESS
+  );
 }
 
 async function findTradingSubaccountId(ownerAddress: string) {
@@ -44,7 +46,8 @@ async function findTradingSubaccountId(ownerAddress: string) {
   let windowEnd = latestBlock;
 
   while (windowEnd >= floorBlock) {
-    const rangeStart = windowEnd > LOG_QUERY_BLOCK_RANGE ? windowEnd - LOG_QUERY_BLOCK_RANGE + 1n : 0n;
+    const rangeStart =
+      windowEnd > LOG_QUERY_BLOCK_RANGE ? windowEnd - LOG_QUERY_BLOCK_RANGE + 1n : 0n;
     const windowStart = rangeStart > floorBlock ? rangeStart : floorBlock;
     const logs = await publicClient.getLogs({
       address: getMatchingAddress(),
@@ -200,7 +203,9 @@ export function useTradingSubaccount(walletAddress: string | null) {
       const createdSubaccountId = await createTradingSubaccount(wallet);
 
       if (!createdSubaccountId) {
-        throw new Error("Trading account creation completed, but the deposited subaccount id could not be resolved");
+        throw new Error(
+          "Trading account creation completed, but the deposited subaccount id could not be resolved"
+        );
       }
 
       setSubaccountId(createdSubaccountId);

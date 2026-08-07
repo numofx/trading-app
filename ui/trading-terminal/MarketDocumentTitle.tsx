@@ -30,13 +30,7 @@ function formatPrice(price: number | null, pair: string) {
   }).format(price);
 }
 
-export function MarketDocumentTitle({
-  pair,
-  price,
-}: {
-  pair: string;
-  price: number | null;
-}) {
+export function MarketDocumentTitle({ pair, price }: { pair: string; price: number | null }) {
   const prevPriceRef = useRef<number | null>(null);
 
   useEffect(() => {

@@ -85,7 +85,12 @@ export function SpotOrderFormPanel({
   availableCngnLabel: string;
   availableUsdcLabel: string;
   markPrice: number | null;
-  onSubmitOrder?: (args: { side: "buy" | "sell"; price: string; size: string; orderType: SpotOrderType }) => void;
+  onSubmitOrder?: (args: {
+    side: "buy" | "sell";
+    price: string;
+    size: string;
+    orderType: SpotOrderType;
+  }) => void;
   isSubmitting?: boolean;
   lastAction?: string | null;
 }) {
@@ -93,7 +98,9 @@ export function SpotOrderFormPanel({
   const [orderType, setOrderType] = useState<SpotOrderType>("Limit");
   const [payWith, setPayWith] = useState<PayCurrency>("cNGN");
   const [payWithOpen, setPayWithOpen] = useState(false);
-  const [limitPrice, setLimitPrice] = useState(markPrice === null ? "" : String(markPrice.toFixed(2)));
+  const [limitPrice, setLimitPrice] = useState(
+    markPrice === null ? "" : String(markPrice.toFixed(2))
+  );
   const [stopPrice, setStopPrice] = useState("");
   const [amount, setAmount] = useState("100");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -118,7 +125,8 @@ export function SpotOrderFormPanel({
       return;
     }
     setStatusMessage(null);
-    const priceForOrder = orderType === "Market" ? (markPrice === null ? "" : String(markPrice)) : limitPrice;
+    const priceForOrder =
+      orderType === "Market" ? (markPrice === null ? "" : String(markPrice)) : limitPrice;
     onSubmitOrder({ side, price: priceForOrder, size: amount, orderType });
   }
 
@@ -185,7 +193,14 @@ export function SpotOrderFormPanel({
           />
         ) : null}
 
-        <FormInput id="spot-amount" label="Amount" onChange={setAmount} placeholder="100" unit="USDC" value={amount} />
+        <FormInput
+          id="spot-amount"
+          label="Amount"
+          onChange={setAmount}
+          placeholder="100"
+          unit="USDC"
+          value={amount}
+        />
 
         {/*
          * Funding source and its balance are one thought — `availableLabel` is
@@ -207,7 +222,12 @@ export function SpotOrderFormPanel({
                   src={PAY_CURRENCY_ICONS[payWith]}
                 />
                 {payWith}
-                <ChevronDown className={cn("size-3 text-panel-text-muted transition-transform", payWithOpen && "rotate-180")} />
+                <ChevronDown
+                  className={cn(
+                    "size-3 text-panel-text-muted transition-transform",
+                    payWithOpen && "rotate-180"
+                  )}
+                />
               </Popover.Trigger>
               <Popover.Portal>
                 <Popover.Positioner align="start" sideOffset={6}>
@@ -253,7 +273,9 @@ export function SpotOrderFormPanel({
         <div className="rounded-[12px] bg-input-bg/60 px-3 py-2 text-[11px]">
           <div className="flex items-center justify-between gap-2">
             <span className="text-panel-text-muted">Total</span>
-            <span className="truncate font-semibold text-[13px] text-panel-text-active">{totalLabel}</span>
+            <span className="truncate font-semibold text-[13px] text-panel-text-active">
+              {totalLabel}
+            </span>
           </div>
 
           <div className="mt-2 space-y-1.5 border-panel-border border-t pt-2">

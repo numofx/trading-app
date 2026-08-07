@@ -21,7 +21,9 @@ function normalizeSelectionKey(value: string) {
 }
 
 const SPOT_SELECTION_KEYS = new Set(
-  [SPOT_URL_SLUG, CANONICAL_SPOT_SYMBOL, LEGACY_SPOT_SYMBOL, SPOT_MARKET_ID].map(normalizeSelectionKey),
+  [SPOT_URL_SLUG, CANONICAL_SPOT_SYMBOL, LEGACY_SPOT_SYMBOL, SPOT_MARKET_ID].map(
+    normalizeSelectionKey
+  )
 );
 
 /**
@@ -49,7 +51,9 @@ export function buildLegacyDerivedMarketId(marketSymbol: string, subId: string) 
  * selection alias map, so the slug round-trips through `resolveMarketSelection`
  * without any extra wiring.
  */
-export function buildMarketUrlSlug(market: Pick<MarketDefinition, "id" | "marketSymbol"> | null | undefined) {
+export function buildMarketUrlSlug(
+  market: Pick<MarketDefinition, "id" | "marketSymbol"> | null | undefined
+) {
   if (!market) {
     return "";
   }
@@ -93,14 +97,20 @@ export function buildMarketSelectionAliasMap(marketDefinitions: MarketDefinition
     aliases.set(normalizeSelectionKey(market.marketSymbol), market.id);
 
     if (market.subId) {
-      aliases.set(normalizeSelectionKey(buildLegacyDerivedMarketId(market.marketSymbol, market.subId)), market.id);
+      aliases.set(
+        normalizeSelectionKey(buildLegacyDerivedMarketId(market.marketSymbol, market.subId)),
+        market.id
+      );
     }
 
     for (const alias of market.marketSymbolAliases ?? []) {
       aliases.set(normalizeSelectionKey(alias), market.id);
 
       if (market.subId) {
-        aliases.set(normalizeSelectionKey(buildLegacyDerivedMarketId(alias, market.subId)), market.id);
+        aliases.set(
+          normalizeSelectionKey(buildLegacyDerivedMarketId(alias, market.subId)),
+          market.id
+        );
       }
     }
   }
@@ -108,7 +118,10 @@ export function buildMarketSelectionAliasMap(marketDefinitions: MarketDefinition
   return aliases;
 }
 
-export function resolveMarketSelection(value: string | null | undefined, aliases: Map<string, MarketId>) {
+export function resolveMarketSelection(
+  value: string | null | undefined,
+  aliases: Map<string, MarketId>
+) {
   if (!value) {
     return null;
   }
@@ -119,7 +132,7 @@ export function resolveMarketSelection(value: string | null | undefined, aliases
 export function resolveInitialMarketSelection(
   requestedMarket: string | null | undefined,
   aliases: Map<string, MarketId>,
-  defaultMarketId: MarketId,
+  defaultMarketId: MarketId
 ) {
   if (!requestedMarket || requestedMarket.trim() === "") {
     return defaultMarketId;
@@ -136,7 +149,9 @@ export function resolveHydratedMarketSelection(params: {
 }) {
   const { aliases, defaultMarketId, requestedMarket, storedMarket } = params;
   const hasRequestedMarket = Boolean(requestedMarket && requestedMarket.trim() !== "");
-  const resolvedRequestedMarket = hasRequestedMarket ? resolveMarketSelection(requestedMarket, aliases) : null;
+  const resolvedRequestedMarket = hasRequestedMarket
+    ? resolveMarketSelection(requestedMarket, aliases)
+    : null;
 
   if (hasRequestedMarket) {
     return {

@@ -5,9 +5,21 @@ import type { ConnectedWallet } from "@privy-io/react-auth";
 import { useEffect, useEffectEvent, useState } from "react";
 import { createWalletClient, custom, decodeEventLog, erc20Abi, getAddress, parseUnits } from "viem";
 import { createBasePublicClient, getAppChain } from "@/lib/base-public-client";
-import { getDepositEffect, startDepositFlow, transitionDepositFlow } from "@/lib/subaccount-deposit-machine";
-import { depositedSubAccountEvent, getDepositAddresses, getMatchingAddress } from "@/lib/subaccount-deposit-config";
-import type { DepositFlowEvent, DepositFlowState, DepositPreflight } from "@/lib/subaccount-deposit.types";
+import {
+  getDepositEffect,
+  startDepositFlow,
+  transitionDepositFlow,
+} from "@/lib/subaccount-deposit-machine";
+import {
+  depositedSubAccountEvent,
+  getDepositAddresses,
+  getMatchingAddress,
+} from "@/lib/subaccount-deposit-config";
+import type {
+  DepositFlowEvent,
+  DepositFlowState,
+  DepositPreflight,
+} from "@/lib/subaccount-deposit.types";
 
 const DECIMAL_INPUT_PATTERN = /^(\d+(\.\d+)?|\.\d+)$/;
 
@@ -76,7 +88,7 @@ async function createConnectedWalletClient(wallet: ConnectedWallet) {
 async function readWhitelistState(
   publicClient: ReturnType<typeof createBasePublicClient>,
   assetAddress: `0x${string}`,
-  subaccountId: string | null,
+  subaccountId: string | null
 ): Promise<Pick<DepositPreflight, "whitelistEnabled" | "whitelisted">> {
   try {
     const whitelistEnabled = await publicClient.readContract({
@@ -136,7 +148,13 @@ async function readPreflight(effect: {
 }
 
 /** Extract the created subaccount id from a createAndDepositSubAccount receipt. */
-function extractDepositedSubaccountId(receipt: { logs: { address: string; data: `0x${string}`; topics: [] | [`0x${string}`, ...`0x${string}`[]] }[] }) {
+function extractDepositedSubaccountId(receipt: {
+  logs: {
+    address: string;
+    data: `0x${string}`;
+    topics: [] | [`0x${string}`, ...`0x${string}`[]];
+  }[];
+}) {
   const matchingAddress = getMatchingAddress().toLowerCase();
 
   for (const log of receipt.logs) {
@@ -163,7 +181,10 @@ function extractDepositedSubaccountId(receipt: { logs: { address: string; data: 
 }
 
 /** Wait for a receipt and translate it into the machine event for the step it confirms. */
-async function resolveReceiptEvent(txHash: `0x${string}`, isApprovalReceipt: boolean): Promise<DepositFlowEvent> {
+async function resolveReceiptEvent(
+  txHash: `0x${string}`,
+  isApprovalReceipt: boolean
+): Promise<DepositFlowEvent> {
   const publicClient = createBasePublicClient();
   const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
 
@@ -186,7 +207,11 @@ async function resolveReceiptEvent(txHash: `0x${string}`, isApprovalReceipt: boo
  * receipt waits run automatically; approve() and deposit() are user-initiated so
  * each wallet signature maps to an explicit click.
  */
-export function useSubaccountDeposit({ onDeposited }: { onDeposited?: (subaccountId: string) => void } = {}) {
+export function useSubaccountDeposit({
+  onDeposited,
+}: {
+  onDeposited?: (subaccountId: string) => void;
+} = {}) {
   const [flowState, setFlowState] = useState<DepositFlowState | null>(null);
   const [activeWallet, setActiveWallet] = useState<ConnectedWallet | null>(null);
   const [inputError, setInputError] = useState<string | null>(null);
@@ -224,7 +249,11 @@ export function useSubaccountDeposit({ onDeposited }: { onDeposited?: (subaccoun
     const effect = getDepositEffect(flowState);
 
     // request-approval / request-deposit wait for an explicit user action.
-    if (effect === null || effect.kind === "request-approval" || effect.kind === "request-deposit") {
+    if (
+      effect === null ||
+      effect.kind === "request-approval" ||
+      effect.kind === "request-deposit"
+    ) {
       return;
     }
 
@@ -237,7 +266,10 @@ export function useSubaccountDeposit({ onDeposited }: { onDeposited?: (subaccoun
       try {
         const event =
           pendingEffect.kind === "read-preflight"
-            ? ({ preflight: await readPreflight(pendingEffect), type: "PREFLIGHT_RESOLVED" } as const)
+            ? ({
+                preflight: await readPreflight(pendingEffect),
+                type: "PREFLIGHT_RESOLVED",
+              } as const)
             : await resolveReceiptEvent(pendingEffect.txHash, isApprovalReceipt);
 
         if (!cancelled) {
@@ -257,7 +289,11 @@ export function useSubaccountDeposit({ onDeposited }: { onDeposited?: (subaccoun
     };
   }, [flowState]);
 
-  async function startDeposit(wallet: ConnectedWallet, amountInput: string, subaccountId: string | null) {
+  async function startDeposit(
+    wallet: ConnectedWallet,
+    amountInput: string,
+    subaccountId: string | null
+  ) {
     const trimmedAmount = amountInput.trim().replaceAll(",", "");
 
     if (!DECIMAL_INPUT_PATTERN.test(trimmedAmount)) {
@@ -284,7 +320,7 @@ export function useSubaccountDeposit({ onDeposited }: { onDeposited?: (subaccoun
           amountUnits: parseUnits(trimmedAmount, tokenDecimals),
           subaccountId,
           walletAddress: getAddress(wallet.address),
-        }),
+        })
       );
     } catch (error) {
       setInputError(getErrorMessage(error));

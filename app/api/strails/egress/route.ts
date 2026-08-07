@@ -19,6 +19,9 @@ export async function GET() {
     const payload = (await response.json()) as { ip?: string };
     return NextResponse.json({ egressIp: payload.ip ?? null, fetchedAt: new Date().toISOString() });
   } catch {
-    return NextResponse.json({ egressIp: null, fetchedAt: new Date().toISOString() }, { status: 502 });
+    return NextResponse.json(
+      { egressIp: null, fetchedAt: new Date().toISOString() },
+      { status: 502 }
+    );
   }
 }

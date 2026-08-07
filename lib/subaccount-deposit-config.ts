@@ -39,7 +39,7 @@ function isAppMainnet() {
 
 /** Emitted by Matching when a subaccount is deposited; carries the created account id. */
 export const depositedSubAccountEvent = parseAbiItem(
-  "event DepositedSubAccount(uint indexed accountId, address indexed owner)",
+  "event DepositedSubAccount(uint indexed accountId, address indexed owner)"
 );
 
 export function getMatchingAddress() {
@@ -48,7 +48,9 @@ export function getMatchingAddress() {
 
 /** WLWrappedERC20Asset contract — the deposit target and spender for direct deposits. */
 export function getWrappedUsdcAssetAddress() {
-  return getAddress(process.env.NEXT_PUBLIC_WRAPPED_USDC_ASSET_ADDRESS?.trim() || DEFAULT_WRAPPED_USDC_ASSET_ADDRESS);
+  return getAddress(
+    process.env.NEXT_PUBLIC_WRAPPED_USDC_ASSET_ADDRESS?.trim() || DEFAULT_WRAPPED_USDC_ASSET_ADDRESS
+  );
 }
 
 /**
@@ -60,16 +62,20 @@ export function getUsdcTokenAddress() {
   return getAddress(
     process.env.NEXT_PUBLIC_USDC_TOKEN_ADDRESS?.trim() ||
       process.env.NEXT_PUBLIC_USDC_DELIVERABLE_BASE_ASSET_ADDRESS?.trim() ||
-      DEFAULT_USDC_TOKEN_ADDRESS,
+      DEFAULT_USDC_TOKEN_ADDRESS
   );
 }
 
 export function getSubaccountCreatorAddress() {
-  return getAddress(process.env.NEXT_PUBLIC_SUBACCOUNT_CREATOR_ADDRESS?.trim() || DEFAULT_SUBACCOUNT_CREATOR_ADDRESS);
+  return getAddress(
+    process.env.NEXT_PUBLIC_SUBACCOUNT_CREATOR_ADDRESS?.trim() || DEFAULT_SUBACCOUNT_CREATOR_ADDRESS
+  );
 }
 
 export function getUsdcCngnManagerAddress() {
-  return getAddress(process.env.NEXT_PUBLIC_USDCCNGN_MANAGER_ADDRESS?.trim() || DEFAULT_USDCCNGN_MANAGER_ADDRESS);
+  return getAddress(
+    process.env.NEXT_PUBLIC_USDCCNGN_MANAGER_ADDRESS?.trim() || DEFAULT_USDCCNGN_MANAGER_ADDRESS
+  );
 }
 
 /** SubAccounts ERC-721 ledger address for the active chain (env override wins). */
@@ -78,7 +84,9 @@ export function getSubaccountsAddress() {
   if (override) {
     return getAddress(override);
   }
-  return getAddress(isAppMainnet() ? DEFAULT_SUBACCOUNTS_ADDRESS_MAINNET : DEFAULT_SUBACCOUNTS_ADDRESS_SEPOLIA);
+  return getAddress(
+    isAppMainnet() ? DEFAULT_SUBACCOUNTS_ADDRESS_MAINNET : DEFAULT_SUBACCOUNTS_ADDRESS_SEPOLIA
+  );
 }
 
 /**
@@ -105,7 +113,9 @@ export function getCngnTokenAddress(): `0x${string}` {
   if (configured) {
     return getAddress(configured);
   }
-  return getAddress(isAppMainnet() ? DEFAULT_CNGN_TOKEN_ADDRESS_MAINNET : DEFAULT_CNGN_TOKEN_ADDRESS_SEPOLIA);
+  return getAddress(
+    isAppMainnet() ? DEFAULT_CNGN_TOKEN_ADDRESS_MAINNET : DEFAULT_CNGN_TOKEN_ADDRESS_SEPOLIA
+  );
 }
 
 /** cNGN-side IAsset address for labeling the cNGN leg of a subaccount balance, or null if unknown. */

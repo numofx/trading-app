@@ -120,9 +120,12 @@ export function getMarketsServiceUrl() {
   const configuredUrl = process.env.MARKETS_SERVICE_URL?.trim();
   const resolvedUrl = configuredUrl || DEFAULT_MARKETS_SERVICE_URL;
 
-  if (process.env.NODE_ENV === "production" && (!configuredUrl || isLocalMarketsServiceUrl(resolvedUrl))) {
+  if (
+    process.env.NODE_ENV === "production" &&
+    (!configuredUrl || isLocalMarketsServiceUrl(resolvedUrl))
+  ) {
     throw new Error(
-      "MARKETS_SERVICE_URL must point to the live markets-service in production and must not be localhost",
+      "MARKETS_SERVICE_URL must point to the live markets-service in production and must not be localhost"
     );
   }
 
@@ -186,7 +189,7 @@ export async function getMarketBook(assetAddress: string, subId: string) {
       headers: {
         accept: "application/json",
       },
-    },
+    }
   );
 
   if (!response.ok) {
@@ -204,7 +207,7 @@ export async function getMarketTrades(assetAddress: string, subId: string, limit
       headers: {
         accept: "application/json",
       },
-    },
+    }
   );
 
   if (!response.ok) {
@@ -243,7 +246,7 @@ export async function getMarketCandles(
   assetAddress: string,
   subId: string,
   interval: CandleInterval = "1h",
-  limit = 200,
+  limit = 200
 ) {
   const response = await fetch(
     `${getMarketsServiceUrl()}/v1/candles?asset_address=${assetAddress}&sub_id=${subId}&interval=${interval}&limit=${limit}`,
@@ -252,7 +255,7 @@ export async function getMarketCandles(
       headers: {
         accept: "application/json",
       },
-    },
+    }
   );
 
   if (!response.ok) {

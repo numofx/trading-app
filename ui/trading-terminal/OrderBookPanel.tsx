@@ -31,20 +31,24 @@ function OrderRow({
       <div
         className={cn(
           "absolute inset-y-0 right-0 rounded-l-xl",
-          side === "ask" ? "bg-ask-bg" : "bg-bid-bg",
+          side === "ask" ? "bg-ask-bg" : "bg-bid-bg"
         )}
         style={{ width }}
       />
       <span
         className={cn(
           "relative z-10 font-semibold",
-          side === "ask" ? "text-ask-text" : "text-bid-text",
+          side === "ask" ? "text-ask-text" : "text-bid-text"
         )}
       >
         {formatPrice(level.price)}
       </span>
-      <span className="relative z-10 text-right font-medium text-panel-text">{formatSize(level.size)}</span>
-      <span className="relative z-10 text-right text-panel-text-muted">{formatSize(level.total)}</span>
+      <span className="relative z-10 text-right font-medium text-panel-text">
+        {formatSize(level.size)}
+      </span>
+      <span className="relative z-10 text-right text-panel-text-muted">
+        {formatSize(level.total)}
+      </span>
     </div>
   );
 }
@@ -79,7 +83,7 @@ export function OrderBookPanel({
           <button
             className={cn(
               "rounded-xl px-2 py-1",
-              view === "Order Book" ? "bg-input-bg text-panel-text-active" : "text-panel-text-muted",
+              view === "Order Book" ? "bg-input-bg text-panel-text-active" : "text-panel-text-muted"
             )}
             onClick={() => onViewChange("Order Book")}
             type="button"
@@ -89,7 +93,7 @@ export function OrderBookPanel({
           <button
             className={cn(
               "rounded-xl px-2 py-1",
-              view === "Trades" ? "bg-input-bg text-panel-text-active" : "text-panel-text-muted",
+              view === "Trades" ? "bg-input-bg text-panel-text-active" : "text-panel-text-muted"
             )}
             onClick={() => onViewChange("Trades")}
             type="button"
@@ -99,10 +103,16 @@ export function OrderBookPanel({
         </div>
 
         <div className="flex items-center gap-1.5">
-          <button className="rounded-xl p-1 text-panel-text-muted transition-colors hover:bg-input-hover hover:text-panel-text-active" type="button">
+          <button
+            className="rounded-xl p-1 text-panel-text-muted transition-colors hover:bg-input-hover hover:text-panel-text-active"
+            type="button"
+          >
             <MoreHorizontal className="size-3.5" />
           </button>
-          <button className="rounded-xl bg-input-bg px-2 py-1 text-[10px] text-panel-text" type="button">
+          <button
+            className="rounded-xl bg-input-bg px-2 py-1 text-[10px] text-panel-text"
+            type="button"
+          >
             {contractLabel}
           </button>
         </div>
@@ -128,13 +138,17 @@ export function OrderBookPanel({
           <div className="mx-2 my-1.5 rounded-2xl bg-input-bg px-3 py-2">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <div className="font-medium text-[8px] text-panel-text-muted uppercase tracking-[0.16em]">Spread</div>
+                <div className="font-medium text-[8px] text-panel-text-muted uppercase tracking-[0.16em]">
+                  Spread
+                </div>
                 <div className="mt-1 font-semibold text-[13px] text-panel-text-active">
                   {spread === null ? "—" : formatPrice(spread)} cNGN
                 </div>
               </div>
               <div className="text-center">
-                <div className="font-medium text-[8px] text-panel-text-muted uppercase tracking-[0.16em]">Mid Price</div>
+                <div className="font-medium text-[8px] text-panel-text-muted uppercase tracking-[0.16em]">
+                  Mid Price
+                </div>
                 <div className="mt-1 font-semibold text-[15px] text-mid-price">
                   {midPrice === null ? "—" : formatPrice(midPrice)}
                 </div>
@@ -157,8 +171,16 @@ export function OrderBookPanel({
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
           {trades.map((trade) => (
-            <div className="grid grid-cols-3 px-3 py-1 text-[9px]" key={`${trade.time}-${trade.price}`}>
-              <span className={cn("font-semibold", trade.side === "buy" ? "text-bid-text" : "text-ask-text")}>
+            <div
+              className="grid grid-cols-3 px-3 py-1 text-[9px]"
+              key={`${trade.time}-${trade.price}`}
+            >
+              <span
+                className={cn(
+                  "font-semibold",
+                  trade.side === "buy" ? "text-bid-text" : "text-ask-text"
+                )}
+              >
                 {formatPrice(trade.price)}
               </span>
               <span className="text-right text-panel-text">{formatSize(trade.size)}</span>

@@ -133,7 +133,9 @@ function SidebarNavButton({
       type="button"
     >
       <Icon className="size-5" />
-      {collapsed ? null : <span className="font-medium text-[10px] tracking-wide">{item.label}</span>}
+      {collapsed ? null : (
+        <span className="font-medium text-[10px] tracking-wide">{item.label}</span>
+      )}
     </button>
   );
 }

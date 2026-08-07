@@ -14,7 +14,11 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { formatFxDisplayPair } from "@/lib/market-display";
-import { calculateAnnualizedBasisPercent, formatAnnualizedBasis, formatBasis } from "@/lib/market-formatting";
+import {
+  calculateAnnualizedBasisPercent,
+  formatAnnualizedBasis,
+  formatBasis,
+} from "@/lib/market-formatting";
 import {
   buildCanonicalMarketId,
   buildLegacyDerivedMarketId,
@@ -269,7 +273,7 @@ function parseNumber(value: string) {
 function buildCandles(
   baseCandles: readonly (readonly [number, number, number, number, number])[],
   offset: number,
-  digits: number,
+  digits: number
 ) {
   return baseCandles.map(([open, high, low, close, volume], index) => ({
     close: Number((close + offset).toFixed(digits)),
@@ -285,7 +289,7 @@ function buildBook(
   levels: readonly { price: number; size: number; total: number }[],
   priceOffset: number,
   sizeMultiplier: number,
-  digits: number,
+  digits: number
 ) {
   return levels.map((level) => ({
     price: Number((level.price + priceOffset).toFixed(digits)),
@@ -305,7 +309,6 @@ function buildSpotTrades(mark: string) {
     { price: markNumber - 0.05, side: "sell", size: 30_000, time: "10:07:12" },
   ] satisfies TradePrint[];
 }
-
 
 function formatPriceWithConvention(value: string) {
   return `${value} cNGN per USDC`;
@@ -332,7 +335,10 @@ function getMarketAvailability({
 function getSpotPositionOverview(mark: string) {
   return [
     { label: "Position", value: "+80,000 USDC" },
-    { label: "Entry Price", value: formatPriceWithConvention(Number(parseNumber(mark) - 1.2).toFixed(2)) },
+    {
+      label: "Entry Price",
+      value: formatPriceWithConvention(Number(parseNumber(mark) - 1.2).toFixed(2)),
+    },
     { label: "Mark Price", value: formatPriceWithConvention(Number(parseNumber(mark)).toFixed(2)) },
     { label: "Unrealized PnL", value: "+$96" },
     { label: "Return on Margin", value: "+0.12%" },
@@ -384,7 +390,11 @@ function buildSpotMarket() {
   } satisfies ContractMarket;
 }
 
-function buildOptionsMarket(label: keyof typeof OPTIONS_MARKET_META, offset: number, sizeMultiplier: number) {
+function buildOptionsMarket(
+  label: keyof typeof OPTIONS_MARKET_META,
+  offset: number,
+  sizeMultiplier: number
+) {
   const meta = OPTIONS_MARKET_META[label];
   const displayLabel = getContractDisplayLabel(label);
   const displayPair = formatFxDisplayPair("USDCcNGN");
@@ -574,19 +584,33 @@ export function buildDeliverableFutureDefinition(config: LiveDeliverableFutureCo
 
 function getMockPricesForDefinitionId(id: string) {
   if (id.includes("eurc")) {
-    if (id.includes("july-2026")) { return { spot: "0.9000", mark: "0.9150" }; }
-    if (id.includes("nov-2026")) { return { spot: "0.9000", mark: "0.9400" }; }
-    if (id.includes("may-2027")) { return { spot: "0.9000", mark: "0.9700" }; }
+    if (id.includes("july-2026")) {
+      return { spot: "0.9000", mark: "0.9150" };
+    }
+    if (id.includes("nov-2026")) {
+      return { spot: "0.9000", mark: "0.9400" };
+    }
+    if (id.includes("may-2027")) {
+      return { spot: "0.9000", mark: "0.9700" };
+    }
     return { spot: "0.9000", mark: "0.9250" };
   }
   if (id.includes("brz")) {
-    if (id.includes("july-2026")) { return { spot: "5.0000", mark: "5.1500" }; }
-    if (id.includes("nov-2026")) { return { spot: "5.0000", mark: "5.4000" }; }
-    if (id.includes("may-2027")) { return { spot: "5.0000", mark: "5.7000" }; }
+    if (id.includes("july-2026")) {
+      return { spot: "5.0000", mark: "5.1500" };
+    }
+    if (id.includes("nov-2026")) {
+      return { spot: "5.0000", mark: "5.4000" };
+    }
+    if (id.includes("may-2027")) {
+      return { spot: "5.0000", mark: "5.7000" };
+    }
     return { spot: "5.0000", mark: "5.2500" };
   }
   // Default cNGN
-  if (id.includes("july-2026")) { return { spot: "1,500.00", mark: "1,545.00" }; }
+  if (id.includes("july-2026")) {
+    return { spot: "1,500.00", mark: "1,545.00" };
+  }
   return { spot: "1,500.00", mark: "1,605.25" };
 }
 
@@ -594,7 +618,7 @@ function buildBookForPair(
   levels: readonly { price: number; size: number; total: number }[],
   mark: number,
   side: "ask" | "bid",
-  pair: string,
+  pair: string
 ) {
   let step = 0.1;
   let digits = 2;
@@ -620,12 +644,12 @@ function buildBookForPair(
 function buildCandlesForPair(
   baseCandles: readonly (readonly [number, number, number, number, number])[],
   mark: number,
-  pair: string,
+  pair: string
 ) {
   const lastBaseCandle = baseCandles.at(-1);
   const lastBaseClose = lastBaseCandle ? lastBaseCandle[3] : 1600;
   const scale = mark / lastBaseClose;
-  
+
   let digits = 2;
   if (pair === "USDCEURC" || pair === "USDCBRZ") {
     digits = 4;
@@ -662,7 +686,7 @@ export function buildDeliverableFutureMarket(definition: MarketDefinition) {
   const annualizedBasis = calculateAnnualizedBasisPercent(
     parseNumber(mark),
     parseNumber(spot),
-    definition.expiryDays,
+    definition.expiryDays
   );
 
   let quote = "cNGN";
@@ -695,7 +719,10 @@ export function buildDeliverableFutureMarket(definition: MarketDefinition) {
       { label: "Manager", value: "Dedicated DeliverableFXManager" },
       { label: "Contract Size", value: `${definition.contractMultiplier ?? "10000"} USDC` },
       { label: "Min Size", value: `${definition.minSize ?? "0.001"} contracts` },
-      { label: "Tick Size", value: `${definition.tickSize ?? (digits === 4 ? "0.0001" : "1")} ${quote} per USDC` },
+      {
+        label: "Tick Size",
+        value: `${definition.tickSize ?? (digits === 4 ? "0.0001" : "1")} ${quote} per USDC`,
+      },
       { label: "Mark Price", value: formatLocalPrice(mark) },
     ],
     id: definition.id,
@@ -703,7 +730,11 @@ export function buildDeliverableFutureMarket(definition: MarketDefinition) {
       { label: "Mark Price", value: formatLocalPrice(mark) },
       { label: "Spot", value: formatLocalPrice(spot) },
       { label: "Basis", tone: "accent", value: formatLocalBasis(basis) },
-      { label: "Basis %", tone: "accent", value: `${((basis / parseNumber(spot)) * 100).toFixed(2)}%` },
+      {
+        label: "Basis %",
+        tone: "accent",
+        value: `${((basis / parseNumber(spot)) * 100).toFixed(2)}%`,
+      },
       { label: "Implied Carry", tone: "accent", value: formatAnnualizedBasis(annualizedBasis) },
       { label: "Expiry", value: displayLabel },
     ],
@@ -712,7 +743,10 @@ export function buildDeliverableFutureMarket(definition: MarketDefinition) {
     orderBookBids: buildBookForPair(BASE_FUTURES_BIDS, parseNumber(mark), "bid", definition.pair),
     positionOverview: [
       { label: "Position", value: "Long USDC · 0.500 contracts" },
-      { label: "Entry Price", value: formatLocalPrice(parseNumber(mark) - 5 * (digits === 4 ? 0.001 : 1)) },
+      {
+        label: "Entry Price",
+        value: formatLocalPrice(parseNumber(mark) - 5 * (digits === 4 ? 0.001 : 1)),
+      },
       { label: "Mark Price", value: formatLocalPrice(mark) },
       { label: "Unrealized PnL", value: "+$156" },
       { label: "Return on Margin", value: "+0.64%" },
@@ -724,10 +758,7 @@ export function buildDeliverableFutureMarket(definition: MarketDefinition) {
   } satisfies ContractMarket;
 }
 
-function buildLiveBookSide(
-  items: NonNullable<BookResponse["asks"]>,
-  side: "ask" | "bid",
-) {
+function buildLiveBookSide(items: NonNullable<BookResponse["asks"]>, side: "ask" | "bid") {
   const levels = items
     .map((item) => ({
       // markets-service presents prices/amounts as plain human decimals (e.g. "1377", "28"),
@@ -735,7 +766,13 @@ function buildLiveBookSide(
       price: Number(item.spot_contract?.ui_intent.price ?? Number(item.limit_price)),
       size: Number(item.spot_contract?.ui_intent.size ?? Number(item.desired_amount)),
     }))
-    .filter((level) => Number.isFinite(level.price) && level.price > 0 && Number.isFinite(level.size) && level.size > 0);
+    .filter(
+      (level) =>
+        Number.isFinite(level.price) &&
+        level.price > 0 &&
+        Number.isFinite(level.size) &&
+        level.size > 0
+    );
 
   const ordered = [...levels].sort((left, right) => {
     return side === "ask" ? left.price - right.price : right.price - left.price;
@@ -790,7 +827,7 @@ function buildLiveDeliverableFutureMarket(
   asks: ReturnType<typeof buildLiveBookSide>,
   bids: ReturnType<typeof buildLiveBookSide>,
   trades: TradePrint[],
-  spotMark: string = SPOT_MARKET_META.mark,
+  spotMark: string = SPOT_MARKET_META.mark
 ) {
   const displayPair = formatFxDisplayPair(definition.pair);
   const displayLabel = definition.expiryLabel ?? "—";
@@ -846,7 +883,7 @@ export function buildDeliverableFutureMarketFromBook(
   book: BookResponse | null,
   trades: PresentedTrade[],
   spotMark: string = SPOT_MARKET_META.mark,
-  candles: Candle[] = [],
+  candles: Candle[] = []
 ) {
   const asks = buildLiveBookSide(book?.asks ?? [], "ask");
   const bids = buildLiveBookSide(book?.bids ?? [], "bid");
@@ -862,7 +899,13 @@ export function buildDeliverableFutureMarketFromBook(
         timeZone: "UTC",
       }).format(new Date(trade.created_at)),
     }))
-    .filter((trade) => Number.isFinite(trade.price) && trade.price > 0 && Number.isFinite(trade.size) && trade.size > 0);
+    .filter(
+      (trade) =>
+        Number.isFinite(trade.price) &&
+        trade.price > 0 &&
+        Number.isFinite(trade.size) &&
+        trade.size > 0
+    );
 
   const market = buildLiveDeliverableFutureMarket(definition, asks, bids, liveTrades, spotMark);
 
@@ -888,7 +931,7 @@ function withRealCandles<T extends { candles: Candle[] }>(market: T, candles: Ca
 export function buildSpotMarketFromBook(
   book: BookResponse | null,
   trades: PresentedTrade[],
-  candles: Candle[] = [],
+  candles: Candle[] = []
 ) {
   // Spot presents in UI orientation (cNGN per USDC price, USDC size) while the engine
   // book rests inverted (USDC per cNGN, cNGN amounts). A resting engine ASK (sell cNGN)
@@ -910,7 +953,13 @@ export function buildSpotMarketFromBook(
         timeZone: "UTC",
       }).format(new Date(trade.created_at)),
     }))
-    .filter((trade) => Number.isFinite(trade.price) && trade.price > 0 && Number.isFinite(trade.size) && trade.size > 0);
+    .filter(
+      (trade) =>
+        Number.isFinite(trade.price) &&
+        trade.price > 0 &&
+        Number.isFinite(trade.size) &&
+        trade.size > 0
+    );
   const derivedMark = deriveMarkFromBook(uiAsks, uiBids) ?? liveTrades[0]?.price.toFixed(2) ?? null;
 
   if (derivedMark === null && liveTrades.length === 0) {
@@ -924,7 +973,12 @@ export function buildSpotMarketFromBook(
 
   return {
     ...preview,
-    availability: getMarketAvailability({ asks: uiAsks, bids: uiBids, mark: derivedMark, trades: liveTrades }),
+    availability: getMarketAvailability({
+      asks: uiAsks,
+      bids: uiBids,
+      mark: derivedMark,
+      trades: liveTrades,
+    }),
     contractDetails: [
       { label: "Market", value: `${displayPair} Spot` },
       { label: "Quote Convention", value: "cNGN per USDC" },
@@ -951,7 +1005,7 @@ export function buildSpotMarketFromBook(
 
 export function buildTradingTerminalMarkets(
   liveFutures: LiveDeliverableFutureRuntime[],
-  liveSpot: LiveSpotRuntime | null = null,
+  liveSpot: LiveSpotRuntime | null = null
 ) {
   const spotMarketData = liveSpot
     ? buildSpotMarketFromBook(liveSpot.book, liveSpot.trades, liveSpot.candles ?? [])
@@ -969,7 +1023,7 @@ export function buildTradingTerminalMarkets(
           previewFutureDefinitions.map((definition) => [
             definition.id,
             buildDeliverableFutureMarket(definition),
-          ]),
+          ])
         ),
       } satisfies Record<MarketId, ContractMarket>,
       marketDefinitions: previewFutureDefinitions,
@@ -995,9 +1049,9 @@ export function buildTradingTerminalMarkets(
           future.book,
           future.trades,
           spotMarketData.mark,
-          future.candles ?? [],
+          future.candles ?? []
         ),
-      ]),
+      ])
     ),
   } satisfies Record<MarketId, ContractMarket>;
 
@@ -1042,7 +1096,14 @@ export const ACTIVITY_VIEWS = {
     rows: [],
   },
   positions: {
-    columns: ["Instrument", "Position", "Entry Price", "Mark Price", "Unrealized PnL", "Return on Margin"],
+    columns: [
+      "Instrument",
+      "Position",
+      "Entry Price",
+      "Mark Price",
+      "Unrealized PnL",
+      "Return on Margin",
+    ],
     rows: [],
   },
   "trade-history": {
@@ -1058,7 +1119,14 @@ export const ACTIVITY_VIEWS = {
     columns: ["Instrument", "Spot Price", "Future Price", "Basis", "Implied Carry %", "Time"],
     rows: [
       {
-        cells: ["USDC-cNGN 16 SEP 26", "1,500.00 cNGN", "1,545.00 cNGN", "+45.00 cNGN", "+3.20%", "10:08:14"],
+        cells: [
+          "USDC-cNGN 16 SEP 26",
+          "1,500.00 cNGN",
+          "1,545.00 cNGN",
+          "+45.00 cNGN",
+          "+3.20%",
+          "10:08:14",
+        ],
         positiveCellIndexes: [3, 4],
       },
     ],

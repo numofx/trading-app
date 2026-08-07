@@ -7,7 +7,11 @@ const FAVORITE_MARKETS_STORAGE_KEY = "market-selector-favorites";
 const RECENT_MARKETS_STORAGE_KEY = "market-selector-recents";
 const DEFAULT_MAX_RECENT_MARKETS = 4;
 
-function parseStoredMarketIds(value: string | null, validMarketIds: Set<string>, aliases: Map<string, MarketId>) {
+function parseStoredMarketIds(
+  value: string | null,
+  validMarketIds: Set<string>,
+  aliases: Map<string, MarketId>
+) {
   if (!value) {
     return [] as MarketId[];
   }
@@ -49,7 +53,7 @@ function marketIdsEqual(left: MarketId[], right: MarketId[]) {
 export function useMarketSelectorPreferences(
   validMarketIds: MarketId[],
   aliases: Map<string, MarketId>,
-  maxRecentMarkets = DEFAULT_MAX_RECENT_MARKETS,
+  maxRecentMarkets = DEFAULT_MAX_RECENT_MARKETS
 ) {
   const [favoriteMarketIds, setFavoriteMarketIds] = useState<MarketId[]>([]);
   const [recentMarketIds, setRecentMarketIds] = useState<MarketId[]>([]);
@@ -59,7 +63,7 @@ export function useMarketSelectorPreferences(
     .map(([alias, marketId]) => `${alias}:${marketId}`)
     .join("|");
   const parseStoredIds = useEffectEvent((storageKey: string, validMarketIdSet: Set<string>) =>
-    parseStoredMarketIds(window.localStorage.getItem(storageKey), validMarketIdSet, aliases),
+    parseStoredMarketIds(window.localStorage.getItem(storageKey), validMarketIdSet, aliases)
   );
 
   useEffect(() => {
@@ -68,9 +72,11 @@ export function useMarketSelectorPreferences(
     const nextRecentMarketIds = parseStoredIds(RECENT_MARKETS_STORAGE_KEY, validMarketIdSet);
 
     setFavoriteMarketIds((current) =>
-      marketIdsEqual(current, nextFavoriteMarketIds) ? current : nextFavoriteMarketIds,
+      marketIdsEqual(current, nextFavoriteMarketIds) ? current : nextFavoriteMarketIds
     );
-    setRecentMarketIds((current) => (marketIdsEqual(current, nextRecentMarketIds) ? current : nextRecentMarketIds));
+    setRecentMarketIds((current) =>
+      marketIdsEqual(current, nextRecentMarketIds) ? current : nextRecentMarketIds
+    );
   }, [aliasEntriesKey, validMarketIdsKey]);
 
   useEffect(() => {
@@ -85,7 +91,7 @@ export function useMarketSelectorPreferences(
     setFavoriteMarketIds((current) =>
       current.includes(marketId)
         ? current.filter((existingId) => existingId !== marketId)
-        : [marketId, ...current],
+        : [marketId, ...current]
     );
   }
 

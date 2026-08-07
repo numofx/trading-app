@@ -82,11 +82,23 @@ function formatContractSize(contractMultiplier: string | null | undefined) {
   return `${parsed.toLocaleString("en-US")} USDC`;
 }
 
-function TickerStat({ label, value, valueClassName }: { label: string; value: string; valueClassName?: string }) {
+function TickerStat({
+  label,
+  value,
+  valueClassName,
+}: {
+  label: string;
+  value: string;
+  valueClassName?: string;
+}) {
   return (
     <div className="flex min-w-0 shrink-0 flex-col gap-1">
       <span className="whitespace-nowrap text-[10px] text-panel-text-muted">{label}</span>
-      <span className={cn("whitespace-nowrap font-medium text-[13px] text-panel-text", valueClassName)}>{value}</span>
+      <span
+        className={cn("whitespace-nowrap font-medium text-[13px] text-panel-text", valueClassName)}
+      >
+        {value}
+      </span>
     </div>
   );
 }
@@ -185,7 +197,9 @@ function FuturesTickerBar({
                       <span className="truncate font-semibold text-[13px] leading-none">
                         {getInstrumentDisplayLabel(candidate)}
                       </span>
-                      <span className="text-[10px] text-panel-text-muted">{getInstrumentSubtext(candidate)}</span>
+                      <span className="text-[10px] text-panel-text-muted">
+                        {getInstrumentSubtext(candidate)}
+                      </span>
                     </span>
                   </button>
                 ))}
@@ -201,7 +215,9 @@ function FuturesTickerBar({
          */}
         <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-x-5 overflow-x-auto sm:flex-wrap sm:gap-y-2 sm:overflow-x-visible">
           <div className="flex min-w-0 shrink-0 flex-col gap-1">
-            <span className="whitespace-nowrap text-[10px] text-panel-text-muted">Last price (24H)</span>
+            <span className="whitespace-nowrap text-[10px] text-panel-text-muted">
+              Last price (24H)
+            </span>
             <span className="flex items-baseline gap-2 whitespace-nowrap">
               <span className="font-semibold text-[15px] text-panel-text-active leading-none">
                 {formatNaira(lastPrice)}
@@ -312,11 +328,15 @@ export function FuturesTradingTerminal({
   });
 
   const { changePercent, volumeLabel } = get24hStats(liveCandles, lastPrice);
-  const activityView = ACTIVITY_VIEWS[bottomTab as keyof typeof ACTIVITY_VIEWS] ?? { columns: [], rows: [] };
+  const activityView = ACTIVITY_VIEWS[bottomTab as keyof typeof ACTIVITY_VIEWS] ?? {
+    columns: [],
+    rows: [],
+  };
   // Prefer the live WebSocket book; fall back to the server-rendered snapshot for this market.
   const bookAsks = futuresBook.isLive ? futuresBook.asks : market.orderBookAsks;
   const bookBids = futuresBook.isLive ? futuresBook.bids : market.orderBookBids;
-  const bookTrades = futuresBook.isLive && futuresBook.trades.length > 0 ? futuresBook.trades : market.trades;
+  const bookTrades =
+    futuresBook.isLive && futuresBook.trades.length > 0 ? futuresBook.trades : market.trades;
 
   return (
     <div className="flex flex-col gap-3 xl:min-h-0 xl:flex-1 xl:overflow-hidden">

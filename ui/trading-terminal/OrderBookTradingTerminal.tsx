@@ -88,7 +88,10 @@ function formatPriceDisplay(value: number | string | null, quoteCurrency = "cNGN
   }
 
   const digits = quoteCurrency === "EURC" || quoteCurrency === "BRZ" ? 4 : 2;
-  const formatted = numericValue.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  const formatted = numericValue.toLocaleString("en-US", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
 
   return `${formatted} ${quoteCurrency} per USDC`;
 }
@@ -222,7 +225,6 @@ function getCompatibleSpotPrice(candidatePrice: number | null, referencePrice: n
   return candidatePrice;
 }
 
-
 function buildSelectorMetrics(
   liveSpotPrice: number,
   marketDefinitions: MarketDefinition[],
@@ -310,7 +312,6 @@ function buildSelectorMetrics(
   };
 }
 
-
 /**
  * The three numbers the ticket footer keeps permanently in view: what the order
  * costs to open, what it costs to fill, and where it gets liquidated. Notional
@@ -383,7 +384,6 @@ function getOrderMetrics(
     liquidationPrice,
   };
 }
-
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This component coordinates terminal state across chart, book, order entry, and URL persistence.
 export function OrderBookTradingTerminal({
@@ -482,9 +482,14 @@ export function OrderBookTradingTerminal({
     isLoading: isResolvingTradingSubaccount,
     subaccountId: tradingSubaccountId,
   } = useTradingSubaccount(primaryWallet?.address ?? null);
-  const { balance: usdcBalance, refresh: refreshUsdcBalance } = useUsdcBalance(primaryWallet?.address ?? null);
-  const { balance: cngnBalance, refresh: refreshCngnBalance } = useCngnBalance(primaryWallet?.address ?? null);
-  const { balance: subaccountBalance, refresh: refreshSubaccountBalance } = useSubaccountBalance(tradingSubaccountId);
+  const { balance: usdcBalance, refresh: refreshUsdcBalance } = useUsdcBalance(
+    primaryWallet?.address ?? null
+  );
+  const { balance: cngnBalance, refresh: refreshCngnBalance } = useCngnBalance(
+    primaryWallet?.address ?? null
+  );
+  const { balance: subaccountBalance, refresh: refreshSubaccountBalance } =
+    useSubaccountBalance(tradingSubaccountId);
   const accountUsdcLabel = formatSubaccountUsdcLabel(subaccountBalance?.cashUnits ?? null);
   const accountCngnLabel = formatSubaccountCngnLabel(subaccountBalance?.cngnUnits ?? null);
 
@@ -517,15 +522,14 @@ export function OrderBookTradingTerminal({
     Number((selectedMarket.contractMultiplier ?? "10000").replaceAll(",", "")) || 10_000;
   const sizeUsdcNotional = String((Number(size) || 0) * futureContractMultiplier);
 
-  const { fees, initialMargin, liquidationPrice } =
-    getOrderMetrics(
-      limitPrice,
-      market.mark,
-      orderType,
-      sizeUsdcNotional,
-      safeLivePrice,
-      orderSide
-    );
+  const { fees, initialMargin, liquidationPrice } = getOrderMetrics(
+    limitPrice,
+    market.mark,
+    orderType,
+    sizeUsdcNotional,
+    safeLivePrice,
+    orderSide
+  );
   const quoteCurrency = getQuoteCurrency(selectedMarket.pair);
 
   const orderSummaryRows = getOrderSummaryRows({
@@ -548,7 +552,9 @@ export function OrderBookTradingTerminal({
 
     const storedMarket = window.localStorage.getItem(SELECTED_MARKET_STORAGE_KEY);
     const selectionToken =
-      requestedMarketParam && requestedMarketParam.trim() !== "" ? requestedMarketParam : storedMarket;
+      requestedMarketParam && requestedMarketParam.trim() !== ""
+        ? requestedMarketParam
+        : storedMarket;
 
     // Spot is a view mode, not a row in marketDefinitions, so resolve it up front.
     if (isSpotMarketSelection(selectionToken)) {
@@ -606,7 +612,9 @@ export function OrderBookTradingTerminal({
     const marketSelectionAliases = buildMarketSelectionAliasMap(marketDefinitions);
     const canonicalMarketId =
       resolveMarketSelection(selectedMarketId, marketSelectionAliases) ?? selectedMarketId;
-    const selectedMarketDefinition = marketDefinitions.find((option) => option.id === canonicalMarketId);
+    const selectedMarketDefinition = marketDefinitions.find(
+      (option) => option.id === canonicalMarketId
+    );
     // Spot is a view mode with no marketDefinitions row, so its URL is the bare
     // pair slug; the futures view uses the selected contract's symbol.
     const viewUrlSlug =
@@ -759,7 +767,8 @@ export function OrderBookTradingTerminal({
       );
       return;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Futures order submission failed";
+      const errorMessage =
+        error instanceof Error ? error.message : "Futures order submission failed";
       posthog.captureException(error, {
         properties: {
           order_side: orderSide,
@@ -841,7 +850,9 @@ export function OrderBookTradingTerminal({
         uiSize: size,
         walletAddress: primaryWallet.address,
       });
-      setLastAction(`Awaiting wallet signature for trading account #${resolvedTradingSubaccountId}`);
+      setLastAction(
+        `Awaiting wallet signature for trading account #${resolvedTradingSubaccountId}`
+      );
       const signature = await walletClient.signTypedData({
         account: primaryWallet.address as `0x${string}`,
         ...envelope.typedData,
@@ -912,7 +923,10 @@ export function OrderBookTradingTerminal({
             />
           }
           sectionControl={
-            <AppSectionSwitcher activeSection={activeSection} onSectionChange={handleSectionChange} />
+            <AppSectionSwitcher
+              activeSection={activeSection}
+              onSectionChange={handleSectionChange}
+            />
           }
         />
 

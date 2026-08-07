@@ -46,7 +46,7 @@ export function MarketSwitcherRow({
       className={cn(
         "flex w-full items-center gap-4 rounded-[20px] p-4 text-left transition-colors hover:bg-input-hover",
         isActive && "bg-input-bg",
-        isSelected && "bg-toolbar-active-bg ring-1 ring-panel-border",
+        isSelected && "bg-toolbar-active-bg ring-1 ring-panel-border"
       )}
     >
       <button
@@ -93,7 +93,9 @@ export function MarketSwitcherRow({
                   </span>
                 ) : null}
                 <span className="truncate font-medium text-[14px] text-panel-text-muted leading-tight">
-                  {market.type === "future" ? market.expiryLabel ?? instrumentDetail : instrumentDetail}
+                  {market.type === "future"
+                    ? (market.expiryLabel ?? instrumentDetail)
+                    : instrumentDetail}
                 </span>
               </span>
             </div>
@@ -107,7 +109,7 @@ export function MarketSwitcherRow({
           "rounded-full p-2 transition-colors",
           isFavorite
             ? "bg-foreground text-background hover:bg-foreground/90"
-            : "bg-transparent text-panel-text-muted hover:bg-input-hover hover:text-panel-text-active",
+            : "bg-transparent text-panel-text-muted hover:bg-input-hover hover:text-panel-text-active"
         )}
         onClick={(event) => {
           event.stopPropagation();
