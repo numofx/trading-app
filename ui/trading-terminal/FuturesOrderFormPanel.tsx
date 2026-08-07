@@ -86,6 +86,9 @@ export function FuturesOrderFormPanel({
 }) {
   const isBuy = orderSide === "buy";
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const directionLabel = isBuy ? "Long" : "Short";
+  // Liquidation decides whether the position survives, so it is lifted out of the summary list.
+  const liquidationRow = summaryRows.find((row) => row.label === "Liquidation Price");
 
   function getSubmitLabel() {
     if (isSubmitting) {
@@ -213,16 +216,26 @@ export function FuturesOrderFormPanel({
         </button>
 
         <ConfirmOrderDialog
-          contractSizeLabel={contractSizeLabel}
+          confirmLabel={`Confirm ${directionLabel.toLowerCase()}`}
+          description={`This submits a ${orderType.toLowerCase()} order for ${marketLabel}. Once filled it cannot be closed from this screen.`}
+          directionLabel={directionLabel}
+          highlightedRow={
+            liquidationRow
+              ? {
+                  label: liquidationRow.label,
+                  note: "The position is liquidated if the mark reaches this price.",
+                  value: liquidationRow.value,
+                }
+              : null
+          }
           isSubmitting={isSubmitting}
-          marketLabel={marketLabel}
           onConfirm={handleConfirm}
           onOpenChange={setConfirmOpen}
           open={confirmOpen}
           orderSide={orderSide}
-          orderType={orderType}
-          size={size}
-          summaryRows={summaryRows}
+          sizeLabel={`${size || "0"} × ${contractSizeLabel}`}
+          summaryRows={summaryRows.filter((row) => row.label !== "Liquidation Price")}
+          title={`Confirm ${directionLabel.toLowerCase()} position`}
         />
 
         {lastAction === null ? null : (
