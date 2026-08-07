@@ -7,6 +7,7 @@ import { cn } from "@/lib/cn";
 import { formatNaira } from "@/lib/market-formatting";
 import { SPOT_TAKER_FEE_RATE } from "@/lib/spot-order-submission";
 import { SmartImage } from "@/ui/SmartImage";
+import { ConfirmOrderDialog } from "@/ui/trading-terminal/ConfirmOrderDialog";
 import { OrderTypeTabs } from "@/ui/trading-terminal/OrderTypeTabs";
 
 type SpotOrderType = "Limit" | "Market" | "Stop Limit";
@@ -21,9 +22,60 @@ const PAY_CURRENCY_ICONS = {
 /** 5 bps taker tier as basis points, derived from the engine-bound rate so the two stay in sync. */
 const SPOT_TAKER_FEE_BPS = Number(SPOT_TAKER_FEE_RATE) * 10_000;
 
+/** Market orders execute at the mark; everything else executes at the entered limit price. */
+function resolveOrderPrice({
+  limitPrice,
+  markPrice,
+  orderType,
+}: {
+  limitPrice: string;
+  markPrice: number | null;
+  orderType: SpotOrderType;
+}) {
+  if (orderType !== "Market") {
+    return limitPrice;
+  }
+
+  return markPrice === null ? "" : String(markPrice);
+}
+
 function parseAmount(value: string) {
   const parsed = Number(value.replaceAll(",", ""));
   return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
+/**
+ * Copy and rows for the submit confirmation. Lives outside the component so its branching does
+ * not count against the panel's cognitive complexity budget.
+ */
+function buildSpotConfirmation({
+  amount,
+  isBuy,
+  orderType,
+  takerFeeLabel,
+  totalLabel,
+}: {
+  amount: string;
+  isBuy: boolean;
+  orderType: SpotOrderType;
+  takerFeeLabel: string;
+  totalLabel: string;
+}) {
+  const action = isBuy ? "buy" : "sell";
+
+  return {
+    confirmLabel: `Confirm ${action}`,
+    description: `This submits a ${orderType.toLowerCase()} order for USDC/cNGN. Once filled it cannot be reversed from this screen.`,
+    directionLabel: isBuy ? "Buy USDC" : "Sell USDC",
+    sizeLabel: `${amount || "0"} USDC`,
+    title: `Confirm ${action}`,
+    // The pay-with currency is deliberately omitted: it reads as "paying with" on a buy but the
+    // trader receives that currency on a sell, and a confirmation should not assert either.
+    summaryRows: [
+      { label: isBuy ? "You pay" : "You receive", value: totalLabel },
+      { label: `Taker fee (${SPOT_TAKER_FEE_BPS} bps)`, value: takerFeeLabel },
+    ],
+  };
 }
 
 /** Taker fee is charged on the USDC notional (the order Amount), matching the signed worstFee bound. */
@@ -116,7 +168,19 @@ export function SpotOrderFormPanel({
   const availableLabel = payWith === "USDC" ? availableUsdcLabel : availableCngnLabel;
   const takerFee = Number.isFinite(parsedAmount) ? parsedAmount * Number(SPOT_TAKER_FEE_RATE) : 0;
   const totalLabel = total === null ? "—" : `${formatNaira(total, 0).replace("₦", "")} cNGN`;
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const confirmation = buildSpotConfirmation({
+    amount,
+    isBuy,
+    orderType,
+    takerFeeLabel: formatSpotFee(takerFee),
+    totalLabel,
+  });
 
+  /**
+   * Preview mode submits nothing, so it keeps the direct path — a confirmation step for a no-op
+   * would be friction without a decision behind it. Live submission goes through the dialog.
+   */
   function handleSubmit() {
     if (!onSubmitOrder) {
       setStatusMessage(
@@ -124,13 +188,26 @@ export function SpotOrderFormPanel({
       );
       return;
     }
+    setConfirmOpen(true);
+  }
+
+  function handleConfirm() {
+    setConfirmOpen(false);
+    if (!onSubmitOrder) {
+      return;
+    }
     setStatusMessage(null);
-    const priceForOrder =
-      orderType === "Market" ? (markPrice === null ? "" : String(markPrice)) : limitPrice;
-    onSubmitOrder({ side, price: priceForOrder, size: amount, orderType });
+    onSubmitOrder({
+      orderType,
+      price: resolveOrderPrice({ limitPrice, markPrice, orderType }),
+      side,
+      size: amount,
+    });
   }
 
   const statusText = lastAction ?? statusMessage;
+  const sideLabel = isBuy ? "Buy USDC" : "Sell USDC";
+  const submitLabel = isSubmitting ? "Submitting…" : sideLabel;
 
   return (
     // The panel claims the column height itself so only the field list below can
@@ -302,8 +379,17 @@ export function SpotOrderFormPanel({
           onClick={handleSubmit}
           type="button"
         >
-          {isSubmitting ? "Submitting…" : isBuy ? "Buy USDC" : "Sell USDC"}
+          {submitLabel}
         </button>
+
+        <ConfirmOrderDialog
+          {...confirmation}
+          isSubmitting={isSubmitting}
+          onConfirm={handleConfirm}
+          onOpenChange={setConfirmOpen}
+          open={confirmOpen}
+          orderSide={side}
+        />
 
         {statusText !== null ? (
           <p className="rounded-[12px] bg-input-bg px-3 py-2 text-[10px] text-panel-text-muted ring-1 ring-panel-border">

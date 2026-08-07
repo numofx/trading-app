@@ -5,58 +5,57 @@ import { cn } from "@/lib/cn";
 import type { DeliveryTerm } from "@/lib/trading.types";
 
 /**
- * Interstitial for opening a leveraged position.
+ * Interstitial for order submission, shared by the spot and futures tickets.
  *
- * Submitting signs an order and posts it; there is no cancel or close endpoint, so a fill
- * cannot be undone from this app. Embedded Privy wallets are configured with
- * `showWalletUIs: false`, which means the signature itself raises no prompt — without this
- * dialog an email user goes from one click to an open position with nothing in between.
+ * Submitting signs an order and posts it; `/api/orders` is POST-only, so there is no cancel or
+ * close path in this app. Embedded Privy wallets are configured with `showWalletUIs: false`,
+ * which means the signature itself raises no prompt — without this dialog an email user goes
+ * from one click to a filled order with nothing in between.
+ *
+ * `highlightedRow` is for a figure that decides whether the position survives (liquidation price
+ * on futures). Spot passes none: it is unleveraged, so there is no such number.
  */
 export function ConfirmOrderDialog({
-  contractSizeLabel,
+  confirmLabel,
+  description,
+  directionLabel,
+  highlightedRow,
   isSubmitting,
-  marketLabel,
   onConfirm,
   onOpenChange,
   open,
   orderSide,
-  orderType,
-  size,
+  sizeLabel,
   summaryRows,
+  title,
 }: {
-  contractSizeLabel: string;
+  confirmLabel: string;
+  description: string;
+  directionLabel: string;
+  highlightedRow?: { label: string; note: string; value: string } | null;
   isSubmitting: boolean;
-  marketLabel: string;
   onConfirm: () => void;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   orderSide: "buy" | "sell";
-  orderType: string;
-  size: string;
+  sizeLabel: string;
   summaryRows: DeliveryTerm[];
+  title: string;
 }) {
   const isBuy = orderSide === "buy";
-  const directionLabel = isBuy ? "Long" : "Short";
-  // Liquidation is the number that decides whether this position survives, so it is pulled
-  // out of the summary list and shown on its own rather than as one row among many.
-  const liquidationRow = summaryRows.find((row) => row.label === "Liquidation Price");
-  const otherRows = summaryRows.filter((row) => row.label !== "Liquidation Price");
 
   return (
     <Dialog.Root onOpenChange={onOpenChange} open={open}>
       <Dialog.Portal>
         {/*
          * Explicit z-index: the terminal panels create stacking contexts that otherwise paint
-         * over the popup, obscuring the liquidation and margin figures this dialog exists to show.
+         * over the popup, obscuring the very figures this dialog exists to show.
          */}
         <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/60 transition-opacity data-ending-style:opacity-0 data-starting-style:opacity-0" />
         <Dialog.Popup className="-translate-1/2 fixed top-1/2 left-1/2 z-50 w-[min(92vw,380px)] rounded-[20px] bg-panel-bg p-5 text-foreground shadow-[0_28px_90px_var(--panel-shadow)] ring-1 ring-panel-ring transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
-          <Dialog.Title className="font-semibold text-[15px] text-panel-text">
-            Confirm {directionLabel.toLowerCase()} position
-          </Dialog.Title>
+          <Dialog.Title className="font-semibold text-[15px] text-panel-text">{title}</Dialog.Title>
           <Dialog.Description className="mt-1 text-[12px] text-panel-text-muted">
-            This submits a {orderType.toLowerCase()} order for {marketLabel}. Once filled it cannot
-            be closed from this screen.
+            {description}
           </Dialog.Description>
 
           <div className="mt-4 space-y-3">
@@ -65,26 +64,24 @@ export function ConfirmOrderDialog({
                 {directionLabel}
               </span>
               <span className="truncate text-right font-medium text-[13px] text-panel-text">
-                {size || "0"} × {contractSizeLabel}
+                {sizeLabel}
               </span>
             </div>
 
-            {liquidationRow ? (
+            {highlightedRow ? (
               <div className="rounded-[14px] bg-input-bg/60 px-3 py-2.5 ring-1 ring-sell/40">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] text-panel-text-muted">{liquidationRow.label}</span>
+                  <span className="text-[11px] text-panel-text-muted">{highlightedRow.label}</span>
                   <span className="truncate text-right font-semibold text-[13px] text-sell">
-                    {liquidationRow.value}
+                    {highlightedRow.value}
                   </span>
                 </div>
-                <p className="mt-1.5 text-[10px] text-panel-text-muted">
-                  The position is liquidated if the mark reaches this price.
-                </p>
+                <p className="mt-1.5 text-[10px] text-panel-text-muted">{highlightedRow.note}</p>
               </div>
             ) : null}
 
             <div className="space-y-1.5 rounded-[14px] bg-input-bg/60 px-3 py-2.5 text-[11px]">
-              {otherRows.map((row) => (
+              {summaryRows.map((row) => (
                 <div className="flex items-center justify-between gap-2" key={row.label}>
                   <span className="truncate text-panel-text-muted">{row.label}</span>
                   <span className="truncate text-right font-medium text-panel-text">
@@ -113,7 +110,7 @@ export function ConfirmOrderDialog({
               onClick={onConfirm}
               type="button"
             >
-              {isSubmitting ? "Submitting..." : `Confirm ${directionLabel.toLowerCase()}`}
+              {isSubmitting ? "Submitting..." : confirmLabel}
             </button>
           </div>
         </Dialog.Popup>
