@@ -1,1 +1,4 @@
-bunx lint-staged
+# Serial, not concurrent: the biome and eslint tasks all match the same staged files, and
+# running them at once has been OOM-killed (`bun eslint ... SIGKILL`) on a loaded machine.
+# Serial is a few seconds slower and does not fail spuriously.
+bunx lint-staged --concurrent false
