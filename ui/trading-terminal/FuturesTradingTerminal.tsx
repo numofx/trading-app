@@ -12,6 +12,7 @@ import {
   FOOTER_LINKS,
   SPOT_TIMEFRAME_OPTIONS,
 } from "@/lib/mock-orderbook-terminal-data";
+import { get24hStats } from "@/lib/ticker-stats";
 import type {
   Candle,
   ContractMarket,
@@ -36,40 +37,6 @@ function formatChangePercent(value: number | null) {
 
   const sign = value >= 0 ? "+" : "-";
   return `${sign}${Math.abs(value).toFixed(2)}%`;
-}
-
-function formatCompactVolume(value: number) {
-  if (!Number.isFinite(value) || value <= 0) {
-    return "—";
-  }
-
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M USDC`;
-  }
-
-  if (value >= 1000) {
-    return `${(value / 1000).toFixed(1)}K USDC`;
-  }
-
-  return `${Math.round(value).toLocaleString("en-US")} USDC`;
-}
-
-function get24hStats(candles: Candle[], lastPrice: number | null) {
-  const firstCandle = candles[0];
-  const lastCandle = candles.at(-1);
-
-  if (!firstCandle || !lastCandle) {
-    return { changePercent: null, volumeLabel: "—" };
-  }
-
-  const resolvedLast = lastPrice ?? lastCandle.close;
-  const changePercent =
-    firstCandle.open > 0 ? ((resolvedLast - firstCandle.open) / firstCandle.open) * 100 : null;
-
-  return {
-    changePercent,
-    volumeLabel: formatCompactVolume(candles.reduce((sum, candle) => sum + candle.volume, 0)),
-  };
 }
 
 function formatContractSize(contractMultiplier: string | null | undefined) {
@@ -325,7 +292,7 @@ export function FuturesTradingTerminal({
     type: "future",
   });
 
-  const { changePercent, volumeLabel } = get24hStats(liveCandles, lastPrice);
+  const { changePercent, volumeLabel } = get24hStats(liveCandles, lastPrice, Date.now());
   const activityView = ACTIVITY_VIEWS[bottomTab as keyof typeof ACTIVITY_VIEWS] ?? {
     columns: [],
     rows: [],

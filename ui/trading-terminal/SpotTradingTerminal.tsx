@@ -9,7 +9,7 @@ import {
   SPOT_BOTTOM_TABS,
   SPOT_TIMEFRAME_OPTIONS,
 } from "@/lib/mock-orderbook-terminal-data";
-import { get24hStats, getVenueLastPrice } from "@/lib/spot-ticker-stats";
+import { get24hStats, getVenueLastPrice } from "@/lib/ticker-stats";
 import type { Candle, ContractMarket } from "@/lib/trading.types";
 import { SpotBalanceSummary } from "@/ui/trading-terminal/SpotBalanceSummary";
 import type { SpotChartTab, SpotTimeframe } from "@/ui/trading-terminal/SpotChartPanel";
