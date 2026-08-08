@@ -32,6 +32,7 @@ import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import { SpotTradingTerminal } from "@/ui/trading-terminal/SpotTradingTerminal";
 import { TradingMarketHeader } from "@/ui/trading-terminal/TradingMarketHeader";
 import { formatCngnBalanceLabel, useCngnBalance } from "@/ui/trading-terminal/useCngnBalance";
+import { useInitialMarginRate } from "@/ui/trading-terminal/useInitialMarginRate";
 import {
   formatSubaccountCngnLabel,
   formatSubaccountUsdcLabel,
@@ -41,14 +42,6 @@ import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount
 import { formatUsdcBalanceLabel, useUsdcBalance } from "@/ui/trading-terminal/useUsdcBalance";
 
 const SELECTED_MARKET_STORAGE_KEY = "trading-terminal-selected-market";
-/**
- * Initial margin as a fraction of USDC notional (5%, i.e. 20x). Unlike the taker fee this is a
- * frontend placeholder — the venue's real requirement lives in risk-core and is not exposed over
- * the markets-service API yet, so the ticket's margin quote is indicative only.
- */
-// TODO: source the initial margin requirement from markets-service instead of hardcoding it.
-const INITIAL_MARGIN_RATE = 0.05;
-
 function parseNumericString(value: string) {
   const parsed = Number(value.replaceAll(",", "").replaceAll("$", "").replaceAll("+", ""));
 
@@ -213,14 +206,19 @@ function getOrderSummaryRows({
   quoteCurrency,
 }: {
   fees: number;
-  initialMargin: number;
+  initialMargin: number | null;
   liquidationPrice: number | null;
   quoteCurrency: string;
 }) {
   return [
     {
       label: "Margin Required",
-      value: `${initialMargin.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 })} USDC`,
+      // No quote rather than a guess: the requirement is the venue's, and an invented one misleads
+      // a trader sizing a position far more than a dash does.
+      value:
+        initialMargin === null
+          ? "—"
+          : `${initialMargin.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 })} USDC`,
     },
     {
       label: "Fees",
@@ -236,7 +234,8 @@ function getOrderMetrics(
   orderType: "Limit" | "Market" | "Stop",
   size: string,
   livePrice: number | null,
-  orderSide: "buy" | "sell"
+  orderSide: "buy" | "sell",
+  initialMarginRate: number | null
 ) {
   const sizeNumber = Number(size || "0");
   const limitPriceNumber = parseNumericString(limitPrice || marketMark);
@@ -264,11 +263,11 @@ function getOrderMetrics(
   // Margin is posted as USDC collateral and the taker fee is charged on the USDC notional, so both
   // are sized off `sizeNumber` (USDC) rather than the quote-currency order value. The fee quote
   // reuses the same tier that bounds `worstFee` on submission so the ticket cannot under-quote
-  // what the trader signs for.
+  // what the trader signs for. The margin rate is the venue's own, read from the risk-core manager.
   return {
     estimatedFill,
     fees: sizeNumber * Number(TAKER_FEE_RATE),
-    initialMargin: sizeNumber * INITIAL_MARGIN_RATE,
+    initialMargin: initialMarginRate === null ? null : sizeNumber * initialMarginRate,
     liquidationPrice,
   };
 }
@@ -407,13 +406,18 @@ export function OrderBookTradingTerminal({
     Number((selectedMarket.contractMultiplier ?? "10000").replaceAll(",", "")) || 10_000;
   const sizeUsdcNotional = String((Number(size) || 0) * futureContractMultiplier);
 
+  const initialMarginRate = useInitialMarginRate({
+    assetAddress: selectedMarket.assetAddress,
+    subId: selectedMarket.subId,
+  });
   const { fees, initialMargin, liquidationPrice } = getOrderMetrics(
     limitPrice,
     market.mark,
     orderType,
     sizeUsdcNotional,
     safeLivePrice,
-    orderSide
+    orderSide,
+    initialMarginRate
   );
   const quoteCurrency = getQuoteCurrency(selectedMarket.pair);
 
