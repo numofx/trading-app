@@ -76,8 +76,14 @@ export type MarketStreamStatus =
   | "unconfigured"
   | "error";
 
-/** Presentation config derived from the selected market. Spot inverts engine price/size into the
- * UI's cNGN-per-USDC / USDC-notional convention; futures show price and contract count directly. */
+/**
+ * Presentation config derived from the selected market.
+ *
+ * `orderEntrySpec` is the market's `order_entry_spec`, and it — not `type` — decides whether engine
+ * values get translated. The inversion belongs to the `usdc_cngn_spot_v1` contract, not to spot in
+ * general, and markets-service only sets the field for that contract.
+ */
 export type MarketStreamPresenter = {
   type: MarketType;
+  orderEntrySpec?: string | null;
 };

@@ -14,10 +14,7 @@ import {
   Type,
 } from "lucide-react";
 import { formatFxDisplayPair } from "@/lib/market-display";
-import {
-  calculateAnnualizedBasisPercent,
-  formatAnnualizedBasis,
-} from "@/lib/market-formatting";
+import { calculateAnnualizedBasisPercent, formatAnnualizedBasis } from "@/lib/market-formatting";
 import {
   buildCanonicalMarketId,
   buildLegacyDerivedMarketId,
@@ -993,6 +990,8 @@ export function buildSpotMarketFromBook(
       mark: derivedMark,
       trades: liveTrades,
     }),
+    // Taken from the venue rather than assumed: it is what tells the stream to invert engine values.
+    orderEntrySpec: book?.market_presentation?.order_entry_spec ?? null,
     contractDetails: [
       { label: "Market", value: `${displayPair} Spot` },
       { label: "Quote Convention", value: "cNGN per USDC" },
