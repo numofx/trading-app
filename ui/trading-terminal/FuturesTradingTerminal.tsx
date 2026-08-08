@@ -12,6 +12,7 @@ import {
   FOOTER_LINKS,
   SPOT_TIMEFRAME_OPTIONS,
 } from "@/lib/mock-orderbook-terminal-data";
+import { get24hStats } from "@/lib/ticker-stats";
 import type {
   Candle,
   ContractMarket,
@@ -36,40 +37,6 @@ function formatChangePercent(value: number | null) {
 
   const sign = value >= 0 ? "+" : "-";
   return `${sign}${Math.abs(value).toFixed(2)}%`;
-}
-
-function formatCompactVolume(value: number) {
-  if (!Number.isFinite(value) || value <= 0) {
-    return "—";
-  }
-
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M USDC`;
-  }
-
-  if (value >= 1000) {
-    return `${(value / 1000).toFixed(1)}K USDC`;
-  }
-
-  return `${Math.round(value).toLocaleString("en-US")} USDC`;
-}
-
-function get24hStats(candles: Candle[], lastPrice: number | null) {
-  const firstCandle = candles[0];
-  const lastCandle = candles.at(-1);
-
-  if (!firstCandle || !lastCandle) {
-    return { changePercent: null, volumeLabel: "—" };
-  }
-
-  const resolvedLast = lastPrice ?? lastCandle.close;
-  const changePercent =
-    firstCandle.open > 0 ? ((resolvedLast - firstCandle.open) / firstCandle.open) * 100 : null;
-
-  return {
-    changePercent,
-    volumeLabel: formatCompactVolume(candles.reduce((sum, candle) => sum + candle.volume, 0)),
-  };
 }
 
 function formatContractSize(contractMultiplier: string | null | undefined) {
@@ -104,7 +71,8 @@ function TickerStat({
 }
 
 function FuturesTickerBar({
-  basisLabel,
+  basisReferenceLabel,
+  basisVenueLabel,
   changePercent24h,
   contractSizeLabel,
   expiryLabel,
@@ -114,7 +82,8 @@ function FuturesTickerBar({
   onSelectMarket,
   volume24hLabel,
 }: {
-  basisLabel: string;
+  basisReferenceLabel: string;
+  basisVenueLabel: string;
   changePercent24h: number | null;
   contractSizeLabel: string;
   expiryLabel: string;
@@ -241,7 +210,9 @@ function FuturesTickerBar({
             <TickerStat label="24H volume" value={volume24hLabel} />
           </div>
           <div className="hidden h-8 w-px bg-panel-border sm:block" />
-          <TickerStat label="Basis (annualized)" value={basisLabel} />
+          <TickerStat label="Basis vs venue" value={basisVenueLabel} />
+          <div className="hidden h-8 w-px bg-panel-border sm:block" />
+          <TickerStat label="Basis vs NGN/USD" value={basisReferenceLabel} />
           <div className="hidden h-8 w-px bg-panel-border sm:block" />
           <TickerStat label="Expiry" value={expiryLabel} />
           <div className="hidden h-8 w-px bg-panel-border sm:block" />
@@ -253,7 +224,8 @@ function FuturesTickerBar({
 }
 
 export function FuturesTradingTerminal({
-  basisLabel,
+  basisReferenceLabel,
+  basisVenueLabel,
   candles,
   isSignedIn = false,
   isSubmitting,
@@ -277,7 +249,8 @@ export function FuturesTradingTerminal({
   accountUsdcLabel = null,
   accountCngnLabel = null,
 }: {
-  basisLabel: string;
+  basisReferenceLabel: string;
+  basisVenueLabel: string;
   candles: Candle[];
   /** Whether a wallet session is active; gates account-scoped rows in the activity panel. */
   isSignedIn?: boolean;
@@ -325,7 +298,7 @@ export function FuturesTradingTerminal({
     type: "future",
   });
 
-  const { changePercent, volumeLabel } = get24hStats(liveCandles, lastPrice);
+  const { changePercent, volumeLabel } = get24hStats(liveCandles, lastPrice, Date.now());
   const activityView = ACTIVITY_VIEWS[bottomTab as keyof typeof ACTIVITY_VIEWS] ?? {
     columns: [],
     rows: [],
@@ -339,7 +312,8 @@ export function FuturesTradingTerminal({
   return (
     <div className="flex flex-col gap-3 xl:min-h-0 xl:flex-1 xl:overflow-hidden">
       <FuturesTickerBar
-        basisLabel={basisLabel}
+        basisReferenceLabel={basisReferenceLabel}
+        basisVenueLabel={basisVenueLabel}
         changePercent24h={changePercent}
         contractSizeLabel={formatContractSize(marketDefinition.contractMultiplier)}
         expiryLabel={marketDefinition.expiryLabel ?? "—"}
