@@ -223,6 +223,7 @@ export function FuturesTradingTerminal({
   basisLabel,
   candles,
   isSignedIn = false,
+  isPreparingAccount = false,
   isSubmitting,
   lastAction,
   lastPrice,
@@ -248,6 +249,8 @@ export function FuturesTradingTerminal({
   candles: Candle[];
   /** Whether a wallet session is active; gates account-scoped rows in the activity panel. */
   isSignedIn?: boolean;
+  /** The trading subaccount is still being resolved — distinct from an order in flight. */
+  isPreparingAccount?: boolean;
   isSubmitting: boolean;
   lastAction: string | null;
   lastPrice: number | null;
@@ -351,6 +354,7 @@ export function FuturesTradingTerminal({
           <FuturesOrderFormPanel
             availableLabel={usdcBalanceLabel ?? "— USDC"}
             contractSizeLabel={formatContractSize(marketDefinition.contractMultiplier)}
+            isPreparingAccount={isPreparingAccount}
             isSubmitting={isSubmitting}
             lastAction={lastAction}
             limitPrice={limitPrice}

@@ -126,11 +126,34 @@ function FormInput({
   );
 }
 
+/**
+ * Resolves the CTA label. An in-flight order wins over account preparation: once a submission
+ * starts, that is the more specific thing the button is waiting on.
+ */
+function getSpotSubmitLabel({
+  isPreparingAccount,
+  isSubmitting,
+  sideLabel,
+}: {
+  isPreparingAccount: boolean;
+  isSubmitting: boolean;
+  sideLabel: string;
+}) {
+  if (isSubmitting) {
+    return "Submitting…";
+  }
+  if (isPreparingAccount) {
+    return "Loading account…";
+  }
+  return sideLabel;
+}
+
 export function SpotOrderFormPanel({
   availableCngnLabel,
   availableUsdcLabel,
   markPrice,
   onSubmitOrder,
+  isPreparingAccount = false,
   isSubmitting = false,
   lastAction = null,
 }: {
@@ -143,6 +166,8 @@ export function SpotOrderFormPanel({
     size: string;
     orderType: SpotOrderType;
   }) => void;
+  /** The trading subaccount is still being resolved — distinct from an order in flight. */
+  isPreparingAccount?: boolean;
   isSubmitting?: boolean;
   lastAction?: string | null;
 }) {
@@ -207,7 +232,10 @@ export function SpotOrderFormPanel({
 
   const statusText = lastAction ?? statusMessage;
   const sideLabel = isBuy ? "Buy USDC" : "Sell USDC";
-  const submitLabel = isSubmitting ? "Submitting…" : sideLabel;
+  // Both states block submission, but they are not the same thing: "Submitting…" on a button the
+  // user never pressed reads as a stuck order rather than a subaccount lookup still in flight.
+  const isBusy = isSubmitting || isPreparingAccount;
+  const submitLabel = getSpotSubmitLabel({ isPreparingAccount, isSubmitting, sideLabel });
 
   return (
     // The panel claims the column height itself so only the field list below can
@@ -373,9 +401,9 @@ export function SpotOrderFormPanel({
             isBuy
               ? "bg-buy text-background ring-1 ring-buy/50 hover:bg-buy/90"
               : "bg-sell text-white ring-1 ring-sell/50 hover:bg-sell/90",
-            isSubmitting && "cursor-wait opacity-70"
+            isBusy && "cursor-wait opacity-70"
           )}
-          disabled={isSubmitting}
+          disabled={isBusy}
           onClick={handleSubmit}
           type="button"
         >
