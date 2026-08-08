@@ -15,6 +15,15 @@ function getCurrencySymbol(pair: string) {
   return "$";
 }
 
+/**
+ * The app labels markets `USDC-cNGN` everywhere else, so the tab matches rather than introducing
+ * a second form of the same name. Normalized here so it holds for both sections and any future
+ * caller, whatever separator they pass.
+ */
+function formatPairForTitle(pair: string) {
+  return pair.replaceAll("/", "-");
+}
+
 function getPrecisionDigits(pair: string) {
   return pair.includes("EURC") || pair.includes("EUR") || pair.includes("BRZ") ? 4 : 2;
 }
@@ -25,8 +34,8 @@ function formatPrice(price: number | null, pair: string) {
   }
   const digits = getPrecisionDigits(pair);
   return new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: digits,
     maximumFractionDigits: digits,
+    minimumFractionDigits: digits,
   }).format(price);
 }
 
@@ -47,7 +56,7 @@ export function MarketDocumentTitle({ pair, price }: { pair: string; price: numb
       }
     }
 
-    document.title = `${prefix}${currencySymbol}${formatted} ${pair} | Numo`;
+    document.title = `${prefix}${currencySymbol}${formatted} ${formatPairForTitle(pair)} | Numo`;
 
     prevPriceRef.current = price;
   }, [pair, price]);
