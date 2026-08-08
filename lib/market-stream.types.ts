@@ -33,6 +33,8 @@ export type StreamBookOrder = {
   filled_amount: string;
   spot_contract?: {
     ui_intent?: {
+      /** UI side, already inverted by the server — the opposite of the engine `side` above. */
+      side?: "buy" | "sell";
       price: string;
       size: string;
     };

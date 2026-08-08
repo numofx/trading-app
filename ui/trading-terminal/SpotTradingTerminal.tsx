@@ -105,8 +105,8 @@ export function SpotTradingTerminal({
 
       <div className="grid grid-cols-1 gap-3 xl:min-h-0 xl:flex-8 xl:grid-cols-[minmax(0,1fr)_270px_320px] xl:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_300px_340px]">
         <SpotChartPanel
-          asks={spotMarket.orderBookAsks}
-          bids={spotMarket.orderBookBids}
+          asks={bookAsks}
+          bids={bookBids}
           candles={liveCandles}
           chartTab={chartTab}
           indicatorsEnabled={indicatorsEnabled}
