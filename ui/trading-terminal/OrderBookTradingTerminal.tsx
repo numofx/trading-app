@@ -239,7 +239,13 @@ export function OrderBookTradingTerminal({
   const [orderType, setOrderType] = useState<"Limit" | "Market" | "Stop">(DEFAULT_ORDER_TYPE);
   const [orderSide, setOrderSide] = useState<"buy" | "sell">("buy");
   const [size, setSize] = useState("1");
-  const [limitPrice, setLimitPrice] = useState("1545");
+  // Seeded from the market actually being rendered, not a literal. Both `setLimitPrice` resets
+  // below fire only when the selected market *changes*, so on a direct load — where
+  // `selectedMarketId` already equals `initialMarketId` — neither runs and whatever this initialises
+  // to is what the trader sees in the price box.
+  const [limitPrice, setLimitPrice] = useState(() =>
+    getRenderablePriceInput(marketData[initialMarketId]?.mark ?? "")
+  );
   const [activeSection, setActiveSection] = useState<AppSection>("spot");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
