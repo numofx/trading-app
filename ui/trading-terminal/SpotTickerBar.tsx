@@ -7,6 +7,14 @@ import { cn } from "@/lib/cn";
 import { formatNaira } from "@/lib/market-formatting";
 import { SmartImage } from "@/ui/SmartImage";
 
+/** Change is only coloured when there is one — an empty window shows a neutral dash. */
+function getChangeClassName(value: number | null) {
+  if (value === null || !Number.isFinite(value)) {
+    return undefined;
+  }
+  return value < 0 ? "text-ask-text" : "text-bid-text";
+}
+
 function formatChangePercent(value: number | null) {
   if (value === null || !Number.isFinite(value)) {
     return "—";
@@ -39,16 +47,12 @@ function TickerStat({
 
 export function SpotTickerBar({
   changePercent24h,
-  high24h,
   lastPrice,
-  low24h,
   referencePrice = null,
   volume24hLabel,
 }: {
   changePercent24h: number | null;
-  high24h: number | null;
   lastPrice: number | null;
-  low24h: number | null;
   /**
    * External NGN/USD rate. Shown beside the venue's own price so the two can be compared —
    * it is a reference, not something that traded here.
@@ -57,7 +61,6 @@ export function SpotTickerBar({
   volume24hLabel: string;
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const isNegativeChange = changePercent24h !== null && changePercent24h < 0;
 
   return (
     <section className="rounded-[20px] bg-panel-bg px-4 py-2.5 shadow-[0_24px_80px_var(--panel-shadow)] ring-1 ring-panel-ring transition-colors duration-300">
@@ -131,20 +134,10 @@ export function SpotTickerBar({
          */}
         <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-x-5 overflow-x-auto sm:flex-wrap sm:gap-y-2 sm:overflow-x-visible">
           <div className="flex min-w-0 shrink-0 flex-col gap-1">
-            <span className="whitespace-nowrap text-[10px] text-panel-text-muted">
-              Last price (24H)
-            </span>
+            <span className="whitespace-nowrap text-[10px] text-panel-text-muted">Price</span>
             <span className="flex items-baseline gap-2 whitespace-nowrap">
               <span className="font-semibold text-[15px] text-panel-text-active leading-none">
                 {formatNaira(lastPrice)}
-              </span>
-              <span
-                className={cn(
-                  "font-medium text-[11px] leading-none",
-                  isNegativeChange ? "text-ask-text" : "text-bid-text"
-                )}
-              >
-                {formatChangePercent(changePercent24h)}
               </span>
             </span>
           </div>
@@ -152,9 +145,11 @@ export function SpotTickerBar({
           <div className="hidden h-8 w-px shrink-0 bg-panel-border sm:block" />
           <TickerStat label="24H volume" value={volume24hLabel} />
           <div className="hidden h-8 w-px shrink-0 bg-panel-border sm:block" />
-          <TickerStat label="24H high" value={formatNaira(high24h)} />
-          <div className="hidden h-8 w-px shrink-0 bg-panel-border sm:block" />
-          <TickerStat label="24H low" value={formatNaira(low24h)} />
+          <TickerStat
+            label="24H change"
+            value={formatChangePercent(changePercent24h)}
+            valueClassName={getChangeClassName(changePercent24h)}
+          />
           {referencePrice === null ? null : (
             <>
               <div className="hidden h-8 w-px shrink-0 bg-panel-border sm:block" />

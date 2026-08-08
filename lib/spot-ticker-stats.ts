@@ -51,19 +51,16 @@ export function get24hStats(candles: Candle[], lastPrice: number | null, nowMs: 
   const firstCandle = recent[0];
 
   if (!firstCandle) {
-    // Nothing traded in the window. A change or high/low would be invented, but the last price
-    // is still real, so report it and leave the rest blank.
-    return { changePercent: null, high: null, low: null, volumeLabel: "—" };
+    // Nothing traded in the window. A change would be invented, but the last price is still
+    // real, so report it and leave the rest blank.
+    return { changePercent: null, volumeLabel: "—" };
   }
 
   const resolvedLast = lastPrice ?? recent.at(-1)?.close ?? firstCandle.close;
-  const changePercent =
-    firstCandle.open > 0 ? ((resolvedLast - firstCandle.open) / firstCandle.open) * 100 : null;
 
   return {
-    changePercent,
-    high: Math.max(...recent.map((candle) => candle.high), resolvedLast),
-    low: Math.min(...recent.map((candle) => candle.low), resolvedLast),
+    changePercent:
+      firstCandle.open > 0 ? ((resolvedLast - firstCandle.open) / firstCandle.open) * 100 : null,
     volumeLabel: formatCompactVolume(recent.reduce((sum, candle) => sum + candle.volume, 0)),
   };
 }

@@ -84,7 +84,7 @@ export function SpotTradingTerminal({
     spotBook.isLive && spotBook.trades.length > 0 ? spotBook.trades : spotMarket.trades;
 
   const lastPrice = getVenueLastPrice(bookTrades, liveCandles, parseMarkPrice(spotMarket.mark));
-  const { changePercent, high, low, volumeLabel } = get24hStats(liveCandles, lastPrice, Date.now());
+  const { changePercent, volumeLabel } = get24hStats(liveCandles, lastPrice, Date.now());
   // Assets is the one bottom tab with a real data source today, so it's built from live balances
   // instead of the placeholder-free static views.
   const activityView =
@@ -101,9 +101,7 @@ export function SpotTradingTerminal({
     <div className="flex flex-col gap-3 xl:min-h-0 xl:flex-1 xl:overflow-hidden">
       <SpotTickerBar
         changePercent24h={changePercent}
-        high24h={high}
         lastPrice={lastPrice}
-        low24h={low}
         referencePrice={liveSpotPrice}
         volume24hLabel={volumeLabel}
       />
