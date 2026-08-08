@@ -31,6 +31,7 @@ import { FuturesTradingTerminal } from "@/ui/trading-terminal/FuturesTradingTerm
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import { SpotTradingTerminal } from "@/ui/trading-terminal/SpotTradingTerminal";
 import { TradingMarketHeader } from "@/ui/trading-terminal/TradingMarketHeader";
+import { useAccountMaintenanceMargin } from "@/ui/trading-terminal/useAccountMaintenanceMargin";
 import { formatCngnBalanceLabel, useCngnBalance } from "@/ui/trading-terminal/useCngnBalance";
 import { useInitialMarginRate } from "@/ui/trading-terminal/useInitialMarginRate";
 import {
@@ -46,36 +47,6 @@ function parseNumericString(value: string) {
   const parsed = Number(value.replaceAll(",", "").replaceAll("$", "").replaceAll("+", ""));
 
   return Number.isFinite(parsed) ? parsed : Number.NaN;
-}
-
-function getQuoteCurrency(pairOrLabel: string) {
-  if (pairOrLabel.includes("EURC")) {
-    return "EURC";
-  }
-  if (pairOrLabel.includes("BRZ")) {
-    return "BRZ";
-  }
-  return "cNGN";
-}
-
-function formatPriceDisplay(value: number | string | null, quoteCurrency = "cNGN") {
-  if (value === null) {
-    return "—";
-  }
-
-  const numericValue = typeof value === "number" ? value : parseNumericString(value);
-
-  if (!Number.isFinite(numericValue)) {
-    return "—";
-  }
-
-  const digits = quoteCurrency === "EURC" || quoteCurrency === "BRZ" ? 4 : 2;
-  const formatted = numericValue.toLocaleString("en-US", {
-    maximumFractionDigits: digits,
-    minimumFractionDigits: digits,
-  });
-
-  return `${formatted} ${quoteCurrency} per USDC`;
 }
 
 function formatSignedPercent(value: number | null) {
@@ -194,21 +165,22 @@ function buildSpotOrderEvent(
 }
 
 /**
- * The three numbers the ticket footer keeps permanently in view: what the order
- * costs to open, what it costs to fill, and where it gets liquidated. Notional
- * and estimated fill are derivable from the size and price fields above it, so
- * they are left out to keep the pinned footer short.
+ * The three numbers the ticket footer keeps permanently in view: what the order costs to open,
+ * what it costs to fill, and how much margin the account has left.
+ *
+ * There is deliberately no liquidation price. Liquidation is portfolio-level in this risk model —
+ * `DutchAuction` starts an auction on the subaccount's maintenance margin going negative, and cNGN
+ * collateral is valued at the same FX rate that drives the position's P&L — so no single price
+ * liquidates an order in isolation. `Account Margin` is the quantity that actually decides it.
  */
 function getOrderSummaryRows({
+  accountMargin,
   fees,
   initialMargin,
-  liquidationPrice,
-  quoteCurrency,
 }: {
+  accountMargin: number | null;
   fees: number;
   initialMargin: number | null;
-  liquidationPrice: number | null;
-  quoteCurrency: string;
 }) {
   return [
     {
@@ -224,51 +196,26 @@ function getOrderSummaryRows({
       label: "Fees",
       value: `${fees.toLocaleString("en-US", { maximumFractionDigits: 4, minimumFractionDigits: 2 })} USDC`,
     },
-    { label: "Liquidation Price", value: formatPriceDisplay(liquidationPrice, quoteCurrency) },
+    {
+      label: "Account Margin",
+      value:
+        accountMargin === null
+          ? "—"
+          : `${accountMargin.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 })} USDC`,
+    },
   ] satisfies DeliveryTerm[];
 }
 
-function getOrderMetrics(
-  limitPrice: string,
-  marketMark: string,
-  orderType: "Limit" | "Market" | "Stop",
-  size: string,
-  livePrice: number | null,
-  orderSide: "buy" | "sell",
-  initialMarginRate: number | null
-) {
+function getOrderMetrics(size: string, initialMarginRate: number | null) {
   const sizeNumber = Number(size || "0");
-  const limitPriceNumber = parseNumericString(limitPrice || marketMark);
-  const safeLimitPrice = Number.isFinite(limitPriceNumber) ? limitPriceNumber : null;
-
-  function getEstimatedFill() {
-    if (orderType !== "Market") {
-      return safeLimitPrice;
-    }
-
-    if (livePrice === null) {
-      return safeLimitPrice;
-    }
-
-    return livePrice + (orderSide === "buy" ? 0.12 : -0.12);
-  }
-
-  const estimatedFill = getEstimatedFill();
-  let liquidationPrice: number | null = null;
-
-  if (safeLimitPrice !== null) {
-    liquidationPrice = orderSide === "buy" ? safeLimitPrice - 62.4 : safeLimitPrice + 62.4;
-  }
 
   // Margin is posted as USDC collateral and the taker fee is charged on the USDC notional, so both
   // are sized off `sizeNumber` (USDC) rather than the quote-currency order value. The fee quote
   // reuses the same tier that bounds `worstFee` on submission so the ticket cannot under-quote
   // what the trader signs for. The margin rate is the venue's own, read from the risk-core manager.
   return {
-    estimatedFill,
     fees: sizeNumber * Number(TAKER_FEE_RATE),
     initialMargin: initialMarginRate === null ? null : sizeNumber * initialMarginRate,
-    liquidationPrice,
   };
 }
 
@@ -410,22 +357,13 @@ export function OrderBookTradingTerminal({
     assetAddress: selectedMarket.assetAddress,
     subId: selectedMarket.subId,
   });
-  const { fees, initialMargin, liquidationPrice } = getOrderMetrics(
-    limitPrice,
-    market.mark,
-    orderType,
-    sizeUsdcNotional,
-    safeLivePrice,
-    orderSide,
-    initialMarginRate
-  );
-  const quoteCurrency = getQuoteCurrency(selectedMarket.pair);
+  const accountMargin = useAccountMaintenanceMargin(tradingSubaccountId);
+  const { fees, initialMargin } = getOrderMetrics(sizeUsdcNotional, initialMarginRate);
 
   const orderSummaryRows = getOrderSummaryRows({
+    accountMargin,
     fees,
     initialMargin,
-    liquidationPrice,
-    quoteCurrency,
   });
 
   useEffect(() => {
