@@ -215,9 +215,7 @@ function FuturesTickerBar({
          */}
         <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-x-5 overflow-x-auto sm:flex-wrap sm:gap-y-2 sm:overflow-x-visible">
           <div className="flex min-w-0 shrink-0 flex-col gap-1">
-            <span className="whitespace-nowrap text-[10px] text-panel-text-muted">
-              Last price (24H)
-            </span>
+            <span className="whitespace-nowrap text-[10px] text-panel-text-muted">Price</span>
             <span className="flex items-baseline gap-2 whitespace-nowrap">
               <span className="font-semibold text-[15px] text-panel-text-active leading-none">
                 {formatNaira(lastPrice)}
