@@ -1,8 +1,8 @@
 "use client";
 
-import posthog from "posthog-js";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { usePathname, useSearchParams } from "next/navigation";
+import posthog from "posthog-js";
 import { useEffect, useRef, useState } from "react";
 import { createWalletClient, custom } from "viem";
 import { getAppChain } from "@/lib/base-public-client";
@@ -12,12 +12,9 @@ import {
   canSubmitFutureOrder,
   TAKER_FEE_RATE,
 } from "@/lib/future-order-submission";
-import { buildSpotOrderEnvelope } from "@/lib/spot-order-submission";
 import { formatFxDisplayPair, getInstrumentDisplayLabel } from "@/lib/market-display";
 import {
   calculateAnnualizedBasisPercent,
-  calculateBasis,
-  formatMarketPrice,
 } from "@/lib/market-formatting";
 import {
   buildMarketSelectionAliasMap,
@@ -28,28 +25,28 @@ import {
   SPOT_URL_SLUG,
 } from "@/lib/market-selection";
 import { DEFAULT_ORDER_TYPE } from "@/lib/mock-orderbook-terminal-data";
+import { buildSpotOrderEnvelope } from "@/lib/spot-order-submission";
 import type {
   ContractMarket,
   DeliveryTerm,
   MarketDefinition,
   MarketId,
-  TradePrint,
 } from "@/lib/trading.types";
-import type { AppSection } from "@/ui/app-sidebar.types";
 import { AppSectionSwitcher, AppSidebar } from "@/ui/AppSidebar";
+import type { AppSection } from "@/ui/app-sidebar.types";
+import { DepositDialog } from "@/ui/trading-terminal/DepositDialog";
 import { FuturesTradingTerminal } from "@/ui/trading-terminal/FuturesTradingTerminal";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import { SpotTradingTerminal } from "@/ui/trading-terminal/SpotTradingTerminal";
 import { TradingMarketHeader } from "@/ui/trading-terminal/TradingMarketHeader";
-import { DepositDialog } from "@/ui/trading-terminal/DepositDialog";
-import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
 import { formatCngnBalanceLabel, useCngnBalance } from "@/ui/trading-terminal/useCngnBalance";
-import { formatUsdcBalanceLabel, useUsdcBalance } from "@/ui/trading-terminal/useUsdcBalance";
 import {
   formatSubaccountCngnLabel,
   formatSubaccountUsdcLabel,
   useSubaccountBalance,
 } from "@/ui/trading-terminal/useSubaccountBalance";
+import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
+import { formatUsdcBalanceLabel, useUsdcBalance } from "@/ui/trading-terminal/useUsdcBalance";
 
 const SELECTED_MARKET_STORAGE_KEY = "trading-terminal-selected-market";
 /**
@@ -89,8 +86,8 @@ function formatPriceDisplay(value: number | string | null, quoteCurrency = "cNGN
 
   const digits = quoteCurrency === "EURC" || quoteCurrency === "BRZ" ? 4 : 2;
   const formatted = numericValue.toLocaleString("en-US", {
-    minimumFractionDigits: digits,
     maximumFractionDigits: digits,
+    minimumFractionDigits: digits,
   });
 
   return `${formatted} ${quoteCurrency} per USDC`;
@@ -187,8 +184,8 @@ type SignedOrderResponse = {
 async function postSignedOrder(payload: object, signature: string): Promise<SignedOrderResponse> {
   const response = await fetch("/api/orders", {
     body: JSON.stringify({ ...payload, signature }),
-    method: "POST",
     headers: { "content-type": "application/json" },
+    method: "POST",
   });
   const body = (await response.json().catch(() => null)) as SignedOrderResponse["body"];
 
@@ -203,11 +200,11 @@ function buildSpotOrderEvent(
   executionPrice: string
 ) {
   return {
+    limit_price: executionPrice,
     market_id: "cngn-usdc-spot",
     order_side: side,
     order_type: orderType,
     size_usdc_notional: size,
-    limit_price: executionPrice,
   };
 }
 
@@ -223,93 +220,6 @@ function getCompatibleSpotPrice(candidatePrice: number | null, referencePrice: n
   }
 
   return candidatePrice;
-}
-
-function buildSelectorMetrics(
-  liveSpotPrice: number,
-  marketDefinitions: MarketDefinition[],
-  marketData: Record<MarketId, { mark: string; trades: TradePrint[] }>
-) {
-  const spotChangeByMarketId = {
-    "cngn-usdc-july-2026-options": null,
-    "cngn-usdc-mar-2026-options": null,
-    "cngn-usdc-spot": "+0.18%",
-  } as Record<string, string | null>;
-  const optionAtmIvByMarketId = {
-    "cngn-usdc-july-2026-options": "61.8%",
-    "cngn-usdc-mar-2026-options": "54.2%",
-    "cngn-usdc-spot": null,
-  } as Record<string, string | null>;
-  const optionOpenInterestByMarketId = {
-    "cngn-usdc-july-2026-options": "$3.1M",
-    "cngn-usdc-mar-2026-options": "$1.4M",
-    "cngn-usdc-spot": null,
-  } as Record<string, string | null>;
-  for (const marketDefinition of marketDefinitions) {
-    if (marketDefinition.type === "future") {
-      spotChangeByMarketId[marketDefinition.id] = null;
-      optionAtmIvByMarketId[marketDefinition.id] = null;
-      optionOpenInterestByMarketId[marketDefinition.id] = null;
-    }
-  }
-
-  function getSelectorLastPrice(marketDefinition: MarketDefinition) {
-    if (marketDefinition.type === "spot") {
-      const parsed = parseNumericString(marketData[marketDefinition.id as MarketId].mark);
-      return Number.isFinite(parsed) ? parsed : null;
-    }
-
-    if (marketDefinition.type === "future") {
-      return marketData[marketDefinition.id as MarketId].trades[0]?.price ?? null;
-    }
-
-    return null;
-  }
-
-  const selectorLastByMarketId = Object.fromEntries(
-    marketDefinitions.map((marketDefinition) => [
-      marketDefinition.id,
-      getSelectorLastPrice(marketDefinition),
-    ])
-  ) satisfies Record<string, number | null>;
-  const selectorBasisByMarketId = Object.fromEntries(
-    marketDefinitions.map((marketDefinition) => {
-      if (marketDefinition.type !== "future") {
-        return [marketDefinition.id, null];
-      }
-
-      const futuresPrice = parseNumericString(marketData[marketDefinition.id as MarketId].mark);
-      if (!Number.isFinite(futuresPrice)) {
-        return [marketDefinition.id, null];
-      }
-      return [marketDefinition.id, calculateBasis(futuresPrice, liveSpotPrice)];
-    })
-  ) satisfies Record<string, number | null>;
-  const selectorAnnualizedBasisByMarketId = Object.fromEntries(
-    marketDefinitions.map((marketDefinition) => {
-      if (marketDefinition.type !== "future") {
-        return [marketDefinition.id, null];
-      }
-
-      const futuresPrice = parseNumericString(marketData[marketDefinition.id as MarketId].mark);
-      if (!Number.isFinite(futuresPrice)) {
-        return [marketDefinition.id, null];
-      }
-      return [
-        marketDefinition.id,
-        calculateAnnualizedBasisPercent(futuresPrice, liveSpotPrice, marketDefinition.expiryDays),
-      ];
-    })
-  ) satisfies Record<string, number | null>;
-
-  return {
-    optionAtmIvByMarketId,
-    optionOpenInterestByMarketId,
-    selectorAnnualizedBasisByMarketId,
-    selectorBasisByMarketId,
-    selectorLastByMarketId,
-    spotChangeByMarketId,
-  };
 }
 
 /**
@@ -332,11 +242,11 @@ function getOrderSummaryRows({
   return [
     {
       label: "Margin Required",
-      value: `${initialMargin.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC`,
+      value: `${initialMargin.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 })} USDC`,
     },
     {
       label: "Fees",
-      value: `${fees.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })} USDC`,
+      value: `${fees.toLocaleString("en-US", { maximumFractionDigits: 4, minimumFractionDigits: 2 })} USDC`,
     },
     { label: "Liquidation Price", value: formatPriceDisplay(liquidationPrice, quoteCurrency) },
   ] satisfies DeliveryTerm[];
@@ -432,9 +342,9 @@ export function OrderBookTradingTerminal({
 
     posthog.capture("market_selected", {
       market_id: targetMarket.id,
-      market_type: targetMarket.type,
-      market_pair: targetMarket.pair,
       market_label: getInstrumentDisplayLabel(targetMarket),
+      market_pair: targetMarket.pair,
+      market_type: targetMarket.type,
     });
 
     setSelectedMarketId(targetMarket.id);
@@ -509,12 +419,30 @@ export function OrderBookTradingTerminal({
   const livePrice =
     selectedMarket.type === "spot" ? liveSpotPrice : parseNumericString(market.mark);
   const safeLivePrice = Number.isFinite(livePrice) ? livePrice : null;
-  const { selectorAnnualizedBasisByMarketId } = buildSelectorMetrics(
-    liveSpotPrice,
-    marketDefinitions,
-    marketData
-  );
-  const liveCarry = selectorAnnualizedBasisByMarketId[selectedMarket.id] ?? null;
+  // Basis is reported against two denominators because they answer different questions, and a
+  // single figure had been silently switching between them: getCompatibleSpotPrice swaps the
+  // external rate for the venue mark once they diverge by 8%, which is exactly when the
+  // distinction matters. Each is pinned to one source so neither can change meaning.
+  const futuresMarkPrice = parseNumericString(market.mark);
+  const oracleSpotPrice = spotReferencePrice ?? chainlinkSpot?.priceNgnPerUsd ?? null;
+  // What is capturable here: futures against this venue's own spot market.
+  const venueBasisPercent =
+    selectedMarket.type === "future" && Number.isFinite(referenceSpotPrice)
+      ? calculateAnnualizedBasisPercent(
+          futuresMarkPrice,
+          referenceSpotPrice,
+          selectedMarket.expiryDays
+        )
+      : null;
+  // How the future sits against the wider NGN/USD market.
+  const referenceBasisPercent =
+    selectedMarket.type === "future" && oracleSpotPrice !== null
+      ? calculateAnnualizedBasisPercent(
+          futuresMarkPrice,
+          oracleSpotPrice,
+          selectedMarket.expiryDays
+        )
+      : null;
 
   // The futures ticket is denominated in contracts (matching the order book). Order economics and
   // on-chain submission work in USDC notional: 1 contract = contractMultiplier USDC.
@@ -737,30 +665,30 @@ export function OrderBookTradingTerminal({
 
       if (!response.ok) {
         posthog.capture("order_rejected", {
-          order_side: orderSide,
-          order_type: orderType,
-          market_id: selectedMarketId,
-          market_pair: selectedMarket.pair,
-          size_contracts: size,
-          size_usdc_notional: sizeUsdcNotional,
-          limit_price: executionLimitPrice,
           error_message: payload?.error ?? null,
           http_status: response.status,
+          limit_price: executionLimitPrice,
+          market_id: selectedMarketId,
+          market_pair: selectedMarket.pair,
+          order_side: orderSide,
+          order_type: orderType,
+          size_contracts: size,
+          size_usdc_notional: sizeUsdcNotional,
         });
         setLastAction(payload?.error ?? "Futures order submission failed");
         return;
       }
 
       posthog.capture("order_submitted", {
+        limit_price: executionLimitPrice,
+        market_id: selectedMarketId,
+        market_pair: selectedMarket.pair,
         order_id: payload?.order?.order_id ?? null,
         order_side: orderSide,
         order_type: orderType,
-        market_id: selectedMarketId,
-        market_pair: selectedMarket.pair,
+        position_after: positionAfter,
         size_contracts: size,
         size_usdc_notional: sizeUsdcNotional,
-        limit_price: executionLimitPrice,
-        position_after: positionAfter,
       });
       setLastAction(
         `Futures order accepted: ${orderSide.toUpperCase()} ${size} contracts (${sizeUsdcNotional} USDC notional) @ ${executionLimitPrice} cNGN/USDC on ${market.ticker}; position after: ${positionAfter}`
@@ -771,22 +699,22 @@ export function OrderBookTradingTerminal({
         error instanceof Error ? error.message : "Futures order submission failed";
       posthog.captureException(error, {
         properties: {
+          limit_price: executionLimitPrice,
+          market_id: selectedMarketId,
           order_side: orderSide,
           order_type: orderType,
-          market_id: selectedMarketId,
           size_contracts: size,
-          limit_price: executionLimitPrice,
         },
       });
       posthog.capture("order_failed", {
-        order_side: orderSide,
-        order_type: orderType,
+        error_message: errorMessage,
+        limit_price: executionLimitPrice,
         market_id: selectedMarketId,
         market_pair: selectedMarket.pair,
+        order_side: orderSide,
+        order_type: orderType,
         size_contracts: size,
         size_usdc_notional: sizeUsdcNotional,
-        limit_price: executionLimitPrice,
-        error_message: errorMessage,
       });
       setLastAction(errorMessage);
       return;
@@ -950,7 +878,8 @@ export function OrderBookTradingTerminal({
           <FuturesTradingTerminal
             accountCngnLabel={accountCngnLabel}
             accountUsdcLabel={accountUsdcLabel}
-            basisLabel={formatSignedPercent(liveCarry)}
+            basisReferenceLabel={formatSignedPercent(referenceBasisPercent)}
+            basisVenueLabel={formatSignedPercent(venueBasisPercent)}
             candles={market.candles}
             isSignedIn={isSignedIn}
             isSubmitting={isSubmittingOrder || isResolvingTradingSubaccount}

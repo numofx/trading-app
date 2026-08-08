@@ -71,7 +71,8 @@ function TickerStat({
 }
 
 function FuturesTickerBar({
-  basisLabel,
+  basisReferenceLabel,
+  basisVenueLabel,
   changePercent24h,
   contractSizeLabel,
   expiryLabel,
@@ -81,7 +82,8 @@ function FuturesTickerBar({
   onSelectMarket,
   volume24hLabel,
 }: {
-  basisLabel: string;
+  basisReferenceLabel: string;
+  basisVenueLabel: string;
   changePercent24h: number | null;
   contractSizeLabel: string;
   expiryLabel: string;
@@ -208,7 +210,9 @@ function FuturesTickerBar({
             <TickerStat label="24H volume" value={volume24hLabel} />
           </div>
           <div className="hidden h-8 w-px bg-panel-border sm:block" />
-          <TickerStat label="Basis (annualized)" value={basisLabel} />
+          <TickerStat label="Basis vs venue" value={basisVenueLabel} />
+          <div className="hidden h-8 w-px bg-panel-border sm:block" />
+          <TickerStat label="Basis vs NGN/USD" value={basisReferenceLabel} />
           <div className="hidden h-8 w-px bg-panel-border sm:block" />
           <TickerStat label="Expiry" value={expiryLabel} />
           <div className="hidden h-8 w-px bg-panel-border sm:block" />
@@ -220,7 +224,8 @@ function FuturesTickerBar({
 }
 
 export function FuturesTradingTerminal({
-  basisLabel,
+  basisReferenceLabel,
+  basisVenueLabel,
   candles,
   isSignedIn = false,
   isSubmitting,
@@ -244,7 +249,8 @@ export function FuturesTradingTerminal({
   accountUsdcLabel = null,
   accountCngnLabel = null,
 }: {
-  basisLabel: string;
+  basisReferenceLabel: string;
+  basisVenueLabel: string;
   candles: Candle[];
   /** Whether a wallet session is active; gates account-scoped rows in the activity panel. */
   isSignedIn?: boolean;
@@ -306,7 +312,8 @@ export function FuturesTradingTerminal({
   return (
     <div className="flex flex-col gap-3 xl:min-h-0 xl:flex-1 xl:overflow-hidden">
       <FuturesTickerBar
-        basisLabel={basisLabel}
+        basisReferenceLabel={basisReferenceLabel}
+        basisVenueLabel={basisVenueLabel}
         changePercent24h={changePercent}
         contractSizeLabel={formatContractSize(marketDefinition.contractMultiplier)}
         expiryLabel={marketDefinition.expiryLabel ?? "—"}
