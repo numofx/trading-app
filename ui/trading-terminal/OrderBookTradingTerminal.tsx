@@ -6,7 +6,6 @@ import posthog from "posthog-js";
 import { useEffect, useRef, useState } from "react";
 import { createWalletClient, custom } from "viem";
 import { getAppChain } from "@/lib/base-public-client";
-import type { ChainlinkSpotSnapshot } from "@/lib/chainlink-ngn-usd";
 import {
   buildFutureOrderEnvelope,
   canSubmitFutureOrder,
@@ -201,20 +200,6 @@ function buildSpotOrderEvent(
   };
 }
 
-function getCompatibleSpotPrice(candidatePrice: number | null, referencePrice: number) {
-  if (candidatePrice === null || !Number.isFinite(candidatePrice) || candidatePrice <= 0) {
-    return referencePrice;
-  }
-
-  const deviation = Math.abs(candidatePrice - referencePrice) / referencePrice;
-
-  if (deviation > 0.08) {
-    return referencePrice;
-  }
-
-  return candidatePrice;
-}
-
 /**
  * The three numbers the ticket footer keeps permanently in view: what the order
  * costs to open, what it costs to fill, and where it gets liquidated. Notional
@@ -290,21 +275,17 @@ function getOrderMetrics(
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This component coordinates terminal state across chart, book, order entry, and URL persistence.
 export function OrderBookTradingTerminal({
-  chainlinkSpot,
   defaultMarketId,
   initialMarketId,
   marketData,
   marketDefinitions,
-  spotReferencePrice,
 }: {
-  chainlinkSpot: ChainlinkSpotSnapshot | null;
   defaultMarketId: MarketId;
   initialMarketId: MarketId;
   marketData: Record<MarketId, ContractMarket>;
   marketDefinitions: MarketDefinition[];
   /** External NGN/USD reference price used only to sanity-check the live spot
    * mark. Never charted — the chart shows this venue's own fills. */
-  spotReferencePrice: number | null;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -405,12 +386,7 @@ export function OrderBookTradingTerminal({
 
   const market = marketData[selectedMarketId];
   const referenceSpotPrice = parseNumericString(marketData["cngn-usdc-spot"].mark);
-  const liveSpotPrice = getCompatibleSpotPrice(
-    spotReferencePrice ?? chainlinkSpot?.priceNgnPerUsd ?? null,
-    referenceSpotPrice
-  );
-  const livePrice =
-    selectedMarket.type === "spot" ? liveSpotPrice : parseNumericString(market.mark);
+  const livePrice = parseNumericString(market.mark);
   const safeLivePrice = Number.isFinite(livePrice) ? livePrice : null;
   // Basis is futures against this venue's own spot mark — the basis actually capturable here.
   // Pinned to that one denominator: it previously divided by whatever getCompatibleSpotPrice
@@ -801,7 +777,9 @@ export function OrderBookTradingTerminal({
     }
   }
 
-  const safeLiveSpotPrice = Number.isFinite(liveSpotPrice) ? liveSpotPrice : null;
+  // The tab title shows this venue's spot price, not the external NGN/USD rate — the ticker
+  // beside it is venue-sourced, and the two disagreeing was the last place that leaked through.
+  const safeVenueSpotPrice = Number.isFinite(referenceSpotPrice) ? referenceSpotPrice : null;
   // The spot chart shows this venue's own fills. It previously charted an external
   // NGN/USD reference series whenever that series happened to sit within 8% of the
   // live price — agreeing with the price does not make it this exchange's trades.
@@ -811,7 +789,7 @@ export function OrderBookTradingTerminal({
     <main className="flex min-h-screen bg-terminal-bg text-foreground transition-colors duration-300 xl:h-dvh xl:overflow-hidden">
       <MarketDocumentTitle
         pair={activeSection === "spot" ? "USDC/cNGN" : formatFxDisplayPair(selectedMarket.pair)}
-        price={activeSection === "spot" ? safeLiveSpotPrice : safeLivePrice}
+        price={activeSection === "spot" ? safeVenueSpotPrice : safeLivePrice}
       />
 
       <AppSidebar

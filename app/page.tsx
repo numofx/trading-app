@@ -1,9 +1,9 @@
-import { getChainlinkNgnUsdSpot } from "@/lib/chainlink-ngn-usd";
-import type { ChainlinkSpotSnapshot } from "@/lib/chainlink-ngn-usd";
-import { getSpotHistorySnapshots } from "@/lib/exchange-api-history";
-import type { SpotHistorySnapshot } from "@/lib/exchange-api-history";
+import { toUiCandles } from "@/lib/market-candles";
+import {
+  buildMarketSelectionAliasMap,
+  resolveInitialMarketSelection,
+} from "@/lib/market-selection";
 import type { BookResponse, CandleInterval, PresentedTrade } from "@/lib/markets-service";
-import type { Candle } from "@/lib/trading.types";
 import {
   getLiveDeliverableFXFutures,
   getLiveSpotMarket,
@@ -11,16 +11,11 @@ import {
   getMarketCandles,
   getMarketTrades,
 } from "@/lib/markets-service";
-import { toUiCandles } from "@/lib/market-candles";
-import {
-  buildMarketSelectionAliasMap,
-  resolveInitialMarketSelection,
-  resolveMarketSelection,
-} from "@/lib/market-selection";
 import {
   buildDeliverableFutureDefinition,
   buildTradingTerminalMarkets,
 } from "@/lib/mock-orderbook-terminal-data";
+import type { Candle } from "@/lib/trading.types";
 import { OrderBookTradingTerminal } from "@/ui/trading-terminal/OrderBookTradingTerminal";
 
 const APR_2026_EXPIRY_TIMESTAMP = 1_777_507_200;
@@ -63,28 +58,14 @@ type HomeProps = {
 
 export default async function Home({ searchParams }: HomeProps) {
   const resolvedSearchParams = (await searchParams) ?? {};
-  let chainlinkSpot: ChainlinkSpotSnapshot | null = null;
   let liveFutures: {
     book: BookResponse | null;
     candles: Candle[];
     definition: ReturnType<typeof buildDeliverableFutureDefinition>;
     trades: PresentedTrade[];
   }[] = [];
-  let spotHistory: Record<SpotHistorySnapshot["pair"], SpotHistorySnapshot> | null = null;
   let liveSpot: { book: BookResponse | null; candles: Candle[]; trades: PresentedTrade[] } | null =
     null;
-
-  try {
-    chainlinkSpot = await getChainlinkNgnUsdSpot();
-  } catch {
-    chainlinkSpot = null;
-  }
-
-  try {
-    spotHistory = await getSpotHistorySnapshots();
-  } catch {
-    spotHistory = null;
-  }
 
   try {
     const liveFutureMarkets = await getLiveDeliverableFXFutures();
@@ -211,12 +192,10 @@ export default async function Home({ searchParams }: HomeProps) {
 
   return (
     <OrderBookTradingTerminal
-      chainlinkSpot={chainlinkSpot}
       defaultMarketId={defaultMarketId}
       initialMarketId={initialMarketId}
       marketData={marketData}
       marketDefinitions={marketDefinitions}
-      spotReferencePrice={spotHistory?.["NGN/USD"]?.latestPrice ?? null}
     />
   );
 }
