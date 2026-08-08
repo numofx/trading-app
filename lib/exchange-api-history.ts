@@ -72,6 +72,7 @@ function buildCandlesFromDailyRates(rates: { date: string; rate: number }[]) {
     const volume = 180 + Math.round(Math.abs(close - open) * (close > 50 ? 14 : 120_000));
 
     return {
+      bucketStartMs: Date.parse(`${entry.date}T00:00:00Z`),
       close: Number(close.toFixed(close > 10 ? 2 : 4)),
       high: Number(high.toFixed(close > 10 ? 2 : 4)),
       low: Number(low.toFixed(close > 10 ? 2 : 4)),

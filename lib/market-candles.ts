@@ -53,6 +53,11 @@ export function toUiCandle(
   }
 
   const time = formatCandleTimeLabel(candle.bucket_start, interval);
+  const bucketStartMs = Date.parse(candle.bucket_start);
+
+  if (!Number.isFinite(bucketStartMs)) {
+    return null;
+  }
 
   if (marketType === "spot") {
     // Every engine price must be positive to invert; a zero would produce Infinity.
@@ -67,6 +72,7 @@ export function toUiCandle(
       low: 1 / high,
       open: 1 / open,
       time,
+      bucketStartMs,
       volume: toFiniteNumber(candle.quote_volume) ?? 0,
     };
   }
@@ -77,6 +83,7 @@ export function toUiCandle(
     low,
     open,
     time,
+    bucketStartMs,
     volume: toFiniteNumber(candle.volume) ?? 0,
   };
 }
