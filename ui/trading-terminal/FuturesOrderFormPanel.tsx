@@ -53,6 +53,7 @@ function FormInput({
 export function FuturesOrderFormPanel({
   availableLabel,
   contractSizeLabel,
+  isPreparingAccount = false,
   isSubmitting,
   lastAction,
   limitPrice,
@@ -70,6 +71,8 @@ export function FuturesOrderFormPanel({
   availableLabel: string;
   /** Shown only in the confirmation dialog; the ticker bar carries it for the ticket itself. */
   contractSizeLabel: string;
+  /** The trading subaccount is still being resolved — distinct from an order in flight. */
+  isPreparingAccount?: boolean;
   isSubmitting: boolean;
   lastAction: string | null;
   limitPrice: string;
@@ -90,9 +93,17 @@ export function FuturesOrderFormPanel({
   // Liquidation decides whether the position survives, so it is lifted out of the summary list.
   const liquidationRow = summaryRows.find((row) => row.label === "Liquidation Price");
 
+  // Both states block submission, but they are not the same thing: "Submitting..." on a button the
+  // user never pressed reads as a stuck order rather than a subaccount lookup still in flight.
+  const isBusy = isSubmitting || isPreparingAccount;
+
   function getSubmitLabel() {
     if (isSubmitting) {
       return "Submitting...";
+    }
+
+    if (isPreparingAccount) {
+      return "Loading account...";
     }
 
     return isBuy ? "Buy now" : "Sell now";
@@ -208,7 +219,7 @@ export function FuturesOrderFormPanel({
               ? "bg-buy text-background ring-1 ring-buy/50 hover:bg-buy/90"
               : "bg-sell text-white ring-1 ring-sell/50 hover:bg-sell/90"
           )}
-          disabled={isSubmitting}
+          disabled={isBusy}
           onClick={() => setConfirmOpen(true)}
           type="button"
         >

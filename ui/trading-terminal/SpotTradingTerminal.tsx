@@ -35,6 +35,7 @@ export function SpotTradingTerminal({
   accountCngnLabel = null,
   onSubmitOrder,
   isSignedIn = false,
+  isPreparingAccount = false,
   isSubmitting = false,
   lastAction = null,
 }: {
@@ -56,6 +57,8 @@ export function SpotTradingTerminal({
   }) => void;
   /** Whether a wallet session is active; gates account-scoped rows in the activity panel. */
   isSignedIn?: boolean;
+  /** The trading subaccount is still being resolved — distinct from an order in flight. */
+  isPreparingAccount?: boolean;
   isSubmitting?: boolean;
   lastAction?: string | null;
 }) {
@@ -137,6 +140,7 @@ export function SpotTradingTerminal({
           <SpotOrderFormPanel
             availableCngnLabel="0.00 cNGN"
             availableUsdcLabel={usdcBalanceLabel ?? "— USDC"}
+            isPreparingAccount={isPreparingAccount}
             isSubmitting={isSubmitting}
             lastAction={lastAction}
             markPrice={lastPrice}

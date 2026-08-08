@@ -273,7 +273,6 @@ function getOrderMetrics(
   };
 }
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: This component coordinates terminal state across chart, book, order entry, and URL persistence.
 export function OrderBookTradingTerminal({
   defaultMarketId,
   initialMarketId,
@@ -824,8 +823,9 @@ export function OrderBookTradingTerminal({
             accountUsdcLabel={accountUsdcLabel}
             candles={spotCandles}
             cngnBalanceLabel={formatCngnBalanceLabel(cngnBalance)}
+            isPreparingAccount={isResolvingTradingSubaccount}
             isSignedIn={isSignedIn}
-            isSubmitting={isSubmittingOrder || isResolvingTradingSubaccount}
+            isSubmitting={isSubmittingOrder}
             lastAction={lastAction}
             onSubmitOrder={handleSubmitSpot}
             spotMarket={marketData["cngn-usdc-spot"]}
@@ -839,8 +839,9 @@ export function OrderBookTradingTerminal({
             accountUsdcLabel={accountUsdcLabel}
             basisLabel={formatSignedPercent(basisPercent)}
             candles={market.candles}
+            isPreparingAccount={isResolvingTradingSubaccount}
             isSignedIn={isSignedIn}
-            isSubmitting={isSubmittingOrder || isResolvingTradingSubaccount}
+            isSubmitting={isSubmittingOrder}
             lastAction={lastAction}
             lastPrice={safeLivePrice}
             limitPrice={limitPrice}
