@@ -17,6 +17,7 @@ const MANAGER_ADDRESS_BY_CHAIN: Record<number, `0x${string}`> = {
 const MANAGER_ABI = parseAbi([
   "function marginParams() view returns (uint256 normalIM, uint256 normalMM)",
   "function lifecycleParams() view returns (uint64 rampDuration, uint256 rampIM, uint256 rampMM)",
+  "function getMargin(uint256 accountId, bool isInitial) view returns (int256)",
 ]);
 
 const FUTURE_ASSET_ABI = parseAbi([
@@ -74,6 +75,46 @@ export function resolveInitialMarginRate(schedule: MarginSchedule, nowSeconds: n
 
   const elapsed = nowSeconds - rampStart;
   return normalIM + ((rampIM - normalIM) * elapsed) / rampDurationSeconds;
+}
+
+/**
+ * The account's maintenance margin in USDC, straight from the manager.
+ *
+ * This is the exact quantity liquidation turns on: `DutchAuction.startAuction` reverts with
+ * `DA_AccountIsAboveMaintenanceMargin` unless it is negative. It is portfolio-level — every
+ * position, cash, and cNGN balance in the subaccount contributes — so it cannot be derived from a
+ * single order.
+ *
+ * Returns null when there is no subaccount yet or the call reverts (the manager rejects accounts
+ * holding assets it does not recognise).
+ */
+export async function fetchAccountMaintenanceMargin(accountId: string): Promise<number | null> {
+  const managerAddress = getDeliverableFxManagerAddress();
+
+  if (!managerAddress) {
+    return null;
+  }
+
+  let parsedAccountId: bigint;
+  try {
+    parsedAccountId = BigInt(accountId);
+  } catch {
+    return null;
+  }
+
+  try {
+    const publicClient = createBasePublicClient();
+    const margin = await publicClient.readContract({
+      abi: MANAGER_ABI,
+      address: managerAddress,
+      args: [parsedAccountId, false],
+      functionName: "getMargin",
+    });
+
+    return Number(margin) / RATIO_SCALE;
+  } catch {
+    return null;
+  }
 }
 
 /**

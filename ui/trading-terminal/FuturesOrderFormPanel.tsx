@@ -90,8 +90,8 @@ export function FuturesOrderFormPanel({
   const isBuy = orderSide === "buy";
   const [confirmOpen, setConfirmOpen] = useState(false);
   const directionLabel = isBuy ? "Long" : "Short";
-  // Liquidation decides whether the position survives, so it is lifted out of the summary list.
-  const liquidationRow = summaryRows.find((row) => row.label === "Liquidation Price");
+  // Margin decides whether the position survives, so it is lifted out of the summary list.
+  const accountMarginRow = summaryRows.find((row) => row.label === "Account Margin");
 
   // Both states block submission, but they are not the same thing: "Submitting..." on a button the
   // user never pressed reads as a stuck order rather than a subaccount lookup still in flight.
@@ -231,11 +231,11 @@ export function FuturesOrderFormPanel({
           description={`This submits a ${orderType.toLowerCase()} order for ${marketLabel}. Once filled it cannot be closed from this screen.`}
           directionLabel={directionLabel}
           highlightedRow={
-            liquidationRow
+            accountMarginRow
               ? {
-                  label: liquidationRow.label,
-                  note: "The position is liquidated if the mark reaches this price.",
-                  value: liquidationRow.value,
+                  label: accountMarginRow.label,
+                  note: "The account is liquidated if its maintenance margin falls below zero.",
+                  value: accountMarginRow.value,
                 }
               : null
           }
@@ -245,7 +245,7 @@ export function FuturesOrderFormPanel({
           open={confirmOpen}
           orderSide={orderSide}
           sizeLabel={`${size || "0"} × ${contractSizeLabel}`}
-          summaryRows={summaryRows.filter((row) => row.label !== "Liquidation Price")}
+          summaryRows={summaryRows.filter((row) => row.label !== "Account Margin")}
           title={`Confirm ${directionLabel.toLowerCase()} position`}
         />
 
