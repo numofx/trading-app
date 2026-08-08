@@ -6,11 +6,7 @@ import posthog from "posthog-js";
 import { useEffect, useRef, useState } from "react";
 import { createWalletClient, custom } from "viem";
 import { getAppChain } from "@/lib/base-public-client";
-import {
-  buildFutureOrderEnvelope,
-  canSubmitFutureOrder,
-  TAKER_FEE_RATE,
-} from "@/lib/future-order-submission";
+import { buildFutureOrderEnvelope, canSubmitFutureOrder } from "@/lib/future-order-submission";
 import { formatFxDisplayPair, getInstrumentDisplayLabel } from "@/lib/market-display";
 import { calculateAnnualizedBasisPercent, formatSignedContracts } from "@/lib/market-formatting";
 import {
@@ -22,6 +18,7 @@ import {
   SPOT_URL_SLUG,
 } from "@/lib/market-selection";
 import { DEFAULT_ORDER_TYPE } from "@/lib/mock-orderbook-terminal-data";
+import { getOrderMetrics } from "@/lib/order-metrics";
 import { buildSpotOrderEnvelope } from "@/lib/spot-order-submission";
 import type { ContractMarket, DeliveryTerm, MarketDefinition, MarketId } from "@/lib/trading.types";
 import { AppSectionSwitcher, AppSidebar } from "@/ui/AppSidebar";
@@ -181,7 +178,7 @@ function getOrderSummaryRows({
   initialMargin,
 }: {
   accountMargin: number | null;
-  fees: number;
+  fees: number | null;
   futuresPosition: number | null;
   initialMargin: number | null;
 }) {
@@ -197,7 +194,10 @@ function getOrderSummaryRows({
     },
     {
       label: "Fees",
-      value: `${fees.toLocaleString("en-US", { maximumFractionDigits: 4, minimumFractionDigits: 2 })} USDC`,
+      value:
+        fees === null
+          ? "—"
+          : `${fees.toLocaleString("en-US", { maximumFractionDigits: 4, minimumFractionDigits: 2 })} USDC`,
     },
     {
       label: "Position",
@@ -213,19 +213,6 @@ function getOrderSummaryRows({
           : `${accountMargin.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 })} USDC`,
     },
   ] satisfies DeliveryTerm[];
-}
-
-function getOrderMetrics(size: string, initialMarginRate: number | null) {
-  const sizeNumber = Number(size || "0");
-
-  // Margin is posted as USDC collateral and the taker fee is charged on the USDC notional, so both
-  // are sized off `sizeNumber` (USDC) rather than the quote-currency order value. The fee quote
-  // reuses the same tier that bounds `worstFee` on submission so the ticket cannot under-quote
-  // what the trader signs for. The margin rate is the venue's own, read from the risk-core manager.
-  return {
-    fees: sizeNumber * Number(TAKER_FEE_RATE),
-    initialMargin: initialMarginRate === null ? null : sizeNumber * initialMarginRate,
-  };
 }
 
 export function OrderBookTradingTerminal({
