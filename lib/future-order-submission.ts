@@ -244,6 +244,29 @@ export function buildFutureOrderEnvelope({
     throw new Error("Size must be greater than zero");
   }
 
+  // markets-service requires `desired_amount` to be a whole multiple of the instrument's amount
+  // step (its `min_size`) and rejects anything else with "desired_amount must align to amount step".
+  // Caught here because the caller signs the order before submitting: without this the trader
+  // approves a wallet signature for an order the venue was always going to refuse.
+  const amountStep = sanitizeDecimalInput(market.minSize ?? "0.001", "Minimum size");
+  const amountStepUnits = parseUnits(amountStep, ENGINE_DECIMALS);
+
+  if (amountStepUnits > 0n) {
+    const enteredContracts = formatFixedPointUnits(desiredAmountUnits, ENGINE_DECIMALS);
+
+    if (desiredAmountUnits < amountStepUnits) {
+      throw new Error(
+        `Size must be at least ${amountStep} contracts (${enteredContracts} entered)`
+      );
+    }
+
+    if (desiredAmountUnits % amountStepUnits !== 0n) {
+      throw new Error(
+        `Size must be a multiple of ${amountStep} contracts (${enteredContracts} entered)`
+      );
+    }
+  }
+
   const nonce = BigInt(Date.now());
   const expiry = BigInt(Math.floor(Date.now() / 1000) + 5 * 60);
   const recipientId = BigInt(subaccountId);
