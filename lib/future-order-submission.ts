@@ -27,6 +27,12 @@ export type FutureOrderEnvelope = {
     signer: `0x${string}`;
     subaccount_id: string;
   };
+  /**
+   * Deliberately carries no `ui_intent` (or `order_entry_spec`). markets-service accepts those two
+   * fields only for the spot USDC/cNGN contract and rejects the order outright otherwise —
+   * `order_entry_spec and ui_intent are only supported for the spot usdc/cngn contract`. Futures
+   * send engine-native values, which is what the signed action encodes anyway.
+   */
   payload: {
     action_json: {
       data: `0x${string}`;
@@ -50,11 +56,6 @@ export type FutureOrderEnvelope = {
     signer_address: `0x${string}`;
     sub_id: string;
     subaccount_id: string;
-    ui_intent: {
-      price: string;
-      side: "buy" | "sell";
-      size: string;
-    };
     worst_fee: string;
   };
   typedData: {
@@ -303,14 +304,10 @@ export function buildFutureOrderEnvelope({
       signer_address: ownerAddress,
       sub_id: market.subId ?? "0",
       subaccount_id: subaccountId,
-      ui_intent: {
-        price: sanitizedPrice,
-        side,
-        size: sanitizedSize,
-      },
       worst_fee: formatFixedPointUnits(worstFeeUnits, ENGINE_DECIMALS),
     },
     typedData: {
+      primaryType: "Action" as const,
       domain: {
         chainId,
         name: "Matching" as const,
@@ -326,7 +323,6 @@ export function buildFutureOrderEnvelope({
         signer: ownerAddress,
         subaccountId: recipientId,
       },
-      primaryType: "Action" as const,
       types: {
         Action: [
           { name: "subaccountId", type: "uint256" },
