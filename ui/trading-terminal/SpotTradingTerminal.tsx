@@ -28,7 +28,6 @@ function parseMarkPrice(mark: string) {
 
 export function SpotTradingTerminal({
   candles,
-  liveSpotPrice,
   spotMarket,
   usdcBalanceLabel,
   cngnBalanceLabel = null,
@@ -40,7 +39,6 @@ export function SpotTradingTerminal({
   lastAction = null,
 }: {
   candles: Candle[];
-  liveSpotPrice: number | null;
   spotMarket: ContractMarket;
   /** Wallet USDC balance — what's available to deposit. */
   usdcBalanceLabel: string | null;
@@ -102,7 +100,6 @@ export function SpotTradingTerminal({
       <SpotTickerBar
         changePercent24h={changePercent}
         lastPrice={lastPrice}
-        referencePrice={liveSpotPrice}
         volume24hLabel={volumeLabel}
       />
 

@@ -13,9 +13,7 @@ import {
   TAKER_FEE_RATE,
 } from "@/lib/future-order-submission";
 import { formatFxDisplayPair, getInstrumentDisplayLabel } from "@/lib/market-display";
-import {
-  calculateAnnualizedBasisPercent,
-} from "@/lib/market-formatting";
+import { calculateAnnualizedBasisPercent } from "@/lib/market-formatting";
 import {
   buildMarketSelectionAliasMap,
   buildMarketUrlSlug,
@@ -26,12 +24,7 @@ import {
 } from "@/lib/market-selection";
 import { DEFAULT_ORDER_TYPE } from "@/lib/mock-orderbook-terminal-data";
 import { buildSpotOrderEnvelope } from "@/lib/spot-order-submission";
-import type {
-  ContractMarket,
-  DeliveryTerm,
-  MarketDefinition,
-  MarketId,
-} from "@/lib/trading.types";
+import type { ContractMarket, DeliveryTerm, MarketDefinition, MarketId } from "@/lib/trading.types";
 import { AppSectionSwitcher, AppSidebar } from "@/ui/AppSidebar";
 import type { AppSection } from "@/ui/app-sidebar.types";
 import { DepositDialog } from "@/ui/trading-terminal/DepositDialog";
@@ -419,27 +412,16 @@ export function OrderBookTradingTerminal({
   const livePrice =
     selectedMarket.type === "spot" ? liveSpotPrice : parseNumericString(market.mark);
   const safeLivePrice = Number.isFinite(livePrice) ? livePrice : null;
-  // Basis is reported against two denominators because they answer different questions, and a
-  // single figure had been silently switching between them: getCompatibleSpotPrice swaps the
-  // external rate for the venue mark once they diverge by 8%, which is exactly when the
-  // distinction matters. Each is pinned to one source so neither can change meaning.
+  // Basis is futures against this venue's own spot mark — the basis actually capturable here.
+  // Pinned to that one denominator: it previously divided by whatever getCompatibleSpotPrice
+  // returned, which swapped in the external NGN/USD rate and silently changed what the number
+  // meant once the two diverged by 8%.
   const futuresMarkPrice = parseNumericString(market.mark);
-  const oracleSpotPrice = spotReferencePrice ?? chainlinkSpot?.priceNgnPerUsd ?? null;
-  // What is capturable here: futures against this venue's own spot market.
-  const venueBasisPercent =
+  const basisPercent =
     selectedMarket.type === "future" && Number.isFinite(referenceSpotPrice)
       ? calculateAnnualizedBasisPercent(
           futuresMarkPrice,
           referenceSpotPrice,
-          selectedMarket.expiryDays
-        )
-      : null;
-  // How the future sits against the wider NGN/USD market.
-  const referenceBasisPercent =
-    selectedMarket.type === "future" && oracleSpotPrice !== null
-      ? calculateAnnualizedBasisPercent(
-          futuresMarkPrice,
-          oracleSpotPrice,
           selectedMarket.expiryDays
         )
       : null;
@@ -867,7 +849,6 @@ export function OrderBookTradingTerminal({
             isSignedIn={isSignedIn}
             isSubmitting={isSubmittingOrder || isResolvingTradingSubaccount}
             lastAction={lastAction}
-            liveSpotPrice={safeLiveSpotPrice}
             onSubmitOrder={handleSubmitSpot}
             spotMarket={marketData["cngn-usdc-spot"]}
             usdcBalanceLabel={formatUsdcBalanceLabel(usdcBalance)}
@@ -878,8 +859,7 @@ export function OrderBookTradingTerminal({
           <FuturesTradingTerminal
             accountCngnLabel={accountCngnLabel}
             accountUsdcLabel={accountUsdcLabel}
-            basisReferenceLabel={formatSignedPercent(referenceBasisPercent)}
-            basisVenueLabel={formatSignedPercent(venueBasisPercent)}
+            basisLabel={formatSignedPercent(basisPercent)}
             candles={market.candles}
             isSignedIn={isSignedIn}
             isSubmitting={isSubmittingOrder || isResolvingTradingSubaccount}

@@ -48,16 +48,10 @@ function TickerStat({
 export function SpotTickerBar({
   changePercent24h,
   lastPrice,
-  referencePrice = null,
   volume24hLabel,
 }: {
   changePercent24h: number | null;
   lastPrice: number | null;
-  /**
-   * External NGN/USD rate. Shown beside the venue's own price so the two can be compared —
-   * it is a reference, not something that traded here.
-   */
-  referencePrice?: number | null;
   volume24hLabel: string;
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -150,12 +144,6 @@ export function SpotTickerBar({
             value={formatChangePercent(changePercent24h)}
             valueClassName={getChangeClassName(changePercent24h)}
           />
-          {referencePrice === null ? null : (
-            <>
-              <div className="hidden h-8 w-px shrink-0 bg-panel-border sm:block" />
-              <TickerStat label="NGN/USD reference" value={formatNaira(referencePrice)} />
-            </>
-          )}
         </div>
       </div>
     </section>
