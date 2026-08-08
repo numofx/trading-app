@@ -52,6 +52,22 @@ function toUiQuote(
   return { price: engineLimitPrice, size: restingAmount };
 }
 
+/**
+ * Translates an engine order side into the UI's side.
+ *
+ * Spot rests inverted: the engine trades WRAPPED_CNGN against internal USDC cash, so an engine BUY
+ * of cNGN is a UI SELL of USDC. Futures display the engine side directly.
+ *
+ * This has to stay in step with the price/size inversion in `toUiQuote` — translating one without
+ * the other files UI-priced orders into the wrong ladder, which reads as a crossed book.
+ */
+function toUiSide(engineSide: "buy" | "sell", presenter: MarketStreamPresenter): "buy" | "sell" {
+  if (presenter.type !== "spot") {
+    return engineSide;
+  }
+  return engineSide === "buy" ? "sell" : "buy";
+}
+
 /** Normalizes a snapshot order into a UI resting order, preferring spot's server-computed
  * `ui_intent` when present. Returns null if the order has no positive price/size. */
 function presentSnapshotOrder(
@@ -71,7 +87,11 @@ function presentSnapshotOrder(
     return null;
   }
 
-  return { price: quote.price, side: order.side, size: quote.size };
+  return {
+    price: quote.price,
+    side: uiIntent?.side ?? toUiSide(order.side, presenter),
+    size: quote.size,
+  };
 }
 
 /** Rebuilds book state from a `snapshot` frame, replacing any prior state. */
@@ -105,7 +125,13 @@ export function applyBookDelta(
     return;
   }
 
-  state.set(delta.order_id, { price: quote.price, side: delta.side, size: quote.size });
+  // Delta frames carry no `spot_contract`, so the side has to be inverted here rather than read
+  // off a server-computed `ui_intent`.
+  state.set(delta.order_id, {
+    price: quote.price,
+    side: toUiSide(delta.side, presenter),
+    size: quote.size,
+  });
 }
 
 /** Aggregation key so orders at the same displayed (2-dp) price collapse into one ladder level. */
@@ -176,5 +202,12 @@ export function presentStreamTrade(
       }).format(new Date(trade.created_at))
     : "";
 
-  return { price: quote.price, side: trade.aggressor_side, size: Math.round(quote.size), time };
+  return {
+    price: quote.price,
+    side: toUiSide(trade.aggressor_side, presenter),
+    // Spot sizes are USDC notional and can be fractional (a 0.073 USDC trade rounds to 0), so they
+    // keep 3 decimals; futures sizes are contract counts. Mirrors the REST trade mapper.
+    size: presenter.type === "spot" ? Number(quote.size.toFixed(3)) : Math.round(quote.size),
+    time,
+  };
 }
