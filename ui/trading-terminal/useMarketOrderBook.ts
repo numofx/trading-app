@@ -2,13 +2,13 @@
 
 import { Duration } from "effect";
 import { useEffect, useState } from "react";
+import type { BookState } from "@/lib/market-stream";
 import {
   applyBookDelta,
   applyBookSnapshot,
   buildBookSide,
   presentStreamTrade,
 } from "@/lib/market-stream";
-import type { BookState } from "@/lib/market-stream";
 import type {
   BookSnapshotData,
   BookUpdateData,
@@ -47,10 +47,13 @@ const EMPTY_VIEW: MarketOrderBookView = { asks: [], bids: [], status: "connectin
 export function useMarketOrderBook({
   market,
   type,
+  orderEntrySpec = null,
   enabled = true,
 }: {
   market: string | null | undefined;
   type: MarketType;
+  /** The market's `order_entry_spec`; decides whether engine values are translated. */
+  orderEntrySpec?: string | null;
   enabled?: boolean;
 }) {
   const [view, setView] = useState<MarketOrderBookView>(EMPTY_VIEW);
@@ -67,7 +70,7 @@ export function useMarketOrderBook({
     }
 
     const marketSymbol: string = market;
-    const presenter: MarketStreamPresenter = { type };
+    const presenter: MarketStreamPresenter = { orderEntrySpec, type };
     const bookState: BookState = new Map();
     let trades: TradePrint[] = [];
     let hasBookSnapshot = false;
@@ -216,7 +219,7 @@ export function useMarketOrderBook({
         socket.close();
       }
     };
-  }, [enabled, market, type]);
+  }, [enabled, market, orderEntrySpec, type]);
 
   const isLive = view.status === "ok" && view.asks.length > 0 && view.bids.length > 0;
 

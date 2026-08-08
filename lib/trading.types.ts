@@ -89,6 +89,11 @@ export type MarketAvailability = {
 
 export type ContractMarket = {
   availability: MarketAvailability;
+  /**
+   * The venue's `order_entry_spec`. Present only for contracts whose engine values differ from the
+   * UI's (today just `usdc_cngn_spot_v1`); null means engine values are presented directly.
+   */
+  orderEntrySpec?: string | null;
   candles: Candle[];
   contractDetails: DeliveryTerm[];
   id: string;

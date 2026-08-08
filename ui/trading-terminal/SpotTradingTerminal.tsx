@@ -76,7 +76,11 @@ export function SpotTradingTerminal({
 
   // No simulated ticking: candles are real venue OHLCV.
 
-  const spotBook = useMarketOrderBook({ market: CANONICAL_SPOT_SYMBOL, type: "spot" });
+  const spotBook = useMarketOrderBook({
+    market: CANONICAL_SPOT_SYMBOL,
+    orderEntrySpec: spotMarket.orderEntrySpec,
+    type: "spot",
+  });
   // Fall back to the simulated preview book whenever the live exchange book is
   // unavailable, one-sided, crossed, or still connecting.
   const bookBids = spotBook.isLive ? spotBook.bids : spotMarket.orderBookBids;

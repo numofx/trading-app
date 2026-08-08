@@ -31,18 +31,35 @@ export function parseDecimal(value: string | null | undefined): number {
 }
 
 /**
+ * The one order-entry contract whose engine values are inverted relative to the UI. markets-service
+ * sets `order_entry_spec` only for this contract; every other market presents engine values directly.
+ */
+const SPOT_TRANSLATION_SPEC = "usdc_cngn_spot_v1";
+
+/**
+ * Whether this market's engine values need the USDC/cNGN inversion.
+ *
+ * Keyed on the spec rather than `type === "spot"` deliberately. The inversion is a property of
+ * `usdc_cngn_spot_v1`, not of spot as a class — applying it to a normally-oriented spot market
+ * would file every order into the wrong ladder and read as a crossed book, which fails silently.
+ */
+function usesSpotTranslation(presenter: MarketStreamPresenter) {
+  return presenter.orderEntrySpec === SPOT_TRANSLATION_SPEC;
+}
+
+/**
  * Translates an engine limit price + resting amount into the UI's display convention.
  *
- * - **Future** (`DisplayPriceDirect`): price shown as-is; size is the resting contract count.
- * - **Spot**: UI price is cNGN-per-USDC = 1 / engine price, and UI size is USDC notional = engine
- *   cNGN amount × engine price (inverse of the documented `engine_amount = ui_size * ui_price`).
+ * - **`usdc_cngn_spot_v1`**: UI price is cNGN-per-USDC = 1 / engine price, and UI size is USDC
+ *   notional = engine cNGN amount × engine price (inverse of `engine_amount = ui_size * ui_price`).
+ * - **Everything else**: price shown as-is; size is the resting contract count.
  */
 function toUiQuote(
   engineLimitPrice: number,
   restingAmount: number,
   presenter: MarketStreamPresenter
 ): { price: number; size: number } | null {
-  if (presenter.type === "spot") {
+  if (usesSpotTranslation(presenter)) {
     if (engineLimitPrice <= 0) {
       return null;
     }
@@ -55,14 +72,15 @@ function toUiQuote(
 /**
  * Translates an engine order side into the UI's side.
  *
- * Spot rests inverted: the engine trades WRAPPED_CNGN against internal USDC cash, so an engine BUY
- * of cNGN is a UI SELL of USDC. Futures display the engine side directly.
+ * Under `usdc_cngn_spot_v1` the book rests inverted: the engine trades WRAPPED_CNGN against
+ * internal USDC cash, so an engine BUY of cNGN is a UI SELL of USDC. Every other market displays
+ * the engine side directly.
  *
  * This has to stay in step with the price/size inversion in `toUiQuote` — translating one without
  * the other files UI-priced orders into the wrong ladder, which reads as a crossed book.
  */
 function toUiSide(engineSide: "buy" | "sell", presenter: MarketStreamPresenter): "buy" | "sell" {
-  if (presenter.type !== "spot") {
+  if (!usesSpotTranslation(presenter)) {
     return engineSide;
   }
   return engineSide === "buy" ? "sell" : "buy";
@@ -74,7 +92,7 @@ function presentSnapshotOrder(
   order: StreamBookOrder,
   presenter: MarketStreamPresenter
 ): RestingOrder | null {
-  const uiIntent = presenter.type === "spot" ? order.spot_contract?.ui_intent : undefined;
+  const uiIntent = usesSpotTranslation(presenter) ? order.spot_contract?.ui_intent : undefined;
   const quote = uiIntent
     ? { price: parseDecimal(uiIntent.price), size: parseDecimal(uiIntent.size) }
     : toUiQuote(
@@ -205,8 +223,9 @@ export function presentStreamTrade(
   return {
     price: quote.price,
     side: toUiSide(trade.aggressor_side, presenter),
-    // Spot sizes are USDC notional and can be fractional (a 0.073 USDC trade rounds to 0), so they
-    // keep 3 decimals; futures sizes are contract counts. Mirrors the REST trade mapper.
+    // Keyed on `type`, not the spec: this is display precision, not the inversion. Any spot market
+    // quotes a notional size that can be fractional (a 0.073 USDC trade rounds to 0), whereas
+    // futures sizes are contract counts. Mirrors the REST trade mapper.
     size: presenter.type === "spot" ? Number(quote.size.toFixed(3)) : Math.round(quote.size),
     time,
   };
