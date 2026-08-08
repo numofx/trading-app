@@ -14,6 +14,16 @@ const MANAGER_ADDRESS_BY_CHAIN: Record<number, `0x${string}`> = {
   [baseSepolia.id]: "0x5921Ca5A694b47766476A69AF0f05c40bF24AB5e",
 };
 
+/** `SubAccounts` per chain, from the same artifacts (`core.json`, `subAccounts` field). */
+const SUBACCOUNTS_ADDRESS_BY_CHAIN: Record<number, `0x${string}`> = {
+  [base.id]: "0x7019244E25FA416e6Ca2ed2F3cA25277aef72843",
+  [baseSepolia.id]: "0xaaA53649Eb98eED1517cA216A95eB5ba9Eb84e27",
+};
+
+const SUBACCOUNTS_ABI = parseAbi([
+  "function getBalance(uint256 accountId, address asset, uint256 subId) view returns (int256)",
+]);
+
 const MANAGER_ABI = parseAbi([
   "function marginParams() view returns (uint256 normalIM, uint256 normalMM)",
   "function lifecycleParams() view returns (uint64 rampDuration, uint256 rampIM, uint256 rampMM)",
@@ -175,6 +185,53 @@ export async function fetchMarginSchedule({
     };
   } catch {
     // A dead RPC must not put a fabricated requirement in front of a trader.
+    return null;
+  }
+}
+
+/**
+ * The subaccount's signed position in one futures series, in contracts. Positive is long, negative
+ * is short, zero is flat.
+ *
+ * Read from the ledger rather than inferred from the order that was just sent: an order can rest
+ * unfilled, partially fill, or reduce an existing position, so the side of a submission says
+ * nothing on its own about the position that results from it.
+ */
+export async function fetchFuturesPosition({
+  accountId,
+  assetAddress,
+  subId,
+}: {
+  accountId: string;
+  assetAddress: string;
+  subId: string;
+}): Promise<number | null> {
+  const subAccountsAddress = SUBACCOUNTS_ADDRESS_BY_CHAIN[getAppChain().id];
+
+  if (!subAccountsAddress) {
+    return null;
+  }
+
+  let parsedAccountId: bigint;
+  let parsedSubId: bigint;
+  try {
+    parsedAccountId = BigInt(accountId);
+    parsedSubId = BigInt(subId);
+  } catch {
+    return null;
+  }
+
+  try {
+    const publicClient = createBasePublicClient();
+    const balance = await publicClient.readContract({
+      abi: SUBACCOUNTS_ABI,
+      address: subAccountsAddress,
+      args: [parsedAccountId, assetAddress as `0x${string}`, parsedSubId],
+      functionName: "getBalance",
+    });
+
+    return Number(balance) / RATIO_SCALE;
+  } catch {
     return null;
   }
 }
