@@ -2,63 +2,28 @@
 
 import { useEffect, useState } from "react";
 import { buildAssetsActivityView } from "@/lib/account-activity-views";
+import { CANONICAL_SPOT_SYMBOL } from "@/lib/market-selection";
 import {
   ACTIVITY_VIEWS,
   FOOTER_LINKS,
   SPOT_BOTTOM_TABS,
   SPOT_TIMEFRAME_OPTIONS,
 } from "@/lib/mock-orderbook-terminal-data";
+import { get24hStats, getVenueLastPrice } from "@/lib/spot-ticker-stats";
 import type { Candle, ContractMarket } from "@/lib/trading.types";
+import { SpotBalanceSummary } from "@/ui/trading-terminal/SpotBalanceSummary";
 import type { SpotChartTab, SpotTimeframe } from "@/ui/trading-terminal/SpotChartPanel";
 import { SpotChartPanel } from "@/ui/trading-terminal/SpotChartPanel";
-import { SpotBalanceSummary } from "@/ui/trading-terminal/SpotBalanceSummary";
 import type { SpotBookTab } from "@/ui/trading-terminal/SpotOrderBookPanel";
 import { SpotOrderBookPanel } from "@/ui/trading-terminal/SpotOrderBookPanel";
 import { SpotOrderFormPanel } from "@/ui/trading-terminal/SpotOrderFormPanel";
 import { SpotTickerBar } from "@/ui/trading-terminal/SpotTickerBar";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
-import { CANONICAL_SPOT_SYMBOL } from "@/lib/market-selection";
 import { useMarketOrderBook } from "@/ui/trading-terminal/useMarketOrderBook";
 
 function parseMarkPrice(mark: string) {
   const parsed = Number(mark.replaceAll(",", ""));
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function formatCompactVolume(value: number) {
-  if (!Number.isFinite(value) || value <= 0) {
-    return "—";
-  }
-
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M USDC`;
-  }
-
-  if (value >= 1000) {
-    return `${(value / 1000).toFixed(1)}K USDC`;
-  }
-
-  return `${Math.round(value).toLocaleString("en-US")} USDC`;
-}
-
-function get24hStats(candles: Candle[], lastPrice: number | null) {
-  const firstCandle = candles[0];
-  const lastCandle = candles.at(-1);
-
-  if (!firstCandle || !lastCandle) {
-    return { changePercent: null, high: null, low: null, volumeLabel: "—" };
-  }
-
-  const resolvedLast = lastPrice ?? lastCandle.close;
-  const changePercent =
-    firstCandle.open > 0 ? ((resolvedLast - firstCandle.open) / firstCandle.open) * 100 : null;
-
-  return {
-    changePercent,
-    high: Math.max(...candles.map((candle) => candle.high), resolvedLast),
-    low: Math.min(...candles.map((candle) => candle.low), resolvedLast),
-    volumeLabel: formatCompactVolume(candles.reduce((sum, candle) => sum + candle.volume, 0)),
-  };
 }
 
 export function SpotTradingTerminal({
@@ -118,8 +83,8 @@ export function SpotTradingTerminal({
   const bookTrades =
     spotBook.isLive && spotBook.trades.length > 0 ? spotBook.trades : spotMarket.trades;
 
-  const lastPrice = liveSpotPrice ?? parseMarkPrice(spotMarket.mark);
-  const { changePercent, high, low, volumeLabel } = get24hStats(liveCandles, lastPrice);
+  const lastPrice = getVenueLastPrice(bookTrades, liveCandles, parseMarkPrice(spotMarket.mark));
+  const { changePercent, high, low, volumeLabel } = get24hStats(liveCandles, lastPrice, Date.now());
   // Assets is the one bottom tab with a real data source today, so it's built from live balances
   // instead of the placeholder-free static views.
   const activityView =
@@ -139,6 +104,7 @@ export function SpotTradingTerminal({
         high24h={high}
         lastPrice={lastPrice}
         low24h={low}
+        referencePrice={liveSpotPrice}
         volume24hLabel={volumeLabel}
       />
 

@@ -9,7 +9,13 @@ export type Candle = {
   high: number;
   low: number;
   open: number;
+  /** Display label for the axis, formatted for the candle's interval. */
   time: string;
+  /**
+   * Start of the bucket as epoch milliseconds. `time` is a formatted label and cannot be compared,
+   * so windowed stats (24h high, low, volume) need this.
+   */
+  bucketStartMs: number;
   volume: number;
 };
 

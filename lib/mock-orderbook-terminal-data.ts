@@ -1,3 +1,4 @@
+import type { LucideIcon } from "lucide-react";
 import {
   ArrowRightLeft,
   Brush,
@@ -12,12 +13,10 @@ import {
   SquareDashedMousePointer,
   Type,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import { formatFxDisplayPair } from "@/lib/market-display";
 import {
   calculateAnnualizedBasisPercent,
   formatAnnualizedBasis,
-  formatBasis,
 } from "@/lib/market-formatting";
 import {
   buildCanonicalMarketId,
@@ -25,6 +24,7 @@ import {
   CANONICAL_SPOT_SYMBOL,
   getMarketSymbolAliases,
 } from "@/lib/market-selection";
+import type { BookResponse, PresentedTrade } from "@/lib/markets-service";
 import type {
   ActivityTab,
   ActivityView,
@@ -32,12 +32,11 @@ import type {
   ChartTool,
   ContractMarket,
   DeliveryTerm,
-  MarketDefinition,
   MarketAvailability,
+  MarketDefinition,
   MarketId,
   TradePrint,
 } from "@/lib/trading.types";
-import type { BookResponse, PresentedTrade } from "@/lib/markets-service";
 
 const BASE_SPOT_CANDLES = [
   [1598.8, 1600.2, 1598.1, 1599.6, 260],
@@ -215,11 +214,11 @@ export const MARKET_DEFINITIONS = [
     id: "cngn-usdc-spot",
     marketSymbol: CANONICAL_SPOT_SYMBOL,
     marketSymbolAliases: getMarketSymbolAliases(CANONICAL_SPOT_SYMBOL),
-    strikeLabel: null,
-    type: "spot",
     pair: "USDCcNGN",
     region: "Africa",
     sortOrder: 0,
+    strikeLabel: null,
+    type: "spot",
   },
   {
     contractLabel: "MAR 2026",
@@ -227,11 +226,11 @@ export const MARKET_DEFINITIONS = [
     expiryLabel: "Mar 2026",
     flagSrc: "/flags/ng.svg",
     id: "cngn-usdc-mar-2026-options",
-    strikeLabel: null,
-    type: "option",
     pair: "USDCcNGN",
     region: "Africa",
     sortOrder: 1,
+    strikeLabel: null,
+    type: "option",
   },
   {
     contractLabel: "JULY 2026",
@@ -239,11 +238,11 @@ export const MARKET_DEFINITIONS = [
     expiryLabel: "July 2026",
     flagSrc: "/flags/ng.svg",
     id: "cngn-usdc-july-2026-options",
-    strikeLabel: null,
-    type: "option",
     pair: "USDCcNGN",
     region: "Africa",
     sortOrder: 2,
+    strikeLabel: null,
+    type: "option",
   },
 ] satisfies MarketDefinition[];
 
@@ -270,12 +269,26 @@ function parseNumber(value: string) {
   return Number(value.replaceAll(",", "").replaceAll("$", "").replaceAll("+", ""));
 }
 
+/**
+ * Bucket timestamp for a preview candle, matching the `HH:00` label built from the same index.
+ *
+ * Anchored to the current UTC day so preview candles land inside windowed stats and the fallback
+ * UI stays coherent. Aligned to the day rather than the moment so a server and client render
+ * agree. Preview data is not real trading history.
+ */
+function previewBucketStartMs(index: number) {
+  const now = new Date();
+  const dayStartMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return dayStartMs + ((index + 8) % 24) * 60 * 60 * 1000;
+}
+
 function buildCandles(
   baseCandles: readonly (readonly [number, number, number, number, number])[],
   offset: number,
   digits: number
 ) {
   return baseCandles.map(([open, high, low, close, volume], index) => ({
+    bucketStartMs: previewBucketStartMs(index),
     close: Number((close + offset).toFixed(digits)),
     high: Number((high + offset).toFixed(digits)),
     low: Number((low + offset).toFixed(digits)),
@@ -358,27 +371,8 @@ function buildSpotMarket() {
   const displayPair = formatFxDisplayPair("USDCcNGN");
 
   return {
-    availability: {
-      bookAvailable: true,
-      markAvailable: true,
-      tradesAvailable: true,
-    },
     candles: buildCandles(BASE_SPOT_CANDLES, 0, 2),
-    contractDetails: [
-      { label: "Market", value: `${displayPair} Spot` },
-      { label: "Quote Convention", value: "cNGN per USDC" },
-      { label: "Price", value: formatPriceWithConvention(SPOT_MARKET_META.mark) },
-      { label: "Executable", value: SPOT_MARKET_META.executable },
-      { label: "Settlement", value: SPOT_MARKET_META.settlement },
-    ],
     id: SPOT_MARKET_META.id,
-    infoBar: [
-      { label: "Mark Price", value: formatPriceWithConvention(SPOT_MARKET_META.mark) },
-      { label: "Basis", value: "—" },
-      { label: "Basis %", value: "—" },
-      { label: "Implied Carry", value: "—" },
-      { label: "Expiry", value: "Spot" },
-    ],
     mark: SPOT_MARKET_META.mark,
     orderBookAsks: buildBook(BASE_SPOT_ASKS, 0, 1, 2),
     orderBookBids: buildBook(BASE_SPOT_BIDS, 0, 1, 2),
@@ -387,6 +381,25 @@ function buildSpotMarket() {
     ticker: `${displayPair} Spot`,
     timeToExpiry: "Spot",
     trades: buildSpotTrades(SPOT_MARKET_META.mark),
+    availability: {
+      bookAvailable: true,
+      markAvailable: true,
+      tradesAvailable: true,
+    },
+    contractDetails: [
+      { label: "Market", value: `${displayPair} Spot` },
+      { label: "Quote Convention", value: "cNGN per USDC" },
+      { label: "Price", value: formatPriceWithConvention(SPOT_MARKET_META.mark) },
+      { label: "Executable", value: SPOT_MARKET_META.executable },
+      { label: "Settlement", value: SPOT_MARKET_META.settlement },
+    ],
+    infoBar: [
+      { label: "Mark Price", value: formatPriceWithConvention(SPOT_MARKET_META.mark) },
+      { label: "Basis", value: "—" },
+      { label: "Basis %", value: "—" },
+      { label: "Implied Carry", value: "—" },
+      { label: "Expiry", value: "Spot" },
+    ],
   } satisfies ContractMarket;
 }
 
@@ -400,27 +413,8 @@ function buildOptionsMarket(
   const displayPair = formatFxDisplayPair("USDCcNGN");
 
   return {
-    availability: {
-      bookAvailable: true,
-      markAvailable: true,
-      tradesAvailable: true,
-    },
     candles: buildCandles(BASE_OPTIONS_CANDLES, offset, 2),
-    contractDetails: [
-      { label: "Contract", value: `${displayPair} Options` },
-      { label: "Premium", value: meta.mark },
-      { label: "Style", value: "European" },
-      { label: "Days to expiry", value: meta.timeToExpiry.replace("d", "") },
-      { label: "Settlement", value: meta.settlement },
-    ],
     id: meta.id,
-    infoBar: [
-      { label: "Mark Price", value: meta.mark },
-      { label: "Basis", value: "—" },
-      { label: "Basis %", value: "—" },
-      { label: "Implied Carry", value: "—" },
-      { label: "Expiry", value: displayLabel },
-    ],
     mark: meta.mark,
     orderBookAsks: buildBook(BASE_OPTIONS_ASKS, offset, sizeMultiplier, 2),
     orderBookBids: buildBook(BASE_OPTIONS_BIDS, offset, sizeMultiplier, 2),
@@ -429,13 +423,32 @@ function buildOptionsMarket(
     ticker: `${displayPair} Options`,
     timeToExpiry: meta.timeToExpiry,
     trades: buildSpotTrades(meta.mark),
+    availability: {
+      bookAvailable: true,
+      markAvailable: true,
+      tradesAvailable: true,
+    },
+    contractDetails: [
+      { label: "Contract", value: `${displayPair} Options` },
+      { label: "Premium", value: meta.mark },
+      { label: "Style", value: "European" },
+      { label: "Days to expiry", value: meta.timeToExpiry.replace("d", "") },
+      { label: "Settlement", value: meta.settlement },
+    ],
+    infoBar: [
+      { label: "Mark Price", value: meta.mark },
+      { label: "Basis", value: "—" },
+      { label: "Basis %", value: "—" },
+      { label: "Implied Carry", value: "—" },
+      { label: "Expiry", value: displayLabel },
+    ],
   } satisfies ContractMarket;
 }
 
 export const MARKET_DATA = {
-  "cngn-usdc-spot": buildSpotMarket(),
   "cngn-usdc-july-2026-options": buildOptionsMarket("JULY 2026", 0, 1),
   "cngn-usdc-mar-2026-options": buildOptionsMarket("MAR 2026", -6.4, 0.84),
+  "cngn-usdc-spot": buildSpotMarket(),
 } satisfies Record<MarketId, ContractMarket>;
 
 type LiveDeliverableFutureConfig = {
@@ -585,33 +598,33 @@ export function buildDeliverableFutureDefinition(config: LiveDeliverableFutureCo
 function getMockPricesForDefinitionId(id: string) {
   if (id.includes("eurc")) {
     if (id.includes("july-2026")) {
-      return { spot: "0.9000", mark: "0.9150" };
+      return { mark: "0.9150", spot: "0.9000" };
     }
     if (id.includes("nov-2026")) {
-      return { spot: "0.9000", mark: "0.9400" };
+      return { mark: "0.9400", spot: "0.9000" };
     }
     if (id.includes("may-2027")) {
-      return { spot: "0.9000", mark: "0.9700" };
+      return { mark: "0.9700", spot: "0.9000" };
     }
-    return { spot: "0.9000", mark: "0.9250" };
+    return { mark: "0.9250", spot: "0.9000" };
   }
   if (id.includes("brz")) {
     if (id.includes("july-2026")) {
-      return { spot: "5.0000", mark: "5.1500" };
+      return { mark: "5.1500", spot: "5.0000" };
     }
     if (id.includes("nov-2026")) {
-      return { spot: "5.0000", mark: "5.4000" };
+      return { mark: "5.4000", spot: "5.0000" };
     }
     if (id.includes("may-2027")) {
-      return { spot: "5.0000", mark: "5.7000" };
+      return { mark: "5.7000", spot: "5.0000" };
     }
-    return { spot: "5.0000", mark: "5.2500" };
+    return { mark: "5.2500", spot: "5.0000" };
   }
   // Default cNGN
   if (id.includes("july-2026")) {
-    return { spot: "1,500.00", mark: "1,545.00" };
+    return { mark: "1,545.00", spot: "1,500.00" };
   }
-  return { spot: "1,500.00", mark: "1,605.25" };
+  return { mark: "1,605.25", spot: "1,500.00" };
 }
 
 function buildBookForPair(
@@ -656,6 +669,7 @@ function buildCandlesForPair(
   }
 
   return baseCandles.map(([open, high, low, close, volume], index) => ({
+    bucketStartMs: previewBucketStartMs(index),
     close: Number((close * scale).toFixed(digits)),
     high: Number((high * scale).toFixed(digits)),
     low: Number((low * scale).toFixed(digits)),
@@ -699,20 +713,21 @@ export function buildDeliverableFutureMarket(definition: MarketDefinition) {
 
   const formatLocalPrice = (value: string | number) => {
     const num = typeof value === "string" ? parseNumber(value) : value;
-    return `${num.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits })} ${quote} per USDC`;
+    return `${num.toLocaleString("en-US", { maximumFractionDigits: digits, minimumFractionDigits: digits })} ${quote} per USDC`;
   };
 
   const formatLocalBasis = (value: number) => {
-    return `${value > 0 ? "+" : ""}${value.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits })} ${quote}`;
+    return `${value > 0 ? "+" : ""}${value.toLocaleString("en-US", { maximumFractionDigits: digits, minimumFractionDigits: digits })} ${quote}`;
   };
 
   return {
+    candles: buildCandlesForPair(BASE_FUTURES_CANDLES, parseNumber(mark), definition.pair),
+    id: definition.id,
     availability: {
       bookAvailable: true,
       markAvailable: true,
       tradesAvailable: true,
     },
-    candles: buildCandlesForPair(BASE_FUTURES_CANDLES, parseNumber(mark), definition.pair),
     contractDetails: [
       { label: "Contract", value: `${displayPair} Futures · ${displayLabel}` },
       { label: "Settlement", value: "Physical delivery" },
@@ -725,7 +740,6 @@ export function buildDeliverableFutureMarket(definition: MarketDefinition) {
       },
       { label: "Mark Price", value: formatLocalPrice(mark) },
     ],
-    id: definition.id,
     infoBar: [
       { label: "Mark Price", value: formatLocalPrice(mark) },
       { label: "Spot", value: formatLocalPrice(spot) },
@@ -741,6 +755,10 @@ export function buildDeliverableFutureMarket(definition: MarketDefinition) {
     mark,
     orderBookAsks: buildBookForPair(BASE_FUTURES_ASKS, parseNumber(mark), "ask", definition.pair),
     orderBookBids: buildBookForPair(BASE_FUTURES_BIDS, parseNumber(mark), "bid", definition.pair),
+    referencePrice: spot,
+    ticker: `${displayPair} Futures`,
+    timeToExpiry: `${definition.expiryDays ?? 0}d`,
+    trades: buildFuturesTradesForPair(mark, basis, definition.pair),
     positionOverview: [
       { label: "Position", value: "Long USDC · 0.500 contracts" },
       {
@@ -751,10 +769,6 @@ export function buildDeliverableFutureMarket(definition: MarketDefinition) {
       { label: "Unrealized PnL", value: "+$156" },
       { label: "Return on Margin", value: "+0.64%" },
     ],
-    referencePrice: spot,
-    ticker: `${displayPair} Futures`,
-    timeToExpiry: `${definition.expiryDays ?? 0}d`,
-    trades: buildFuturesTradesForPair(mark, basis, definition.pair),
   } satisfies ContractMarket;
 }
 
@@ -843,6 +857,13 @@ function buildLiveDeliverableFutureMarket(
       trades,
     }),
     candles: buildCandles(BASE_FUTURES_CANDLES, 0, 2),
+    id: definition.id,
+    mark: derivedMark ?? "—",
+    orderBookAsks: asks,
+    orderBookBids: bids,
+    referencePrice: spot,
+    ticker: `${displayPair} Futures`,
+    timeToExpiry: `${definition.expiryDays ?? 0}d`,
     contractDetails: [
       { label: "Contract", value: `${displayPair} Futures · ${displayLabel}` },
       { label: "Settlement", value: "Physical delivery" },
@@ -852,7 +873,6 @@ function buildLiveDeliverableFutureMarket(
       { label: "Tick Size", value: `${definition.tickSize ?? "1"} cNGN per USDC` },
       { label: "Mark Price", value: markValue },
     ],
-    id: definition.id,
     infoBar: [
       { label: "Mark Price", value: markValue },
       { label: "Spot", value: formatPriceWithConvention(spot) },
@@ -861,9 +881,6 @@ function buildLiveDeliverableFutureMarket(
       { label: "Implied Carry", tone: "accent", value: "—" },
       { label: "Expiry", value: displayLabel },
     ],
-    mark: derivedMark ?? "—",
-    orderBookAsks: asks,
-    orderBookBids: bids,
     positionOverview: [
       { label: "Position", value: "Long USDC · 0.500 contracts" },
       { label: "Entry Price", value: formatPriceWithConvention("1,600.00") },
@@ -871,9 +888,6 @@ function buildLiveDeliverableFutureMarket(
       { label: "Unrealized PnL", value: "—" },
       { label: "Return on Margin", value: "—" },
     ],
-    referencePrice: spot,
-    ticker: `${displayPair} Futures`,
-    timeToExpiry: `${definition.expiryDays ?? 0}d`,
     trades,
   } satisfies ContractMarket;
 }
@@ -1091,34 +1105,12 @@ export const SPOT_TIMEFRAME_OPTIONS = ["1m", "30m", "1h", "D", "W", "M"] as cons
  */
 // TODO: populate the account-scoped views from markets-service once it exposes per-account endpoints.
 export const ACTIVITY_VIEWS = {
-  "open-orders": {
-    columns: ["Instrument", "Direction", "Type", "Size", "Price"],
-    rows: [],
-  },
-  positions: {
-    columns: [
-      "Instrument",
-      "Position",
-      "Entry Price",
-      "Mark Price",
-      "Unrealized PnL",
-      "Return on Margin",
-    ],
-    rows: [],
-  },
-  "trade-history": {
-    columns: ["Time", "Instrument", "Direction", "Size", "Price"],
-    rows: [],
-  },
-  "order-history": {
-    columns: ["Time", "Instrument", "Direction", "Type", "Size", "Price", "Status"],
-    rows: [],
-  },
   // Market-level data, not account state — safe to show a sample row.
   "basis-history": {
     columns: ["Instrument", "Spot Price", "Future Price", "Basis", "Implied Carry %", "Time"],
     rows: [
       {
+        positiveCellIndexes: [3, 4],
         cells: [
           "USDC-cNGN 16 SEP 26",
           "1,500.00 cNGN",
@@ -1127,9 +1119,31 @@ export const ACTIVITY_VIEWS = {
           "+3.20%",
           "10:08:14",
         ],
-        positiveCellIndexes: [3, 4],
       },
     ],
+  },
+  "open-orders": {
+    columns: ["Instrument", "Direction", "Type", "Size", "Price"],
+    rows: [],
+  },
+  "order-history": {
+    columns: ["Time", "Instrument", "Direction", "Type", "Size", "Price", "Status"],
+    rows: [],
+  },
+  positions: {
+    rows: [],
+    columns: [
+      "Instrument",
+      "Position",
+      "Entry Price",
+      "Mark Price",
+      "Unrealized PnL",
+      "Return on Margin",
+    ],
+  },
+  "trade-history": {
+    columns: ["Time", "Instrument", "Direction", "Size", "Price"],
+    rows: [],
   },
 } satisfies Record<string, ActivityView>;
 
