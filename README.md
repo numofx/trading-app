@@ -41,28 +41,43 @@ The spot and futures order-book panels stream live depth and trades from `market
 
 - `NEXT_PUBLIC_MARKETS_WS_URL` — e.g. `wss://api.numofx.com/v1/ws` in production, `ws://127.0.0.1:8080/v1/ws` locally.
 
-The client subscribes to the public `book` and `trades` channels for the selected market (spot uses the `USDCcNGN-SPOT` symbol; futures use the market symbol such as `USDCcNGN-SEP16-2026`), seeds from the `snapshot` frame, and applies `update` deltas. Both channels are unauthenticated; the only server-side gate is `WS_ALLOWED_ORIGINS` on the `markets-service` deployment, which **must include the frontend origin** or the browser handshake is rejected. When the socket is unreachable, still connecting, or the book is one-sided/crossed, the panel falls back to the server-rendered snapshot (futures) or preview book (spot), and the "Live liquidity" badge only shows once both sides have depth.
+The client subscribes to the public `book` and `trades` channels for the selected market (spot uses the `USDCcNGN-SPOT` symbol; futures use the market symbol such as `USDCcNGN-SEP16-2026`), seeds from the `snapshot` frame, and applies `update` deltas. Both channels are unauthenticated; the only server-side gate is `WS_ALLOWED_ORIGINS` on the `markets-service` deployment, which **must include the frontend origin** or the browser handshake is rejected. When the socket is unreachable, still connecting, or the book is one-sided/crossed, the panel falls back to the server-rendered snapshot (futures) or preview book (spot). That fallback is silent — there is no on-screen indicator of which source is rendering, so a stream that never goes live looks identical to a healthy one. (A "Live liquidity" badge used to signal this and was removed in `bf5688e`; its absence is what let the spot stream sit permanently in fallback, fixed in `c7c2f2e`.)
 
 `GET /api/strails/egress` remains as an ops diagnostic that reports the deployment's current egress IP (used when registering an IP allowlist upstream).
 
 ## How markets are populated
 
-`markets-service` has **no seeding script, admin endpoint, or on-chain auto-discovery**. Its market list is a static registry in Go (`internal/instruments/registry.go`) defining three USDC/cNGN deliverable futures. Each market is served from `GET /v1/markets` only when its env-var pair is set on the `markets-service` deployment:
+`markets-service` has **no seeding script, admin endpoint, or on-chain auto-discovery**. Its market
+list is a static registry in Go — `services/markets/internal/instruments/registry.go` in the
+`numofx/exchange` monorepo — defining spot plus three USDC/cNGN deliverable futures. Each market is
+served from `GET /v1/markets` only when its env var(s) are set on the `markets-service` deployment:
 
-| Market | Env vars on markets-service |
-| --- | --- |
-| JUN 30 2026 | `CNGN_JUN30_2026_FUTURE_ASSET_ADDRESS` + `CNGN_JUN30_2026_FUTURE_SUB_ID` |
-| NOV 30 2026 | `CNGN_NOV30_2026_FUTURE_ASSET_ADDRESS` + `CNGN_NOV30_2026_FUTURE_SUB_ID` |
-| MAY 31 2027 | `CNGN_MAY31_2027_FUTURE_ASSET_ADDRESS` + `CNGN_MAY31_2027_FUTURE_SUB_ID` |
+| Market | Expiry (UTC) | Env vars on markets-service | Live today |
+| --- | --- | --- | --- |
+| `USDCcNGN-SPOT` | — | `CNGN_SPOT_ASSET_ADDRESS` | yes |
+| `USDCcNGN-SEP16-2026` | 2026-09-16 14:00 | `CNGN_SEP16_2026_FUTURE_ASSET_ADDRESS` + `CNGN_SEP16_2026_FUTURE_SUB_ID` | yes |
+| `USDCcNGN-NOV30-2026` | 2026-11-30 00:00 | `CNGN_NOV30_2026_FUTURE_ASSET_ADDRESS` + `CNGN_NOV30_2026_FUTURE_SUB_ID` | no |
+| `USDCcNGN-MAY31-2027` | 2027-05-31 00:00 | `CNGN_MAY31_2027_FUTURE_ASSET_ADDRESS` + `CNGN_MAY31_2027_FUTURE_SUB_ID` | no |
 
-The address/sub-id pairs identify the instrument in the on-chain `Matching` contract. If `/v1/markets` returns `[]`, none of those pairs are configured on the backend deployment.
+The address/sub-id pairs identify the instrument in the on-chain `Matching` contract. A market whose
+pair is unset is simply absent from `/v1/markets` — that is the only reason a registry entry does
+not appear, so an empty `[]` means none of the pairs are configured on the backend deployment.
 
-The frontend consumes markets matching:
+> Verify the "live today" column against `GET https://api.numofx.com/v1/markets` before relying on
+> it. Until 2026-08-08 this table described a `CNGN_JUN30_2026_*` pair that no longer exists in the
+> registry — it dated from the standalone `markets-service` repo and was never updated when the
+> service moved into `numofx/exchange`, so it sent readers looking for env vars matching nothing.
 
-- `contract_type=deliverable_fx_future`
-- `settlement_type=physical_delivery`
-- `base_asset_symbol=USDC`
-- `quote_asset_symbol=cNGN`
+The frontend picks markets out of that list with two separate filters (`lib/markets-service.ts`):
+
+| | Futures (`getLiveDeliverableFXFutures`) | Spot (`getLiveSpotMarket`) |
+| --- | --- | --- |
+| `contract_type` | `deliverable_fx_future` | `spot` |
+| `settlement_type` | `physical_delivery` | not checked |
+| `base_asset_symbol` | `USDC` | `USDC` |
+| `quote_asset_symbol` | `cNGN` | `cNGN` |
+
+Futures are sorted by `expiry_timestamp` ascending; spot takes the first match.
 
 ## Spot market status
 
