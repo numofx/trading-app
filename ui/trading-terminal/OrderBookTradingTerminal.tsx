@@ -12,7 +12,7 @@ import {
   TAKER_FEE_RATE,
 } from "@/lib/future-order-submission";
 import { formatFxDisplayPair, getInstrumentDisplayLabel } from "@/lib/market-display";
-import { calculateAnnualizedBasisPercent } from "@/lib/market-formatting";
+import { calculateAnnualizedBasisPercent, formatSignedContracts } from "@/lib/market-formatting";
 import {
   buildMarketSelectionAliasMap,
   buildMarketUrlSlug,
@@ -33,6 +33,7 @@ import { SpotTradingTerminal } from "@/ui/trading-terminal/SpotTradingTerminal";
 import { TradingMarketHeader } from "@/ui/trading-terminal/TradingMarketHeader";
 import { useAccountMaintenanceMargin } from "@/ui/trading-terminal/useAccountMaintenanceMargin";
 import { formatCngnBalanceLabel, useCngnBalance } from "@/ui/trading-terminal/useCngnBalance";
+import { useFuturesPosition } from "@/ui/trading-terminal/useFuturesPosition";
 import { useInitialMarginRate } from "@/ui/trading-terminal/useInitialMarginRate";
 import {
   formatSubaccountCngnLabel,
@@ -176,10 +177,12 @@ function buildSpotOrderEvent(
 function getOrderSummaryRows({
   accountMargin,
   fees,
+  futuresPosition,
   initialMargin,
 }: {
   accountMargin: number | null;
   fees: number;
+  futuresPosition: number | null;
   initialMargin: number | null;
 }) {
   return [
@@ -195,6 +198,12 @@ function getOrderSummaryRows({
     {
       label: "Fees",
       value: `${fees.toLocaleString("en-US", { maximumFractionDigits: 4, minimumFractionDigits: 2 })} USDC`,
+    },
+    {
+      label: "Position",
+      // Read from the ledger. Signed: positive is long, negative is short, and exactly zero is
+      // flat rather than "no data" — which is why null and 0 render differently.
+      value: futuresPosition === null ? "—" : formatSignedContracts(futuresPosition),
     },
     {
       label: "Account Margin",
@@ -364,11 +373,17 @@ export function OrderBookTradingTerminal({
     subId: selectedMarket.subId,
   });
   const accountMargin = useAccountMaintenanceMargin(tradingSubaccountId);
+  const futuresPosition = useFuturesPosition({
+    assetAddress: selectedMarket.assetAddress,
+    subaccountId: tradingSubaccountId,
+    subId: selectedMarket.subId,
+  });
   const { fees, initialMargin } = getOrderMetrics(sizeUsdcNotional, initialMarginRate);
 
   const orderSummaryRows = getOrderSummaryRows({
     accountMargin,
     fees,
+    futuresPosition,
     initialMargin,
   });
 
@@ -488,7 +503,6 @@ export function OrderBookTradingTerminal({
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Order submission needs wallet, env, signing, and backend submission checks in one submit path.
   async function handleSubmit(orderSide: "buy" | "sell") {
     setOrderSide(orderSide);
-    const positionAfter = orderSide === "buy" ? "long" : "short";
 
     if (!walletsReady) {
       setLastAction("Wallet is still loading");
@@ -591,12 +605,15 @@ export function OrderBookTradingTerminal({
         order_id: payload?.order?.order_id ?? null,
         order_side: orderSide,
         order_type: orderType,
-        position_after: positionAfter,
+        position_before_contracts: futuresPosition,
         size_contracts: size,
         size_usdc_notional: sizeUsdcNotional,
       });
+      // No claim about the resulting position: an order can rest unfilled, fill partially, or
+      // reduce an existing position, and settlement lands asynchronously. The Position row reads
+      // the ledger, which is the only thing that actually knows.
       setLastAction(
-        `Futures order accepted: ${orderSide.toUpperCase()} ${size} contracts (${sizeUsdcNotional} USDC notional) @ ${executionLimitPrice} cNGN/USDC on ${market.ticker}; position after: ${positionAfter}`
+        `Futures order accepted: ${orderSide.toUpperCase()} ${size} contracts (${sizeUsdcNotional} USDC notional) @ ${executionLimitPrice} cNGN/USDC on ${market.ticker}`
       );
       return;
     } catch (error) {

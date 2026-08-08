@@ -69,3 +69,30 @@ export function formatAnnualizedBasis(value: number | null, digits = 2) {
 
   return `${sign}${formatted}%`;
 }
+
+/**
+ * A signed futures position in contracts.
+ *
+ * Zero renders as "Flat" rather than "0" because that is the distinction a trader acts on: holding
+ * nothing versus carrying a small residual position. Callers must keep null (position unknown)
+ * separate from 0 (position known to be flat) — collapsing them tells a trader they are flat when
+ * the ledger simply could not be read.
+ */
+export function formatSignedContracts(value: number) {
+  if (value === 0) {
+    return "Flat";
+  }
+
+  const sign = value > 0 ? "+" : "-";
+  const magnitude = Math.abs(value);
+  // Positions are multiples of the venue's 0.001 amount step, so 3 decimals is exact. A residual
+  // smaller than that should not exist — but if one ever does, rendering it as "0.000" would read
+  // as flat, which is the confusion this formatter exists to prevent.
+  const digits = magnitude < 0.001 ? 6 : 3;
+  const formatted = magnitude.toLocaleString("en-US", {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: digits,
+  });
+
+  return `${sign}${formatted} contracts`;
+}
