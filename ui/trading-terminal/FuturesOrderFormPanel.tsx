@@ -192,7 +192,12 @@ export function FuturesOrderFormPanel({
             />
             USDC
           </span>
-          <span className="truncate font-medium text-panel-text">{availableLabel}</span>
+          <span className="flex min-w-0 items-center gap-1.5">
+            {/* "Wallet", because the Account strip below shows the same tokens for the trading
+                subaccount. Deposited collateral leaves this at 0 while the account is funded. */}
+            <span className="shrink-0 text-panel-text-muted">Wallet</span>
+            <span className="truncate font-medium text-panel-text">{availableLabel}</span>
+          </span>
         </div>
       </div>
 
