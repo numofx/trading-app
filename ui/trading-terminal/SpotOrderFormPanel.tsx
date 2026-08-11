@@ -127,22 +127,22 @@ function FormInput({
 }
 
 /**
- * Resolves the CTA label. Signing in comes first — without a wallet there is nothing to submit
- * or prepare. After that an in-flight order wins over account preparation: once a submission
- * starts, that is the more specific thing the button is waiting on.
+ * Resolves the CTA label. The wallet comes first — without one there is nothing to submit or
+ * prepare, and submission rejects on the same condition. After that an in-flight order wins over
+ * account preparation: once a submission starts, that is the more specific thing to wait on.
  */
 function getSpotSubmitLabel({
+  hasWallet,
   isPreparingAccount,
-  isSignedIn,
   isSubmitting,
   sideLabel,
 }: {
+  hasWallet: boolean;
   isPreparingAccount: boolean;
-  isSignedIn: boolean;
   isSubmitting: boolean;
   sideLabel: string;
 }) {
-  if (!isSignedIn) {
+  if (!hasWallet) {
     return "Deposit";
   }
   if (isSubmitting) {
@@ -161,7 +161,7 @@ export function SpotOrderFormPanel({
   onDepositRequest,
   onSubmitOrder,
   isPreparingAccount = false,
-  isSignedIn = false,
+  hasWallet = false,
   isSubmitting = false,
   lastAction = null,
 }: {
@@ -178,8 +178,11 @@ export function SpotOrderFormPanel({
   }) => void;
   /** The trading subaccount is still being resolved — distinct from an order in flight. */
   isPreparingAccount?: boolean;
-  /** No connected wallet means no account to trade from, so the CTA points at funding instead. */
-  isSignedIn?: boolean;
+  /**
+   * Whether a wallet is connected. This, not a Privy session, is what order submission and the
+   * deposit flow require, so the CTA points at funding whenever it is false.
+   */
+  hasWallet?: boolean;
   isSubmitting?: boolean;
   lastAction?: string | null;
 }) {
@@ -219,8 +222,8 @@ export function SpotOrderFormPanel({
    * would be friction without a decision behind it. Live submission goes through the dialog.
    */
   function handleSubmit() {
-    // Signed out there is nothing to submit against, so the CTA funds an account instead.
-    if (!isSignedIn) {
+    // Without a wallet there is nothing to submit against, so the CTA funds an account instead.
+    if (!hasWallet) {
       onDepositRequest?.();
       return;
     }
@@ -253,8 +256,8 @@ export function SpotOrderFormPanel({
   // user never pressed reads as a stuck order rather than a subaccount lookup still in flight.
   const isBusy = isSubmitting || isPreparingAccount;
   const submitLabel = getSpotSubmitLabel({
+    hasWallet,
     isPreparingAccount,
-    isSignedIn,
     isSubmitting,
     sideLabel,
   });

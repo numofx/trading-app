@@ -35,6 +35,7 @@ export function SpotTradingTerminal({
   accountCngnLabel = null,
   onDepositRequest,
   onSubmitOrder,
+  hasWallet = false,
   isSignedIn = false,
   isPreparingAccount = false,
   isSubmitting = false,
@@ -58,6 +59,8 @@ export function SpotTradingTerminal({
     size: string;
     orderType: "Limit" | "Market" | "Stop Limit";
   }) => void;
+  /** Whether a wallet is connected; gates the order ticket's submit CTA. */
+  hasWallet?: boolean;
   /** Whether a wallet session is active; gates account-scoped rows in the activity panel. */
   isSignedIn?: boolean;
   /** The trading subaccount is still being resolved — distinct from an order in flight. */
@@ -147,8 +150,8 @@ export function SpotTradingTerminal({
           <SpotOrderFormPanel
             availableCngnLabel="0.00 cNGN"
             availableUsdcLabel={usdcBalanceLabel ?? "— USDC"}
+            hasWallet={hasWallet}
             isPreparingAccount={isPreparingAccount}
-            isSignedIn={isSignedIn}
             isSubmitting={isSubmitting}
             lastAction={lastAction}
             markPrice={lastPrice}
