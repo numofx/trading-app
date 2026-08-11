@@ -23,7 +23,7 @@ import { buildSpotOrderEnvelope } from "@/lib/spot-order-submission";
 import type { ContractMarket, DeliveryTerm, MarketDefinition, MarketId } from "@/lib/trading.types";
 import { AppSectionSwitcher, AppSidebar } from "@/ui/AppSidebar";
 import type { AppSection } from "@/ui/app-sidebar.types";
-import { DepositDialog } from "@/ui/trading-terminal/DepositDialog";
+import { buildDepositAccount, DepositDialog } from "@/ui/trading-terminal/DepositDialog";
 import { FuturesTradingTerminal } from "@/ui/trading-terminal/FuturesTradingTerminal";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import { SpotTradingTerminal } from "@/ui/trading-terminal/SpotTradingTerminal";
@@ -358,6 +358,7 @@ export function OrderBookTradingTerminal({
     isLoading: isResolvingTradingSubaccount,
     subaccountId: tradingSubaccountId,
   } = useTradingSubaccount(primaryWallet?.address ?? null);
+  const depositAccount = buildDepositAccount(primaryWallet, tradingSubaccountId);
   const isPreparingAccount = isPreparingTradingAccount({
     isResolvingSubaccount: isResolvingTradingSubaccount,
     isSignedIn,
@@ -821,14 +822,13 @@ export function OrderBookTradingTerminal({
         <TradingMarketHeader
           depositControl={
             <DepositDialog
+              account={depositAccount}
               onConnectWallet={handleConnectWallet}
               onDeposited={handleDeposited}
               onOpenChange={setDepositOpen}
               open={depositOpen}
-              subaccountId={tradingSubaccountId}
               triggerClassName="flex h-8 cursor-pointer items-center whitespace-nowrap rounded-lg bg-input-bg px-2.5 font-semibold text-[11px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active disabled:cursor-not-allowed disabled:opacity-60"
               triggerId="header-deposit-trigger"
-              wallet={primaryWallet}
             />
           }
           sectionControl={

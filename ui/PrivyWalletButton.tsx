@@ -3,11 +3,8 @@
 import { useLogin, useLogout, usePrivy, useWallets } from "@privy-io/react-auth";
 import { Wallet } from "lucide-react";
 import posthog from "posthog-js";
+import { formatAddressShort } from "@/lib/address-display";
 import { cn } from "@/lib/cn";
-
-function formatAddress(address: string) {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
-}
 
 export function PrivyWalletButton() {
   const privyAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID?.trim();
@@ -38,12 +35,12 @@ function PrivyWalletButtonInner() {
       const distinctId = walletAddress ?? user.id;
       posthog.identify(distinctId);
       posthog.capture("wallet_connected", {
+        is_new_user: false,
+        login_method: loginAccount?.type ?? null,
+        privy_user_id: user.id,
         wallet_address_truncated: walletAddress
           ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
           : null,
-        login_method: loginAccount?.type ?? null,
-        privy_user_id: user.id,
-        is_new_user: false,
       });
     },
     onError: (error) => {
@@ -62,7 +59,7 @@ function PrivyWalletButtonInner() {
   });
   const { ready: walletsReady, wallets } = useWallets();
   const primaryWallet = wallets[0];
-  const walletAddress = primaryWallet?.address ? formatAddress(primaryWallet.address) : null;
+  const walletAddress = primaryWallet?.address ? formatAddressShort(primaryWallet.address) : null;
   let buttonLabel = "Connect Wallet";
 
   if (!ready || !walletsReady) {
