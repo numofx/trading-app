@@ -109,18 +109,26 @@ Deposit flow address semantics (naming follows the risk-core deployment artifact
 - `NEXT_PUBLIC_USDC_TOKEN_ADDRESS` is the underlying USDC ERC-20 pulled from the wallet (`wrappedAsset` in the same
   artifact). The legacy `NEXT_PUBLIC_USDC_DELIVERABLE_BASE_ASSET_ADDRESS` env is honored as a fallback alias for the
   token address.
-- `NEXT_PUBLIC_CNGN_TOKEN_ADDRESS` is the underlying cNGN ERC-20 held in the wallet, which the spot terminal's
-  Assets tab reads. Both chains have a verified default (name/symbol `cNGN`, 6 decimals on each), so the env is an
-  override rather than required config: `0x46C85152bFe9f96829aA94755D9f915F9B10EF5F` on Base mainnet and
-  `0xe2387F04d3858e7Cb64Ef5Ed6617f9B2fcEEAfa2` on Base Sepolia. Do not confuse it with
-  `NEXT_PUBLIC_CNGN_ASSET_ADDRESS`, which is the `WrappedERC20Asset` wrapping that token.
-- `NEXT_PUBLIC_CNGN_ASSET_ADDRESS` is the cNGN counterpart to `NEXT_PUBLIC_WRAPPED_USDC_ASSET_ADDRESS`: the
-  contract a cNGN deposit approves and pays into, and the asset id used to label the cNGN leg of a subaccount
-  balance. On Base mainnet it defaults to `0x9d806fd040a719d27a8e5e77dc5ae0ed1e089493` — verified on-chain:
-  `wrappedAsset()` returns the cNGN ERC-20 above, `deposit(uint256,uint256)` is present, and there is no
-  `wlEnabled()` gate. That same address is the spot market's `asset_address` from `GET /v1/markets`, so cNGN
-  deposits and cNGN orders settle against one escrow. **No default exists off mainnet**, so the deposit dialog
-  offers USDC only on Base Sepolia until this env is set there.
+- The cNGN pair (`NEXT_PUBLIC_CNGN_ASSET_ADDRESS` + `NEXT_PUBLIC_CNGN_TOKEN_ADDRESS`) mirrors
+  `risk-core/deployments/<chainId>/WRAPPED_CNGN.json`, whose `base` is the escrow and `wrappedAsset` the token.
+  The asset is the cNGN counterpart to `NEXT_PUBLIC_WRAPPED_USDC_ASSET_ADDRESS` — what a cNGN deposit approves
+  and pays into, and the id labeling the cNGN leg of a subaccount balance. The token is the ERC-20 pulled from
+  the wallet, which the spot terminal's Assets tab reads. Defaults per chain:
+
+  | Chain | Asset (escrow) | Token (ERC-20) | Token decimals |
+  | --- | --- | --- | --- |
+  | Base mainnet (8453) | `0x9d806fd040a719d27a8e5e77dc5ae0ed1e089493` | `0x46C85152bFe9f96829aA94755D9f915F9B10EF5F` | 6 |
+  | Base Sepolia (84532) | `0x1c08f30c204EE18EbBDc161c0f0864AFb826934b` | `0x6B232A2155Bd0C9bf741dB4cf8E7e8A0176A6fc6` | 18 |
+
+  Both escrows are verified on-chain: `wrappedAsset()` returns the paired token, `deposit(uint256,uint256)` is
+  present, and neither has a `wlEnabled()` gate. The mainnet escrow is also the spot market's `asset_address`
+  from `GET /v1/markets`, so cNGN deposits and cNGN orders settle against one contract.
+
+  > **Override the two together or not at all.** An escrow only accepts the exact ERC-20 it wraps. Base Sepolia
+  > also hosts `0xe2387F04d3858e7Cb64Ef5Ed6617f9B2fcEEAfa2` — likewise named `cNGN`, but 6 decimals and not
+  > wrapped by this venue's escrow. The app pointed at it until 2026-08-11; approving it produces a deposit that
+  > cannot settle. Note the decimals differ by chain, so never hardcode 6: the deposit flow reads them from the
+  > token contract.
 - Deposits may be whitelist-gated on-chain (`WLWrappedERC20Asset.wlEnabled`). The app probes for the whitelist at
   preflight: plain `WrappedERC20Asset` deployments (including the current Base Sepolia one) have no gate and deposits
   are open; on WL deployments only operator-whitelisted subaccounts can deposit, and the create-and-deposit path

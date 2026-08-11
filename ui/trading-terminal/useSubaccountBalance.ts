@@ -20,19 +20,19 @@ const getAccountBalancesAbi = [
   {
     inputs: [{ name: "accountId", type: "uint256" }],
     name: "getAccountBalances",
+    stateMutability: "view",
+    type: "function",
     outputs: [
       {
+        name: "",
+        type: "tuple[]",
         components: [
           { name: "asset", type: "address" },
           { name: "subId", type: "uint256" },
           { name: "balance", type: "int256" },
         ],
-        name: "",
-        type: "tuple[]",
       },
     ],
-    stateMutability: "view",
-    type: "function",
   },
 ] as const;
 
@@ -89,7 +89,7 @@ export function useSubaccountBalance(subaccountId: string | null) {
         if (cashAsset !== null && isAddressEqual(row.asset, cashAsset)) {
           cashUnits = row.balance;
         }
-        if (cngnAsset !== null && isAddressEqual(row.asset, cngnAsset)) {
+        if (isAddressEqual(row.asset, cngnAsset)) {
           cngnUnits = row.balance;
         }
         return { asset: row.asset, balance: row.balance, subId: row.subId };
