@@ -7,7 +7,12 @@ import posthog from "posthog-js";
 import { useState } from "react";
 import { formatAddressShort } from "@/lib/address-display";
 import { cn } from "@/lib/cn";
-import type { DepositBlockedReason, DepositFlowState } from "@/lib/subaccount-deposit.types";
+import type {
+  DepositBlockedReason,
+  DepositCurrency,
+  DepositFlowState,
+} from "@/lib/subaccount-deposit.types";
+import { getDepositableCurrencies } from "@/lib/subaccount-deposit-config";
 import { useSubaccountDeposit } from "@/ui/trading-terminal/useSubaccountDeposit";
 
 /**
@@ -29,6 +34,11 @@ export function buildDepositAccount(
   subaccountId: string | null
 ): DepositAccount | null {
   return wallet === null ? null : { subaccountId, wallet };
+}
+
+/** Placeholder scaled to the currency: 1000 cNGN is pocket change against a ~1,600 NGN/USD rate. */
+function getAmountPlaceholder(currency: DepositCurrency) {
+  return currency === "USDC" ? "1000" : "1500000";
 }
 
 function getDepositDescription(account: DepositAccount | null) {
@@ -59,12 +69,12 @@ function getBlockedCopy(reason: DepositBlockedReason, isCreatePath: boolean) {
   return "This trading account is not approved for deposits yet. Ask the venue operator to whitelist it.";
 }
 
-function getStepCopy(flowState: DepositFlowState) {
+function getStepCopy(flowState: DepositFlowState, currency: DepositCurrency) {
   switch (flowState.status) {
     case "preflight":
       return "Checking balance, allowance, and deposit permissions...";
     case "awaiting-approval":
-      return "Step 1 of 2 — approve USDC so the venue can pull your deposit.";
+      return `Step 1 of 2 — approve ${currency} so the venue can pull your deposit.`;
     case "approving":
       return "Waiting for the approval transaction to confirm...";
     case "awaiting-deposit":
@@ -115,16 +125,59 @@ function FundingWalletRow({ address }: { address: string }) {
   );
 }
 
+/**
+ * Asset picker. Rendered only when the deployment can take more than one currency — off mainnet
+ * there is no cNGN escrow, and a lone disabled option would advertise something unavailable.
+ */
+function CurrencyTabs({
+  currencies,
+  onSelect,
+  selected,
+}: {
+  currencies: DepositCurrency[];
+  onSelect: (currency: DepositCurrency) => void;
+  selected: DepositCurrency;
+}) {
+  if (currencies.length < 2) {
+    return null;
+  }
+
+  return (
+    <div className="mt-4 grid grid-cols-2 gap-1 rounded-[12px] bg-input-bg p-1">
+      {currencies.map((currency) => (
+        <button
+          className={cn(
+            "min-h-9 cursor-pointer rounded-[9px] font-semibold text-[12px] transition-colors",
+            currency === selected
+              ? "bg-panel-bg text-panel-text-active ring-1 ring-panel-border"
+              : "text-panel-text-muted hover:text-panel-text"
+          )}
+          key={currency}
+          onClick={() => onSelect(currency)}
+          type="button"
+        >
+          {currency}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function DepositProgress({
   approve,
+  currency,
   deposit,
-  flowState,
+  onDepositAnother,
   reset,
   retry,
+  flowState,
 }: {
   approve: () => Promise<void>;
+  currency: DepositCurrency;
   deposit: () => Promise<void>;
   flowState: DepositFlowState;
+  /** Returns to the amount step for the other asset, so funding both is one visit. */
+  onDepositAnother: (() => void) | null;
   reset: () => void;
   retry: () => void;
 }) {
@@ -132,7 +185,7 @@ function DepositProgress({
     flowState.status === "preflight" ||
     flowState.status === "approving" ||
     flowState.status === "depositing";
-  const stepCopy = getStepCopy(flowState);
+  const stepCopy = getStepCopy(flowState, currency);
 
   return (
     <div className="mt-4 space-y-3">
@@ -159,7 +212,7 @@ function DepositProgress({
       <div className="flex gap-2">
         {flowState.status === "awaiting-approval" ? (
           <button className={PRIMARY_BUTTON_CLASSES} onClick={() => void approve()} type="button">
-            Approve USDC
+            Approve {currency}
           </button>
         ) : null}
 
@@ -185,8 +238,23 @@ function DepositProgress({
           </button>
         ) : null}
 
+        {flowState.status === "success" && onDepositAnother !== null ? (
+          <button className={PRIMARY_BUTTON_CLASSES} onClick={onDepositAnother} type="button">
+            Deposit another asset
+          </button>
+        ) : null}
+
         {flowState.status === "success" ? (
-          <Dialog.Close className={PRIMARY_BUTTON_CLASSES}>Done</Dialog.Close>
+          <Dialog.Close
+            className={cn(
+              "min-h-11 flex-1 cursor-pointer rounded-[12px] font-semibold text-[13px] transition-colors",
+              onDepositAnother === null
+                ? "bg-foreground text-background hover:bg-foreground/90"
+                : "bg-input-bg text-panel-text ring-1 ring-panel-border hover:bg-input-hover"
+            )}
+          >
+            Done
+          </Dialog.Close>
         ) : null}
       </div>
     </div>
@@ -216,8 +284,10 @@ export function DepositDialog({
   /** Stable DOM id for the trigger so SSR and client markup agree even if hydration re-renders. */
   triggerId?: string;
 }) {
+  const depositableCurrencies = getDepositableCurrencies();
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const [amount, setAmount] = useState("");
+  const [currency, setCurrency] = useState<DepositCurrency>("USDC");
   const { approve, deposit, flowState, inputError, reset, retry, startDeposit } =
     useSubaccountDeposit({
       onDeposited,
@@ -230,6 +300,18 @@ export function DepositDialog({
     if (!nextOpen) {
       reset();
     }
+  }
+
+  const otherCurrency = depositableCurrencies.find((option) => option !== currency) ?? null;
+
+  /**
+   * Funding a new account means two deposits — margin in USDC and inventory in cNGN — so a
+   * confirmed deposit offers the other asset rather than only closing.
+   */
+  function handleDepositAnother(next: DepositCurrency) {
+    reset();
+    setAmount("");
+    setCurrency(next);
   }
 
   return (
@@ -256,7 +338,7 @@ export function DepositDialog({
         <Dialog.Popup className="-translate-1/2 fixed top-1/2 left-1/2 z-50 w-[min(92vw,380px)] rounded-[20px] bg-panel-bg p-5 text-foreground shadow-[0_28px_90px_var(--panel-shadow)] ring-1 ring-panel-ring transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
           <div className="flex items-start justify-between gap-3">
             <Dialog.Title className="font-semibold text-[15px] text-panel-text">
-              Deposit USDC margin
+              Deposit {depositableCurrencies.join(" or ")}
             </Dialog.Title>
             <Dialog.Close
               aria-label="Close deposit dialog"
@@ -274,42 +356,54 @@ export function DepositDialog({
           {account !== null ? <FundingWalletRow address={account.wallet.address} /> : null}
 
           {account !== null && flowState === null ? (
-            <div className="mt-3 space-y-3">
-              <label className="block text-[12px] text-panel-text" htmlFor="deposit-amount">
-                Amount (USDC)
-              </label>
-              <input
-                className="min-h-11 w-full rounded-[12px] border border-input-border bg-input-bg px-3 font-semibold text-[14px] text-panel-text outline-none"
-                id="deposit-amount"
-                inputMode="decimal"
-                onChange={(event) => setAmount(event.target.value.replace(/[^\d.,]/g, ""))}
-                placeholder="1000"
-                value={amount}
+            <>
+              <CurrencyTabs
+                currencies={depositableCurrencies}
+                onSelect={setCurrency}
+                selected={currency}
               />
-              {inputError !== null ? (
-                <p className="text-[11px] text-ask-text">{inputError}</p>
-              ) : null}
-              <button
-                className={cn(PRIMARY_BUTTON_CLASSES, "w-full")}
-                onClick={() => {
-                  posthog.capture("deposit_started", {
-                    is_new_account: account.subaccountId === null,
-                    subaccount_id: account.subaccountId,
-                  });
-                  void startDeposit(account.wallet, amount, account.subaccountId);
-                }}
-                type="button"
-              >
-                Continue
-              </button>
-            </div>
+              <div className="mt-3 space-y-3">
+                <label className="block text-[12px] text-panel-text" htmlFor="deposit-amount">
+                  Amount ({currency})
+                </label>
+                <input
+                  className="min-h-11 w-full rounded-[12px] border border-input-border bg-input-bg px-3 font-semibold text-[14px] text-panel-text outline-none"
+                  id="deposit-amount"
+                  inputMode="decimal"
+                  onChange={(event) => setAmount(event.target.value.replace(/[^\d.,]/g, ""))}
+                  placeholder={getAmountPlaceholder(currency)}
+                  value={amount}
+                />
+                {inputError !== null ? (
+                  <p className="text-[11px] text-ask-text">{inputError}</p>
+                ) : null}
+                <button
+                  className={cn(PRIMARY_BUTTON_CLASSES, "w-full")}
+                  onClick={() => {
+                    posthog.capture("deposit_started", {
+                      deposit_currency: currency,
+                      is_new_account: account.subaccountId === null,
+                      subaccount_id: account.subaccountId,
+                    });
+                    void startDeposit(account.wallet, amount, account.subaccountId, currency);
+                  }}
+                  type="button"
+                >
+                  Continue
+                </button>
+              </div>
+            </>
           ) : null}
 
           {account !== null && flowState !== null ? (
             <DepositProgress
               approve={approve}
+              currency={currency}
               deposit={deposit}
               flowState={flowState}
+              onDepositAnother={
+                otherCurrency === null ? null : () => handleDepositAnother(otherCurrency)
+              }
               reset={reset}
               retry={retry}
             />

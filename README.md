@@ -113,8 +113,14 @@ Deposit flow address semantics (naming follows the risk-core deployment artifact
   Assets tab reads. Both chains have a verified default (name/symbol `cNGN`, 6 decimals on each), so the env is an
   override rather than required config: `0x46C85152bFe9f96829aA94755D9f915F9B10EF5F` on Base mainnet and
   `0xe2387F04d3858e7Cb64Ef5Ed6617f9B2fcEEAfa2` on Base Sepolia. Do not confuse it with
-  `NEXT_PUBLIC_CNGN_ASSET_ADDRESS`, which is the ledger-side Numo IAsset used to label the cNGN leg of a
-  subaccount balance.
+  `NEXT_PUBLIC_CNGN_ASSET_ADDRESS`, which is the `WrappedERC20Asset` wrapping that token.
+- `NEXT_PUBLIC_CNGN_ASSET_ADDRESS` is the cNGN counterpart to `NEXT_PUBLIC_WRAPPED_USDC_ASSET_ADDRESS`: the
+  contract a cNGN deposit approves and pays into, and the asset id used to label the cNGN leg of a subaccount
+  balance. On Base mainnet it defaults to `0x9d806fd040a719d27a8e5e77dc5ae0ed1e089493` — verified on-chain:
+  `wrappedAsset()` returns the cNGN ERC-20 above, `deposit(uint256,uint256)` is present, and there is no
+  `wlEnabled()` gate. That same address is the spot market's `asset_address` from `GET /v1/markets`, so cNGN
+  deposits and cNGN orders settle against one escrow. **No default exists off mainnet**, so the deposit dialog
+  offers USDC only on Base Sepolia until this env is set there.
 - Deposits may be whitelist-gated on-chain (`WLWrappedERC20Asset.wlEnabled`). The app probes for the whitelist at
   preflight: plain `WrappedERC20Asset` deployments (including the current Base Sepolia one) have no gate and deposits
   are open; on WL deployments only operator-whitelisted subaccounts can deposit, and the create-and-deposit path

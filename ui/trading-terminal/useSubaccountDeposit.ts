@@ -1,25 +1,26 @@
 "use client";
 
-import posthog from "posthog-js";
 import type { ConnectedWallet } from "@privy-io/react-auth";
+import posthog from "posthog-js";
 import { useEffect, useEffectEvent, useState } from "react";
 import { createWalletClient, custom, decodeEventLog, erc20Abi, getAddress, parseUnits } from "viem";
 import { createBasePublicClient, getAppChain } from "@/lib/base-public-client";
-import {
-  getDepositEffect,
-  startDepositFlow,
-  transitionDepositFlow,
-} from "@/lib/subaccount-deposit-machine";
+import type {
+  DepositCurrency,
+  DepositFlowEvent,
+  DepositFlowState,
+  DepositPreflight,
+} from "@/lib/subaccount-deposit.types";
 import {
   depositedSubAccountEvent,
   getDepositAddresses,
   getMatchingAddress,
 } from "@/lib/subaccount-deposit-config";
-import type {
-  DepositFlowEvent,
-  DepositFlowState,
-  DepositPreflight,
-} from "@/lib/subaccount-deposit.types";
+import {
+  getDepositEffect,
+  startDepositFlow,
+  transitionDepositFlow,
+} from "@/lib/subaccount-deposit-machine";
 
 const DECIMAL_INPUT_PATTERN = /^(\d+(\.\d+)?|\.\d+)$/;
 
@@ -39,28 +40,28 @@ const wrappedAssetAbi = [
     type: "function",
   },
   {
-    inputs: [
-      { name: "recipientAccount", type: "uint256" },
-      { name: "assetAmount", type: "uint256" },
-    ],
     name: "deposit",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",
+    inputs: [
+      { name: "recipientAccount", type: "uint256" },
+      { name: "assetAmount", type: "uint256" },
+    ],
   },
 ] as const;
 
 const subaccountCreatorAbi = [
   {
+    name: "createAndDepositSubAccount",
+    outputs: [{ name: "accountId", type: "uint256" }],
+    stateMutability: "nonpayable",
+    type: "function",
     inputs: [
       { name: "baseAsset", type: "address" },
       { name: "initDeposit", type: "uint256" },
       { name: "manager", type: "address" },
     ],
-    name: "createAndDepositSubAccount",
-    outputs: [{ name: "accountId", type: "uint256" }],
-    stateMutability: "nonpayable",
-    type: "function",
   },
 ] as const;
 
@@ -114,14 +115,21 @@ async function readWhitelistState(
   }
 }
 
-async function readPreflight(effect: {
-  owner: `0x${string}`;
-  spender: `0x${string}`;
-  subaccountId: string | null;
-  token: `0x${string}`;
-}): Promise<DepositPreflight> {
+/**
+ * `assetAddress` is passed in rather than re-derived from config: the flow's escrow contract
+ * depends on which currency started it, and re-reading the default would probe USDC's whitelist
+ * for a cNGN deposit.
+ */
+async function readPreflight(
+  effect: {
+    owner: `0x${string}`;
+    spender: `0x${string}`;
+    subaccountId: string | null;
+    token: `0x${string}`;
+  },
+  assetAddress: `0x${string}`
+): Promise<DepositPreflight> {
   const publicClient = createBasePublicClient();
-  const assetAddress = getDepositAddresses().baseAssetContract;
 
   const [allowance, tokenBalance, tokenDecimals, whitelistState] = await Promise.all([
     publicClient.readContract({
@@ -259,6 +267,7 @@ export function useSubaccountDeposit({
 
     // Re-bind after the guard so the narrowed union survives into the async closure.
     const pendingEffect = effect;
+    const preflightAssetAddress = flowState.context.addresses.baseAssetContract;
     const isApprovalReceipt = flowState.status === "approving";
     let cancelled = false;
 
@@ -267,7 +276,7 @@ export function useSubaccountDeposit({
         const event =
           pendingEffect.kind === "read-preflight"
             ? ({
-                preflight: await readPreflight(pendingEffect),
+                preflight: await readPreflight(pendingEffect, preflightAssetAddress),
                 type: "PREFLIGHT_RESOLVED",
               } as const)
             : await resolveReceiptEvent(pendingEffect.txHash, isApprovalReceipt);
@@ -292,19 +301,25 @@ export function useSubaccountDeposit({
   async function startDeposit(
     wallet: ConnectedWallet,
     amountInput: string,
-    subaccountId: string | null
+    subaccountId: string | null,
+    currency: DepositCurrency
   ) {
     const trimmedAmount = amountInput.trim().replaceAll(",", "");
 
     if (!DECIMAL_INPUT_PATTERN.test(trimmedAmount)) {
-      setInputError("Enter a valid USDC amount");
+      setInputError(`Enter a valid ${currency} amount`);
+      return;
+    }
+
+    const addresses = getDepositAddresses(currency);
+
+    if (addresses === null) {
+      setInputError(`${currency} deposits are not configured for this network.`);
       return;
     }
 
     setInputError(null);
     setActiveWallet(wallet);
-
-    const addresses = getDepositAddresses();
 
     try {
       const publicClient = createBasePublicClient();
