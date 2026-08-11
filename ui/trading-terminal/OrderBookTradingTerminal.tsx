@@ -331,14 +331,25 @@ export function OrderBookTradingTerminal({
   // The header hosts the one deposit dialog; the order tickets open it through this state.
   const [depositOpen, setDepositOpen] = useState(false);
   const [resumeDepositAfterLogin, setResumeDepositAfterLogin] = useState(false);
-  const primaryWallet = wallets[0] ?? null;
   // Stays false while Privy is still restoring a session, so account-scoped panels never flash for visitors.
   const isSignedIn = privyReady && authenticated;
   /*
-   * The order ticket gates on the wallet, not the session. Everything the CTA leads to — order
-   * submission, the subaccount lookup, the deposit flow — needs an address to sign with, and the
-   * two states diverge in both directions: an injected wallet can be connected without a Privy
-   * session, and an email login is authenticated before its embedded wallet is provisioned.
+   * Deliberately gated on the session, not just `wallets[0]`.
+   *
+   * An extension can be connected to the page without Privy having issued a session — a wallet
+   * login abandoned at the signature step, or a logout that left the extension connected. Taking
+   * that wallet made the app contradict itself: the header offered "Connect Wallet" while the
+   * account strip showed real balances, the deposit dialog offered to fund the wallet's existing
+   * subaccount, and an order would have signed and submitted. `posthog.identify` never runs for
+   * that user either, so their orders land on an anonymous distinct id.
+   *
+   * The cost is one extra click for a connect-only user; the alternative is a live Buy button in
+   * front of someone who believes they are disconnected.
+   */
+  const primaryWallet = isSignedIn ? (wallets[0] ?? null) : null;
+  /*
+   * The ticket gates on the wallet rather than the session because a session can exist before its
+   * embedded wallet does: an email login is authenticated while Privy is still provisioning one.
    */
   const hasWallet = primaryWallet !== null;
   const {
