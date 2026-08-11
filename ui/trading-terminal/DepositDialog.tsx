@@ -5,9 +5,43 @@ import type { ConnectedWallet } from "@privy-io/react-auth";
 import { X } from "lucide-react";
 import posthog from "posthog-js";
 import { useState } from "react";
+import { formatAddressShort } from "@/lib/address-display";
 import { cn } from "@/lib/cn";
 import type { DepositBlockedReason, DepositFlowState } from "@/lib/subaccount-deposit.types";
 import { useSubaccountDeposit } from "@/ui/trading-terminal/useSubaccountDeposit";
+
+/**
+ * The wallet a deposit would come from, and the trading account it would land in.
+ *
+ * The two are one value on purpose. As separate props, "a subaccount with no wallet" was
+ * expressible, and that is exactly the state the dialog rendered when it offered to fund account
+ * #11 for a visitor it had no address for. Here it does not typecheck.
+ */
+export type DepositAccount = {
+  /** null until this wallet's first deposit creates one. */
+  subaccountId: string | null;
+  wallet: ConnectedWallet;
+};
+
+/** Pairs a wallet with its resolved subaccount, or null when no wallet is connected. */
+export function buildDepositAccount(
+  wallet: ConnectedWallet | null,
+  subaccountId: string | null
+): DepositAccount | null {
+  return wallet === null ? null : { subaccountId, wallet };
+}
+
+function getDepositDescription(account: DepositAccount | null) {
+  if (account === null) {
+    return "Connect a wallet to fund a trading account.";
+  }
+
+  if (account.subaccountId === null) {
+    return "Creates your trading account and funds it in one flow.";
+  }
+
+  return `Funds trading account #${account.subaccountId}.`;
+}
 
 function getBlockedCopy(reason: DepositBlockedReason, isCreatePath: boolean) {
   if (reason === "zero-amount") {
@@ -50,20 +84,33 @@ const PRIMARY_BUTTON_CLASSES =
  * is no address to pull USDC from — so the dialog offers login instead of a dead disabled field.
  */
 function ConnectWalletStep({ onConnectWallet }: { onConnectWallet?: () => void }) {
+  if (onConnectWallet === undefined) {
+    return null;
+  }
+
   return (
-    <div className="mt-4 space-y-3">
-      <p className="text-[12px] text-panel-text">
-        Connect a wallet to open a trading account and fund it with USDC margin.
-      </p>
-      {onConnectWallet === undefined ? null : (
-        <button
-          className={cn(PRIMARY_BUTTON_CLASSES, "w-full")}
-          onClick={onConnectWallet}
-          type="button"
-        >
-          Connect wallet
-        </button>
-      )}
+    <button
+      className={cn(PRIMARY_BUTTON_CLASSES, "mt-4 w-full")}
+      onClick={onConnectWallet}
+      type="button"
+    >
+      Connect wallet
+    </button>
+  );
+}
+
+/**
+ * The address the USDC is pulled from.
+ *
+ * Shown because a bare "trading account #11" carries no provenance: it cannot distinguish the
+ * viewer's own account from a stale one, which is what made an earlier bug so hard to read off a
+ * screenshot. An address on screen means a wallet is connected, and says which.
+ */
+function FundingWalletRow({ address }: { address: string }) {
+  return (
+    <div className="mt-3 flex items-center justify-between gap-2 rounded-[10px] bg-input-bg/60 px-2.5 py-1.5 text-[11px]">
+      <span className="text-panel-text-muted">Funding wallet</span>
+      <span className="font-medium text-panel-text">{formatAddressShort(address)}</span>
     </div>
   );
 }
@@ -147,15 +194,16 @@ function DepositProgress({
 }
 
 export function DepositDialog({
+  account,
   onConnectWallet,
   onDeposited,
   onOpenChange,
   open,
-  subaccountId,
   triggerClassName,
   triggerId,
-  wallet,
 }: {
+  /** The funding wallet and its trading account, or null when no wallet is connected. */
+  account: DepositAccount | null;
   /** Starts wallet login from the dialog's no-wallet step. */
   onConnectWallet?: () => void;
   onDeposited: (subaccountId: string) => void;
@@ -163,12 +211,10 @@ export function DepositDialog({
   onOpenChange?: (open: boolean) => void;
   /** Controlled open state; omit to let the dialog own it from its own trigger. */
   open?: boolean;
-  subaccountId: string | null;
   /** Overrides the default inline pill trigger styling, e.g. for the global header toolbar. */
   triggerClassName?: string;
   /** Stable DOM id for the trigger so SSR and client markup agree even if hydration re-renders. */
   triggerId?: string;
-  wallet: ConnectedWallet | null;
 }) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const [amount, setAmount] = useState("");
@@ -220,15 +266,15 @@ export function DepositDialog({
             </Dialog.Close>
           </div>
           <Dialog.Description className="mt-1 text-[12px] text-panel-text-muted">
-            {subaccountId === null
-              ? "Creates your trading account and funds it in one flow."
-              : `Funds trading account #${subaccountId}.`}
+            {getDepositDescription(account)}
           </Dialog.Description>
 
-          {wallet === null ? <ConnectWalletStep onConnectWallet={onConnectWallet} /> : null}
+          {account === null ? <ConnectWalletStep onConnectWallet={onConnectWallet} /> : null}
 
-          {wallet !== null && flowState === null ? (
-            <div className="mt-4 space-y-3">
+          {account !== null ? <FundingWalletRow address={account.wallet.address} /> : null}
+
+          {account !== null && flowState === null ? (
+            <div className="mt-3 space-y-3">
               <label className="block text-[12px] text-panel-text" htmlFor="deposit-amount">
                 Amount (USDC)
               </label>
@@ -247,10 +293,10 @@ export function DepositDialog({
                 className={cn(PRIMARY_BUTTON_CLASSES, "w-full")}
                 onClick={() => {
                   posthog.capture("deposit_started", {
-                    is_new_account: subaccountId === null,
-                    subaccount_id: subaccountId,
+                    is_new_account: account.subaccountId === null,
+                    subaccount_id: account.subaccountId,
                   });
-                  void startDeposit(wallet, amount, subaccountId);
+                  void startDeposit(account.wallet, amount, account.subaccountId);
                 }}
                 type="button"
               >
@@ -259,7 +305,7 @@ export function DepositDialog({
             </div>
           ) : null}
 
-          {wallet !== null && flowState !== null ? (
+          {account !== null && flowState !== null ? (
             <DepositProgress
               approve={approve}
               deposit={deposit}
