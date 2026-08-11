@@ -222,6 +222,7 @@ function FuturesTickerBar({
 export function FuturesTradingTerminal({
   basisLabel,
   candles,
+  hasWallet = false,
   isSignedIn = false,
   isPreparingAccount = false,
   isSubmitting,
@@ -248,6 +249,8 @@ export function FuturesTradingTerminal({
 }: {
   basisLabel: string;
   candles: Candle[];
+  /** Whether a wallet is connected; gates the order ticket's submit CTA. */
+  hasWallet?: boolean;
   /** Whether a wallet session is active; gates account-scoped rows in the activity panel. */
   isSignedIn?: boolean;
   /** The trading subaccount is still being resolved — distinct from an order in flight. */
@@ -357,8 +360,8 @@ export function FuturesTradingTerminal({
           <FuturesOrderFormPanel
             availableLabel={usdcBalanceLabel ?? "— USDC"}
             contractSizeLabel={formatContractSize(marketDefinition.contractMultiplier)}
+            hasWallet={hasWallet}
             isPreparingAccount={isPreparingAccount}
-            isSignedIn={isSignedIn}
             isSubmitting={isSubmitting}
             lastAction={lastAction}
             limitPrice={limitPrice}

@@ -128,6 +128,27 @@ function resolveSpotExecutionPrice(
   return { price: String(opposing.price) };
 }
 
+/**
+ * Whether the ticket should read "Loading account…" rather than offering to trade.
+ *
+ * Covers two waits: the subaccount lookup, and the gap where Privy reports a session before
+ * `useWallets` has produced its embedded wallet. The second one matters because the ticket gates
+ * on the wallet — without this it would send a signed-in user to the deposit dialog mid-login.
+ *
+ * Lives outside the component to keep its branching off that function's complexity budget.
+ */
+function isPreparingTradingAccount({
+  isResolvingSubaccount,
+  isSignedIn,
+  walletsReady,
+}: {
+  isResolvingSubaccount: boolean;
+  isSignedIn: boolean;
+  walletsReady: boolean;
+}) {
+  return isResolvingSubaccount || (isSignedIn && !walletsReady);
+}
+
 type SignedOrderResponse = {
   body: { error?: string; order?: { order_id?: string } } | null;
   ok: boolean;
@@ -313,12 +334,24 @@ export function OrderBookTradingTerminal({
   const primaryWallet = wallets[0] ?? null;
   // Stays false while Privy is still restoring a session, so account-scoped panels never flash for visitors.
   const isSignedIn = privyReady && authenticated;
+  /*
+   * The order ticket gates on the wallet, not the session. Everything the CTA leads to — order
+   * submission, the subaccount lookup, the deposit flow — needs an address to sign with, and the
+   * two states diverge in both directions: an injected wallet can be connected without a Privy
+   * session, and an email login is authenticated before its embedded wallet is provisioned.
+   */
+  const hasWallet = primaryWallet !== null;
   const {
     adoptSubaccountId,
     ensureTradingSubaccount,
     isLoading: isResolvingTradingSubaccount,
     subaccountId: tradingSubaccountId,
   } = useTradingSubaccount(primaryWallet?.address ?? null);
+  const isPreparingAccount = isPreparingTradingAccount({
+    isResolvingSubaccount: isResolvingTradingSubaccount,
+    isSignedIn,
+    walletsReady,
+  });
   const { balance: usdcBalance, refresh: refreshUsdcBalance } = useUsdcBalance(
     primaryWallet?.address ?? null
   );
@@ -801,7 +834,8 @@ export function OrderBookTradingTerminal({
             accountUsdcLabel={accountUsdcLabel}
             candles={spotCandles}
             cngnBalanceLabel={formatCngnBalanceLabel(cngnBalance)}
-            isPreparingAccount={isResolvingTradingSubaccount}
+            hasWallet={hasWallet}
+            isPreparingAccount={isPreparingAccount}
             isSignedIn={isSignedIn}
             isSubmitting={isSubmittingOrder}
             lastAction={lastAction}
@@ -818,7 +852,8 @@ export function OrderBookTradingTerminal({
             accountUsdcLabel={accountUsdcLabel}
             basisLabel={formatSignedPercent(basisPercent)}
             candles={market.candles}
-            isPreparingAccount={isResolvingTradingSubaccount}
+            hasWallet={hasWallet}
+            isPreparingAccount={isPreparingAccount}
             isSignedIn={isSignedIn}
             isSubmitting={isSubmittingOrder}
             lastAction={lastAction}

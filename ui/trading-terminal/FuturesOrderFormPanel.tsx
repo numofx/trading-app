@@ -54,7 +54,7 @@ export function FuturesOrderFormPanel({
   availableLabel,
   contractSizeLabel,
   isPreparingAccount = false,
-  isSignedIn = false,
+  hasWallet = false,
   isSubmitting,
   lastAction,
   limitPrice,
@@ -75,8 +75,11 @@ export function FuturesOrderFormPanel({
   contractSizeLabel: string;
   /** The trading subaccount is still being resolved — distinct from an order in flight. */
   isPreparingAccount?: boolean;
-  /** No connected wallet means no account to trade from, so the CTA points at funding instead. */
-  isSignedIn?: boolean;
+  /**
+   * Whether a wallet is connected. This, not a Privy session, is what order submission and the
+   * deposit flow require, so the CTA points at funding whenever it is false.
+   */
+  hasWallet?: boolean;
   isSubmitting: boolean;
   lastAction: string | null;
   limitPrice: string;
@@ -103,9 +106,9 @@ export function FuturesOrderFormPanel({
   // user never pressed reads as a stuck order rather than a subaccount lookup still in flight.
   const isBusy = isSubmitting || isPreparingAccount;
 
-  // Signing in comes first: without a wallet there is no account to prepare or submit against.
+  // The wallet comes first: without one there is no account to prepare or submit against.
   function getSubmitLabel() {
-    if (!isSignedIn) {
+    if (!hasWallet) {
       return "Deposit";
     }
 
@@ -125,9 +128,9 @@ export function FuturesOrderFormPanel({
     onSubmit(orderSide);
   }
 
-  // Signed out there is nothing to submit against, so the CTA funds an account instead.
+  // Without a wallet there is nothing to submit against, so the CTA funds an account instead.
   function handleCtaClick() {
-    if (isSignedIn) {
+    if (hasWallet) {
       setConfirmOpen(true);
       return;
     }
