@@ -231,6 +231,7 @@ export function FuturesTradingTerminal({
   market,
   marketDefinition,
   marketDefinitions,
+  onDepositRequest,
   onLimitPriceChange,
   onOrderTypeChange,
   onSelectMarket,
@@ -258,6 +259,8 @@ export function FuturesTradingTerminal({
   market: ContractMarket;
   marketDefinition: MarketDefinition;
   marketDefinitions: MarketDefinition[];
+  /** Opens the deposit dialog; the ticket CTA calls it while there is no funded account. */
+  onDepositRequest?: () => void;
   onLimitPriceChange: (value: string) => void;
   onOrderTypeChange: (orderType: "Limit" | "Market" | "Stop") => void;
   onSelectMarket: (marketId: MarketId) => void;
@@ -355,10 +358,12 @@ export function FuturesTradingTerminal({
             availableLabel={usdcBalanceLabel ?? "— USDC"}
             contractSizeLabel={formatContractSize(marketDefinition.contractMultiplier)}
             isPreparingAccount={isPreparingAccount}
+            isSignedIn={isSignedIn}
             isSubmitting={isSubmitting}
             lastAction={lastAction}
             limitPrice={limitPrice}
             marketLabel={getInstrumentDisplayLabel(marketDefinition)}
+            onDepositRequest={onDepositRequest}
             onLimitPriceChange={onLimitPriceChange}
             onOrderTypeChange={onOrderTypeChange}
             onSideChange={onSideChange}

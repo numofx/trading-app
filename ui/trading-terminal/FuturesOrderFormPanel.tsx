@@ -54,10 +54,12 @@ export function FuturesOrderFormPanel({
   availableLabel,
   contractSizeLabel,
   isPreparingAccount = false,
+  isSignedIn = false,
   isSubmitting,
   lastAction,
   limitPrice,
   marketLabel,
+  onDepositRequest,
   onLimitPriceChange,
   onOrderTypeChange,
   onSideChange,
@@ -73,10 +75,14 @@ export function FuturesOrderFormPanel({
   contractSizeLabel: string;
   /** The trading subaccount is still being resolved — distinct from an order in flight. */
   isPreparingAccount?: boolean;
+  /** No connected wallet means no account to trade from, so the CTA points at funding instead. */
+  isSignedIn?: boolean;
   isSubmitting: boolean;
   lastAction: string | null;
   limitPrice: string;
   marketLabel: string;
+  /** Opens the deposit dialog — what the CTA does before a wallet is connected. */
+  onDepositRequest?: () => void;
   onLimitPriceChange: (value: string) => void;
   onOrderTypeChange: (orderType: FuturesOrderType) => void;
   onSideChange: (side: "buy" | "sell") => void;
@@ -97,7 +103,12 @@ export function FuturesOrderFormPanel({
   // user never pressed reads as a stuck order rather than a subaccount lookup still in flight.
   const isBusy = isSubmitting || isPreparingAccount;
 
+  // Signing in comes first: without a wallet there is no account to prepare or submit against.
   function getSubmitLabel() {
+    if (!isSignedIn) {
+      return "Deposit";
+    }
+
     if (isSubmitting) {
       return "Submitting...";
     }
@@ -112,6 +123,16 @@ export function FuturesOrderFormPanel({
   function handleConfirm() {
     setConfirmOpen(false);
     onSubmit(orderSide);
+  }
+
+  // Signed out there is nothing to submit against, so the CTA funds an account instead.
+  function handleCtaClick() {
+    if (isSignedIn) {
+      setConfirmOpen(true);
+      return;
+    }
+
+    onDepositRequest?.();
   }
 
   return (
@@ -225,7 +246,7 @@ export function FuturesOrderFormPanel({
               : "bg-sell text-white ring-1 ring-sell/50 hover:bg-sell/90"
           )}
           disabled={isBusy}
-          onClick={() => setConfirmOpen(true)}
+          onClick={handleCtaClick}
           type="button"
         >
           {getSubmitLabel()}

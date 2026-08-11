@@ -2,8 +2,9 @@
 
 import { Dialog } from "@base-ui/react/dialog";
 import type { ConnectedWallet } from "@privy-io/react-auth";
-import { useState } from "react";
+import { X } from "lucide-react";
 import posthog from "posthog-js";
+import { useState } from "react";
 import { cn } from "@/lib/cn";
 import type { DepositBlockedReason, DepositFlowState } from "@/lib/subaccount-deposit.types";
 import { useSubaccountDeposit } from "@/ui/trading-terminal/useSubaccountDeposit";
@@ -42,7 +43,30 @@ function getStepCopy(flowState: DepositFlowState) {
 }
 
 const PRIMARY_BUTTON_CLASSES =
-  "min-h-11 flex-1 rounded-[12px] bg-foreground font-semibold text-[13px] text-background transition-colors hover:bg-foreground/90";
+  "min-h-11 flex-1 cursor-pointer rounded-[12px] bg-foreground font-semibold text-[13px] text-background transition-colors hover:bg-foreground/90";
+
+/**
+ * First step for a visitor with no wallet. The deposit form itself is useless without one — there
+ * is no address to pull USDC from — so the dialog offers login instead of a dead disabled field.
+ */
+function ConnectWalletStep({ onConnectWallet }: { onConnectWallet?: () => void }) {
+  return (
+    <div className="mt-4 space-y-3">
+      <p className="text-[12px] text-panel-text">
+        Connect a wallet to open a trading account and fund it with USDC margin.
+      </p>
+      {onConnectWallet === undefined ? null : (
+        <button
+          className={cn(PRIMARY_BUTTON_CLASSES, "w-full")}
+          onClick={onConnectWallet}
+          type="button"
+        >
+          Connect wallet
+        </button>
+      )}
+    </div>
+  );
+}
 
 function DepositProgress({
   approve,
@@ -123,13 +147,22 @@ function DepositProgress({
 }
 
 export function DepositDialog({
+  onConnectWallet,
   onDeposited,
+  onOpenChange,
+  open,
   subaccountId,
   triggerClassName,
   triggerId,
   wallet,
 }: {
+  /** Starts wallet login from the dialog's no-wallet step. */
+  onConnectWallet?: () => void;
   onDeposited: (subaccountId: string) => void;
+  /** Pass with `open` to drive the dialog from outside, e.g. the order ticket's Deposit CTA. */
+  onOpenChange?: (open: boolean) => void;
+  /** Controlled open state; omit to let the dialog own it from its own trigger. */
+  open?: boolean;
   subaccountId: string | null;
   /** Overrides the default inline pill trigger styling, e.g. for the global header toolbar. */
   triggerClassName?: string;
@@ -137,45 +170,64 @@ export function DepositDialog({
   triggerId?: string;
   wallet: ConnectedWallet | null;
 }) {
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const [amount, setAmount] = useState("");
   const { approve, deposit, flowState, inputError, reset, retry, startDeposit } =
     useSubaccountDeposit({
       onDeposited,
     });
+  const isOpen = open ?? uncontrolledOpen;
 
   function handleOpenChange(nextOpen: boolean) {
-    setOpen(nextOpen);
+    setUncontrolledOpen(nextOpen);
+    onOpenChange?.(nextOpen);
     if (!nextOpen) {
       reset();
     }
   }
 
   return (
-    <Dialog.Root onOpenChange={handleOpenChange} open={open}>
+    <Dialog.Root onOpenChange={handleOpenChange} open={isOpen}>
+      {/*
+       * Not gated on a connected wallet: the dialog's first step is the login prompt, so a
+       * disconnected visitor clicking Deposit gets somewhere to go instead of a dead button.
+       */}
       <Dialog.Trigger
         className={
           triggerClassName ??
           "rounded-lg bg-input-bg px-2 py-0.5 font-semibold text-[11px] text-panel-text-active ring-1 ring-panel-border transition-colors hover:bg-input-hover"
         }
-        disabled={wallet === null}
         id={triggerId}
       >
         Deposit
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 bg-black/60 transition-opacity data-ending-style:opacity-0 data-starting-style:opacity-0" />
-        <Dialog.Popup className="-translate-1/2 fixed top-1/2 left-1/2 w-[min(92vw,380px)] rounded-[20px] bg-panel-bg p-5 text-foreground shadow-[0_28px_90px_var(--panel-shadow)] ring-1 ring-panel-ring transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
-          <Dialog.Title className="font-semibold text-[15px] text-panel-text">
-            Deposit USDC margin
-          </Dialog.Title>
+        {/*
+         * Explicit z-index: the terminal panels create stacking contexts that otherwise paint
+         * over the popup — order book rows were rendering on top of this dialog's own controls.
+         */}
+        <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/60 transition-opacity data-ending-style:opacity-0 data-starting-style:opacity-0" />
+        <Dialog.Popup className="-translate-1/2 fixed top-1/2 left-1/2 z-50 w-[min(92vw,380px)] rounded-[20px] bg-panel-bg p-5 text-foreground shadow-[0_28px_90px_var(--panel-shadow)] ring-1 ring-panel-ring transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
+          <div className="flex items-start justify-between gap-3">
+            <Dialog.Title className="font-semibold text-[15px] text-panel-text">
+              Deposit USDC margin
+            </Dialog.Title>
+            <Dialog.Close
+              aria-label="Close deposit dialog"
+              className="-mt-1 -mr-1 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-lg text-panel-text-muted transition-colors hover:bg-input-hover hover:text-panel-text"
+            >
+              <X className="size-4" />
+            </Dialog.Close>
+          </div>
           <Dialog.Description className="mt-1 text-[12px] text-panel-text-muted">
             {subaccountId === null
               ? "Creates your trading account and funds it in one flow."
               : `Funds trading account #${subaccountId}.`}
           </Dialog.Description>
 
-          {flowState === null ? (
+          {wallet === null ? <ConnectWalletStep onConnectWallet={onConnectWallet} /> : null}
+
+          {wallet !== null && flowState === null ? (
             <div className="mt-4 space-y-3">
               <label className="block text-[12px] text-panel-text" htmlFor="deposit-amount">
                 Amount (USDC)
@@ -192,23 +244,22 @@ export function DepositDialog({
                 <p className="text-[11px] text-ask-text">{inputError}</p>
               ) : null}
               <button
-                className="min-h-11 w-full rounded-[12px] bg-foreground font-semibold text-[13px] text-background transition-colors hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={wallet === null}
+                className={cn(PRIMARY_BUTTON_CLASSES, "w-full")}
                 onClick={() => {
-                  if (wallet !== null) {
-                    posthog.capture("deposit_started", {
-                      subaccount_id: subaccountId,
-                      is_new_account: subaccountId === null,
-                    });
-                    void startDeposit(wallet, amount, subaccountId);
-                  }
+                  posthog.capture("deposit_started", {
+                    is_new_account: subaccountId === null,
+                    subaccount_id: subaccountId,
+                  });
+                  void startDeposit(wallet, amount, subaccountId);
                 }}
                 type="button"
               >
                 Continue
               </button>
             </div>
-          ) : (
+          ) : null}
+
+          {wallet !== null && flowState !== null ? (
             <DepositProgress
               approve={approve}
               deposit={deposit}
@@ -216,7 +267,7 @@ export function DepositDialog({
               reset={reset}
               retry={retry}
             />
-          )}
+          ) : null}
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>

@@ -127,18 +127,24 @@ function FormInput({
 }
 
 /**
- * Resolves the CTA label. An in-flight order wins over account preparation: once a submission
+ * Resolves the CTA label. Signing in comes first — without a wallet there is nothing to submit
+ * or prepare. After that an in-flight order wins over account preparation: once a submission
  * starts, that is the more specific thing the button is waiting on.
  */
 function getSpotSubmitLabel({
   isPreparingAccount,
+  isSignedIn,
   isSubmitting,
   sideLabel,
 }: {
   isPreparingAccount: boolean;
+  isSignedIn: boolean;
   isSubmitting: boolean;
   sideLabel: string;
 }) {
+  if (!isSignedIn) {
+    return "Deposit";
+  }
   if (isSubmitting) {
     return "Submitting…";
   }
@@ -152,14 +158,18 @@ export function SpotOrderFormPanel({
   availableCngnLabel,
   availableUsdcLabel,
   markPrice,
+  onDepositRequest,
   onSubmitOrder,
   isPreparingAccount = false,
+  isSignedIn = false,
   isSubmitting = false,
   lastAction = null,
 }: {
   availableCngnLabel: string;
   availableUsdcLabel: string;
   markPrice: number | null;
+  /** Opens the deposit dialog — what the CTA does before a wallet is connected. */
+  onDepositRequest?: () => void;
   onSubmitOrder?: (args: {
     side: "buy" | "sell";
     price: string;
@@ -168,6 +178,8 @@ export function SpotOrderFormPanel({
   }) => void;
   /** The trading subaccount is still being resolved — distinct from an order in flight. */
   isPreparingAccount?: boolean;
+  /** No connected wallet means no account to trade from, so the CTA points at funding instead. */
+  isSignedIn?: boolean;
   isSubmitting?: boolean;
   lastAction?: string | null;
 }) {
@@ -207,6 +219,11 @@ export function SpotOrderFormPanel({
    * would be friction without a decision behind it. Live submission goes through the dialog.
    */
   function handleSubmit() {
+    // Signed out there is nothing to submit against, so the CTA funds an account instead.
+    if (!isSignedIn) {
+      onDepositRequest?.();
+      return;
+    }
     if (!onSubmitOrder) {
       setStatusMessage(
         `${isBuy ? "Buy" : "Sell"} ${amount || "0"} USDC (${orderType}) previewed. Order execution is not enabled yet.`
@@ -235,7 +252,12 @@ export function SpotOrderFormPanel({
   // Both states block submission, but they are not the same thing: "Submitting…" on a button the
   // user never pressed reads as a stuck order rather than a subaccount lookup still in flight.
   const isBusy = isSubmitting || isPreparingAccount;
-  const submitLabel = getSpotSubmitLabel({ isPreparingAccount, isSubmitting, sideLabel });
+  const submitLabel = getSpotSubmitLabel({
+    isPreparingAccount,
+    isSignedIn,
+    isSubmitting,
+    sideLabel,
+  });
 
   return (
     // The panel claims the column height itself so only the field list below can
