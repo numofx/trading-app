@@ -1,6 +1,6 @@
 "use client";
 
-import { usePrivy, useWallets } from "@privy-io/react-auth";
+import { useLogin, usePrivy, useWallets } from "@privy-io/react-auth";
 import { usePathname, useSearchParams } from "next/navigation";
 import posthog from "posthog-js";
 import { useEffect, useRef, useState } from "react";
@@ -303,7 +303,13 @@ export function OrderBookTradingTerminal({
   };
 
   const { authenticated, ready: privyReady } = usePrivy();
+  // No callbacks here: PrivyWalletButton owns the analytics side of login, and a second
+  // useLogin with its own onComplete would double-count every connection.
+  const { login } = useLogin();
   const { ready: walletsReady, wallets } = useWallets();
+  // The header hosts the one deposit dialog; the order tickets open it through this state.
+  const [depositOpen, setDepositOpen] = useState(false);
+  const [resumeDepositAfterLogin, setResumeDepositAfterLogin] = useState(false);
   const primaryWallet = wallets[0] ?? null;
   // Stays false while Privy is still restoring a session, so account-scoped panels never flash for visitors.
   const isSignedIn = privyReady && authenticated;
@@ -330,6 +336,23 @@ export function OrderBookTradingTerminal({
     refreshCngnBalance();
     refreshSubaccountBalance();
   }
+
+  /**
+   * Base UI dialogs are modal, so Privy's login modal would render inert behind this one. The
+   * deposit dialog steps aside for the login and an effect brings it back once a wallet lands.
+   */
+  function handleConnectWallet() {
+    setDepositOpen(false);
+    setResumeDepositAfterLogin(true);
+    login();
+  }
+
+  useEffect(() => {
+    if (resumeDepositAfterLogin && primaryWallet !== null) {
+      setResumeDepositAfterLogin(false);
+      setDepositOpen(true);
+    }
+  }, [primaryWallet, resumeDepositAfterLogin]);
 
   const market = marketData[selectedMarketId];
   const referenceSpotPrice = parseNumericString(marketData["cngn-usdc-spot"].mark);
@@ -754,7 +777,10 @@ export function OrderBookTradingTerminal({
         <TradingMarketHeader
           depositControl={
             <DepositDialog
+              onConnectWallet={handleConnectWallet}
               onDeposited={handleDeposited}
+              onOpenChange={setDepositOpen}
+              open={depositOpen}
               subaccountId={tradingSubaccountId}
               triggerClassName="flex h-8 cursor-pointer items-center whitespace-nowrap rounded-lg bg-input-bg px-2.5 font-semibold text-[11px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active disabled:cursor-not-allowed disabled:opacity-60"
               triggerId="header-deposit-trigger"
@@ -779,6 +805,7 @@ export function OrderBookTradingTerminal({
             isSignedIn={isSignedIn}
             isSubmitting={isSubmittingOrder}
             lastAction={lastAction}
+            onDepositRequest={() => setDepositOpen(true)}
             onSubmitOrder={handleSubmitSpot}
             spotMarket={marketData["cngn-usdc-spot"]}
             usdcBalanceLabel={formatUsdcBalanceLabel(usdcBalance)}
@@ -800,6 +827,7 @@ export function OrderBookTradingTerminal({
             market={market}
             marketDefinition={selectedMarket}
             marketDefinitions={marketDefinitions}
+            onDepositRequest={() => setDepositOpen(true)}
             onLimitPriceChange={setLimitPrice}
             onOrderTypeChange={setOrderType}
             onSelectMarket={handleOpenMarketFromSection}

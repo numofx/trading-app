@@ -33,6 +33,7 @@ export function SpotTradingTerminal({
   cngnBalanceLabel = null,
   accountUsdcLabel = null,
   accountCngnLabel = null,
+  onDepositRequest,
   onSubmitOrder,
   isSignedIn = false,
   isPreparingAccount = false,
@@ -49,6 +50,8 @@ export function SpotTradingTerminal({
   accountUsdcLabel?: string | null;
   /** Subaccount cNGN balance. */
   accountCngnLabel?: string | null;
+  /** Opens the deposit dialog; the ticket CTA calls it while there is no funded account. */
+  onDepositRequest?: () => void;
   onSubmitOrder?: (args: {
     side: "buy" | "sell";
     price: string;
@@ -145,9 +148,11 @@ export function SpotTradingTerminal({
             availableCngnLabel="0.00 cNGN"
             availableUsdcLabel={usdcBalanceLabel ?? "— USDC"}
             isPreparingAccount={isPreparingAccount}
+            isSignedIn={isSignedIn}
             isSubmitting={isSubmitting}
             lastAction={lastAction}
             markPrice={lastPrice}
+            onDepositRequest={onDepositRequest}
             onSubmitOrder={onSubmitOrder}
           />
           <SpotBalanceSummary
