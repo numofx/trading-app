@@ -127,6 +127,16 @@ function formatLedgerUnits(units: bigint | null, symbol: string) {
   return `${value.toLocaleString("en-US", { maximumFractionDigits: 2 })} ${symbol}`;
 }
 
+/**
+ * The subaccount balance as a plain token amount, or null when unknown.
+ *
+ * The order ticket sizes a percentage of what the account can actually spend, so it needs the
+ * number rather than the display label.
+ */
+export function toLedgerAmount(units: bigint | null) {
+  return units === null ? null : Number(formatUnits(units, SUBACCOUNT_LEDGER_DECIMALS));
+}
+
 /** Format the subaccount's USDC cash balance, e.g. "1.03 USDC", or null when unknown. */
 export function formatSubaccountUsdcLabel(units: bigint | null) {
   return formatLedgerUnits(units, "USDC");

@@ -16,19 +16,17 @@ export function OrderTypeTabs<T extends string>({
   selected: T;
 }) {
   return (
-    // Tracks the number of options rather than assuming three, so removing an order type does not
-    // leave an empty column behind.
-    <div
-      className="grid gap-1 rounded-[14px] bg-input-bg p-1"
-      style={{ gridTemplateColumns: `repeat(${orderTypes.length}, minmax(0, 1fr))` }}
-    >
+    // Underlined text tabs rather than a filled segmented control: the side selector directly above
+    // is already a filled two-up, and stacking two of them made the order type read as a second
+    // buy/sell choice.
+    <div className="flex items-center gap-4 border-panel-border border-b">
       {orderTypes.map((type) => (
         <button
           className={cn(
-            "h-8 cursor-pointer rounded-[10px] font-medium text-[10px] transition-colors",
+            "-mb-px cursor-pointer border-b-2 pb-1.5 font-medium text-[12px] transition-colors",
             selected === type
-              ? "bg-toolbar-active-bg text-toolbar-active-fg"
-              : "text-panel-text-muted hover:bg-input-hover"
+              ? "border-panel-text-active text-panel-text-active"
+              : "border-transparent text-panel-text-muted hover:text-panel-text"
           )}
           key={type}
           onClick={() => onSelect(type)}

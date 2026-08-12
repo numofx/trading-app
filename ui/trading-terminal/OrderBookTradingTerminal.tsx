@@ -16,6 +16,7 @@ import { formatCngnBalanceLabel, useCngnBalance } from "@/ui/trading-terminal/us
 import {
   formatSubaccountCngnLabel,
   formatSubaccountUsdcLabel,
+  toLedgerAmount,
   useSubaccountBalance,
 } from "@/ui/trading-terminal/useSubaccountBalance";
 import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
@@ -309,7 +310,9 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
         />
 
         <SpotTradingTerminal
+          accountCngn={toLedgerAmount(subaccountBalance?.cngnUnits ?? null)}
           accountCngnLabel={accountCngnLabel}
+          accountUsdc={toLedgerAmount(subaccountBalance?.cashUnits ?? null)}
           accountUsdcLabel={accountUsdcLabel}
           candles={spotMarket.candles}
           cngnBalanceLabel={formatCngnBalanceLabel(cngnBalance)}

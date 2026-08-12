@@ -31,6 +31,8 @@ export function SpotTradingTerminal({
   cngnBalanceLabel = null,
   accountUsdcLabel = null,
   accountCngnLabel = null,
+  accountCngn = null,
+  accountUsdc = null,
   onDepositRequest,
   onSubmitOrder,
   hasWallet = false,
@@ -49,6 +51,9 @@ export function SpotTradingTerminal({
   accountUsdcLabel?: string | null;
   /** Subaccount cNGN balance. */
   accountCngnLabel?: string | null;
+  /** Subaccount balances as numbers — the ticket sizes a percentage of what the account can spend. */
+  accountCngn?: number | null;
+  accountUsdc?: number | null;
   /** Opens the deposit dialog; the ticket CTA calls it while there is no funded account. */
   onDepositRequest?: () => void;
   onSubmitOrder: (args: {
@@ -164,8 +169,10 @@ export function SpotTradingTerminal({
         <div className="order-first flex min-h-[420px] flex-col gap-3 xl:order-0 xl:min-h-0 xl:overflow-hidden">
           <SpotOrderFormPanel
             anchorPrice={anchorPrice}
-            availableCngnLabel={cngnBalanceLabel ?? "— cNGN"}
-            availableUsdcLabel={usdcBalanceLabel ?? "— USDC"}
+            availableCngn={accountCngn}
+            availableCngnLabel={accountCngnLabel ?? "— cNGN"}
+            availableUsdc={accountUsdc}
+            availableUsdcLabel={accountUsdcLabel ?? "— USDC"}
             bestAsk={bestAsk}
             bestBid={bestBid}
             hasWallet={hasWallet}

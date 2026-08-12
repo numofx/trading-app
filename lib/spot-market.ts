@@ -36,6 +36,35 @@ export function getAnchorPrice(
 }
 
 /**
+ * The largest USDC order the trading account can currently fund.
+ *
+ * A buy spends cNGN, so the ceiling is the cNGN balance converted at the order's price; a sell
+ * spends USDC directly. Null whenever the balance is unknown or there is no price to convert at —
+ * the ticket's size slider goes inert rather than sliding against a guessed ceiling.
+ */
+export function getMaxOrderSize({
+  availableCngn,
+  availableUsdc,
+  isBuy,
+  price,
+}: {
+  availableCngn: number | null;
+  availableUsdc: number | null;
+  isBuy: boolean;
+  price: number | null;
+}) {
+  if (!isBuy) {
+    return availableUsdc;
+  }
+
+  if (availableCngn === null || price === null || !Number.isFinite(price) || price <= 0) {
+    return null;
+  }
+
+  return availableCngn / price;
+}
+
+/**
  * The price a market order crosses at: the opposing touch. A UI BUY of USDC lifts the best ask,
  * a UI SELL hits the best bid. Null when that side is empty — there is nothing to cross.
  */
