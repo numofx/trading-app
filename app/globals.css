@@ -134,6 +134,11 @@
 
 html {
   color-scheme: dark;
+  /* No rubber-band. A terminal that springs away from its own edges reads as a page that has
+     come loose; the panels are pinned to the viewport, so the frame should be too. Scrolling
+     itself is untouched — below `xl` the stacked layout still scrolls, it just stops dead at
+     both ends instead of overshooting, and inner scrollers no longer chain out to the page. */
+  overscroll-behavior: none;
 }
 
 html.light {
@@ -146,7 +151,11 @@ body {
     var(--terminal-bg);
   color: var(--foreground);
   font-family: var(--font-geist-sans), sans-serif;
-  min-height: 100vh;
+  /* `dvh`, not `vh`: on mobile browsers `100vh` is taller than the visible viewport, which left
+     the body overflowing by the height of the URL bar and gave the page a scroll — and so a
+     bounce — even where the layout fit. */
+  min-height: 100dvh;
+  overscroll-behavior: none;
   transition: background 0.3s ease, color 0.3s ease;
 }
 
