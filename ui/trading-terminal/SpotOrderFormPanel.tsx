@@ -11,10 +11,17 @@ import { SmartImage } from "@/ui/SmartImage";
 import { ConfirmOrderDialog } from "@/ui/trading-terminal/ConfirmOrderDialog";
 import { OrderTypeTabs } from "@/ui/trading-terminal/OrderTypeTabs";
 
-type SpotOrderType = "Limit" | "Market" | "Stop Limit";
+/*
+ * No "Stop Limit". The signed envelope this ticket produces is a plain limit action — it carries
+ * a limit price, size, side, fee bound, nonce and expiry, and the `Matching` contract has no
+ * trigger field to hang a stop on. The tab used to be offered anyway: the stop price was collected
+ * into state that nothing read, so submitting sent an ordinary limit order at the limit price and
+ * discarded the stop. A trader setting downside protection got a resting order instead.
+ */
+type SpotOrderType = "Limit" | "Market";
 type PayCurrency = "cNGN" | "USDC";
 
-const ORDER_TYPES = ["Limit", "Market", "Stop Limit"] as const satisfies readonly SpotOrderType[];
+const ORDER_TYPES = ["Limit", "Market"] as const satisfies readonly SpotOrderType[];
 const PAY_CURRENCY_ICONS = {
   cNGN: "/tokens/cngn.svg",
   USDC: "/tokens/usdc.svg",
@@ -214,7 +221,6 @@ export function SpotOrderFormPanel({
   const [limitPrice, setLimitPrice] = useState(
     anchorPrice === null ? "" : String(anchorPrice.toFixed(2))
   );
-  const [stopPrice, setStopPrice] = useState("");
   const [amount, setAmount] = useState("100");
 
   const isBuy = side === "buy";
@@ -309,17 +315,6 @@ export function SpotOrderFormPanel({
         </div>
 
         <OrderTypeTabs onSelect={setOrderType} orderTypes={ORDER_TYPES} selected={orderType} />
-
-        {orderType === "Stop Limit" ? (
-          <FormInput
-            id="spot-stop-price"
-            label="Stop price"
-            onChange={setStopPrice}
-            placeholder="0.00"
-            unit="cNGN / USDC"
-            value={stopPrice}
-          />
-        ) : null}
 
         {needsLimitPrice ? (
           <FormInput

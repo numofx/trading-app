@@ -37,7 +37,7 @@ type SubmittedBook = { bestAsk: number | null; bestBid: number | null };
  * filling, which is the one thing a market order is not supposed to do.
  */
 function resolveSpotExecutionPrice(
-  orderType: "Limit" | "Market" | "Stop Limit",
+  orderType: "Limit" | "Market",
   side: "buy" | "sell",
   book: SubmittedBook,
   enteredPrice: string
@@ -97,7 +97,7 @@ async function postSignedOrder(payload: object, signature: string): Promise<Sign
 /** Properties shared by every spot order analytics event. */
 function buildSpotOrderEvent(
   side: "buy" | "sell",
-  orderType: "Limit" | "Market" | "Stop Limit",
+  orderType: "Limit" | "Market",
   size: string,
   executionPrice: string
 ) {
@@ -206,7 +206,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
     side: "buy" | "sell";
     price: string;
     size: string;
-    orderType: "Limit" | "Market" | "Stop Limit";
+    orderType: "Limit" | "Market";
     book: SubmittedBook;
   }) {
     if (!walletsReady) {
