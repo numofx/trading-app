@@ -16,7 +16,12 @@ export function OrderTypeTabs<T extends string>({
   selected: T;
 }) {
   return (
-    <div className="grid grid-cols-3 gap-1 rounded-[14px] bg-input-bg p-1">
+    // Tracks the number of options rather than assuming three, so removing an order type does not
+    // leave an empty column behind.
+    <div
+      className="grid gap-1 rounded-[14px] bg-input-bg p-1"
+      style={{ gridTemplateColumns: `repeat(${orderTypes.length}, minmax(0, 1fr))` }}
+    >
       {orderTypes.map((type) => (
         <button
           className={cn(

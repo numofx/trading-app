@@ -55,7 +55,7 @@ export function SpotTradingTerminal({
     side: "buy" | "sell";
     price: string;
     size: string;
-    orderType: "Limit" | "Market" | "Stop Limit";
+    orderType: "Limit" | "Market";
     /** The touch as displayed when the trader submitted; a market order crosses against it. */
     book: { bestAsk: number | null; bestBid: number | null };
   }) => void;
@@ -106,7 +106,7 @@ export function SpotTradingTerminal({
     side: "buy" | "sell";
     price: string;
     size: string;
-    orderType: "Limit" | "Market" | "Stop Limit";
+    orderType: "Limit" | "Market";
   }) {
     onSubmitOrder({ ...args, book: { bestAsk, bestBid } });
   }
