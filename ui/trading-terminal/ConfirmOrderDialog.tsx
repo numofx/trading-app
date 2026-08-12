@@ -5,15 +5,15 @@ import { cn } from "@/lib/cn";
 import type { DeliveryTerm } from "@/lib/trading.types";
 
 /**
- * Interstitial for order submission, shared by the spot and futures tickets.
+ * Interstitial for order submission, used by the spot ticket.
  *
  * Submitting signs an order and posts it; `/api/orders` is POST-only, so there is no cancel or
  * close path in this app. Embedded Privy wallets are configured with `showWalletUIs: false`,
  * which means the signature itself raises no prompt — without this dialog an email user goes
  * from one click to a filled order with nothing in between.
  *
- * `highlightedRow` is for a figure that decides whether the position survives (liquidation price
- * on futures). Spot passes none: it is unleveraged, so there is no such number.
+ * `highlightedRow` is for a figure that decides whether the position survives, e.g. a liquidation
+ * price. Spot passes none: it is unleveraged, so there is no such number.
  */
 export function ConfirmOrderDialog({
   confirmLabel,

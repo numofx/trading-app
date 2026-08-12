@@ -2,14 +2,7 @@
 
 import { cn } from "@/lib/cn";
 
-export const FUTURES_ORDER_TYPES = ["Limit", "Market", "Stop"] as const;
-
-/** The futures "Stop" order executes as a stop-limit, so it shares the spot form's display label. */
-export const FUTURES_ORDER_TYPE_LABELS = {
-  Stop: "Stop Limit",
-} satisfies Partial<Record<(typeof FUTURES_ORDER_TYPES)[number], string>>;
-
-/** Bounded pill-tab order type selector shared by the spot and futures order forms. */
+/** Bounded pill-tab order type selector for the order form. */
 export function OrderTypeTabs<T extends string>({
   labels,
   onSelect,

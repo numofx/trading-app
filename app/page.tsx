@@ -1,139 +1,28 @@
 import { toUiCandles } from "@/lib/market-candles";
-import {
-  buildMarketSelectionAliasMap,
-  resolveInitialMarketSelection,
-} from "@/lib/market-selection";
 import type { BookResponse, CandleInterval, PresentedTrade } from "@/lib/markets-service";
 import {
-  getLiveDeliverableFXFutures,
   getLiveSpotMarket,
   getMarketBook,
   getMarketCandles,
   getMarketTrades,
 } from "@/lib/markets-service";
-import {
-  buildDeliverableFutureDefinition,
-  buildTradingTerminalMarkets,
-} from "@/lib/mock-orderbook-terminal-data";
+import { buildSpotMarket } from "@/lib/spot-market";
 import type { Candle } from "@/lib/trading.types";
 import { OrderBookTradingTerminal } from "@/ui/trading-terminal/OrderBookTradingTerminal";
 
-const APR_2026_EXPIRY_TIMESTAMP = 1_777_507_200;
 const CHART_CANDLE_INTERVAL: CandleInterval = "1d";
 const CHART_CANDLE_LIMIT = 120;
-const ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
-const UNSIGNED_INTEGER_PATTERN = /^\d+$/;
 
-function getAprFutureOverrides() {
-  const assetAddress = process.env.NEXT_PUBLIC_USDCCNGN_APR_FUTURE_ASSET_ADDRESS?.trim() ?? "";
-  const subId = process.env.NEXT_PUBLIC_USDCCNGN_APR_FUTURE_SUB_ID?.trim() ?? "";
+/**
+ * The book, trades and candles below are per-request state. The page used to read `searchParams`
+ * for the market selector, which opted it into dynamic rendering; with one market and no params
+ * left, Next would otherwise prerender a build-time snapshot of the venue and serve that forever.
+ */
+export const dynamic = "force-dynamic";
 
-  return {
-    assetAddress: ADDRESS_PATTERN.test(assetAddress) ? assetAddress : null,
-    subId: UNSIGNED_INTEGER_PATTERN.test(subId) ? subId : null,
-  };
-}
-
-function applyAprFutureOverrides<
-  T extends { asset_address?: string; expiry_timestamp?: number; sub_id?: string },
->(market: T) {
-  if (market.expiry_timestamp !== APR_2026_EXPIRY_TIMESTAMP) {
-    return market;
-  }
-
-  const overrides = getAprFutureOverrides();
-
-  return {
-    ...market,
-    asset_address: overrides.assetAddress ?? market.asset_address,
-    sub_id: overrides.subId ?? market.sub_id,
-  };
-}
-
-type HomeProps = {
-  searchParams?: Promise<{
-    market?: string | string[];
-  }>;
-};
-
-export default async function Home({ searchParams }: HomeProps) {
-  const resolvedSearchParams = (await searchParams) ?? {};
-  let liveFutures: {
-    book: BookResponse | null;
-    candles: Candle[];
-    definition: ReturnType<typeof buildDeliverableFutureDefinition>;
-    trades: PresentedTrade[];
-  }[] = [];
+export default async function Home() {
   let liveSpot: { book: BookResponse | null; candles: Candle[]; trades: PresentedTrade[] } | null =
     null;
-
-  try {
-    const liveFutureMarkets = await getLiveDeliverableFXFutures();
-    const validLiveFutures = liveFutureMarkets.map(applyAprFutureOverrides).filter((market) => {
-      return Boolean(market.asset_address && market.sub_id && market.expiry_timestamp);
-    });
-
-    liveFutures = await Promise.all(
-      validLiveFutures.map(async (liveFuture) => {
-        const definition = buildDeliverableFutureDefinition({
-          assetAddress: liveFuture.asset_address as string,
-          contractMultiplier: "10000",
-          expiryTimestamp: liveFuture.expiry_timestamp as number,
-          lastTradeTimestamp: liveFuture.last_trade_timestamp,
-          market: liveFuture.market,
-          minSize: "0.001",
-          subId: liveFuture.sub_id as string,
-          tickSize: liveFuture.tick_size ?? "1",
-        });
-
-        let book: BookResponse | null = null;
-        let candles: Candle[] = [];
-        let trades: PresentedTrade[] = [];
-
-        try {
-          book = await getMarketBook(
-            liveFuture.asset_address as string,
-            liveFuture.sub_id as string
-          );
-        } catch {
-          book = null;
-        }
-
-        try {
-          candles = toUiCandles(
-            await getMarketCandles(
-              liveFuture.asset_address as string,
-              liveFuture.sub_id as string,
-              CHART_CANDLE_INTERVAL,
-              CHART_CANDLE_LIMIT
-            ),
-            "future",
-            CHART_CANDLE_INTERVAL
-          );
-        } catch {
-          candles = [];
-        }
-
-        try {
-          trades = await getMarketTrades(
-            liveFuture.asset_address as string,
-            liveFuture.sub_id as string
-          );
-        } catch {
-          trades = [];
-        }
-
-        return {
-          book,
-          candles,
-          definition,
-          trades,
-        };
-      })
-    );
-  } catch {
-    liveFutures = [];
-  }
 
   try {
     const spotMarket = await getLiveSpotMarket();
@@ -176,26 +65,5 @@ export default async function Home({ searchParams }: HomeProps) {
     liveSpot = null;
   }
 
-  const { defaultMarketId, marketData, marketDefinitions } = buildTradingTerminalMarkets(
-    liveFutures,
-    liveSpot
-  );
-  const marketSelectionAliases = buildMarketSelectionAliasMap(marketDefinitions);
-  const requestedMarket = Array.isArray(resolvedSearchParams.market)
-    ? resolvedSearchParams.market[0]
-    : resolvedSearchParams.market;
-  const initialMarketId = resolveInitialMarketSelection(
-    requestedMarket,
-    marketSelectionAliases,
-    defaultMarketId
-  );
-
-  return (
-    <OrderBookTradingTerminal
-      defaultMarketId={defaultMarketId}
-      initialMarketId={initialMarketId}
-      marketData={marketData}
-      marketDefinitions={marketDefinitions}
-    />
-  );
+  return <OrderBookTradingTerminal spotMarket={buildSpotMarket(liveSpot)} />;
 }

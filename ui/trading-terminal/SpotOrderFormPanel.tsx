@@ -40,6 +40,12 @@ function resolveOrderPrice({
 }
 
 function parseAmount(value: string) {
+  // An empty field is "not entered", not zero: `Number("")` is 0, which rendered a total of
+  // "0 cNGN" for an order with no price rather than leaving the row blank.
+  if (value.trim() === "") {
+    return Number.NaN;
+  }
+
   const parsed = Number(value.replaceAll(",", ""));
   return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
@@ -170,7 +176,7 @@ export function SpotOrderFormPanel({
   markPrice: number | null;
   /** Opens the deposit dialog — what the CTA does before a wallet is connected. */
   onDepositRequest?: () => void;
-  onSubmitOrder?: (args: {
+  onSubmitOrder: (args: {
     side: "buy" | "sell";
     price: string;
     size: string;
@@ -195,7 +201,6 @@ export function SpotOrderFormPanel({
   );
   const [stopPrice, setStopPrice] = useState("");
   const [amount, setAmount] = useState("100");
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const isBuy = side === "buy";
   const needsLimitPrice = orderType !== "Market";
@@ -217,20 +222,10 @@ export function SpotOrderFormPanel({
     totalLabel,
   });
 
-  /**
-   * Preview mode submits nothing, so it keeps the direct path — a confirmation step for a no-op
-   * would be friction without a decision behind it. Live submission goes through the dialog.
-   */
   function handleSubmit() {
     // Without a wallet there is nothing to submit against, so the CTA funds an account instead.
     if (!hasWallet) {
       onDepositRequest?.();
-      return;
-    }
-    if (!onSubmitOrder) {
-      setStatusMessage(
-        `${isBuy ? "Buy" : "Sell"} ${amount || "0"} USDC (${orderType}) previewed. Order execution is not enabled yet.`
-      );
       return;
     }
     setConfirmOpen(true);
@@ -238,10 +233,6 @@ export function SpotOrderFormPanel({
 
   function handleConfirm() {
     setConfirmOpen(false);
-    if (!onSubmitOrder) {
-      return;
-    }
-    setStatusMessage(null);
     onSubmitOrder({
       orderType,
       price: resolveOrderPrice({ limitPrice, markPrice, orderType }),
@@ -250,7 +241,7 @@ export function SpotOrderFormPanel({
     });
   }
 
-  const statusText = lastAction ?? statusMessage;
+  const statusText = lastAction;
   const sideLabel = isBuy ? "Buy USDC" : "Sell USDC";
   // Both states block submission, but they are not the same thing: "Submitting…" on a button the
   // user never pressed reads as a stuck order rather than a subaccount lookup still in flight.
@@ -306,7 +297,7 @@ export function SpotOrderFormPanel({
             id="spot-stop-price"
             label="Stop price"
             onChange={setStopPrice}
-            placeholder="1,600.00"
+            placeholder="0.00"
             unit="cNGN / USDC"
             value={stopPrice}
           />
@@ -317,7 +308,7 @@ export function SpotOrderFormPanel({
             id="spot-limit-price"
             label="Limit price"
             onChange={setLimitPrice}
-            placeholder="1,600.00"
+            placeholder="0.00"
             unit="cNGN / USDC"
             value={limitPrice}
           />

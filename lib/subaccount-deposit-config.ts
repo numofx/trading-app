@@ -1,7 +1,7 @@
 import { getAddress, parseAbiItem } from "viem";
 import { base } from "viem/chains";
 import { getAppChain } from "@/lib/base-public-client";
-import type { DepositAddresses } from "@/lib/subaccount-deposit.types";
+import type { DepositAddresses, DepositCurrency } from "@/lib/subaccount-deposit.types";
 
 /**
  * Address plumbing for the subaccount deposit flow (Base Sepolia defaults).
@@ -27,11 +27,35 @@ const DEFAULT_SUBACCOUNTS_ADDRESS_SEPOLIA = "0xdEEF5903FEfEEde7A4F4369050AFd228d
 
 /** Numo CashAsset — deposited USDC is minted into this per-subaccount cash balance. */
 const DEFAULT_CASH_ASSET_ADDRESS_MAINNET = "0x6b232a2155bd0c9bf741db4cf8e7e8a0176a6fc6";
-/** Numo cNGN-side IAsset — held per subaccount after a USDC->cNGN buy. */
-const DEFAULT_CNGN_ASSET_ADDRESS_MAINNET = "0x9d806fd040a719d27a8e5e77dc5ae0ed1e089493";
-/** cNGN ERC-20s. Both verified on-chain: name/symbol "cNGN", 6 decimals. */
-const DEFAULT_CNGN_TOKEN_ADDRESS_MAINNET = "0x46C85152bFe9f96829aA94755D9f915F9B10EF5F";
-const DEFAULT_CNGN_TOKEN_ADDRESS_SEPOLIA = "0xe2387F04d3858e7Cb64Ef5Ed6617f9B2fcEEAfa2";
+/**
+ * cNGN deployment per chain, mirroring `risk-core/deployments/<chainId>/WRAPPED_CNGN.json`
+ * (`asset` is the artifact's `base`, `token` its `wrappedAsset`).
+ *
+ * Kept as a pair because the two must match: the escrow only accepts the exact ERC-20 it wraps,
+ * and Base Sepolia hosts two unrelated contracts both calling themselves cNGN — the one this
+ * venue wraps (18 decimals) and `0xe2387F04d3858e7Cb64Ef5Ed6617f9B2fcEEAfa2` (6 decimals), which
+ * the app previously pointed at. Approving the wrong one leaves a deposit that cannot settle, so
+ * these are only ever read together.
+ *
+ * Both `asset` entries are verified on-chain: `wrappedAsset()` returns the paired token,
+ * `deposit(uint256,uint256)` is present, and neither has a `wlEnabled()` gate. The mainnet asset
+ * is also the spot market's `asset_address` from `GET /v1/markets`, so cNGN deposits and cNGN
+ * orders settle against one escrow.
+ */
+const CNGN_DEPLOYMENTS = {
+  mainnet: {
+    asset: "0x9d806fd040a719d27a8e5e77dc5ae0ed1e089493",
+    token: "0x46C85152bFe9f96829aA94755D9f915F9B10EF5F",
+  },
+  sepolia: {
+    asset: "0x1c08f30c204EE18EbBDc161c0f0864AFb826934b",
+    token: "0x6B232A2155Bd0C9bf741dB4cf8E7e8A0176A6fc6",
+  },
+} as const;
+
+function getCngnDeployment() {
+  return isAppMainnet() ? CNGN_DEPLOYMENTS.mainnet : CNGN_DEPLOYMENTS.sepolia;
+}
 
 function isAppMainnet() {
   return getAppChain().id === base.id;
@@ -103,35 +127,60 @@ export function getCashAssetAddress(): `0x${string}` | null {
 }
 
 /**
- * Underlying cNGN ERC-20 token held in the user's wallet — the cNGN counterpart to
- * {@link getUsdcTokenAddress}, and distinct from {@link getCngnAssetAddress}, which is the Numo
- * IAsset wrapper on the ledger side. Both chains getAppChain() can return have a verified default,
- * so unlike the ledger-side asset getters this always resolves to an address.
+ * Underlying cNGN ERC-20 held in the user's wallet — the cNGN counterpart to
+ * {@link getUsdcTokenAddress}, and the token {@link getCngnAssetAddress} wraps. Decimals differ by
+ * chain (6 on mainnet, 18 on Sepolia), so never assume: read them from the token.
  */
 export function getCngnTokenAddress(): `0x${string}` {
   const configured = process.env.NEXT_PUBLIC_CNGN_TOKEN_ADDRESS?.trim();
   if (configured) {
     return getAddress(configured);
   }
-  return getAddress(
-    isAppMainnet() ? DEFAULT_CNGN_TOKEN_ADDRESS_MAINNET : DEFAULT_CNGN_TOKEN_ADDRESS_SEPOLIA
-  );
+  return getAddress(getCngnDeployment().token);
 }
 
-/** cNGN-side IAsset address for labeling the cNGN leg of a subaccount balance, or null if unknown. */
-export function getCngnAssetAddress(): `0x${string}` | null {
+/**
+ * cNGN WrappedERC20Asset for the active chain: the contract a cNGN deposit approves and pays into,
+ * and the asset id labeling the cNGN leg of a subaccount balance. Both chains have a deployment,
+ * so this always resolves.
+ */
+export function getCngnAssetAddress(): `0x${string}` {
   const override = process.env.NEXT_PUBLIC_CNGN_ASSET_ADDRESS?.trim();
   if (override) {
     return getAddress(override);
   }
-  return isAppMainnet() ? getAddress(DEFAULT_CNGN_ASSET_ADDRESS_MAINNET) : null;
+  return getAddress(getCngnDeployment().asset);
 }
 
-export function getDepositAddresses(): DepositAddresses {
-  return {
-    baseAssetContract: getWrappedUsdcAssetAddress(),
+/**
+ * Deposit plumbing for one currency.
+ *
+ * Both currencies share the manager and the creator periphery; only the escrow contract and the
+ * ERC-20 pulled from the wallet differ. The machine reads decimals off the token, so nothing
+ * downstream assumes 6.
+ */
+export function getDepositAddresses(currency: DepositCurrency): DepositAddresses {
+  const shared = {
     manager: getUsdcCngnManagerAddress(),
     subaccountCreator: getSubaccountCreatorAddress(),
-    token: getUsdcTokenAddress(),
   };
+
+  if (currency === "USDC") {
+    return {
+      ...shared,
+      baseAssetContract: getWrappedUsdcAssetAddress(),
+      token: getUsdcTokenAddress(),
+    };
+  }
+
+  return {
+    ...shared,
+    baseAssetContract: getCngnAssetAddress(),
+    token: getCngnTokenAddress(),
+  };
+}
+
+/** The currencies this deployment can accept, in display order. */
+export function getDepositableCurrencies(): DepositCurrency[] {
+  return ["USDC", "cNGN"];
 }

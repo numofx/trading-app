@@ -158,6 +158,15 @@ function priceKey(price: number): number {
 }
 
 /**
+ * Spot depth is USDC notional and routinely fractional — a 0.4 USDC order is real resting depth.
+ * Sizes keep 3 decimals (the venue's amount step) rather than being rounded to whole units, which
+ * displayed sub-unit levels as "0".
+ */
+function roundSize(value: number) {
+  return Math.round(value * 1000) / 1000;
+}
+
+/**
  * Builds one side of the display ladder from book state: aggregates by displayed price, sorts, and
  * computes cumulative depth. Cumulative-total conventions mirror the REST book mapper so bar widths
  * render identically.
@@ -184,16 +193,16 @@ export function buildBookSide(state: BookState, side: "ask" | "bid"): OrderBookL
       const level = ordered[index];
       if (level) {
         runningTotal += level.size;
-        level.size = Math.round(level.size);
-        level.total = Math.round(runningTotal);
+        level.size = roundSize(level.size);
+        level.total = roundSize(runningTotal);
       }
     }
   } else {
     let runningTotal = 0;
     for (const level of ordered) {
       runningTotal += level.size;
-      level.size = Math.round(level.size);
-      level.total = Math.round(runningTotal);
+      level.size = roundSize(level.size);
+      level.total = roundSize(runningTotal);
     }
   }
 

@@ -2,15 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { buildAssetsActivityView } from "@/lib/account-activity-views";
-import { CANONICAL_SPOT_SYMBOL } from "@/lib/market-selection";
 import {
   ACTIVITY_VIEWS,
   FOOTER_LINKS,
   SPOT_BOTTOM_TABS,
   SPOT_TIMEFRAME_OPTIONS,
-} from "@/lib/mock-orderbook-terminal-data";
+} from "@/lib/spot-terminal-config";
 import { get24hStats, getVenueLastPrice } from "@/lib/ticker-stats";
-import type { Candle, ContractMarket } from "@/lib/trading.types";
+import type { Candle, SpotMarket } from "@/lib/trading.types";
 import { SpotBalanceSummary } from "@/ui/trading-terminal/SpotBalanceSummary";
 import type { SpotChartTab, SpotTimeframe } from "@/ui/trading-terminal/SpotChartPanel";
 import { SpotChartPanel } from "@/ui/trading-terminal/SpotChartPanel";
@@ -21,10 +20,8 @@ import { SpotTickerBar } from "@/ui/trading-terminal/SpotTickerBar";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
 import { useMarketOrderBook } from "@/ui/trading-terminal/useMarketOrderBook";
 
-function parseMarkPrice(mark: string) {
-  const parsed = Number(mark.replaceAll(",", ""));
-  return Number.isFinite(parsed) ? parsed : null;
-}
+/** The venue's symbol for this market; markets-service resolves the stream subscription from it. */
+const SPOT_MARKET_SYMBOL = "USDCcNGN-SPOT";
 
 export function SpotTradingTerminal({
   candles,
@@ -42,7 +39,7 @@ export function SpotTradingTerminal({
   lastAction = null,
 }: {
   candles: Candle[];
-  spotMarket: ContractMarket;
+  spotMarket: SpotMarket;
   /** Wallet USDC balance — what's available to deposit. */
   usdcBalanceLabel: string | null;
   /** Wallet cNGN balance, or null when the cNGN token address isn't configured for this chain. */
@@ -53,7 +50,7 @@ export function SpotTradingTerminal({
   accountCngnLabel?: string | null;
   /** Opens the deposit dialog; the ticket CTA calls it while there is no funded account. */
   onDepositRequest?: () => void;
-  onSubmitOrder?: (args: {
+  onSubmitOrder: (args: {
     side: "buy" | "sell";
     price: string;
     size: string;
@@ -83,18 +80,19 @@ export function SpotTradingTerminal({
   // No simulated ticking: candles are real venue OHLCV.
 
   const spotBook = useMarketOrderBook({
-    market: CANONICAL_SPOT_SYMBOL,
+    market: SPOT_MARKET_SYMBOL,
     orderEntrySpec: spotMarket.orderEntrySpec,
     type: "spot",
   });
-  // Fall back to the simulated preview book whenever the live exchange book is
-  // unavailable, one-sided, crossed, or still connecting.
+  // Both sources are the venue's own depth: the stream when it is live, and the server-rendered
+  // REST snapshot while the socket is unavailable, one-sided, crossed, or still connecting. When
+  // the venue has no resting orders both are empty and the panel says so.
   const bookBids = spotBook.isLive ? spotBook.bids : spotMarket.orderBookBids;
   const bookAsks = spotBook.isLive ? spotBook.asks : spotMarket.orderBookAsks;
   const bookTrades =
     spotBook.isLive && spotBook.trades.length > 0 ? spotBook.trades : spotMarket.trades;
 
-  const lastPrice = getVenueLastPrice(bookTrades, liveCandles, parseMarkPrice(spotMarket.mark));
+  const lastPrice = getVenueLastPrice(bookTrades, liveCandles, spotMarket.mark);
   const { changePercent, volumeLabel } = get24hStats(liveCandles, lastPrice, Date.now());
   // Assets is the one bottom tab with a real data source today, so it's built from live balances
   // instead of the placeholder-free static views.
@@ -148,7 +146,7 @@ export function SpotTradingTerminal({
          */}
         <div className="order-first flex min-h-[420px] flex-col gap-3 xl:order-0 xl:min-h-0 xl:overflow-hidden">
           <SpotOrderFormPanel
-            availableCngnLabel="0.00 cNGN"
+            availableCngnLabel={cngnBalanceLabel ?? "— cNGN"}
             availableUsdcLabel={usdcBalanceLabel ?? "— USDC"}
             hasWallet={hasWallet}
             isPreparingAccount={isPreparingAccount}
@@ -159,8 +157,7 @@ export function SpotTradingTerminal({
             onSubmitOrder={onSubmitOrder}
           />
           <SpotBalanceSummary
-            cngnBalanceLabel={accountCngnLabel ?? "0.00 cNGN"}
-            marginRatioPercent={0}
+            cngnBalanceLabel={accountCngnLabel ?? "— cNGN"}
             usdcBalanceLabel={accountUsdcLabel ?? "— USDC"}
           />
         </div>

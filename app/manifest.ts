@@ -25,8 +25,12 @@ export default function manifest(): MetadataRoute.Manifest {
 
   return {
     background_color: baseColor,
-    description: "A dark trading terminal interface mockup built with Next.js.",
+    description: "An orderbook exchange for USDC/cNGN spot.",
     display: "standalone",
+    name: "Numo",
+    short_name: "Numo",
+    start_url: "/",
+    theme_color: baseColor,
     icons: [
       {
         sizes: "any",
@@ -34,9 +38,5 @@ export default function manifest(): MetadataRoute.Manifest {
         type: "image/x-icon",
       },
     ],
-    name: "Numo",
-    short_name: "Numo",
-    start_url: "/",
-    theme_color: baseColor,
   };
 }

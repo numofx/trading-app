@@ -15,12 +15,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  description: "A dark trading terminal interface mockup built with Next.js.",
+  description: "An orderbook exchange for USDC/cNGN spot.",
   manifest: "/manifest.webmanifest",
+  title: "Numo",
   other: {
     "base:app_id": "6a57c26c338fe7f5494ab385",
   },
-  title: "Numo",
 };
 
 export default function RootLayout({
