@@ -1,22 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { PrivyWalletButton } from "@/ui/PrivyWalletButton";
 import { SmartImage } from "@/ui/SmartImage";
 
-export function TradingMarketHeader({
-  depositControl,
-  sectionControl,
-}: {
-  depositControl?: ReactNode;
-  /**
-   * Primary nav for phones, where the sidebar rail is hidden. Rendered inside the header's
-   * wrapping row so it rides along on the logo's line instead of costing a row of its own.
-   */
-  sectionControl?: ReactNode;
-}) {
+export function TradingMarketHeader({ depositControl }: { depositControl?: ReactNode }) {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
@@ -48,14 +38,12 @@ export function TradingMarketHeader({
           src={theme === "light" ? "/numo_logo_black.png" : "/numo_logo_white.png"}
         />
 
-        {sectionControl}
-
         <div className="flex items-center gap-3">
           {depositControl}
           <button
-            onClick={toggleTheme}
-            className="flex size-10 cursor-pointer items-center justify-center rounded-full border border-panel-border bg-input-bg text-panel-text-active transition-all duration-300 hover:bg-input-hover"
             aria-label="Toggle theme"
+            className="flex size-10 cursor-pointer items-center justify-center rounded-full border border-panel-border bg-input-bg text-panel-text-active transition-all duration-300 hover:bg-input-hover"
+            onClick={toggleTheme}
             type="button"
           >
             {theme === "light" ? <Moon className="size-5" /> : <Sun className="size-5" />}

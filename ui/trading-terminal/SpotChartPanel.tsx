@@ -4,8 +4,8 @@ import type { MouseEvent } from "react";
 import { useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatNaira } from "@/lib/market-formatting";
-import type { SPOT_TIMEFRAME_OPTIONS } from "@/lib/mock-orderbook-terminal-data";
-import { CHART_TOOL_ICONS, CHART_TOOLS } from "@/lib/mock-orderbook-terminal-data";
+import type { SPOT_TIMEFRAME_OPTIONS } from "@/lib/spot-terminal-config";
+import { CHART_TOOL_ICONS, CHART_TOOLS } from "@/lib/spot-terminal-config";
 import type { Candle, OrderBookLevel } from "@/lib/trading.types";
 
 export type SpotChartTab = "depth" | "price";

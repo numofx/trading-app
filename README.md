@@ -1,12 +1,23 @@
 # Trading App
 
-**An orderbook exchange for futures on stablecoin FX.**
+**An orderbook exchange for stablecoin FX.**
 
-Renders physically delivered FX futures on USDC/cNGN through an orderbook UI, with off/on ramping via Busha and Coinbase APIs for instant USD/USDC and NGN/cNGN conversions. Integrated with `markets-service` for live market discovery, books, and trades.
+Renders the USDC/cNGN spot market through an orderbook UI, with off/on ramping via Busha and Coinbase APIs for instant USD/USDC and NGN/cNGN conversions. Integrated with `markets-service` for live books and trades.
+
+The app renders **spot only**. The futures section — a second terminal behind a sidebar rail, its
+order ticket, margin/position hooks and order-submission envelope — was removed; `markets-service`
+still serves the deliverable futures documented below, but nothing in this app reads them.
 
 ## Runtime config
 
-The app discovers live markets from `markets-service` and renders them through the orderbook UI. When `markets-service` is unreachable or returns no markets, the app falls back to preview (mock) markets and disables live order submission.
+The app reads the live spot market from `markets-service` and renders it through the orderbook UI.
+
+**There is no mock, preview or sample data anywhere in the render path.** Every price, level, trade,
+candle and balance on screen is the venue's own or the connected wallet's. When `markets-service` is
+unreachable or serves no spot market, the panels render empty states ("No resting bids", "No chart
+data", a `—` price) rather than invented depth — a trader cannot tell fabricated depth from real
+depth, and the prices would be ones nothing can fill at. `lib/spot-market.test.mjs` pins that
+contract.
 
 Set:
 
@@ -37,11 +48,11 @@ environment and should be treated as required production configuration rather th
 
 ## Live order book stream
 
-The spot and futures order-book panels stream live depth and trades from `markets-service` over its WebSocket API (`GET /v1/ws`). The browser connects **directly** to the socket (no Next.js proxy), so the URL must be client-reachable:
+The spot order-book panel streams live depth and trades from `markets-service` over its WebSocket API (`GET /v1/ws`). The browser connects **directly** to the socket (no Next.js proxy), so the URL must be client-reachable:
 
 - `NEXT_PUBLIC_MARKETS_WS_URL` — e.g. `wss://api.numofx.com/v1/ws` in production, `ws://127.0.0.1:8080/v1/ws` locally.
 
-The client subscribes to the public `book` and `trades` channels for the selected market (spot uses the `USDCcNGN-SPOT` symbol; futures use the market symbol such as `USDCcNGN-SEP16-2026`), seeds from the `snapshot` frame, and applies `update` deltas. Both channels are unauthenticated; the only server-side gate is `WS_ALLOWED_ORIGINS` on the `markets-service` deployment, which **must include the frontend origin** or the browser handshake is rejected. When the socket is unreachable, still connecting, or the book is one-sided/crossed, the panel falls back to the server-rendered snapshot (futures) or preview book (spot). That fallback is silent — there is no on-screen indicator of which source is rendering, so a stream that never goes live looks identical to a healthy one. (A "Live liquidity" badge used to signal this and was removed in `bf5688e`; its absence is what let the spot stream sit permanently in fallback, fixed in `c7c2f2e`.)
+The client subscribes to the public `book` and `trades` channels for the `USDCcNGN-SPOT` symbol, seeds from the `snapshot` frame, and applies `update` deltas. Both channels are unauthenticated; the only server-side gate is `WS_ALLOWED_ORIGINS` on the `markets-service` deployment, which **must include the frontend origin** or the browser handshake is rejected. When the socket is unreachable, still connecting, empty or crossed, the panel falls back to the server-rendered REST snapshot — also real venue data, just fetched at page render. A genuinely one-sided live book is shown as it rests rather than being replaced by the older snapshot. When neither source has depth, the ladder says so. That fallback is silent — there is no on-screen indicator of which source is rendering, so a stream that never goes live looks identical to a healthy one. (A "Live liquidity" badge used to signal this and was removed in `bf5688e`; its absence is what let the spot stream sit permanently in fallback, fixed in `c7c2f2e`.)
 
 `GET /api/strails/egress` remains as an ops diagnostic that reports the deployment's current egress IP (used when registering an IP allowlist upstream).
 
@@ -68,16 +79,10 @@ not appear, so an empty `[]` means none of the pairs are configured on the backe
 > registry — it dated from the standalone `markets-service` repo and was never updated when the
 > service moved into `numofx/exchange`, so it sent readers looking for env vars matching nothing.
 
-The frontend picks markets out of that list with two separate filters (`lib/markets-service.ts`):
-
-| | Futures (`getLiveDeliverableFXFutures`) | Spot (`getLiveSpotMarket`) |
-| --- | --- | --- |
-| `contract_type` | `deliverable_fx_future` | `spot` |
-| `settlement_type` | `physical_delivery` | not checked |
-| `base_asset_symbol` | `USDC` | `USDC` |
-| `quote_asset_symbol` | `cNGN` | `cNGN` |
-
-Futures are sorted by `expiry_timestamp` ascending; spot takes the first match.
+The frontend picks its one market out of that list with `getLiveSpotMarket` (`lib/markets-service.ts`),
+taking the first entry whose `contract_type` is `spot`, `base_asset_symbol` is `USDC` and
+`quote_asset_symbol` is `cNGN`. The futures rows are ignored — the futures filter
+(`getLiveDeliverableFXFutures`) was deleted along with the futures UI.
 
 ## Spot market status
 
@@ -89,7 +94,7 @@ contract below is what the engine actually expects.
 > An earlier revision of this section said spot had been removed in `e75d513` (May 2026). That was
 > true at the time and is no longer — verify against `GET /v1/markets` before trusting it again.
 
-Legacy override envs: `NEXT_PUBLIC_USDCCNGN_APR_FUTURE_ASSET_ADDRESS` / `NEXT_PUBLIC_USDCCNGN_APR_FUTURE_SUB_ID` patch metadata only for a market with `expiry_timestamp=1777507200` (APR 30 2026, now expired). They are no-ops against the current registry and can be left unset.
+Legacy override envs: `NEXT_PUBLIC_USDCCNGN_APR_FUTURE_ASSET_ADDRESS` / `NEXT_PUBLIC_USDCCNGN_APR_FUTURE_SUB_ID` are no longer read at all — the code that applied them went with the futures UI. Leave them unset.
 
 ## Base Sepolia execution
 

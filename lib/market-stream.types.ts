@@ -67,7 +67,7 @@ export type StreamTrade = {
 };
 
 /** How much the connection can offer the UI right now, so the order-book panel can fall back to
- * preview depth on anything but `ok`. */
+ * the server-rendered REST snapshot on anything but `ok`. */
 export type MarketStreamStatus =
   | "connecting"
   | "ok"

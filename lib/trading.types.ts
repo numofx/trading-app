@@ -1,9 +1,3 @@
-export type MarketStat = {
-  label: string;
-  tone?: "accent" | "negative" | "positive" | "neutral";
-  value: string;
-};
-
 export type Candle = {
   close: number;
   high: number;
@@ -42,70 +36,35 @@ export type ChartTool = {
   label: string;
 };
 
-export type ContractTab = {
-  active?: boolean;
-  label: string;
-};
-
 export type MarketType = "spot" | "future" | "option" | "perp";
 
-export type MarketId = string;
-
-export type MarketDefinition = {
-  assetAddress?: string | null;
-  contractLabel: string | null;
-  contractMultiplier?: string | null;
-  contractType?: string | null;
-  expiryDays: number | null;
-  expiryLabel: string | null;
-  expiryTimestamp?: number | null;
-  flagSrc: string;
-  id: MarketId;
-  lastTradeTimestamp?: number | null;
-  marketIdAliases?: string[] | null;
-  marketSymbol?: string | null;
-  marketSymbolAliases?: string[] | null;
-  minSize?: string | null;
-  settlementType?: string | null;
-  strikeLabel: string | null;
-  subId?: string | null;
-  type: MarketType;
-  pair: string;
-  region: string;
-  sortOrder: number;
-  tickSize?: string | null;
+/**
+ * The USDC/cNGN spot market as the terminal renders it.
+ *
+ * Every field is the venue's own data or empty — there is no preview or sample state. A market
+ * that has never traded renders an empty book, an empty tape and no mark, which is what is true.
+ */
+export type SpotMarket = {
+  /** Real OHLCV from markets-service; empty when the market has not traded yet. */
+  candles: Candle[];
+  /**
+   * Mid of the venue's best bid and ask, falling back to the single resting side and then to the
+   * last trade. Null when the venue has neither a book nor a trade — never a placeholder price.
+   */
+  mark: number | null;
+  orderBookAsks: OrderBookLevel[];
+  orderBookBids: OrderBookLevel[];
+  /**
+   * The venue's `order_entry_spec`. Present only for contracts whose engine values differ from the
+   * UI's (today just `usdc_cngn_spot_v1`); null means engine values are presented directly.
+   */
+  orderEntrySpec: string | null;
+  trades: TradePrint[];
 };
 
 export type DeliveryTerm = {
   label: string;
   value: string;
-};
-
-export type MarketAvailability = {
-  bookAvailable: boolean;
-  markAvailable: boolean;
-  tradesAvailable: boolean;
-};
-
-export type ContractMarket = {
-  availability: MarketAvailability;
-  /**
-   * The venue's `order_entry_spec`. Present only for contracts whose engine values differ from the
-   * UI's (today just `usdc_cngn_spot_v1`); null means engine values are presented directly.
-   */
-  orderEntrySpec?: string | null;
-  candles: Candle[];
-  contractDetails: DeliveryTerm[];
-  id: string;
-  infoBar: MarketStat[];
-  mark: string;
-  orderBookAsks: OrderBookLevel[];
-  orderBookBids: OrderBookLevel[];
-  positionOverview: DeliveryTerm[];
-  referencePrice: string;
-  ticker: string;
-  timeToExpiry: string;
-  trades: TradePrint[];
 };
 
 export type ActivityRow = {

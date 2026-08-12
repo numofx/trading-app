@@ -38,8 +38,9 @@ const EMPTY_VIEW: MarketOrderBookView = { asks: [], bids: [], status: "connectin
 /**
  * Streams a live order book and recent trades for one market over the markets-service WebSocket
  * (`GET /v1/ws`). Seeds from the `snapshot` frame, then applies `book`/`trades` `update` deltas,
- * and reconnects with backoff. Callers keep their preview book unless `isLive` is true — a book is
- * only "live" once both sides have depth, so a crossed or one-sided book falls back gracefully.
+ * and reconnects with backoff. `isLive` marks the stream as the authoritative source: `status` is
+ * already `ok` only when the book has depth and is not crossed, and a genuinely one-sided book is
+ * reported as it rests. Callers fall back to the server-rendered REST snapshot otherwise.
  *
  * The `market` identifier is a canonical symbol (e.g. `USDCcNGN-SEP16-2026`, `USDCcNGN-SPOT`) or
  * the `"<asset_address>:<sub_id>"` form; the server resolves either.
@@ -221,7 +222,9 @@ export function useMarketOrderBook({
     };
   }, [enabled, market, orderEntrySpec, type]);
 
-  const isLive = view.status === "ok" && view.asks.length > 0 && view.bids.length > 0;
+  // `ok` already excludes the empty and crossed books; a one-sided book is a real book and is
+  // shown as one rather than being replaced by the older REST snapshot.
+  const isLive = view.status === "ok";
 
   return {
     asks: isLive ? view.asks : [],

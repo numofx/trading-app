@@ -17,8 +17,8 @@ function getCurrencySymbol(pair: string) {
 
 /**
  * The app labels markets `USDC-cNGN` everywhere else, so the tab matches rather than introducing
- * a second form of the same name. Normalized here so it holds for both sections and any future
- * caller, whatever separator they pass.
+ * a second form of the same name. Normalized here so it holds for any caller, whatever
+ * separator they pass.
  */
 function formatPairForTitle(pair: string) {
   return pair.replaceAll("/", "-");
