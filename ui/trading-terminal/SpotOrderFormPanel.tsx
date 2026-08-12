@@ -1,7 +1,5 @@
 "use client";
 
-import { Popover } from "@base-ui/react/popover";
-import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatNaira } from "@/lib/market-formatting";
@@ -214,8 +212,6 @@ export function SpotOrderFormPanel({
 }) {
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [orderType, setOrderType] = useState<SpotOrderType>("Limit");
-  const [payWith, setPayWith] = useState<PayCurrency>("cNGN");
-  const [payWithOpen, setPayWithOpen] = useState(false);
   // Seeded from the mid, not the last trade: a prefill past the touch turns the trader's chosen
   // "Limit" into a taker on submit — an immediate fill at the 5 bps tier instead of resting free.
   const [limitPrice, setLimitPrice] = useState(
@@ -234,7 +230,14 @@ export function SpotOrderFormPanel({
     effectivePrice !== null && Number.isFinite(effectivePrice) && Number.isFinite(parsedAmount)
       ? parsedAmount * effectivePrice
       : null;
-  const availableLabel = payWith === "USDC" ? availableUsdcLabel : availableCngnLabel;
+  /*
+   * Not a choice. This market has two legs and the side fixes which one leaves the trader's hands:
+   * a UI BUY acquires USDC and pays cNGN, a UI SELL disposes of USDC. The dropdown that used to sit
+   * here let either currency be picked and changed nothing but this label — the signed envelope was
+   * identical either way — so it offered a decision the venue does not have.
+   */
+  const spendCurrency: PayCurrency = isBuy ? "cNGN" : "USDC";
+  const availableLabel = spendCurrency === "USDC" ? availableUsdcLabel : availableCngnLabel;
   const takerFee = Number.isFinite(parsedAmount) ? parsedAmount * Number(SPOT_TAKER_FEE_RATE) : 0;
   const totalLabel = total === null ? "—" : `${formatNaira(total, 0).replace("₦", "")} cNGN`;
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -337,62 +340,21 @@ export function SpotOrderFormPanel({
         />
 
         {/*
-         * Funding source and its balance are one thought — `availableLabel` is
-         * the balance of whichever currency is selected here — so they share a
-         * row. It sits below the amount fields because the trader picks a
-         * funding currency once, but types an amount on every order.
+         * Funding currency and its balance are one thought — `availableLabel` is the balance of
+         * whichever currency this side spends — so they share a row.
          */}
-        <div className="flex items-center justify-between gap-2 rounded-[12px] bg-input-bg/60 py-1.5 pr-1.5 pl-3 text-[11px]">
+        <div className="flex items-center justify-between gap-2 rounded-[12px] bg-input-bg/60 px-3 py-1.5 text-[11px]">
           <span className="flex min-w-0 items-center gap-2">
             <span className="shrink-0 text-panel-text-muted">Pay with</span>
-            <Popover.Root onOpenChange={setPayWithOpen} open={payWithOpen}>
-              <Popover.Trigger
-                className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-input-bg px-2 py-1 text-panel-text-active ring-1 ring-panel-border transition-colors hover:bg-input-hover"
-                id="spot-pay-with-trigger"
-              >
-                <SmartImage<string>
-                  alt={payWith}
-                  className="size-4 animate-none rounded-full"
-                  src={PAY_CURRENCY_ICONS[payWith]}
-                />
-                {payWith}
-                <ChevronDown
-                  className={cn(
-                    "size-3 text-panel-text-muted transition-transform",
-                    payWithOpen && "rotate-180"
-                  )}
-                />
-              </Popover.Trigger>
-              <Popover.Portal>
-                <Popover.Positioner align="start" sideOffset={6}>
-                  <Popover.Popup className="z-50 min-w-[140px] overflow-hidden rounded-xl border border-panel-border bg-panel-bg-darker p-1 shadow-[0_20px_60px_var(--panel-shadow)] outline-none transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
-                    {(["cNGN", "USDC"] as const).map((currency) => (
-                      <button
-                        className={cn(
-                          "flex w-full cursor-pointer items-center gap-2 rounded-lg p-2 text-left text-[11px] transition-colors hover:bg-input-hover",
-                          payWith === currency ? "text-panel-text-active" : "text-panel-text"
-                        )}
-                        key={currency}
-                        onClick={() => {
-                          setPayWith(currency);
-                          setPayWithOpen(false);
-                        }}
-                        type="button"
-                      >
-                        <SmartImage<string>
-                          alt={currency}
-                          className="size-4 animate-none rounded-full"
-                          src={PAY_CURRENCY_ICONS[currency]}
-                        />
-                        {currency}
-                      </button>
-                    ))}
-                  </Popover.Popup>
-                </Popover.Positioner>
-              </Popover.Portal>
-            </Popover.Root>
+            <span className="flex items-center gap-1.5 font-medium text-panel-text-active">
+              <SmartImage<string>
+                alt={spendCurrency}
+                className="size-4 animate-none rounded-full"
+                src={PAY_CURRENCY_ICONS[spendCurrency]}
+              />
+              {spendCurrency}
+            </span>
           </span>
-
           <span className="flex min-w-0 items-center gap-1.5">
             {/* "Wallet", because the Account strip below shows the same tokens for the trading
                 subaccount. Deposited collateral leaves this at 0 while the account is funded. */}
