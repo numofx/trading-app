@@ -69,7 +69,7 @@ export function SpotTradingTerminal({
   lastAction?: string | null;
 }) {
   const [chartTab, setChartTab] = useState<SpotChartTab>("price");
-  const [timeframe, setTimeframe] = useState<SpotTimeframe>("1h");
+  const [timeframe, setTimeframe] = useState<SpotTimeframe>("D");
   const [selectedTool, setSelectedTool] = useState("crosshair");
   const [indicatorsEnabled, setIndicatorsEnabled] = useState(false);
   const [bookTab, setBookTab] = useState<SpotBookTab>("book");
