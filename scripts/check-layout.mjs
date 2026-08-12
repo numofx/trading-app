@@ -36,12 +36,16 @@ const VIEWPORTS = [
 ];
 
 const PROBE = `(() => {
-  const cta = [...document.querySelectorAll("button")].find((b) => /^(Buy USDC|Buy now)$/.test(b.textContent.trim()));
+  // Matched by id, not label: the CTA reads "Deposit" signed out, "Loading account…" while the
+  // subaccount resolves and "Buy USDC" once funded. Matching on text silently found nothing from
+  // 25b40bf (which relabelled the signed-out CTA) until the id landed.
+  const cta = document.getElementById("spot-submit-cta");
   if (!cta) return JSON.stringify({ error: "no submit CTA found" });
   const rect = cta.getBoundingClientRect();
 
   const navs = [...document.querySelectorAll("nav")].filter((n) => getComputedStyle(n).display !== "none");
   const doc = document.documentElement;
+  const rootStyle = getComputedStyle(doc);
 
   // Every grid track that holds text must fit its content — this is what regressed when the
   // activity table compressed six columns into ~52px each.
@@ -75,6 +79,9 @@ const PROBE = `(() => {
   for (const s of scrollers) s.scrollTop = 0;
 
   return JSON.stringify({
+    ctaLabel: cta.textContent.trim(),
+    // The page must sit still at its borders rather than rubber-banding away from them.
+    overscrollPinned: rootStyle.overscrollBehaviorY === "none" && rootStyle.overscrollBehaviorX === "none",
     ctaVisible: rect.top >= 0 && rect.bottom <= innerHeight,
     ctaVisibleAfterScroll,
     ctaBottom: Math.round(rect.bottom + scrollY),
@@ -94,7 +101,7 @@ function browser(...args) {
 
 function probe(width, height) {
   browser("set", "viewport", String(width), String(height));
-  browser("open", `${BASE_URL}/?market=USDCcNGN`);
+  browser("open", BASE_URL);
   browser("wait", "3500");
   // `--json` wraps the result in an envelope; `data.result` is itself a JSON string,
   // since the probe returns JSON.stringify(...).
@@ -133,7 +140,10 @@ for (const viewport of VIEWPORTS) {
       result.ctaVisibleAfterScroll === expectCta,
       `CTA scrolled out of view: expected ${expectCta} after scrolling the ticket, got ${result.ctaVisibleAfterScroll}`,
     ],
-    [result.visibleNavCount === 1, `expected exactly 1 visible nav, got ${result.visibleNavCount}`],
+    // The app is a single spot terminal, so there is no primary nav to render: the Spot/Futures
+    // rail and its phone-sized switcher went with the futures section.
+    [result.visibleNavCount === 0, `expected no visible nav, got ${result.visibleNavCount}`],
+    [result.overscrollPinned, "page can overscroll — expected overscroll-behavior: none on the root"],
     [result.pageHorizontalScroll === false, "page scrolls horizontally"],
     [
       result.overflowingCells.length === 0,
@@ -149,7 +159,7 @@ for (const viewport of VIEWPORTS) {
 
   const status = failed.length === 0 ? "ok  " : "FAIL";
   console.log(
-    `${status} ${label.padEnd(9)} cta=${String(result.ctaVisible).padEnd(5)} bottom=${String(result.ctaBottom).padEnd(5)}${note ? `  (${note})` : ""}`
+    `${status} ${label.padEnd(9)} cta=${String(result.ctaVisible).padEnd(5)} bottom=${String(result.ctaBottom).padEnd(5)} label=${String(result.ctaLabel).padEnd(14)}${note ? `  (${note})` : ""}`
   );
 }
 

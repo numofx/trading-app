@@ -425,6 +425,9 @@ export function SpotOrderFormPanel({
             isBusy && "cursor-wait opacity-70"
           )}
           disabled={isBusy}
+          // Stable hook for the layout invariant check: the label changes with wallet and
+          // submission state ("Deposit", "Submitting…", "Buy USDC"), so text is not an identifier.
+          id="spot-submit-cta"
           onClick={handleSubmit}
           type="button"
         >
