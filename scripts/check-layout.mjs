@@ -19,14 +19,18 @@ const BASE_URL = urlArgIndex === -1 ? "http://localhost:3111" : process.argv[url
 
 /**
  * Known-good matrix. `ctaVisible: false` is not a passing grade — it records a gap that is
- * currently accepted (see PR #17: the header needs two rows below ~390px wide, so the CTA
- * cannot clear a 667px fold). If a change makes it true, tighten the expectation.
+ * currently accepted. If a change makes it true, tighten the expectation.
+ *
+ * iPhone SE was such a gap (PR #17: the header needs two rows below ~390px wide, so the CTA could
+ * not clear a 667px fold). Removing the decorative "Pay with" dropdown reclaimed the row it cost
+ * and the CTA now clears the fold — by nothing to spare, which is why the expectation is tightened
+ * rather than left permissive: the next row added to the ticket pushes it back under.
  */
 const VIEWPORTS = [
   {
-    ctaVisible: false,
+    ctaVisible: true,
     height: 667,
-    note: "iPhone SE — known gap, header needs 2 rows",
+    note: "iPhone SE — clears the fold with no margin",
     width: 375,
   },
   { ctaVisible: true, height: 711, width: 410 },
