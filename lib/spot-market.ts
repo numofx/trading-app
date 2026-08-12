@@ -1,5 +1,51 @@
 import type { BookResponse, PresentedTrade } from "@/lib/markets-service";
-import type { Candle, SpotMarket, TradePrint } from "@/lib/trading.types";
+import type { Candle, OrderBookLevel, SpotMarket, TradePrint } from "@/lib/trading.types";
+
+/**
+ * The touch: the best price resting on each side of the ladder the trader is looking at.
+ *
+ * Everything that needs a price — the spread row, the limit prefill, a market order's cost
+ * estimate, and the price a market order is actually submitted at — derives from this one pair,
+ * so the terminal cannot quote one number and trade at another.
+ */
+export function getBestPrices(asks: OrderBookLevel[], bids: OrderBookLevel[]) {
+  return {
+    bestAsk: asks[0]?.price ?? null,
+    bestBid: bids[0]?.price ?? null,
+  };
+}
+
+/**
+ * The price the book is centred on: the mid of the two resting sides, else the single resting
+ * side, else the last trade.
+ *
+ * The mid is the only value guaranteed to sit between the touches, so seeding a limit ticket with
+ * it cannot cross on either side. The last trade is the fallback of last resort — on a quiet
+ * market it is routinely days old and can rest outside the current spread.
+ */
+export function getAnchorPrice(
+  bestAsk: number | null,
+  bestBid: number | null,
+  lastPrice: number | null = null
+) {
+  if (bestAsk !== null && bestBid !== null) {
+    return (bestAsk + bestBid) / 2;
+  }
+
+  return bestAsk ?? bestBid ?? lastPrice;
+}
+
+/**
+ * The price a market order crosses at: the opposing touch. A UI BUY of USDC lifts the best ask,
+ * a UI SELL hits the best bid. Null when that side is empty — there is nothing to cross.
+ */
+export function getCrossingPrice(
+  side: "buy" | "sell",
+  bestAsk: number | null,
+  bestBid: number | null
+) {
+  return side === "buy" ? bestAsk : bestBid;
+}
 
 export type LiveSpotRuntime = {
   book: BookResponse | null;

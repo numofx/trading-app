@@ -5,6 +5,7 @@ import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatNaira } from "@/lib/market-formatting";
+import { getCrossingPrice } from "@/lib/spot-market";
 import { SPOT_TAKER_FEE_RATE } from "@/lib/spot-order-submission";
 import { SmartImage } from "@/ui/SmartImage";
 import { ConfirmOrderDialog } from "@/ui/trading-terminal/ConfirmOrderDialog";
@@ -22,21 +23,27 @@ const PAY_CURRENCY_ICONS = {
 /** 5 bps taker tier as basis points, derived from the engine-bound rate so the two stay in sync. */
 const SPOT_TAKER_FEE_BPS = Number(SPOT_TAKER_FEE_RATE) * 10_000;
 
-/** Market orders execute at the mark; everything else executes at the entered limit price. */
+/**
+ * Market orders cross the opposing touch; everything else executes at the entered limit price.
+ *
+ * This previously sent the last traded price, which on a quiet market is days old and can rest
+ * past the touch — a "market" order priced behind the book does not cross, so it silently rests
+ * as a limit instead of filling.
+ */
 function resolveOrderPrice({
+  crossingPrice,
   limitPrice,
-  markPrice,
   orderType,
 }: {
+  crossingPrice: number | null;
   limitPrice: string;
-  markPrice: number | null;
   orderType: SpotOrderType;
 }) {
   if (orderType !== "Market") {
     return limitPrice;
   }
 
-  return markPrice === null ? "" : String(markPrice);
+  return crossingPrice === null ? "" : String(crossingPrice);
 }
 
 function parseAmount(value: string) {
@@ -161,9 +168,11 @@ function getSpotSubmitLabel({
 }
 
 export function SpotOrderFormPanel({
+  anchorPrice,
   availableCngnLabel,
   availableUsdcLabel,
-  markPrice,
+  bestAsk,
+  bestBid,
   onDepositRequest,
   onSubmitOrder,
   isPreparingAccount = false,
@@ -171,9 +180,13 @@ export function SpotOrderFormPanel({
   isSubmitting = false,
   lastAction = null,
 }: {
+  /** Mid of the displayed book — seeds the limit price, and cannot cross on either side. */
+  anchorPrice: number | null;
   availableCngnLabel: string;
   availableUsdcLabel: string;
-  markPrice: number | null;
+  /** The touch as displayed in the ladder, so the ticket quotes the book on screen. */
+  bestAsk: number | null;
+  bestBid: number | null;
   /** Opens the deposit dialog — what the CTA does before a wallet is connected. */
   onDepositRequest?: () => void;
   onSubmitOrder: (args: {
@@ -196,15 +209,20 @@ export function SpotOrderFormPanel({
   const [orderType, setOrderType] = useState<SpotOrderType>("Limit");
   const [payWith, setPayWith] = useState<PayCurrency>("cNGN");
   const [payWithOpen, setPayWithOpen] = useState(false);
+  // Seeded from the mid, not the last trade: a prefill past the touch turns the trader's chosen
+  // "Limit" into a taker on submit — an immediate fill at the 5 bps tier instead of resting free.
   const [limitPrice, setLimitPrice] = useState(
-    markPrice === null ? "" : String(markPrice.toFixed(2))
+    anchorPrice === null ? "" : String(anchorPrice.toFixed(2))
   );
   const [stopPrice, setStopPrice] = useState("");
   const [amount, setAmount] = useState("100");
 
   const isBuy = side === "buy";
   const needsLimitPrice = orderType !== "Market";
-  const effectivePrice = orderType === "Market" ? markPrice : parseAmount(limitPrice);
+  const crossingPrice = getCrossingPrice(side, bestAsk, bestBid);
+  // A market order costs what it crosses at, so the total quotes the touch rather than a price
+  // the order will never trade at.
+  const effectivePrice = orderType === "Market" ? crossingPrice : parseAmount(limitPrice);
   const parsedAmount = parseAmount(amount);
   const total =
     effectivePrice !== null && Number.isFinite(effectivePrice) && Number.isFinite(parsedAmount)
@@ -235,7 +253,7 @@ export function SpotOrderFormPanel({
     setConfirmOpen(false);
     onSubmitOrder({
       orderType,
-      price: resolveOrderPrice({ limitPrice, markPrice, orderType }),
+      price: resolveOrderPrice({ crossingPrice, limitPrice, orderType }),
       side,
       size: amount,
     });
