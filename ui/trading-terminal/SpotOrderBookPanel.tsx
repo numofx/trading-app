@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/cn";
 import { formatNaira } from "@/lib/market-formatting";
+import { getAnchorPrice, getBestPrices } from "@/lib/spot-market";
 import type { OrderBookLevel, TradePrint } from "@/lib/trading.types";
 
 export type SpotBookTab = "book" | "trades";
@@ -62,27 +63,6 @@ function BookEmptyState({ message }: { message: string }) {
   );
 }
 
-/**
- * The price the spread row is anchored on.
- *
- * The mid of the two resting sides, because anchoring the spread is that row's whole job. A single
- * resting side is the next best truth. The last trade is the fallback only when there is no book at
- * all: on a market this quiet it is routinely days old and can sit outside the current spread —
- * this row read ₦1,374.24 from a four-day-old fill while the best ask rested ₦2.88 below it, which
- * presents a price nothing can fill at as the live one.
- */
-function getLadderAnchorPrice(
-  bestAsk: number | null,
-  bestBid: number | null,
-  lastPrice: number | null
-) {
-  if (bestAsk !== null && bestBid !== null) {
-    return (bestAsk + bestBid) / 2;
-  }
-
-  return bestAsk ?? bestBid ?? lastPrice;
-}
-
 /** The bid/ask ladder with the spread row between the two sides. */
 function BookLadder({
   asks,
@@ -95,12 +75,11 @@ function BookLadder({
 }) {
   const askMax = Math.max(...asks.map((level) => level.total), 1);
   const bidMax = Math.max(...bids.map((level) => level.total), 1);
-  const bestAsk = asks[0]?.price ?? null;
-  const bestBid = bids[0]?.price ?? null;
+  const { bestAsk, bestBid } = getBestPrices(asks, bids);
   const spread = bestAsk !== null && bestBid !== null ? bestAsk - bestBid : null;
   const midPrice = bestAsk !== null && bestBid !== null ? (bestAsk + bestBid) / 2 : null;
   const spreadPercent = midPrice !== null && spread !== null ? (spread / midPrice) * 100 : null;
-  const anchorPrice = getLadderAnchorPrice(bestAsk, bestBid, lastPrice);
+  const anchorPrice = getAnchorPrice(bestAsk, bestBid, lastPrice);
   // Coinbase-style ladder: best ask sits directly above the spread row.
   const descendingAsks = [...asks].reverse();
 

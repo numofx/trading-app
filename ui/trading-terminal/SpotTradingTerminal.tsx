@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { buildAssetsActivityView } from "@/lib/account-activity-views";
+import { getAnchorPrice, getBestPrices } from "@/lib/spot-market";
 import {
   ACTIVITY_VIEWS,
   FOOTER_LINKS,
@@ -55,6 +56,8 @@ export function SpotTradingTerminal({
     price: string;
     size: string;
     orderType: "Limit" | "Market" | "Stop Limit";
+    /** The touch as displayed when the trader submitted; a market order crosses against it. */
+    book: { bestAsk: number | null; bestBid: number | null };
   }) => void;
   /** Whether a wallet is connected; gates the order ticket's submit CTA. */
   hasWallet?: boolean;
@@ -93,6 +96,20 @@ export function SpotTradingTerminal({
     spotBook.isLive && spotBook.trades.length > 0 ? spotBook.trades : spotMarket.trades;
 
   const lastPrice = getVenueLastPrice(bookTrades, liveCandles, spotMarket.mark);
+  // The touch the trader is actually looking at. It drives the ticket's prefill and cost estimate
+  // and rides along on submission, so an order can never be priced off a book that is no longer
+  // on screen — the server-rendered snapshot goes stale the moment the stream moves.
+  const { bestAsk, bestBid } = getBestPrices(bookAsks, bookBids);
+  const anchorPrice = getAnchorPrice(bestAsk, bestBid, lastPrice);
+
+  function handleSubmitOrder(args: {
+    side: "buy" | "sell";
+    price: string;
+    size: string;
+    orderType: "Limit" | "Market" | "Stop Limit";
+  }) {
+    onSubmitOrder({ ...args, book: { bestAsk, bestBid } });
+  }
   const { changePercent, volumeLabel } = get24hStats(liveCandles, lastPrice, Date.now());
   // Assets is the one bottom tab with a real data source today, so it's built from live balances
   // instead of the placeholder-free static views.
@@ -146,15 +163,17 @@ export function SpotTradingTerminal({
          */}
         <div className="order-first flex min-h-[420px] flex-col gap-3 xl:order-0 xl:min-h-0 xl:overflow-hidden">
           <SpotOrderFormPanel
+            anchorPrice={anchorPrice}
             availableCngnLabel={cngnBalanceLabel ?? "— cNGN"}
             availableUsdcLabel={usdcBalanceLabel ?? "— USDC"}
+            bestAsk={bestAsk}
+            bestBid={bestBid}
             hasWallet={hasWallet}
             isPreparingAccount={isPreparingAccount}
             isSubmitting={isSubmitting}
             lastAction={lastAction}
-            markPrice={lastPrice}
             onDepositRequest={onDepositRequest}
-            onSubmitOrder={onSubmitOrder}
+            onSubmitOrder={handleSubmitOrder}
           />
           <SpotBalanceSummary
             cngnBalanceLabel={accountCngnLabel ?? "— cNGN"}

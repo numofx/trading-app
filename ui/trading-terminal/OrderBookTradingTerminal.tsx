@@ -5,6 +5,7 @@ import posthog from "posthog-js";
 import { useEffect, useState } from "react";
 import { createWalletClient, custom } from "viem";
 import { getAppChain } from "@/lib/base-public-client";
+import { getCrossingPrice } from "@/lib/spot-market";
 import { buildSpotOrderEnvelope } from "@/lib/spot-order-submission";
 import type { SpotMarket } from "@/lib/trading.types";
 import { buildDepositAccount, DepositDialog } from "@/ui/trading-terminal/DepositDialog";
@@ -22,28 +23,36 @@ import { formatUsdcBalanceLabel, useUsdcBalance } from "@/ui/trading-terminal/us
 
 type SpotExecutionPrice = { price: string } | { error: string };
 
+/** The touch as displayed in the ladder at the moment the trader submitted. */
+type SubmittedBook = { bestAsk: number | null; bestBid: number | null };
+
 /**
  * Market spot orders cross the opposing side of the book; every other order type executes at the
  * entered price. Returns the operator-facing copy rather than throwing, so a missing book side
  * reads the same as it did inline.
+ *
+ * The touch comes from the terminal — the book the trader was looking at — not from this
+ * component's server-rendered snapshot. A terminal stays open for hours, and pricing a market
+ * order off page-load depth sends a limit that no longer crosses: the order rests instead of
+ * filling, which is the one thing a market order is not supposed to do.
  */
 function resolveSpotExecutionPrice(
   orderType: "Limit" | "Market" | "Stop Limit",
   side: "buy" | "sell",
-  spotMarket: SpotMarket,
+  book: SubmittedBook,
   enteredPrice: string
 ): SpotExecutionPrice {
   if (orderType !== "Market") {
     return { price: enteredPrice };
   }
 
-  const opposing = side === "buy" ? spotMarket.orderBookAsks[0] : spotMarket.orderBookBids[0];
+  const crossing = getCrossingPrice(side, book.bestAsk, book.bestBid);
 
-  if (!opposing) {
+  if (crossing === null) {
     return { error: "No opposing spot liquidity to cross. Use a limit order." };
   }
 
-  return { price: String(opposing.price) };
+  return { price: String(crossing) };
 }
 
 /**
@@ -192,11 +201,13 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
     price,
     size,
     orderType,
+    book,
   }: {
     side: "buy" | "sell";
     price: string;
     size: string;
     orderType: "Limit" | "Market" | "Stop Limit";
+    book: SubmittedBook;
   }) {
     if (!walletsReady) {
       setLastAction("Wallet is still loading");
@@ -206,7 +217,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
       setLastAction("Connect a wallet before submitting an order");
       return;
     }
-    const resolvedPrice = resolveSpotExecutionPrice(orderType, side, spotMarket, price);
+    const resolvedPrice = resolveSpotExecutionPrice(orderType, side, book, price);
 
     if ("error" in resolvedPrice) {
       setLastAction(resolvedPrice.error);
