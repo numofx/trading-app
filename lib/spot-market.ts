@@ -71,6 +71,53 @@ export function getMaxOrderSize({
 }
 
 /**
+ * What an order takes out of the account if it fills: cNGN for a buy, USDC for a sell.
+ *
+ * Null when either input is unusable — an unknown cost must not read as a free order.
+ */
+export function getOrderCost(side: "buy" | "sell", price: number | null, size: number) {
+  if (!Number.isFinite(size) || size <= 0) {
+    return null;
+  }
+  if (side === "sell") {
+    return { amount: size, currency: "USDC" as const };
+  }
+  if (price === null || !Number.isFinite(price) || price <= 0) {
+    return null;
+  }
+  return { amount: size * price, currency: "cNGN" as const };
+}
+
+/**
+ * What this trader's own resting orders already lay claim to.
+ *
+ * A balance that ignores working orders overstates what a new order can spend: an account holding
+ * 1,300 cNGN with 1,382 already committed can fund nothing, but reads as fully available.
+ */
+export function getCommittedBalances(openOrders: SpotOpenOrder[], walletAddress: string | null) {
+  const owned =
+    walletAddress === null
+      ? []
+      : openOrders.filter(
+          (order) => order.ownerAddress.toLowerCase() === walletAddress.toLowerCase()
+        );
+
+  let cngn = 0;
+  let usdc = 0;
+  for (const order of owned) {
+    const remaining = Math.max(0, order.size - order.filled);
+    const cost = getOrderCost(order.side, order.price, remaining);
+    if (cost?.currency === "cNGN") {
+      cngn += cost.amount;
+    } else if (cost?.currency === "USDC") {
+      usdc += cost.amount;
+    }
+  }
+
+  return { cngn, usdc };
+}
+
+/**
  * The price a market order crosses at: the opposing touch. A UI BUY of USDC lifts the best ask,
  * a UI SELL hits the best bid. Null when that side is empty — there is nothing to cross.
  */

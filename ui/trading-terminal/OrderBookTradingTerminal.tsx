@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { createWalletClient, custom } from "viem";
 import { getAppChain } from "@/lib/base-public-client";
 import { getCrossingPrice } from "@/lib/spot-market";
-import { buildSpotOrderEnvelope } from "@/lib/spot-order-submission";
+import { buildSpotOrderEnvelope, SPOT_ORDER_LIFETIME_LABEL } from "@/lib/spot-order-submission";
 import type { SpotMarket } from "@/lib/trading.types";
 import { buildDepositAccount, DepositDialog } from "@/ui/trading-terminal/DepositDialog";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
@@ -93,6 +93,49 @@ async function postSignedOrder(payload: object, signature: string): Promise<Sign
   const body = (await response.json().catch(() => null)) as SignedOrderResponse["body"];
 
   return { body, ok: response.ok, status: response.status };
+}
+
+type OrderOutcome = { status?: string; filled_amount?: string; remaining_amount?: string };
+
+/**
+ * What the venue did with the order, in the trader's terms.
+ *
+ * "Accepted" only means the order reached the book. It filled, is resting, or expired unfilled —
+ * and the terminal used to echo the submitted limit price back as though it were a fill price. It
+ * deliberately does not quote a price: the order-status response carries amounts and a status but
+ * no execution price, and inventing one is how the limit came to be reported as the fill.
+ */
+function describeOrderOutcome(outcome: OrderOutcome | null, size: string, price: string) {
+  if (outcome?.status === "filled") {
+    return `Filled ${size} USDC. Balances updated.`;
+  }
+  if (outcome?.status === "expired") {
+    return `Order expired unfilled at ₦${price}.`;
+  }
+  if (outcome?.status === "cancelled") {
+    return "Order cancelled.";
+  }
+  if (outcome?.status === "active") {
+    const filled = Number(outcome.filled_amount ?? "0");
+    return filled > 0
+      ? `Partly filled, the rest resting at ₦${price}. Expires ${SPOT_ORDER_LIFETIME_LABEL} after signing.`
+      : `Resting at ₦${price}. Expires ${SPOT_ORDER_LIFETIME_LABEL} after signing, or cancel it from Open Orders.`;
+  }
+  // No status yet: say what is certain rather than claiming a fill.
+  return `Order accepted at ₦${price}. Check Open Orders for its status.`;
+}
+
+/** Reads the order back so the terminal reports what happened, not what was asked for. */
+async function readOrderOutcome(orderId: string): Promise<OrderOutcome | null> {
+  try {
+    const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}`);
+    if (!response.ok) {
+      return null;
+    }
+    return (await response.json()) as OrderOutcome;
+  } catch {
+    return null;
+  }
 }
 
 /** Properties shared by every spot order analytics event. */
@@ -272,9 +315,12 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
         ...buildSpotOrderEvent(side, orderType, size, executionPrice),
         order_id: body?.order?.order_id ?? null,
       });
-      setLastAction(
-        `Spot order accepted: ${side.toUpperCase()} ${size} USDC @ ${executionPrice} cNGN/USDC`
-      );
+      setLastAction("Order accepted. Checking whether it filled…");
+      // The engine matches on submission, so the outcome settles within a moment of acceptance.
+      const outcome = await readOrderOutcome(envelope.payload.order_id);
+      setLastAction(describeOrderOutcome(outcome, size, executionPrice));
+      // Read balances after the outcome, not before it: refreshing on acceptance alone showed the
+      // pre-fill account and left the strip disagreeing with the trade that had just happened.
       refreshUsdcBalance();
       refreshCngnBalance();
       refreshSubaccountBalance();
