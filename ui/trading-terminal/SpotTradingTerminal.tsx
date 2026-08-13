@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { buildAssetsActivityView } from "@/lib/account-activity-views";
 import { getAnchorPrice, getBestPrices } from "@/lib/spot-market";
@@ -17,7 +18,7 @@ import { SpotChartPanel } from "@/ui/trading-terminal/SpotChartPanel";
 import type { SpotBookTab } from "@/ui/trading-terminal/SpotOrderBookPanel";
 import { SpotOrderBookPanel } from "@/ui/trading-terminal/SpotOrderBookPanel";
 import { SpotOrderFormPanel } from "@/ui/trading-terminal/SpotOrderFormPanel";
-import { SpotTickerBar } from "@/ui/trading-terminal/SpotTickerBar";
+import { TerminalHeaderBar } from "@/ui/trading-terminal/TerminalHeaderBar";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
 import { useMarketOrderBook } from "@/ui/trading-terminal/useMarketOrderBook";
 
@@ -33,6 +34,7 @@ export function SpotTradingTerminal({
   accountCngnLabel = null,
   accountCngn = null,
   accountUsdc = null,
+  depositControl,
   onDepositRequest,
   onSubmitOrder,
   hasWallet = false,
@@ -54,6 +56,8 @@ export function SpotTradingTerminal({
   /** Subaccount balances as numbers — the ticket sizes a percentage of what the account can spend. */
   accountCngn?: number | null;
   accountUsdc?: number | null;
+  /** The deposit dialog trigger, hosted in the header bar. */
+  depositControl?: ReactNode;
   /** Opens the deposit dialog; the ticket CTA calls it while there is no funded account. */
   onDepositRequest?: () => void;
   onSubmitOrder: (args: {
@@ -129,86 +133,89 @@ export function SpotTradingTerminal({
       : (ACTIVITY_VIEWS[bottomTab as keyof typeof ACTIVITY_VIEWS] ?? { columns: [], rows: [] });
 
   return (
-    <div className="flex flex-col gap-3 xl:min-h-0 xl:flex-1 xl:overflow-hidden">
-      <SpotTickerBar
+    <>
+      <TerminalHeaderBar
         changePercent24h={changePercent}
+        depositControl={depositControl}
         lastPrice={lastPrice}
         volume24hLabel={volumeLabel}
       />
 
-      {/*
-       * One grid, two rows: the chart and order book take the top row, the activity panel spans the
-       * bottom row beneath them, and the ticket column runs the full height alongside both. The
-       * ticket used to be boxed into the top row's height, which cut its Amount field off mid-box
-       * on the ~700-900px viewports most of this app's desktop traffic uses.
-       *
-       * The bottom row takes 3/10 rather than 2/10: at 2/10 the activity panel was a ~144px sliver
-       * whose own empty state ran past its bottom edge, so it read as a strip of tab labels rather
-       * than a panel holding anything.
-       */}
-      <div className="grid grid-cols-1 gap-3 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_270px_320px] xl:grid-rows-[minmax(0,7fr)_minmax(0,3fr)] xl:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_300px_340px]">
-        <SpotChartPanel
-          asks={bookAsks}
-          bids={bookBids}
-          candles={liveCandles}
-          chartTab={chartTab}
-          indicatorsEnabled={indicatorsEnabled}
-          onChartTabChange={setChartTab}
-          onIndicatorsToggle={() => setIndicatorsEnabled((current) => !current)}
-          onTimeframeChange={setTimeframe}
-          onToolSelect={setSelectedTool}
-          selectedTimeframe={timeframe}
-          selectedTool={selectedTool}
-          timeframes={SPOT_TIMEFRAME_OPTIONS}
-        />
-
-        <SpotOrderBookPanel
-          asks={bookAsks}
-          bids={bookBids}
-          lastPrice={lastPrice}
-          onTabChange={setBookTab}
-          tab={bookTab}
-          trades={bookTrades}
-        />
-
+      <div className="flex min-w-0 flex-1 flex-col gap-3 p-3 xl:min-h-0 xl:overflow-hidden xl:px-4">
         {/*
-         * `order-first` on phones only: in the stacked single column the ticket would sit
-         * below the chart and order book, putting the submit button ~2.5 screens down the
-         * document. The xl grid places columns explicitly, so order resets there.
+         * One grid, two rows: the chart and order book take the top row, the activity panel spans the
+         * bottom row beneath them, and the ticket column runs the full height alongside both. The
+         * ticket used to be boxed into the top row's height, which cut its Amount field off mid-box
+         * on the ~700-900px viewports most of this app's desktop traffic uses.
+         *
+         * The bottom row takes 3/10 rather than 2/10: at 2/10 the activity panel was a ~144px sliver
+         * whose own empty state ran past its bottom edge, so it read as a strip of tab labels rather
+         * than a panel holding anything.
          */}
-        <div className="order-first flex min-h-[420px] flex-col gap-3 xl:order-0 xl:row-span-2 xl:min-h-0 xl:overflow-hidden">
-          <SpotOrderFormPanel
-            anchorPrice={anchorPrice}
-            availableCngn={accountCngn}
-            availableCngnLabel={accountCngnLabel ?? "— cNGN"}
-            availableUsdc={accountUsdc}
-            availableUsdcLabel={accountUsdcLabel ?? "— USDC"}
-            bestAsk={bestAsk}
-            bestBid={bestBid}
-            hasWallet={hasWallet}
-            isPreparingAccount={isPreparingAccount}
-            isSubmitting={isSubmitting}
-            lastAction={lastAction}
-            onDepositRequest={onDepositRequest}
-            onSubmitOrder={handleSubmitOrder}
+        <div className="grid grid-cols-1 gap-3 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_270px_320px] xl:grid-rows-[minmax(0,7fr)_minmax(0,3fr)] xl:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_300px_340px]">
+          <SpotChartPanel
+            asks={bookAsks}
+            bids={bookBids}
+            candles={liveCandles}
+            chartTab={chartTab}
+            indicatorsEnabled={indicatorsEnabled}
+            onChartTabChange={setChartTab}
+            onIndicatorsToggle={() => setIndicatorsEnabled((current) => !current)}
+            onTimeframeChange={setTimeframe}
+            onToolSelect={setSelectedTool}
+            selectedTimeframe={timeframe}
+            selectedTool={selectedTool}
+            timeframes={SPOT_TIMEFRAME_OPTIONS}
           />
-          <SpotBalanceSummary
-            cngnBalanceLabel={accountCngnLabel ?? "— cNGN"}
-            usdcBalanceLabel={accountUsdcLabel ?? "— USDC"}
-          />
-        </div>
 
-        <div className="min-h-[200px] xl:col-span-2 xl:min-h-0">
-          <TradingActivityPanel
-            activityView={activityView}
-            footerLinks={FOOTER_LINKS}
-            isSignedIn={isSignedIn}
-            onTabSelect={setBottomTab}
-            selectedTab={bottomTab}
-            tabs={SPOT_BOTTOM_TABS}
+          <SpotOrderBookPanel
+            asks={bookAsks}
+            bids={bookBids}
+            lastPrice={lastPrice}
+            onTabChange={setBookTab}
+            tab={bookTab}
+            trades={bookTrades}
           />
+
+          {/*
+           * `order-first` on phones only: in the stacked single column the ticket would sit
+           * below the chart and order book, putting the submit button ~2.5 screens down the
+           * document. The xl grid places columns explicitly, so order resets there.
+           */}
+          <div className="order-first flex min-h-[420px] flex-col gap-3 xl:order-0 xl:row-span-2 xl:min-h-0 xl:overflow-hidden">
+            <SpotOrderFormPanel
+              anchorPrice={anchorPrice}
+              availableCngn={accountCngn}
+              availableCngnLabel={accountCngnLabel ?? "— cNGN"}
+              availableUsdc={accountUsdc}
+              availableUsdcLabel={accountUsdcLabel ?? "— USDC"}
+              bestAsk={bestAsk}
+              bestBid={bestBid}
+              hasWallet={hasWallet}
+              isPreparingAccount={isPreparingAccount}
+              isSubmitting={isSubmitting}
+              lastAction={lastAction}
+              onDepositRequest={onDepositRequest}
+              onSubmitOrder={handleSubmitOrder}
+            />
+            <SpotBalanceSummary
+              cngnBalanceLabel={accountCngnLabel ?? "— cNGN"}
+              usdcBalanceLabel={accountUsdcLabel ?? "— USDC"}
+            />
+          </div>
+
+          <div className="min-h-[200px] xl:col-span-2 xl:min-h-0">
+            <TradingActivityPanel
+              activityView={activityView}
+              footerLinks={FOOTER_LINKS}
+              isSignedIn={isSignedIn}
+              onTabSelect={setBottomTab}
+              selectedTab={bottomTab}
+              tabs={SPOT_BOTTOM_TABS}
+            />
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
