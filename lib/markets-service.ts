@@ -31,6 +31,10 @@ export type MarketPresentation = {
 
 export type PresentedOrder = {
   created_at: string;
+  /** Identity of the resting order. `owner_address` + `nonce` is what `POST /v1/orders/cancel` takes. */
+  nonce?: string;
+  order_id?: string;
+  owner_address?: string;
   desired_amount: string;
   filled_amount: string;
   limit_price: string;

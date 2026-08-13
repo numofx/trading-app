@@ -39,6 +39,21 @@ export type ChartTool = {
 export type MarketType = "spot" | "future" | "option" | "perp";
 
 /**
+ * A resting order as the public book presents it. `ownerAddress` and `nonce` are the pair
+ * `POST /v1/orders/cancel` cancels by, so a client can offer cancellation from the book alone.
+ */
+export type SpotOpenOrder = {
+  /** USDC notional already filled; the rest is still working. */
+  filled: number;
+  nonce: string;
+  orderId: string;
+  ownerAddress: string;
+  price: number;
+  side: "buy" | "sell";
+  size: number;
+};
+
+/**
  * The USDC/cNGN spot market as the terminal renders it.
  *
  * Every field is the venue's own data or empty — there is no preview or sample state. A market
@@ -59,6 +74,12 @@ export type SpotMarket = {
    * UI's (today just `usdc_cngn_spot_v1`); null means engine values are presented directly.
    */
   orderEntrySpec: string | null;
+  /**
+   * Every order resting on the book, with the identity needed to cancel one. The terminal filters
+   * these to the connected wallet — the venue's private `orders` stream carries the same set, but
+   * needs a signed auth frame for data the public book already exposes.
+   */
+  openOrders: SpotOpenOrder[];
   trades: TradePrint[];
 };
 

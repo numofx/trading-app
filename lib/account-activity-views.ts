@@ -1,4 +1,4 @@
-import type { ActivityView } from "@/lib/trading.types";
+import type { ActivityView, SpotOpenOrder } from "@/lib/trading.types";
 
 /** Rendered when a balance is genuinely unknown — never substitute a zero or a placeholder figure. */
 const UNKNOWN_BALANCE = "—";
@@ -32,4 +32,51 @@ export function buildAssetsActivityView({
       { cells: ["cNGN", accountCngnLabel ?? UNKNOWN_BALANCE, walletCngnLabel ?? UNKNOWN_BALANCE] },
     ],
   };
+}
+
+/** Columns for the Open Orders tab. The trailing column holds each row's cancel control. */
+export const OPEN_ORDERS_COLUMNS = ["Side", "Price", "Size", "Filled", ""] as const;
+
+function formatUsdc(size: number) {
+  return `${size.toLocaleString("en-US", { maximumFractionDigits: 3 })} USDC`;
+}
+
+/**
+ * The connected wallet's resting orders, newest-priced first.
+ *
+ * Filtered to the wallet rather than showing the whole book: the tab is the trader's own working
+ * orders, and every other row on the venue belongs to someone else. Returns no rows when there is
+ * no wallet, which the panel renders as its signed-out state.
+ */
+export function buildOpenOrdersActivityView(
+  openOrders: SpotOpenOrder[],
+  walletAddress: string | null
+): ActivityView {
+  const owned =
+    walletAddress === null
+      ? []
+      : openOrders.filter(
+          (order) => order.ownerAddress.toLowerCase() === walletAddress.toLowerCase()
+        );
+
+  return {
+    columns: [...OPEN_ORDERS_COLUMNS],
+    rows: owned.map((order) => ({
+      cells: [
+        order.side === "buy" ? "Buy" : "Sell",
+        `\u20a6${order.price.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 })}`,
+        formatUsdc(order.size),
+        formatUsdc(order.filled),
+      ],
+    })),
+  };
+}
+
+/** The orders a cancel control acts on, in the same order as the view's rows. */
+export function getOwnedOpenOrders(openOrders: SpotOpenOrder[], walletAddress: string | null) {
+  return walletAddress === null
+    ? []
+    : openOrders.filter(
+        (order) => order.ownerAddress.toLowerCase() === walletAddress.toLowerCase()
+      );
 }
