@@ -6,7 +6,7 @@ import posthog from "posthog-js";
 import { useEffect, useState } from "react";
 import { createWalletClient, custom } from "viem";
 import { getAppChain } from "@/lib/base-public-client";
-import { getCrossingPrice } from "@/lib/spot-market";
+import { getMarketableLimitPrice } from "@/lib/spot-market";
 import { buildSpotOrderEnvelope, SPOT_ORDER_LIFETIME_LABEL } from "@/lib/spot-order-submission";
 import type { SpotMarket } from "@/lib/trading.types";
 import { buildDepositAccount, DepositDialog } from "@/ui/trading-terminal/DepositDialog";
@@ -47,13 +47,15 @@ function resolveSpotExecutionPrice(
     return { price: enteredPrice };
   }
 
-  const crossing = getCrossingPrice(side, book.bestAsk, book.bestBid);
+  // Signed through the touch rather than at it, so a quote that moves in the interim does not
+  // turn the market order into a resting limit. The fill still happens at the maker's price.
+  const marketable = getMarketableLimitPrice(side, book.bestAsk, book.bestBid);
 
-  if (crossing === null) {
+  if (marketable === null) {
     return { error: "No opposing spot liquidity to cross. Use a limit order." };
   }
 
-  return { price: String(crossing) };
+  return { price: String(marketable) };
 }
 
 /**
