@@ -136,7 +136,13 @@ export function SpotTradingTerminal({
         volume24hLabel={volumeLabel}
       />
 
-      <div className="grid grid-cols-1 gap-3 xl:min-h-0 xl:flex-8 xl:grid-cols-[minmax(0,1fr)_270px_320px] xl:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_300px_340px]">
+      {/*
+       * One grid, two rows: the chart and order book take the top row, the activity panel spans the
+       * bottom row beneath them, and the ticket column runs the full height alongside both. The
+       * ticket used to be boxed into the top row's height, which cut its Amount field off mid-box
+       * on the ~700-900px viewports most of this app's desktop traffic uses.
+       */}
+      <div className="grid grid-cols-1 gap-3 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_270px_320px] xl:grid-rows-[minmax(0,8fr)_minmax(0,2fr)] xl:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_300px_340px]">
         <SpotChartPanel
           asks={bookAsks}
           bids={bookBids}
@@ -166,7 +172,7 @@ export function SpotTradingTerminal({
          * below the chart and order book, putting the submit button ~2.5 screens down the
          * document. The xl grid places columns explicitly, so order resets there.
          */}
-        <div className="order-first flex min-h-[420px] flex-col gap-3 xl:order-0 xl:min-h-0 xl:overflow-hidden">
+        <div className="order-first flex min-h-[420px] flex-col gap-3 xl:order-0 xl:row-span-2 xl:min-h-0 xl:overflow-hidden">
           <SpotOrderFormPanel
             anchorPrice={anchorPrice}
             availableCngn={accountCngn}
@@ -187,17 +193,17 @@ export function SpotTradingTerminal({
             usdcBalanceLabel={accountUsdcLabel ?? "— USDC"}
           />
         </div>
-      </div>
 
-      <div className="min-h-[200px] xl:min-h-0 xl:flex-2">
-        <TradingActivityPanel
-          activityView={activityView}
-          footerLinks={FOOTER_LINKS}
-          isSignedIn={isSignedIn}
-          onTabSelect={setBottomTab}
-          selectedTab={bottomTab}
-          tabs={SPOT_BOTTOM_TABS}
-        />
+        <div className="min-h-[200px] xl:col-span-2 xl:min-h-0">
+          <TradingActivityPanel
+            activityView={activityView}
+            footerLinks={FOOTER_LINKS}
+            isSignedIn={isSignedIn}
+            onTabSelect={setBottomTab}
+            selectedTab={bottomTab}
+            tabs={SPOT_BOTTOM_TABS}
+          />
+        </div>
       </div>
     </div>
   );
