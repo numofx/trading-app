@@ -1,3 +1,4 @@
+import { Duration } from "effect";
 import { encodeAbiParameters, getAddress } from "viem";
 import { getAppChain } from "@/lib/base-public-client";
 
@@ -16,6 +17,22 @@ const ENGINE_DECIMALS = 18;
  * exceeds the signed worstFee, so it bounds what the keeper can charge.
  */
 export const SPOT_TAKER_FEE_RATE = "0.0005";
+
+/**
+ * How long a signed order stays valid. The engine drops it at this point whether or not it filled.
+ *
+ * Exported because the ticket has to say so: five minutes is an IOC lifetime attached to an order
+ * type whose purpose is to rest, so an unfilled limit order silently leaves the book. A trader who
+ * watched their order become the best bid and then vanish has no way to tell that from a bug.
+ *
+ * It stays short on purpose for now — `/v1/orders` is POST-only, so expiry is currently the only
+ * way an order ever leaves the book, and a long-lived order could not be withdrawn. Lengthen it
+ * once cancellation exists (numofx/exchange#7).
+ */
+export const SPOT_ORDER_LIFETIME_SECONDS = Duration.toSeconds("5 minutes");
+
+/** The order lifetime as ticket copy, e.g. "5 minutes". */
+export const SPOT_ORDER_LIFETIME_LABEL = `${SPOT_ORDER_LIFETIME_SECONDS / 60} minutes`;
 
 const DECIMAL_INPUT_PATTERN = /^(\d+(\.\d+)?|\.\d+)$/;
 const TRAILING_ZEROES_PATTERN = /0+$/;
@@ -136,7 +153,7 @@ export function buildSpotOrderEnvelope({
 
   // enginePrice = 1 / uiPrice, as an 18-decimal fixed-point wei value.
   const enginePriceWei = roundRationalToScaledUnits(
-    { numerator: priceRational.denominator, denominator: priceRational.numerator },
+    { denominator: priceRational.numerator, numerator: priceRational.denominator },
     ENGINE_DECIMALS
   );
 
@@ -176,7 +193,7 @@ export function buildSpotOrderEnvelope({
   const chainId = getMatchingChainId();
 
   const nonce = BigInt(Date.now());
-  const expiry = BigInt(Math.floor(Date.now() / 1000) + 5 * 60);
+  const expiry = BigInt(Math.floor(Date.now() / 1000) + SPOT_ORDER_LIFETIME_SECONDS);
   const recipientId = BigInt(subaccountId);
 
   const actionData = encodeAbiParameters(
@@ -237,6 +254,18 @@ export function buildSpotOrderEnvelope({
       worst_fee: formatFixedPointUnits(worstFeeUnits, ENGINE_DECIMALS),
     },
     typedData: {
+      primaryType: "Action" as const,
+      types: {
+        Action: [
+          { name: "subaccountId", type: "uint256" },
+          { name: "nonce", type: "uint256" },
+          { name: "module", type: "address" },
+          { name: "data", type: "bytes" },
+          { name: "expiry", type: "uint256" },
+          { name: "owner", type: "address" },
+          { name: "signer", type: "address" },
+        ],
+      } as const,
       domain: {
         chainId,
         name: "Matching" as const,
@@ -252,18 +281,6 @@ export function buildSpotOrderEnvelope({
         signer: ownerAddress,
         subaccountId: recipientId,
       },
-      primaryType: "Action" as const,
-      types: {
-        Action: [
-          { name: "subaccountId", type: "uint256" },
-          { name: "nonce", type: "uint256" },
-          { name: "module", type: "address" },
-          { name: "data", type: "bytes" },
-          { name: "expiry", type: "uint256" },
-          { name: "owner", type: "address" },
-          { name: "signer", type: "address" },
-        ],
-      } as const,
     },
   };
 }

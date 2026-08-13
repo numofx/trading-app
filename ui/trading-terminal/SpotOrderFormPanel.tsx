@@ -5,7 +5,7 @@ import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatNaira } from "@/lib/market-formatting";
 import { getCrossingPrice, getMaxOrderSize } from "@/lib/spot-market";
-import { SPOT_TAKER_FEE_RATE } from "@/lib/spot-order-submission";
+import { SPOT_ORDER_LIFETIME_LABEL, SPOT_TAKER_FEE_RATE } from "@/lib/spot-order-submission";
 import { ConfirmOrderDialog } from "@/ui/trading-terminal/ConfirmOrderDialog";
 import { OrderTypeTabs } from "@/ui/trading-terminal/OrderTypeTabs";
 
@@ -82,7 +82,7 @@ function buildSpotConfirmation({
 
   return {
     confirmLabel: `Confirm ${action}`,
-    description: `This submits a ${orderType.toLowerCase()} order for USDC/cNGN. Once filled it cannot be reversed from this screen.`,
+    description: `This submits a ${orderType.toLowerCase()} order for USDC/cNGN. It expires ${SPOT_ORDER_LIFETIME_LABEL} after signing if it has not filled, and once filled it cannot be reversed from this screen.`,
     directionLabel: isBuy ? "Buy USDC" : "Sell USDC",
     sizeLabel: `${amount || "0"} USDC`,
     title: `Confirm ${action}`,
@@ -91,6 +91,7 @@ function buildSpotConfirmation({
     summaryRows: [
       { label: isBuy ? "You pay" : "You receive", value: totalLabel },
       { label: `Taker fee (${SPOT_TAKER_FEE_BPS} bps)`, value: takerFeeLabel },
+      { label: "Expires", value: `${SPOT_ORDER_LIFETIME_LABEL} after signing` },
     ],
   };
 }
@@ -570,6 +571,11 @@ export function SpotOrderFormPanel({
             value={formatSpotFee(takerFee)}
           />
           <CostRow label="Maker fee" value="Free" />
+          {/*
+           * Not a cost, but the term a trader is most likely to be surprised by: an unfilled order
+           * leaves the book on its own, and nothing else on screen would say so.
+           */}
+          <CostRow label="Expires" value={`${SPOT_ORDER_LIFETIME_LABEL} after signing`} />
         </div>
 
         <button
