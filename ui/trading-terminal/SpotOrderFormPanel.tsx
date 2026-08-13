@@ -558,16 +558,18 @@ export function SpotOrderFormPanel({
 
       {/* Fees and the submit CTA stay pinned so the primary action is never scrolled out of reach. */}
       <div className="shrink-0 space-y-2.5 border-panel-border border-t bg-panel-bg-muted px-3 pt-2.5 pb-3">
+        {/*
+         * One total, not a Subtotal/Total pair. The fee is charged on the USDC leg while the total
+         * is the cNGN one, so Total never differs from Subtotal — printing both implied the fee was
+         * added into it, and cost the two rows the Amount field needed on a 700px screen.
+         */}
         <div className="space-y-1.5 text-[11px]">
-          <CostRow label="Subtotal" value={totalLabel} />
+          <CostRow emphasis label="Total" value={totalLabel} />
           <CostRow
             label={`Taker fee (${SPOT_TAKER_FEE_BPS} bps)`}
             value={formatSpotFee(takerFee)}
           />
           <CostRow label="Maker fee" value="Free" />
-          <div className="border-panel-border border-t pt-1.5">
-            <CostRow emphasis label="Total" value={totalLabel} />
-          </div>
         </div>
 
         <button
@@ -587,11 +589,6 @@ export function SpotOrderFormPanel({
         >
           {submitLabel}
         </button>
-
-        {/* Literally true here: `/api/orders` is POST-only, so nothing on this screen can undo a fill. */}
-        <p className="text-[10px] text-panel-text-muted leading-snug">
-          A fill cannot be reversed from this screen.
-        </p>
 
         <ConfirmOrderDialog
           {...confirmation}
