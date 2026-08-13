@@ -119,7 +119,7 @@ export function SpotTradingTerminal({
   }) {
     onSubmitOrder({ ...args, book: { bestAsk, bestBid } });
   }
-  const { changePercent, volumeLabel } = get24hStats(liveCandles, lastPrice, Date.now());
+  const { changePercent, high, low, volumeLabel } = get24hStats(liveCandles, lastPrice, Date.now());
   // Assets is the one bottom tab with a real data source today, so it's built from live balances
   // instead of the placeholder-free static views.
   const activityView =
@@ -137,7 +137,9 @@ export function SpotTradingTerminal({
       <TerminalHeaderBar
         changePercent24h={changePercent}
         depositControl={depositControl}
+        high24h={high}
         lastPrice={lastPrice}
+        low24h={low}
         volume24hLabel={volumeLabel}
       />
 

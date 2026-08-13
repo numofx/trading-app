@@ -81,12 +81,17 @@ function MarketIdentity({ compact }: { compact?: boolean }) {
 export function TerminalHeaderBar({
   changePercent24h,
   depositControl,
+  high24h,
   lastPrice,
+  low24h,
   volume24hLabel,
 }: {
   changePercent24h: number | null;
   depositControl?: ReactNode;
+  /** Extremes over the same window as the volume; null when nothing traded in it. */
+  high24h: number | null;
   lastPrice: number | null;
+  low24h: number | null;
   volume24hLabel: string;
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -169,6 +174,8 @@ export function TerminalHeaderBar({
           </span>
         </HeaderMetric>
         <HeaderMetric label="24H volume">{volume24hLabel}</HeaderMetric>
+        <HeaderMetric label="24H high">{formatNaira(high24h)}</HeaderMetric>
+        <HeaderMetric label="24H low">{formatNaira(low24h)}</HeaderMetric>
       </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-3">
