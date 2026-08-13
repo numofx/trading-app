@@ -121,6 +121,39 @@ export function getCommittedBalances(openOrders: SpotOpenOrder[], walletAddress:
  * The price a market order crosses at: the opposing touch. A UI BUY of USDC lifts the best ask,
  * a UI SELL hits the best bid. Null when that side is empty — there is nothing to cross.
  */
+/**
+ * How far through the touch a market order is priced. 0.5%.
+ *
+ * Not slippage the trader pays: this venue fills at the resting maker's price, so a buy signed at
+ * ask + 0.5% still executes at the ask. It is the room the order has to still cross if the book
+ * moves between the price being read and the engine matching.
+ */
+export const SPOT_MARKET_SLIPPAGE = 0.005;
+
+/**
+ * The limit price a market order is signed at: through the opposing touch, not at it.
+ *
+ * Priced exactly at the touch, a market order stops being marketable the moment the quote moves —
+ * it rests as an ordinary limit and expires unfilled, which is what happened to a market sell
+ * signed at a bid of 1374.02 that the maker had already left. Pricing through the book is how a
+ * marketable order works on a limit-order-book engine.
+ */
+export function getMarketableLimitPrice(
+  side: "buy" | "sell",
+  bestAsk: number | null,
+  bestBid: number | null,
+  tolerance: number = SPOT_MARKET_SLIPPAGE
+) {
+  const touch = getCrossingPrice(side, bestAsk, bestBid);
+
+  if (touch === null || !Number.isFinite(touch) || touch <= 0) {
+    return null;
+  }
+
+  const priced = side === "buy" ? touch * (1 + tolerance) : touch * (1 - tolerance);
+  return Number(priced.toFixed(2));
+}
+
 export function getCrossingPrice(
   side: "buy" | "sell",
   bestAsk: number | null,

@@ -4,7 +4,13 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatNaira } from "@/lib/market-formatting";
-import { getCrossingPrice, getMaxOrderSize, getOrderCost } from "@/lib/spot-market";
+import {
+  getCrossingPrice,
+  getMarketableLimitPrice,
+  getMaxOrderSize,
+  getOrderCost,
+  SPOT_MARKET_SLIPPAGE,
+} from "@/lib/spot-market";
 import { SPOT_ORDER_LIFETIME_LABEL, SPOT_TAKER_FEE_RATE } from "@/lib/spot-order-submission";
 import { ConfirmOrderDialog } from "@/ui/trading-terminal/ConfirmOrderDialog";
 import { OrderTypeTabs } from "@/ui/trading-terminal/OrderTypeTabs";
@@ -240,7 +246,15 @@ function deriveOrderEconomics({
   });
   const canSizeByPercent = maxOrderSize !== null && maxOrderSize > 0;
 
-  const cost = getOrderCost(side, hasPrice ? (effectivePrice as number) : null, parsedAmount);
+  /*
+   * Checked against the price the order is *signed* at, not the one it is expected to fill at. A
+   * market order is signed through the touch, and the engine holds collateral against that limit —
+   * so a buy that looks affordable at the ask can still be short of what the venue requires.
+   */
+  const enteredPrice = hasPrice ? (effectivePrice as number) : null;
+  const signedPrice =
+    orderType === "Market" ? getMarketableLimitPrice(side, bestAsk, bestBid) : enteredPrice;
+  const cost = getOrderCost(side, signedPrice, parsedAmount);
   const availableForCost = cost?.currency === "USDC" ? availableUsdc : availableCngn;
   /*
    * A shortfall, not a rejection: the venue accepts an order the account cannot cover, rests it,
@@ -256,6 +270,7 @@ function deriveOrderEconomics({
     canSizeByPercent,
     crossingPrice,
     shortfall,
+    signedPrice,
     maxOrderSize,
     // Derived from the amount rather than held separately, so typing a size moves the slider and
     // the two can never disagree about what is being ordered.
@@ -463,6 +478,7 @@ export function SpotOrderFormPanel({
     crossingPrice,
     maxOrderSize,
     shortfall,
+    signedPrice,
     sizePercent,
     takerFee,
     totalLabel,
@@ -602,6 +618,14 @@ export function SpotOrderFormPanel({
            * Not a cost, but the term a trader is most likely to be surprised by: an unfilled order
            * leaves the book on its own, and nothing else on screen would say so.
            */}
+          {orderType === "Market" && signedPrice !== null ? (
+            // Not a cost either: it is the room the order has to still cross if the quote moves,
+            // and the price it is signed at. The fill itself lands at the maker's price.
+            <CostRow
+              label={`Crosses to ₦${signedPrice.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 })}`}
+              value={`${(SPOT_MARKET_SLIPPAGE * 100).toFixed(1)}% tolerance`}
+            />
+          ) : null}
           <CostRow label="Expires" value={`${SPOT_ORDER_LIFETIME_LABEL} after signing`} />
         </div>
 
