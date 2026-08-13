@@ -8,7 +8,7 @@ import {
   buildOpenOrdersActivityView,
   getOwnedOpenOrders,
 } from "@/lib/account-activity-views";
-import { getAnchorPrice, getBestPrices } from "@/lib/spot-market";
+import { getAnchorPrice, getBestPrices, getCommittedBalances } from "@/lib/spot-market";
 import {
   ACTIVITY_VIEWS,
   FOOTER_LINKS,
@@ -134,6 +134,14 @@ export function SpotTradingTerminal({
   // Assets is the one bottom tab with a real data source today, so it's built from live balances
   // instead of the placeholder-free static views.
   const ownedOpenOrders = getOwnedOpenOrders(spotMarket.openOrders, walletAddress);
+  /*
+   * What a new order can actually spend: the account balance less what this trader's own resting
+   * orders already claim. Showing the raw balance let an account with 1,300 cNGN and 1,382 already
+   * working read as fully available.
+   */
+  const committed = getCommittedBalances(spotMarket.openOrders, walletAddress);
+  const spendableCngn = accountCngn === null ? null : Math.max(0, accountCngn - committed.cngn);
+  const spendableUsdc = accountUsdc === null ? null : Math.max(0, accountUsdc - committed.usdc);
 
   function buildActivityView() {
     if (bottomTab === "assets") {
@@ -233,9 +241,9 @@ export function SpotTradingTerminal({
           <div className="order-first flex min-h-[420px] flex-col gap-3 xl:order-0 xl:row-span-2 xl:min-h-0 xl:overflow-hidden">
             <SpotOrderFormPanel
               anchorPrice={anchorPrice}
-              availableCngn={accountCngn}
+              availableCngn={spendableCngn}
               availableCngnLabel={accountCngnLabel ?? "— cNGN"}
-              availableUsdc={accountUsdc}
+              availableUsdc={spendableUsdc}
               availableUsdcLabel={accountUsdcLabel ?? "— USDC"}
               bestAsk={bestAsk}
               bestBid={bestBid}

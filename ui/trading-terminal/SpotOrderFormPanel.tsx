@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatNaira } from "@/lib/market-formatting";
-import { getCrossingPrice, getMaxOrderSize } from "@/lib/spot-market";
+import { getCrossingPrice, getMaxOrderSize, getOrderCost } from "@/lib/spot-market";
 import { SPOT_ORDER_LIFETIME_LABEL, SPOT_TAKER_FEE_RATE } from "@/lib/spot-order-submission";
 import { ConfirmOrderDialog } from "@/ui/trading-terminal/ConfirmOrderDialog";
 import { OrderTypeTabs } from "@/ui/trading-terminal/OrderTypeTabs";
@@ -94,6 +94,11 @@ function buildSpotConfirmation({
       { label: "Expires", value: `${SPOT_ORDER_LIFETIME_LABEL} after signing` },
     ],
   };
+}
+
+/** A balance or order cost in its own currency, e.g. "1,382.00 cNGN". */
+function formatBalance(amount: number, currency: "cNGN" | "USDC") {
+  return `${amount.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 })} ${currency}`;
 }
 
 /** Taker fee is charged on the USDC notional (the order Amount), matching the signed worstFee bound. */
@@ -235,9 +240,22 @@ function deriveOrderEconomics({
   });
   const canSizeByPercent = maxOrderSize !== null && maxOrderSize > 0;
 
+  const cost = getOrderCost(side, hasPrice ? (effectivePrice as number) : null, parsedAmount);
+  const availableForCost = cost?.currency === "USDC" ? availableUsdc : availableCngn;
+  /*
+   * A shortfall, not a rejection: the venue accepts an order the account cannot cover, rests it,
+   * and lets it expire unfilled five minutes later — which reads as the order vanishing. Catching
+   * it here is the only place a trader finds out before signing.
+   */
+  const shortfall =
+    cost !== null && availableForCost !== null && cost.amount > availableForCost
+      ? { currency: cost.currency, held: availableForCost, needed: cost.amount }
+      : null;
+
   return {
     canSizeByPercent,
     crossingPrice,
+    shortfall,
     maxOrderSize,
     // Derived from the amount rather than held separately, so typing a size moves the slider and
     // the two can never disagree about what is being ordered.
@@ -440,18 +458,25 @@ export function SpotOrderFormPanel({
   const needsLimitPrice = orderType !== "Market";
   const spendCurrency: PayCurrency = isBuy ? "cNGN" : "USDC";
   const availableLabel = spendCurrency === "USDC" ? availableUsdcLabel : availableCngnLabel;
-  const { canSizeByPercent, crossingPrice, maxOrderSize, sizePercent, takerFee, totalLabel } =
-    deriveOrderEconomics({
-      amount,
-      anchorPrice,
-      availableCngn,
-      availableUsdc,
-      bestAsk,
-      bestBid,
-      limitPrice,
-      orderType,
-      side,
-    });
+  const {
+    canSizeByPercent,
+    crossingPrice,
+    maxOrderSize,
+    shortfall,
+    sizePercent,
+    takerFee,
+    totalLabel,
+  } = deriveOrderEconomics({
+    amount,
+    anchorPrice,
+    availableCngn,
+    availableUsdc,
+    bestAsk,
+    bestBid,
+    limitPrice,
+    orderType,
+    side,
+  });
 
   const confirmation = buildSpotConfirmation({
     amount,
@@ -492,6 +517,8 @@ export function SpotOrderFormPanel({
   // Both states block submission, but they are not the same thing: "Submitting…" on a button the
   // user never pressed reads as a stuck order rather than a subaccount lookup still in flight.
   const isBusy = isSubmitting || isPreparingAccount;
+  // Only blocks a trader who has an account to measure against: with no wallet the CTA funds one.
+  const isUnaffordable = hasWallet && shortfall !== null;
   const submitLabel = getSpotSubmitLabel({
     hasWallet,
     isPreparingAccount,
@@ -578,15 +605,23 @@ export function SpotOrderFormPanel({
           <CostRow label="Expires" value={`${SPOT_ORDER_LIFETIME_LABEL} after signing`} />
         </div>
 
+        {shortfall === null || !hasWallet ? null : (
+          <p className="text-[10px] text-sell leading-snug">
+            Needs {formatBalance(shortfall.needed, shortfall.currency)}; account holds{" "}
+            {formatBalance(shortfall.held, shortfall.currency)}.
+          </p>
+        )}
+
         <button
           className={cn(
             "h-11 w-full cursor-pointer rounded-[12px] font-semibold text-[13px] transition-colors",
             isBuy
               ? "bg-buy text-background hover:bg-buy/90"
               : "bg-sell text-white hover:bg-sell/90",
-            isBusy && "cursor-wait opacity-70"
+            isBusy && "cursor-wait opacity-70",
+            isUnaffordable && "cursor-not-allowed opacity-50"
           )}
-          disabled={isBusy}
+          disabled={isBusy || isUnaffordable}
           // Stable hook for the layout invariant check: the label changes with wallet and
           // submission state ("Deposit", "Submitting…", "Buy USDC"), so text is not an identifier.
           id="spot-submit-cta"
