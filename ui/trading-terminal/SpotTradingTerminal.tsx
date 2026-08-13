@@ -141,8 +141,12 @@ export function SpotTradingTerminal({
        * bottom row beneath them, and the ticket column runs the full height alongside both. The
        * ticket used to be boxed into the top row's height, which cut its Amount field off mid-box
        * on the ~700-900px viewports most of this app's desktop traffic uses.
+       *
+       * The bottom row takes 3/10 rather than 2/10: at 2/10 the activity panel was a ~144px sliver
+       * whose own empty state ran past its bottom edge, so it read as a strip of tab labels rather
+       * than a panel holding anything.
        */}
-      <div className="grid grid-cols-1 gap-3 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_270px_320px] xl:grid-rows-[minmax(0,8fr)_minmax(0,2fr)] xl:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_300px_340px]">
+      <div className="grid grid-cols-1 gap-3 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_270px_320px] xl:grid-rows-[minmax(0,7fr)_minmax(0,3fr)] xl:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_300px_340px]">
         <SpotChartPanel
           asks={bookAsks}
           bids={bookBids}
