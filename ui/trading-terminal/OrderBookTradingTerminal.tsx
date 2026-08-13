@@ -11,7 +11,6 @@ import type { SpotMarket } from "@/lib/trading.types";
 import { buildDepositAccount, DepositDialog } from "@/ui/trading-terminal/DepositDialog";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import { SpotTradingTerminal } from "@/ui/trading-terminal/SpotTradingTerminal";
-import { TradingMarketHeader } from "@/ui/trading-terminal/TradingMarketHeader";
 import { formatCngnBalanceLabel, useCngnBalance } from "@/ui/trading-terminal/useCngnBalance";
 import {
   formatSubaccountCngnLabel,
@@ -291,42 +290,37 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
   }
 
   return (
-    <main className="flex min-h-screen bg-terminal-bg text-foreground transition-colors duration-300 xl:h-dvh xl:overflow-hidden">
+    <main className="flex min-h-screen flex-col bg-terminal-bg text-foreground transition-colors duration-300 xl:h-dvh xl:overflow-hidden">
       <MarketDocumentTitle pair="USDC/cNGN" price={spotMarket.mark} />
 
-      <div className="flex min-h-screen min-w-0 flex-1 flex-col gap-3 p-3 xl:h-dvh xl:overflow-hidden xl:px-4">
-        <TradingMarketHeader
-          depositControl={
-            <DepositDialog
-              account={depositAccount}
-              onConnectWallet={handleConnectWallet}
-              onDeposited={handleDeposited}
-              onOpenChange={setDepositOpen}
-              open={depositOpen}
-              triggerClassName="flex h-8 cursor-pointer items-center whitespace-nowrap rounded-lg bg-input-bg px-2.5 font-semibold text-[11px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active disabled:cursor-not-allowed disabled:opacity-60"
-              triggerId="header-deposit-trigger"
-            />
-          }
-        />
-
-        <SpotTradingTerminal
-          accountCngn={toLedgerAmount(subaccountBalance?.cngnUnits ?? null)}
-          accountCngnLabel={accountCngnLabel}
-          accountUsdc={toLedgerAmount(subaccountBalance?.cashUnits ?? null)}
-          accountUsdcLabel={accountUsdcLabel}
-          candles={spotMarket.candles}
-          cngnBalanceLabel={formatCngnBalanceLabel(cngnBalance)}
-          hasWallet={hasWallet}
-          isPreparingAccount={isPreparingAccount}
-          isSignedIn={isSignedIn}
-          isSubmitting={isSubmittingOrder}
-          lastAction={lastAction}
-          onDepositRequest={() => setDepositOpen(true)}
-          onSubmitOrder={handleSubmitSpot}
-          spotMarket={spotMarket}
-          usdcBalanceLabel={formatUsdcBalanceLabel(usdcBalance)}
-        />
-      </div>
+      <SpotTradingTerminal
+        accountCngn={toLedgerAmount(subaccountBalance?.cngnUnits ?? null)}
+        accountCngnLabel={accountCngnLabel}
+        accountUsdc={toLedgerAmount(subaccountBalance?.cashUnits ?? null)}
+        accountUsdcLabel={accountUsdcLabel}
+        candles={spotMarket.candles}
+        cngnBalanceLabel={formatCngnBalanceLabel(cngnBalance)}
+        depositControl={
+          <DepositDialog
+            account={depositAccount}
+            onConnectWallet={handleConnectWallet}
+            onDeposited={handleDeposited}
+            onOpenChange={setDepositOpen}
+            open={depositOpen}
+            triggerClassName="flex h-10 cursor-pointer items-center whitespace-nowrap rounded-full bg-input-bg px-4 font-semibold text-[12px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active disabled:cursor-not-allowed disabled:opacity-60"
+            triggerId="header-deposit-trigger"
+          />
+        }
+        hasWallet={hasWallet}
+        isPreparingAccount={isPreparingAccount}
+        isSignedIn={isSignedIn}
+        isSubmitting={isSubmittingOrder}
+        lastAction={lastAction}
+        onDepositRequest={() => setDepositOpen(true)}
+        onSubmitOrder={handleSubmitSpot}
+        spotMarket={spotMarket}
+        usdcBalanceLabel={formatUsdcBalanceLabel(usdcBalance)}
+      />
     </main>
   );
 }
