@@ -1,5 +1,6 @@
-import type { ActivityTab, ActivityView } from "@/lib/trading.types";
+import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import type { ActivityTab, ActivityView } from "@/lib/trading.types";
 
 /** Tabs that describe the viewer's own account, so their rows must never render for a signed-out visitor. */
 const ACCOUNT_SCOPED_TABS = new Set([
@@ -35,6 +36,7 @@ export function TradingActivityPanel({
   activityView,
   footerLinks,
   isSignedIn = false,
+  rowAction,
   selectedTab,
   tabs,
   onTabSelect,
@@ -43,6 +45,11 @@ export function TradingActivityPanel({
   footerLinks: readonly { href: string; label: string }[];
   /** Whether a wallet session is active. Defaults to false so rows stay hidden unless proven otherwise. */
   isSignedIn?: boolean;
+  /**
+   * Control rendered in each row's trailing cell — the cancel button on Open Orders. The view
+   * supplies a matching empty trailing column so the header and rows keep the same track count.
+   */
+  rowAction?: (rowIndex: number) => ReactNode;
   selectedTab: string;
   tabs: ActivityTab[];
   onTabSelect: (tabId: string) => void;
@@ -118,6 +125,7 @@ export function TradingActivityPanel({
                         {cell}
                       </span>
                     ))}
+                    {rowAction ? <span className="text-right">{rowAction(rowIndex)}</span> : null}
                   </div>
                 ))}
 

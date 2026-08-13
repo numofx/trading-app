@@ -1,6 +1,7 @@
 "use client";
 
 import { useLogin, usePrivy, useWallets } from "@privy-io/react-auth";
+import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
 import { useEffect, useState } from "react";
 import { createWalletClient, custom } from "viem";
@@ -115,6 +116,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
   // footer space in the order ticket without telling the trader anything.
   const [lastAction, setLastAction] = useState<string | null>(null);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+  const router = useRouter();
 
   const { authenticated, ready: privyReady } = usePrivy();
   // No callbacks here: PrivyWalletButton owns the analytics side of login, and a second
@@ -276,6 +278,9 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
       refreshUsdcBalance();
       refreshCngnBalance();
       refreshSubaccountBalance();
+      // Re-runs the server render, so an order that rested shows up in the book and in Open Orders
+      // instead of leaving the terminal looking exactly as it did before the trade.
+      router.refresh();
       return;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Spot order submission failed";
@@ -320,6 +325,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
         onSubmitOrder={handleSubmitSpot}
         spotMarket={spotMarket}
         usdcBalanceLabel={formatUsdcBalanceLabel(usdcBalance)}
+        walletAddress={primaryWallet?.address ?? null}
       />
     </main>
   );

@@ -1,8 +1,13 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { buildAssetsActivityView } from "@/lib/account-activity-views";
+import {
+  buildAssetsActivityView,
+  buildOpenOrdersActivityView,
+  getOwnedOpenOrders,
+} from "@/lib/account-activity-views";
 import { getAnchorPrice, getBestPrices } from "@/lib/spot-market";
 import {
   ACTIVITY_VIEWS,
@@ -34,6 +39,7 @@ export function SpotTradingTerminal({
   accountCngnLabel = null,
   accountCngn = null,
   accountUsdc = null,
+  walletAddress = null,
   depositControl,
   onDepositRequest,
   onSubmitOrder,
@@ -56,6 +62,8 @@ export function SpotTradingTerminal({
   /** Subaccount balances as numbers — the ticket sizes a percentage of what the account can spend. */
   accountCngn?: number | null;
   accountUsdc?: number | null;
+  /** Connected wallet, used to pick this trader's own orders out of the public book. */
+  walletAddress?: string | null;
   /** The deposit dialog trigger, hosted in the header bar. */
   depositControl?: ReactNode;
   /** Opens the deposit dialog; the ticket CTA calls it while there is no funded account. */
@@ -84,6 +92,9 @@ export function SpotTradingTerminal({
   const [bookTab, setBookTab] = useState<SpotBookTab>("book");
   const [bottomTab, setBottomTab] = useState<string>("positions");
   const [liveCandles, setLiveCandles] = useState<Candle[]>(candles);
+  const [cancellingNonce, setCancellingNonce] = useState<string | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     setLiveCandles(candles);
@@ -122,15 +133,50 @@ export function SpotTradingTerminal({
   const { changePercent, high, low, volumeLabel } = get24hStats(liveCandles, lastPrice, Date.now());
   // Assets is the one bottom tab with a real data source today, so it's built from live balances
   // instead of the placeholder-free static views.
-  const activityView =
-    bottomTab === "assets"
-      ? buildAssetsActivityView({
-          accountCngnLabel,
-          accountUsdcLabel,
-          walletCngnLabel: cngnBalanceLabel,
-          walletUsdcLabel: usdcBalanceLabel,
-        })
-      : (ACTIVITY_VIEWS[bottomTab as keyof typeof ACTIVITY_VIEWS] ?? { columns: [], rows: [] });
+  const ownedOpenOrders = getOwnedOpenOrders(spotMarket.openOrders, walletAddress);
+
+  function buildActivityView() {
+    if (bottomTab === "assets") {
+      return buildAssetsActivityView({
+        accountCngnLabel,
+        accountUsdcLabel,
+        walletCngnLabel: cngnBalanceLabel,
+        walletUsdcLabel: usdcBalanceLabel,
+      });
+    }
+    if (bottomTab === "open-orders") {
+      return buildOpenOrdersActivityView(spotMarket.openOrders, walletAddress);
+    }
+    return ACTIVITY_VIEWS[bottomTab as keyof typeof ACTIVITY_VIEWS] ?? { columns: [], rows: [] };
+  }
+
+  const activityView = buildActivityView();
+
+  /**
+   * Cancels by `(owner_address, nonce)` — what markets-service takes — then refreshes the server
+   * render so the book and this list reflect the removal rather than showing an order that is gone.
+   */
+  async function handleCancelOrder(nonce: string, ownerAddress: string) {
+    setCancelError(null);
+    setCancellingNonce(nonce);
+    try {
+      const response = await fetch("/api/orders/cancel", {
+        body: JSON.stringify({ nonce, owner_address: ownerAddress }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: string } | null;
+        setCancelError(body?.error ?? `Cancel failed (${response.status})`);
+        return;
+      }
+      router.refresh();
+    } catch (error) {
+      setCancelError(error instanceof Error ? error.message : "Cancel failed");
+    } finally {
+      setCancellingNonce(null);
+    }
+  }
 
   return (
     <>
@@ -212,9 +258,32 @@ export function SpotTradingTerminal({
               footerLinks={FOOTER_LINKS}
               isSignedIn={isSignedIn}
               onTabSelect={setBottomTab}
+              rowAction={
+                bottomTab === "open-orders"
+                  ? (rowIndex) => {
+                      const order = ownedOpenOrders[rowIndex];
+                      if (!order) {
+                        return null;
+                      }
+                      return (
+                        <button
+                          className="cursor-pointer rounded-lg bg-input-bg px-2 py-1 font-medium text-[10px] text-panel-text ring-1 ring-panel-border transition-colors hover:text-panel-text-active disabled:cursor-wait disabled:opacity-60"
+                          disabled={cancellingNonce === order.nonce}
+                          onClick={() => handleCancelOrder(order.nonce, order.ownerAddress)}
+                          type="button"
+                        >
+                          {cancellingNonce === order.nonce ? "Cancelling…" : "Cancel"}
+                        </button>
+                      );
+                    }
+                  : undefined
+              }
               selectedTab={bottomTab}
               tabs={SPOT_BOTTOM_TABS}
             />
+            {cancelError === null ? null : (
+              <p className="px-4 pt-1 text-[10px] text-sell">{cancelError}</p>
+            )}
           </div>
         </div>
       </div>

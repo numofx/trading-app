@@ -1,5 +1,11 @@
 import type { BookResponse, PresentedTrade } from "@/lib/markets-service";
-import type { Candle, OrderBookLevel, SpotMarket, TradePrint } from "@/lib/trading.types";
+import type {
+  Candle,
+  OrderBookLevel,
+  SpotMarket,
+  SpotOpenOrder,
+  TradePrint,
+} from "@/lib/trading.types";
 
 /**
  * The touch: the best price resting on each side of the ladder the trader is looking at.
@@ -87,11 +93,41 @@ export type LiveSpotRuntime = {
 const EMPTY_SPOT_MARKET: SpotMarket = {
   candles: [],
   mark: null,
+  openOrders: [],
   orderBookAsks: [],
   orderBookBids: [],
   orderEntrySpec: null,
   trades: [],
 };
+
+/**
+ * Resting orders in trader-facing terms, keeping the identity a cancel needs.
+ *
+ * Orders without both an owner and a nonce are dropped rather than listed: a row that cannot be
+ * cancelled is worse than no row, since the only reason to show it is to act on it.
+ */
+export function collectOpenOrders(book: BookResponse | null): SpotOpenOrder[] {
+  return [...(book?.bids ?? []), ...(book?.asks ?? [])]
+    .map((order) => {
+      const intent = order.spot_contract?.ui_intent;
+      return {
+        filled: Number(order.filled_amount ?? "0"),
+        nonce: order.nonce ?? "",
+        orderId: order.order_id ?? "",
+        ownerAddress: order.owner_address ?? "",
+        price: Number(intent?.price ?? Number(order.limit_price)),
+        side: intent?.side ?? order.side,
+        size: Number(intent?.size ?? order.desired_amount),
+      };
+    })
+    .filter(
+      (order) =>
+        order.ownerAddress !== "" &&
+        order.nonce !== "" &&
+        Number.isFinite(order.price) &&
+        Number.isFinite(order.size)
+    );
+}
 
 /**
  * Spot depth is USDC notional and routinely fractional — a 0.4 USDC order is real resting depth.
@@ -206,6 +242,7 @@ export function buildSpotMarket(liveSpot: LiveSpotRuntime | null): SpotMarket {
   return {
     candles: liveSpot.candles ?? [],
     mark: deriveMarkFromBook(orderBookAsks, orderBookBids) ?? trades[0]?.price ?? null,
+    openOrders: collectOpenOrders(liveSpot.book),
     orderBookAsks,
     orderBookBids,
     // Taken from the venue rather than assumed: it is what tells the stream to invert engine values.
