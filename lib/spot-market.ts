@@ -89,6 +89,31 @@ export function getOrderCost(side: "buy" | "sell", price: number | null, size: n
 }
 
 /**
+ * The orders still working at `nowMs`, dropping any the venue has already expired.
+ *
+ * The book arrives as a server-rendered snapshot and orders leave it on a timer, so a page that
+ * does not re-render keeps counting dead orders — which held `Available` down by the cost of an
+ * order that had already expired. `nowMs` of 0 means "not yet known" (the first client render,
+ * before an effect supplies the clock) and ages nothing out, so hydration matches the server.
+ */
+export function getWorkingOrders(openOrders: SpotOpenOrder[], nowMs: number) {
+  if (nowMs <= 0) {
+    return openOrders;
+  }
+
+  return openOrders.filter((order) => order.expiresAtMs === null || order.expiresAtMs > nowMs);
+}
+
+/** When the soonest of these orders expires, so a caller can re-render exactly then. */
+export function getNextExpiryMs(openOrders: SpotOpenOrder[]) {
+  const expiries = openOrders
+    .map((order) => order.expiresAtMs)
+    .filter((expiry): expiry is number => expiry !== null);
+
+  return expiries.length === 0 ? null : Math.min(...expiries);
+}
+
+/**
  * What this trader's own resting orders already lay claim to.
  *
  * A balance that ignores working orders overstates what a new order can spend: an account holding
@@ -190,7 +215,9 @@ export function collectOpenOrders(book: BookResponse | null): SpotOpenOrder[] {
   return [...(book?.bids ?? []), ...(book?.asks ?? [])]
     .map((order) => {
       const intent = order.spot_contract?.ui_intent;
+      const expiry = Number(order.expiry);
       return {
+        expiresAtMs: Number.isFinite(expiry) && expiry > 0 ? expiry * 1000 : null,
         filled: Number(order.filled_amount ?? "0"),
         nonce: order.nonce ?? "",
         orderId: order.order_id ?? "",

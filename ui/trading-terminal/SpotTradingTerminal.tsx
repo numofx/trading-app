@@ -2,13 +2,19 @@
 
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import {
   buildAssetsActivityView,
   buildOpenOrdersActivityView,
   getOwnedOpenOrders,
 } from "@/lib/account-activity-views";
-import { getAnchorPrice, getBestPrices, getCommittedBalances } from "@/lib/spot-market";
+import {
+  getAnchorPrice,
+  getBestPrices,
+  getCommittedBalances,
+  getNextExpiryMs,
+  getWorkingOrders,
+} from "@/lib/spot-market";
 import {
   ACTIVITY_VIEWS,
   FOOTER_LINKS,
@@ -93,12 +99,47 @@ export function SpotTradingTerminal({
   const [bottomTab, setBottomTab] = useState<string>("positions");
   const [liveCandles, setLiveCandles] = useState<Candle[]>(candles);
   const [cancellingNonce, setCancellingNonce] = useState<string | null>(null);
+  // Starts at 0 — "clock not known yet" — so the first client render ages nothing out and matches
+  // what the server rendered. An effect supplies the real time straight after mount.
+  const [nowMs, setNowMs] = useState(0);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
     setLiveCandles(candles);
   }, [candles]);
+
+  // Scoped to this trader's own orders: theirs are what `Available` and Open Orders depend on, and
+  // a visitor with none should not be re-rendering the page on the market maker's quote cycle.
+  const nextExpiryMs = getNextExpiryMs(getOwnedOpenOrders(spotMarket.openOrders, walletAddress));
+
+  /**
+   * Re-reads the clock, and the server render with it, the moment the soonest order expires.
+   *
+   * `useEffectEvent` keeps the router out of the effect's dependencies, which would otherwise
+   * resubscribe the timer on every render.
+   */
+  const catchUpWithExpiries = useEffectEvent(() => {
+    setNowMs(Date.now());
+    router.refresh();
+  });
+
+  // Supplies the clock after mount, and again whenever the book changes.
+  useEffect(() => {
+    setNowMs(Date.now());
+  }, [spotMarket.openOrders]);
+
+  useEffect(() => {
+    if (nextExpiryMs === null) {
+      return;
+    }
+
+    // A moment past the deadline, so the venue has certainly dropped it before we re-read.
+    const delay = Math.max(0, nextExpiryMs - Date.now()) + 500;
+    const timer = window.setTimeout(() => catchUpWithExpiries(), delay);
+
+    return () => window.clearTimeout(timer);
+  }, [nextExpiryMs]);
 
   // No simulated ticking: candles are real venue OHLCV.
 
@@ -133,13 +174,16 @@ export function SpotTradingTerminal({
   const { changePercent, high, low, volumeLabel } = get24hStats(liveCandles, lastPrice, Date.now());
   // Assets is the one bottom tab with a real data source today, so it's built from live balances
   // instead of the placeholder-free static views.
-  const ownedOpenOrders = getOwnedOpenOrders(spotMarket.openOrders, walletAddress);
+  // Orders leave the book when they expire and nothing announces it, so a snapshot taken while one
+  // was alive keeps counting it. Ageing them out here is what lets `Available` recover on its own.
+  const workingOrders = getWorkingOrders(spotMarket.openOrders, nowMs);
+  const ownedOpenOrders = getOwnedOpenOrders(workingOrders, walletAddress);
   /*
    * What a new order can actually spend: the account balance less what this trader's own resting
    * orders already claim. Showing the raw balance let an account with 1,300 cNGN and 1,382 already
    * working read as fully available.
    */
-  const committed = getCommittedBalances(spotMarket.openOrders, walletAddress);
+  const committed = getCommittedBalances(workingOrders, walletAddress);
   const spendableCngn = accountCngn === null ? null : Math.max(0, accountCngn - committed.cngn);
   const spendableUsdc = accountUsdc === null ? null : Math.max(0, accountUsdc - committed.usdc);
 
@@ -153,7 +197,7 @@ export function SpotTradingTerminal({
       });
     }
     if (bottomTab === "open-orders") {
-      return buildOpenOrdersActivityView(spotMarket.openOrders, walletAddress);
+      return buildOpenOrdersActivityView(workingOrders, walletAddress);
     }
     return ACTIVITY_VIEWS[bottomTab as keyof typeof ACTIVITY_VIEWS] ?? { columns: [], rows: [] };
   }

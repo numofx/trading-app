@@ -43,6 +43,12 @@ export type MarketType = "spot" | "future" | "option" | "perp";
  * `POST /v1/orders/cancel` cancels by, so a client can offer cancellation from the book alone.
  */
 export type SpotOpenOrder = {
+  /**
+   * When the venue stops matching it, in epoch milliseconds; null when the book omits an expiry.
+   * Orders leave the book on this timer with nothing to announce it, so a client holding a
+   * snapshot has to age them out itself.
+   */
+  expiresAtMs: number | null;
   /** USDC notional already filled; the rest is still working. */
   filled: number;
   nonce: string;
