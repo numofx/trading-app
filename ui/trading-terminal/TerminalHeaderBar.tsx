@@ -84,6 +84,7 @@ export function TerminalHeaderBar({
   high24h,
   lastPrice,
   low24h,
+  onPortfolioSelect,
   volume24hLabel,
 }: {
   changePercent24h: number | null;
@@ -92,6 +93,8 @@ export function TerminalHeaderBar({
   high24h: number | null;
   lastPrice: number | null;
   low24h: number | null;
+  /** Fired by the connected wallet menu's Portfolio item. */
+  onPortfolioSelect?: () => void;
   volume24hLabel: string;
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -188,7 +191,7 @@ export function TerminalHeaderBar({
         >
           {theme === "light" ? <Moon className="size-5" /> : <Sun className="size-5" />}
         </button>
-        <PrivyWalletButton />
+        <PrivyWalletButton onPortfolioSelect={onPortfolioSelect} />
       </div>
     </header>
   );
