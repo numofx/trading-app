@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
-import { useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import {
   buildAssetsActivityView,
   buildOpenOrdersActivityView,
@@ -103,6 +103,7 @@ export function SpotTradingTerminal({
   // what the server rendered. An effect supplies the real time straight after mount.
   const [nowMs, setNowMs] = useState(0);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const activityPanelRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -205,6 +206,16 @@ export function SpotTradingTerminal({
   const activityView = buildActivityView();
 
   /**
+   * The wallet menu's Portfolio item. There is no separate portfolio route — the account's holdings
+   * live in the activity panel's Assets tab, so this selects that tab and brings the panel into
+   * view, which matters on the short viewports most of this app's traffic uses.
+   */
+  function showPortfolio() {
+    setBottomTab("assets");
+    activityPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  /**
    * Cancels by `(owner_address, nonce)` — what markets-service takes — then refreshes the server
    * render so the book and this list reflect the removal rather than showing an order that is gone.
    */
@@ -238,6 +249,7 @@ export function SpotTradingTerminal({
         high24h={high}
         lastPrice={lastPrice}
         low24h={low}
+        onPortfolioSelect={showPortfolio}
         volume24hLabel={volumeLabel}
       />
 
@@ -304,7 +316,7 @@ export function SpotTradingTerminal({
             />
           </div>
 
-          <div className="min-h-[200px] xl:col-span-2 xl:min-h-0">
+          <div className="min-h-[200px] xl:col-span-2 xl:min-h-0" ref={activityPanelRef}>
             <TradingActivityPanel
               activityView={activityView}
               footerLinks={FOOTER_LINKS}
