@@ -55,54 +55,101 @@ function HeaderMetric({
   );
 }
 
+/** One `label — value` line in the claim breakdown. */
+function ClaimRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4">
+      <span className="text-panel-text-muted">{label}</span>
+      <span className="font-medium text-panel-text-active">{value}</span>
+    </div>
+  );
+}
+
 /**
- * One holding, as a muted symbol beside its figure. Inline rather than the stacked
- * {@link HeaderMetric} so the pair reads as a single group with the deposit button next to it.
+ * One holding, in ticker form — "1,300 cNGN", the figure carrying its own symbol. Inline rather
+ * than the stacked {@link HeaderMetric} so the pair reads as a single group with the deposit button
+ * next to it.
  *
  * The header reports what the account holds while the ticket reports what a new order can spend.
- * When resting orders have opened a gap between the two, the balance carries the claimed figure
- * after it, so the smaller number in the ticket is accounted for rather than looking like a
- * disagreement between two panels.
+ * When resting orders have opened a gap between the two, the balance becomes a disclosure that
+ * breaks the difference down, so the smaller number in the ticket is accounted for rather than
+ * looking like a disagreement between two panels.
+ *
+ * A popover rather than a `title` tooltip: the inline note only fits from `xl`, and a `title` is
+ * unreachable on the touch devices that make up the widths below it — which is where the note is
+ * hidden and the explanation is needed most. Plain text when there is nothing to explain, so the
+ * trader is not offered a control that opens an empty box.
  */
 function AccountBalance({
   claimedLabel,
-  label,
+  spendableLabel,
+  symbol,
   value,
 }: {
   /** Non-null only when this trader's resting orders claim a printable part of the balance. */
   claimedLabel: string | null;
-  label: string;
+  spendableLabel: string;
+  symbol: string;
   value: string;
 }) {
+  if (claimedLabel === null) {
+    return (
+      <span className="whitespace-nowrap font-medium text-[13px] text-panel-text-active">
+        {value}
+      </span>
+    );
+  }
+
   return (
-    <span
-      className="flex items-baseline gap-1.5 whitespace-nowrap"
-      title={
-        claimedLabel === null
-          ? undefined
-          : `${value} ${label} in the account. ${claimedLabel} is claimed by your resting orders, so the order ticket can spend the rest.`
-      }
-    >
-      <span className="text-[10px] text-panel-text-muted">{label}</span>
-      <span className="font-medium text-[13px] text-panel-text-active">{value}</span>
-      {claimedLabel === null ? null : (
+    <Popover.Root>
+      <Popover.Trigger
+        aria-label={`${symbol} balance breakdown`}
+        // The padding is bled back out with matching negative margins: it buys the tap target
+        // ~12px of height and a little grab room either side without spending a pixel of the
+        // header's own row, which is measured to the edge at these widths.
+        className="-mx-1 -my-1.5 flex cursor-pointer items-baseline gap-1.5 whitespace-nowrap rounded-md px-1 py-1.5 outline-none transition-colors hover:bg-input-bg focus-visible:ring-2 focus-visible:ring-panel-text-muted"
+      >
+        <span className="font-medium text-[13px] text-panel-text-active">{value}</span>
+        {/*
+         * A bare minus would read as a price move on a row of market figures. The lock says what
+         * the number is — spoken for, not lost — and holds that meaning at the width where the
+         * figure beside it does not fit.
+         *
+         * Below `xl` the lock travels alone: a noted pair measures ~335px there and pushes the row
+         * onto a second line. It is still a ~12px tap target inside a taller trigger, and it is
+         * what tells the trader there is something to open.
+         */}
         <span className="flex items-center gap-1 text-[10px] text-panel-text-muted">
-          {/*
-           * A bare minus would read as a price move on a row of market figures. The lock says what
-           * the number is — spoken for, not lost — and holds that meaning at the width where the
-           * word itself does not fit.
-           */}
           <Lock aria-hidden className="size-2.5" />
-          {claimedLabel}
           {/*
-           * Always announced, shown from `2xl` where the row has room for it: `sr-only` is out of
-           * flow, so below that the words cost nothing and the lock is not left carrying the
-           * meaning alone for a screen reader.
+           * Two spans for one figure, so exactly one of them is ever rendered and exactly one is
+           * ever announced. The visible one is `aria-hidden`; the phrased one is always in the
+           * accessibility tree — `sr-only` is out of flow, so below `2xl` it costs no width, and
+           * the lock is never left carrying the meaning alone for a screen reader.
            */}
-          <span className="sr-only 2xl:not-sr-only">in orders</span>
+          <span aria-hidden className="hidden xl:inline 2xl:hidden">
+            {claimedLabel}
+          </span>
+          <span className="sr-only 2xl:not-sr-only">{claimedLabel} in orders</span>
         </span>
-      )}
-    </span>
+      </Popover.Trigger>
+
+      <Popover.Portal>
+        <Popover.Positioner align="end" sideOffset={8}>
+          <Popover.Popup className="z-50 w-[260px] rounded-2xl border border-panel-border bg-panel-bg-darker p-3 text-[11px] shadow-[0_20px_60px_var(--panel-shadow)] outline-none transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
+            <div className="space-y-1.5">
+              <ClaimRow label="In account" value={value} />
+              <ClaimRow label="Claimed by resting orders" value={claimedLabel} />
+              <ClaimRow label="Available to trade" value={spendableLabel} />
+            </div>
+            <p className="mt-2.5 border-panel-border border-t pt-2 text-[10px] text-panel-text-muted leading-snug">
+              Your working orders hold this much until they fill or expire. The order ticket can
+              spend the rest.
+            </p>
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }
 
@@ -207,10 +254,10 @@ export function TerminalHeaderBar({
   };
 
   return (
-    // Exactly 64px from `md` up. Below that the actions alone need ~320px, so the row wraps to a
-    // second line rather than overflowing — the same two-row treatment the previous header used on
-    // phones, and what keeps the page free of horizontal scroll at 375px.
-    <header className="flex min-h-16 shrink-0 flex-wrap items-center gap-3 border-panel-border border-b px-4 py-3 transition-colors duration-300 md:h-16 md:flex-nowrap md:py-0">
+    // 64px when everything fits on one line (40px of controls inside 24px of padding), growing
+    // rather than overflowing when it does not: the account balances now render at every width, so
+    // the row can no longer be sized as if the right-hand cluster had a fixed extent.
+    <header className="flex min-h-16 shrink-0 flex-wrap items-center gap-3 border-panel-border border-b px-4 py-3 transition-colors duration-300 md:flex-nowrap">
       <SmartImage<string>
         alt="Numo"
         className="h-7 w-24 shrink-0"
@@ -255,50 +302,71 @@ export function TerminalHeaderBar({
       {/*
        * Spacing separates the metrics, not rules — the one divider above marks the app/market
        * split, and repeating it between every figure would turn the bar into a table. Hidden
-       * rather than wrapped below `md`, where the actions need the width more than the figures do.
+       * rather than wrapped below `lg`: the balances hold the right of the row at every width now,
+       * and between `md` and `lg` the actions need what is left more than the figures do.
        */}
-      <div className="hidden min-w-0 items-center gap-6 md:flex">
+      {/*
+       * `overflow-hidden` because every figure in here is `whitespace-nowrap`: squeezed by a wide
+       * balance cluster to its right, the values would otherwise paint straight over it rather
+       * than clip.
+       */}
+      <div className="hidden min-w-0 items-center gap-6 overflow-hidden lg:flex">
         <HeaderMetric label="Price">
           {formatNaira(lastPrice)}
           <span className={cn("text-[11px]", getChangeClassName(changePercent24h))}>
             {formatChangePercent(changePercent24h)}
           </span>
         </HeaderMetric>
-        <HeaderMetric label="24H volume">{volume24hLabel}</HeaderMetric>
         {/*
-         * The extremes step aside between `xl` and `2xl`, where the row cannot hold both them and
-         * the account balances — measured, the balances need ~150px these were occupying. They are
-         * the two figures a trader can read straight off the chart, so they are the ones to give
-         * up. Unconditional rather than gated on the wallet: tying it to `hasWallet` rearranged the
-         * header at the moment of connecting, which reads as a glitch, and this way the row's shape
-         * depends only on its width. Below `xl` they stay — the balances do not appear there, so
-         * hiding them would cost the trader two figures and return nothing.
+         * Volume stands down below `xl` for the same reason the extremes stand down below `2xl`:
+         * measured at 1024px, Price, volume and a claim-noted balance pair overrun the row by
+         * ~40px, and the metrics box is the one that gives — clipping "24H volume ₦1" mid-figure.
+         * Price is the figure worth keeping at every width the metrics show at all.
          */}
-        <HeaderMetric className="xl:hidden 2xl:flex" label="24H high">
+        <HeaderMetric className="hidden xl:flex" label="24H volume">
+          {volume24hLabel}
+        </HeaderMetric>
+        {/*
+         * The extremes stand down below `2xl`, where the row cannot hold both them and the account
+         * balances — measured, the balances need ~150px these were occupying, more once a claim
+         * note is on them. They are the two figures a trader can read straight off the chart, so
+         * they are the ones to give up. Unconditional rather than gated on the wallet: tying it to
+         * `hasWallet` rearranged the header at the moment of connecting, which reads as a glitch,
+         * and this way the row's shape depends only on its width.
+         */}
+        <HeaderMetric className="hidden 2xl:flex" label="24H high">
           {formatNaira(high24h)}
         </HeaderMetric>
-        <HeaderMetric className="xl:hidden 2xl:flex" label="24H low">
+        <HeaderMetric className="hidden 2xl:flex" label="24H low">
           {formatNaira(low24h)}
         </HeaderMetric>
       </div>
 
-      <div className="ml-auto flex shrink-0 items-center gap-3">
+      {/*
+       * Wraps inside itself rather than overflowing. This is the only cluster whose width is not
+       * knowable in advance — a claim note can add ~60px to either balance — and it is the one the
+       * header can least afford to have paint over its neighbours, so it is allowed a second line
+       * at the narrow widths where the balances plus the three controls do not fit on one.
+       */}
+      <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
         {/*
-         * `xl` is affordable only because 24H high and low stand down above — the 24H metrics sit
-         * in a `min-w-0` box, so a group added without freeing that space does not widen the
-         * header, it silently squeezes those figures until their nowrap values paint over these
-         * balances. Below `xl` the ticket column's balance summary carries the same numbers.
+         * Shown at every width, and the only place either balance is now reported: the strip that
+         * used to carry them under the order ticket is gone, so hiding them here would leave a
+         * phone with no account balance on screen at all. 24H high and low stand down below `2xl`
+         * to pay for the space.
          */}
         {hasWallet ? (
-          <div className="mr-1 hidden items-center gap-4 xl:flex">
+          <div className="mr-1 flex shrink-0 items-center gap-4">
             <AccountBalance
               claimedLabel={getClaimedNote(accountUsdc, spendableUsdc, formatAccountUsdc)}
-              label="USDC"
+              spendableLabel={formatAccountUsdc(spendableUsdc)}
+              symbol="USDC"
               value={usdcLabel}
             />
             <AccountBalance
               claimedLabel={getClaimedNote(accountCngn, spendableCngn, formatAccountCngn)}
-              label="cNGN"
+              spendableLabel={formatAccountCngn(spendableCngn)}
+              symbol="cNGN"
               value={cngnLabel}
             />
           </div>
@@ -306,7 +374,7 @@ export function TerminalHeaderBar({
         {depositControl}
         <button
           aria-label="Toggle theme"
-          className="flex size-10 cursor-pointer items-center justify-center rounded-full border border-panel-border bg-input-bg text-panel-text-active transition-all duration-300 hover:bg-input-hover"
+          className="flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full border border-panel-border bg-input-bg text-panel-text-active transition-all duration-300 hover:bg-input-hover"
           onClick={toggleTheme}
           type="button"
         >

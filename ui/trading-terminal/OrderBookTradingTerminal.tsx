@@ -8,6 +8,7 @@ import { createWalletClient, custom } from "viem";
 import { getAppChain } from "@/lib/base-public-client";
 import { getMarketableLimitPrice } from "@/lib/spot-market";
 import { buildSpotOrderEnvelope, SPOT_ORDER_LIFETIME_LABEL } from "@/lib/spot-order-submission";
+import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
 import type { SpotMarket } from "@/lib/trading.types";
 import { buildDepositAccount, DepositDialog } from "@/ui/trading-terminal/DepositDialog";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
@@ -170,6 +171,9 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
   const { ready: walletsReady, wallets } = useWallets();
   // The header hosts the one deposit dialog; the order ticket opens it through this state.
   const [depositOpen, setDepositOpen] = useState(false);
+  // Which asset it opens on. Held here rather than inside the dialog because the ticket names the
+  // currency when it sends the trader over — a "Deposit cNGN" button must not land on the USDC form.
+  const [depositCurrency, setDepositCurrency] = useState<DepositCurrency>("USDC");
   const [resumeDepositAfterLogin, setResumeDepositAfterLogin] = useState(false);
   // Stays false while Privy is still restoring a session, so account-scoped panels never flash for visitors.
   const isSignedIn = privyReady && authenticated;
@@ -356,7 +360,9 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
         depositControl={
           <DepositDialog
             account={depositAccount}
+            currency={depositCurrency}
             onConnectWallet={handleConnectWallet}
+            onCurrencyChange={setDepositCurrency}
             onDeposited={handleDeposited}
             onOpenChange={setDepositOpen}
             open={depositOpen}
@@ -369,7 +375,12 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
         isSignedIn={isSignedIn}
         isSubmitting={isSubmittingOrder}
         lastAction={lastAction}
-        onDepositRequest={() => setDepositOpen(true)}
+        onDepositRequest={(currency) => {
+          if (currency !== undefined) {
+            setDepositCurrency(currency);
+          }
+          setDepositOpen(true);
+        }}
         onSubmitOrder={handleSubmitSpot}
         spotMarket={spotMarket}
         usdcBalanceLabel={formatUsdcBalanceLabel(usdcBalance)}

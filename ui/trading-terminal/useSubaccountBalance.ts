@@ -142,7 +142,7 @@ export function formatSubaccountUsdcLabel(units: bigint | null) {
   return formatLedgerUnits(units, "USDC");
 }
 
-/** Format the subaccount's cNGN balance, e.g. "5,440.00 cNGN", or null when unknown. */
+/** Format the subaccount's cNGN balance, e.g. "5,440 cNGN", or null when unknown. */
 export function formatSubaccountCngnLabel(units: bigint | null) {
   return formatLedgerUnits(units, "cNGN");
 }

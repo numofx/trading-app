@@ -263,7 +263,9 @@ function DepositProgress({
 
 export function DepositDialog({
   account,
+  currency: controlledCurrency,
   onConnectWallet,
+  onCurrencyChange,
   onDeposited,
   onOpenChange,
   open,
@@ -272,8 +274,16 @@ export function DepositDialog({
 }: {
   /** The funding wallet and its trading account, or null when no wallet is connected. */
   account: DepositAccount | null;
+  /**
+   * Controlled asset selection; omit to let the dialog own it. Pass with `onCurrencyChange` when
+   * something outside the dialog decides which asset to fund — the order ticket's shortfall CTA
+   * names the leg the account is short of, and the form has to open on that one.
+   */
+  currency?: DepositCurrency;
   /** Starts wallet login from the dialog's no-wallet step. */
   onConnectWallet?: () => void;
+  /** Fires for both the asset picker and the "deposit the other asset" step. */
+  onCurrencyChange?: (currency: DepositCurrency) => void;
   onDeposited: (subaccountId: string) => void;
   /** Pass with `open` to drive the dialog from outside, e.g. the order ticket's Deposit CTA. */
   onOpenChange?: (open: boolean) => void;
@@ -287,12 +297,13 @@ export function DepositDialog({
   const depositableCurrencies = getDepositableCurrencies();
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const [amount, setAmount] = useState("");
-  const [currency, setCurrency] = useState<DepositCurrency>("USDC");
+  const [uncontrolledCurrency, setUncontrolledCurrency] = useState<DepositCurrency>("USDC");
   const { approve, deposit, flowState, inputError, reset, retry, startDeposit } =
     useSubaccountDeposit({
       onDeposited,
     });
   const isOpen = open ?? uncontrolledOpen;
+  const currency = controlledCurrency ?? uncontrolledCurrency;
 
   function handleOpenChange(nextOpen: boolean) {
     setUncontrolledOpen(nextOpen);
@@ -300,6 +311,12 @@ export function DepositDialog({
     if (!nextOpen) {
       reset();
     }
+  }
+
+  /** Both states are kept, so the dialog behaves the same whether or not a parent drives it. */
+  function selectCurrency(next: DepositCurrency) {
+    setUncontrolledCurrency(next);
+    onCurrencyChange?.(next);
   }
 
   const otherCurrency = depositableCurrencies.find((option) => option !== currency) ?? null;
@@ -311,7 +328,7 @@ export function DepositDialog({
   function handleDepositAnother(next: DepositCurrency) {
     reset();
     setAmount("");
-    setCurrency(next);
+    selectCurrency(next);
   }
 
   return (
@@ -359,7 +376,7 @@ export function DepositDialog({
             <>
               <CurrencyTabs
                 currencies={depositableCurrencies}
-                onSelect={setCurrency}
+                onSelect={selectCurrency}
                 selected={currency}
               />
               <div className="mt-3 space-y-3">

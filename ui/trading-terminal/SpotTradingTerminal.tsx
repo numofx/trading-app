@@ -21,9 +21,9 @@ import {
   SPOT_BOTTOM_TABS,
   SPOT_TIMEFRAME_OPTIONS,
 } from "@/lib/spot-terminal-config";
+import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
 import { get24hStats, getVenueLastPrice } from "@/lib/ticker-stats";
 import type { Candle, SpotMarket } from "@/lib/trading.types";
-import { SpotBalanceSummary } from "@/ui/trading-terminal/SpotBalanceSummary";
 import type { SpotChartTab, SpotTimeframe } from "@/ui/trading-terminal/SpotChartPanel";
 import { SpotChartPanel } from "@/ui/trading-terminal/SpotChartPanel";
 import type { SpotBookTab } from "@/ui/trading-terminal/SpotOrderBookPanel";
@@ -72,8 +72,12 @@ export function SpotTradingTerminal({
   walletAddress?: string | null;
   /** The deposit dialog trigger, hosted in the header bar. */
   depositControl?: ReactNode;
-  /** Opens the deposit dialog; the ticket CTA calls it while there is no funded account. */
-  onDepositRequest?: () => void;
+  /**
+   * Opens the deposit dialog; the ticket CTA calls it while there is no funded account, or when the
+   * order on screen is short of one leg. The currency is the asset that is short, so the dialog
+   * opens on the one the trader was asked to deposit rather than always on USDC.
+   */
+  onDepositRequest?: (currency?: DepositCurrency) => void;
   onSubmitOrder: (args: {
     side: "buy" | "sell";
     price: string;
@@ -298,14 +302,16 @@ export function SpotTradingTerminal({
            * `order-first` on phones only: in the stacked single column the ticket would sit
            * below the chart and order book, putting the submit button ~2.5 screens down the
            * document. The xl grid places columns explicitly, so order resets there.
+           *
+           * The ticket is the whole column. It used to share it with an "Account" balance strip,
+           * which restated the two figures the header already carries — so the header now reports
+           * the balances at every width and the ticket gets the rows back.
            */}
-          <div className="order-first flex min-h-[420px] flex-col gap-3 xl:order-0 xl:row-span-2 xl:min-h-0 xl:overflow-hidden">
+          <div className="order-first flex min-h-[420px] flex-col xl:order-0 xl:row-span-2 xl:min-h-0 xl:overflow-hidden">
             <SpotOrderFormPanel
               anchorPrice={anchorPrice}
               availableCngn={spendableCngn}
-              availableCngnLabel={accountCngnLabel ?? "— cNGN"}
               availableUsdc={spendableUsdc}
-              availableUsdcLabel={accountUsdcLabel ?? "— USDC"}
               bestAsk={bestAsk}
               bestBid={bestBid}
               hasWallet={hasWallet}
@@ -314,10 +320,6 @@ export function SpotTradingTerminal({
               lastAction={lastAction}
               onDepositRequest={onDepositRequest}
               onSubmitOrder={handleSubmitOrder}
-            />
-            <SpotBalanceSummary
-              cngnBalanceLabel={accountCngnLabel ?? "— cNGN"}
-              usdcBalanceLabel={accountUsdcLabel ?? "— USDC"}
             />
           </div>
 

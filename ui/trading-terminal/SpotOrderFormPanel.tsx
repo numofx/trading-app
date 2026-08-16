@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useState } from "react";
+import { formatBalance, formatBalanceFigure } from "@/lib/account-balance-display";
 import { cn } from "@/lib/cn";
 import { formatNaira } from "@/lib/market-formatting";
 import {
@@ -100,11 +101,6 @@ function buildSpotConfirmation({
       { label: "Expires", value: `${SPOT_ORDER_LIFETIME_LABEL} after signing` },
     ],
   };
-}
-
-/** A balance or order cost in its own currency, e.g. "1,382.00 cNGN". */
-function formatBalance(amount: number, currency: "cNGN" | "USDC") {
-  return `${amount.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 })} ${currency}`;
 }
 
 /** Taker fee is charged on the USDC notional (the order Amount), matching the signed worstFee bound. */
@@ -238,14 +234,6 @@ function deriveOrderEconomics({
   const hasAmount = Number.isFinite(parsedAmount);
   const total = hasPrice && hasAmount ? parsedAmount * (effectivePrice as number) : null;
 
-  const maxOrderSize = getMaxOrderSize({
-    availableCngn,
-    availableUsdc,
-    isBuy,
-    price: hasPrice ? (effectivePrice as number) : anchorPrice,
-  });
-  const canSizeByPercent = maxOrderSize !== null && maxOrderSize > 0;
-
   /*
    * Checked against the price the order is *signed* at, not the one it is expected to fill at. A
    * market order is signed through the touch, and the engine holds collateral against that limit —
@@ -254,6 +242,20 @@ function deriveOrderEconomics({
   const enteredPrice = hasPrice ? (effectivePrice as number) : null;
   const signedPrice =
     orderType === "Market" ? getMarketableLimitPrice(side, bestAsk, bestBid) : enteredPrice;
+
+  /*
+   * The ceiling is priced off `signedPrice` for the same reason. Sized against the touch instead, a
+   * market buy at 100% cost 0.5% more than the account held the moment it was sized — the slider's
+   * own top notch produced an order the ticket then refused to submit.
+   */
+  const maxOrderSize = getMaxOrderSize({
+    availableCngn,
+    availableUsdc,
+    isBuy,
+    price: signedPrice ?? anchorPrice,
+  });
+  const canSizeByPercent = maxOrderSize !== null && maxOrderSize > 0;
+
   const cost = getOrderCost(side, signedPrice, parsedAmount);
   const availableForCost = cost?.currency === "USDC" ? availableUsdc : availableCngn;
   /*
@@ -327,6 +329,10 @@ function SideTabs({
  * The balance an order draws on is the trading account's, not the connected wallet's — so this is
  * the number that answers "can I place this?". The plus opens the deposit dialog, which is the
  * action when the answer is no.
+ *
+ * The currency follows the selected side, because so does the balance an order spends: a buy pays
+ * cNGN for USDC, a sell pays USDC. The figure is printed bare — the currency is already named one
+ * gap to its left, and the ticker suffix the rest of the app uses would only repeat it.
  */
 function AvailableRow({
   currency,
@@ -335,7 +341,7 @@ function AvailableRow({
 }: {
   currency: PayCurrency;
   label: string;
-  onDepositRequest?: () => void;
+  onDepositRequest?: (currency: PayCurrency) => void;
 }) {
   return (
     <div className="flex items-center justify-between gap-2 text-[11px]">
@@ -343,9 +349,9 @@ function AvailableRow({
       <span className="flex min-w-0 items-center gap-1.5">
         <span className="truncate font-medium text-panel-text">{label}</span>
         <button
-          aria-label="Deposit funds"
+          aria-label={`Deposit ${currency}`}
           className="flex size-4 cursor-pointer items-center justify-center rounded-full bg-input-bg text-[12px] text-panel-text-muted leading-none ring-1 ring-panel-border transition-colors hover:text-panel-text-active"
-          onClick={() => onDepositRequest?.()}
+          onClick={() => onDepositRequest?.(currency)}
           type="button"
         >
           +
@@ -389,16 +395,23 @@ function SizeSlider({
  * Resolves the CTA label. The wallet comes first — without one there is nothing to submit or
  * prepare, and submission rejects on the same condition. After that an in-flight order wins over
  * account preparation: once a submission starts, that is the more specific thing to wait on.
+ *
+ * A shortfall comes last and turns the button into the remedy rather than switching it off. A
+ * disabled "Sell USDC" is a dead control: it states that the order cannot be placed and offers
+ * nothing to do about it, which is the one blocker on this ticket the trader can clear themselves.
  */
 function getSpotSubmitLabel({
   hasWallet,
   isPreparingAccount,
   isSubmitting,
+  shortfallCurrency,
   sideLabel,
 }: {
   hasWallet: boolean;
   isPreparingAccount: boolean;
   isSubmitting: boolean;
+  /** The asset the account is short of, or null when the order is covered. */
+  shortfallCurrency: PayCurrency | null;
   sideLabel: string;
 }) {
   if (!hasWallet) {
@@ -410,15 +423,27 @@ function getSpotSubmitLabel({
   if (isPreparingAccount) {
     return "Loading account…";
   }
+  if (shortfallCurrency !== null) {
+    return `Deposit ${shortfallCurrency}`;
+  }
   return sideLabel;
+}
+
+/**
+ * Rounds a slider-derived size *down* to the field's four decimals.
+ *
+ * `toFixed` rounds to nearest, which at 100% can land a hair above what the account holds — and a
+ * hair is enough for the ticket to call the order unaffordable. Flooring keeps the top notch of the
+ * slider exactly at the affordable max.
+ */
+function toAffordableSize(size: number) {
+  return (Math.floor(size * 10_000) / 10_000).toFixed(4);
 }
 
 export function SpotOrderFormPanel({
   anchorPrice,
   availableCngn,
-  availableCngnLabel,
   availableUsdc,
-  availableUsdcLabel,
   bestAsk,
   bestBid,
   onDepositRequest,
@@ -431,18 +456,24 @@ export function SpotOrderFormPanel({
   /** Mid of the displayed book — seeds the limit price, and cannot cross on either side. */
   anchorPrice: number | null;
   /**
-   * Trading-account balances, which are what an order actually spends. The connected wallet's
-   * balance funds a deposit, not an order, so it belongs in the deposit dialog rather than here.
+   * What a new order can actually spend: the trading-account balance less what this trader's own
+   * resting orders already claim. The connected wallet's balance funds a deposit, not an order, so
+   * it belongs in the deposit dialog rather than here.
+   *
+   * `Available` is formatted from these numbers rather than taking a label of its own — the two used
+   * to arrive separately, and the label was the *balance* while the number was the spendable part,
+   * so a trader with orders resting read a figure the slider would not size to.
    */
   availableCngn: number | null;
-  availableCngnLabel: string;
   availableUsdc: number | null;
-  availableUsdcLabel: string;
   /** The touch as displayed in the ladder, so the ticket quotes the book on screen. */
   bestAsk: number | null;
   bestBid: number | null;
-  /** Opens the deposit dialog — what the CTA does before a wallet is connected. */
-  onDepositRequest?: () => void;
+  /**
+   * Opens the deposit dialog — what the CTA does before a wallet is connected, and what it does
+   * instead of going dead when the account is short of the asset this order spends.
+   */
+  onDepositRequest?: (currency?: PayCurrency) => void;
   onSubmitOrder: (args: {
     side: "buy" | "sell";
     price: string;
@@ -472,7 +503,10 @@ export function SpotOrderFormPanel({
   const isBuy = side === "buy";
   const needsLimitPrice = orderType !== "Market";
   const spendCurrency: PayCurrency = isBuy ? "cNGN" : "USDC";
-  const availableLabel = spendCurrency === "USDC" ? availableUsdcLabel : availableCngnLabel;
+  const availableLabel = formatBalanceFigure(
+    spendCurrency === "USDC" ? availableUsdc : availableCngn,
+    spendCurrency
+  );
   const {
     canSizeByPercent,
     crossingPrice,
@@ -506,13 +540,19 @@ export function SpotOrderFormPanel({
     if (!canSizeByPercent) {
       return;
     }
-    setAmount(((maxOrderSize as number) * (percent / 100)).toFixed(4));
+    setAmount(toAffordableSize((maxOrderSize as number) * (percent / 100)));
   }
 
   function handleSubmit() {
     // Without a wallet there is nothing to submit against, so the CTA funds an account instead.
     if (!hasWallet) {
       onDepositRequest?.();
+      return;
+    }
+    // Same move for the one blocker a trader can clear from here: the ticket sends them to the
+    // dialog for the asset it named, rather than refusing the order and stopping there.
+    if (shortfall !== null) {
+      onDepositRequest?.(shortfall.currency);
       return;
     }
     setConfirmOpen(true);
@@ -533,12 +573,14 @@ export function SpotOrderFormPanel({
   // Both states block submission, but they are not the same thing: "Submitting…" on a button the
   // user never pressed reads as a stuck order rather than a subaccount lookup still in flight.
   const isBusy = isSubmitting || isPreparingAccount;
-  // Only blocks a trader who has an account to measure against: with no wallet the CTA funds one.
-  const isUnaffordable = hasWallet && shortfall !== null;
+  // Only meaningful for a trader who has an account to measure against: with no wallet the CTA
+  // already funds one, and there is no balance to be short of yet.
+  const shortfallCurrency = hasWallet && shortfall !== null ? shortfall.currency : null;
   const submitLabel = getSpotSubmitLabel({
     hasWallet,
     isPreparingAccount,
     isSubmitting,
+    shortfallCurrency,
     sideLabel,
   });
 
@@ -642,10 +684,13 @@ export function SpotOrderFormPanel({
             isBuy
               ? "bg-buy text-background hover:bg-buy/90"
               : "bg-sell text-white hover:bg-sell/90",
-            isBusy && "cursor-wait opacity-70",
-            isUnaffordable && "cursor-not-allowed opacity-50"
+            // Neutral once it stops being an order button, so the trader is not asked to press a
+            // green "Buy"-coloured control that will open a deposit dialog.
+            shortfallCurrency !== null &&
+              "bg-input-bg text-panel-text-active ring-1 ring-panel-border hover:bg-input-hover",
+            isBusy && "cursor-wait opacity-70"
           )}
-          disabled={isBusy || isUnaffordable}
+          disabled={isBusy}
           // Stable hook for the layout invariant check: the label changes with wallet and
           // submission state ("Deposit", "Submitting…", "Buy USDC"), so text is not an identifier.
           id="spot-submit-cta"
