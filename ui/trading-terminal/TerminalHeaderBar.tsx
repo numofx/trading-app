@@ -1,9 +1,14 @@
 "use client";
 
 import { Popover } from "@base-ui/react/popover";
-import { ChevronDown, Moon, Sun } from "lucide-react";
+import { ChevronDown, Lock, Moon, Sun } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import {
+  formatAccountCngn,
+  formatAccountUsdc,
+  getClaimedNote,
+} from "@/lib/account-balance-display";
 import { cn } from "@/lib/cn";
 import { formatNaira } from "@/lib/market-formatting";
 import { PrivyWalletButton } from "@/ui/PrivyWalletButton";
@@ -30,14 +35,74 @@ function formatChangePercent(value: number | null) {
  * One metric: a muted label over its value. Every label shares a type size and every value shares
  * another, so the two rows keep a common baseline across the group without explicit alignment.
  */
-function HeaderMetric({ children, label }: { children: ReactNode; label: string }) {
+function HeaderMetric({
+  children,
+  className,
+  label,
+}: {
+  children: ReactNode;
+  /** Lets a metric yield its place at narrower widths; merged over the display class. */
+  className?: string;
+  label: string;
+}) {
   return (
-    <div className="flex flex-col gap-1">
+    <div className={cn("flex flex-col gap-1", className)}>
       <span className="whitespace-nowrap text-[10px] text-panel-text-muted">{label}</span>
       <span className="flex items-baseline gap-1.5 whitespace-nowrap font-medium text-[13px] text-panel-text-active">
         {children}
       </span>
     </div>
+  );
+}
+
+/**
+ * One holding, as a muted symbol beside its figure. Inline rather than the stacked
+ * {@link HeaderMetric} so the pair reads as a single group with the deposit button next to it.
+ *
+ * The header reports what the account holds while the ticket reports what a new order can spend.
+ * When resting orders have opened a gap between the two, the balance carries the claimed figure
+ * after it, so the smaller number in the ticket is accounted for rather than looking like a
+ * disagreement between two panels.
+ */
+function AccountBalance({
+  claimedLabel,
+  label,
+  value,
+}: {
+  /** Non-null only when this trader's resting orders claim a printable part of the balance. */
+  claimedLabel: string | null;
+  label: string;
+  value: string;
+}) {
+  return (
+    <span
+      className="flex items-baseline gap-1.5 whitespace-nowrap"
+      title={
+        claimedLabel === null
+          ? undefined
+          : `${value} ${label} in the account. ${claimedLabel} is claimed by your resting orders, so the order ticket can spend the rest.`
+      }
+    >
+      <span className="text-[10px] text-panel-text-muted">{label}</span>
+      <span className="font-medium text-[13px] text-panel-text-active">{value}</span>
+      {claimedLabel === null ? null : (
+        <span className="flex items-center gap-1 text-[10px] text-panel-text-muted">
+          {/*
+           * A bare minus would read as a price move on a row of market figures. The lock says what
+           * the number is — spoken for, not lost — and holds that meaning at the width where the
+           * word itself does not fit.
+           */}
+          <Lock aria-hidden className="size-2.5" />
+          {claimedLabel}
+          {/*
+           * Always announced, shown from `2xl` where the row has room for it: `sr-only` is out of
+           * flow, so below that the words cost nothing and the lock is not left carrying the
+           * meaning alone for a screen reader.
+           */}
+          <span className="sr-only 2xl:not-sr-only">in orders</span>
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -79,26 +144,49 @@ function MarketIdentity({ compact }: { compact?: boolean }) {
  * it is rendered outside the padded panel column rather than as its first child.
  */
 export function TerminalHeaderBar({
+  accountCngn = null,
+  accountUsdc = null,
   changePercent24h,
   depositControl,
+  hasWallet = false,
   high24h,
   lastPrice,
   low24h,
   onPortfolioSelect,
+  spendableCngn = null,
+  spendableUsdc = null,
   volume24hLabel,
 }: {
+  /**
+   * The trading account's holdings, shown beside the deposit control because that button is the
+   * remedy when a figure reads lower than the trader expected. Null while unknown — no wallet, or
+   * the balance still loading — which renders as a dash rather than a zero the account may not hold.
+   */
+  accountCngn?: number | null;
+  accountUsdc?: number | null;
   changePercent24h: number | null;
   depositControl?: ReactNode;
+  /** Gates the balances: a visitor with no account has no holdings to report. */
+  hasWallet?: boolean;
   /** Extremes over the same window as the volume; null when nothing traded in it. */
   high24h: number | null;
   lastPrice: number | null;
   low24h: number | null;
   /** Fired by the connected wallet menu's Portfolio item. */
   onPortfolioSelect?: () => void;
+  /**
+   * What a new order can actually draw on — the balance less what this trader's own resting orders
+   * already claim. This is the ticket's `Available`, passed in so the header can show where the
+   * difference went instead of leaving the two panels quoting unexplained different numbers.
+   */
+  spendableCngn?: number | null;
+  spendableUsdc?: number | null;
   volume24hLabel: string;
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const usdcLabel = formatAccountUsdc(accountUsdc);
+  const cngnLabel = formatAccountCngn(accountCngn);
 
   useEffect(() => {
     const isLight = document.documentElement.classList.contains("light");
@@ -177,11 +265,44 @@ export function TerminalHeaderBar({
           </span>
         </HeaderMetric>
         <HeaderMetric label="24H volume">{volume24hLabel}</HeaderMetric>
-        <HeaderMetric label="24H high">{formatNaira(high24h)}</HeaderMetric>
-        <HeaderMetric label="24H low">{formatNaira(low24h)}</HeaderMetric>
+        {/*
+         * The extremes step aside between `xl` and `2xl`, where the row cannot hold both them and
+         * the account balances — measured, the balances need ~150px these were occupying. They are
+         * the two figures a trader can read straight off the chart, so they are the ones to give
+         * up. Unconditional rather than gated on the wallet: tying it to `hasWallet` rearranged the
+         * header at the moment of connecting, which reads as a glitch, and this way the row's shape
+         * depends only on its width. Below `xl` they stay — the balances do not appear there, so
+         * hiding them would cost the trader two figures and return nothing.
+         */}
+        <HeaderMetric className="xl:hidden 2xl:flex" label="24H high">
+          {formatNaira(high24h)}
+        </HeaderMetric>
+        <HeaderMetric className="xl:hidden 2xl:flex" label="24H low">
+          {formatNaira(low24h)}
+        </HeaderMetric>
       </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-3">
+        {/*
+         * `xl` is affordable only because 24H high and low stand down above — the 24H metrics sit
+         * in a `min-w-0` box, so a group added without freeing that space does not widen the
+         * header, it silently squeezes those figures until their nowrap values paint over these
+         * balances. Below `xl` the ticket column's balance summary carries the same numbers.
+         */}
+        {hasWallet ? (
+          <div className="mr-1 hidden items-center gap-4 xl:flex">
+            <AccountBalance
+              claimedLabel={getClaimedNote(accountUsdc, spendableUsdc, formatAccountUsdc)}
+              label="USDC"
+              value={usdcLabel}
+            />
+            <AccountBalance
+              claimedLabel={getClaimedNote(accountCngn, spendableCngn, formatAccountCngn)}
+              label="cNGN"
+              value={cngnLabel}
+            />
+          </div>
+        ) : null}
         {depositControl}
         <button
           aria-label="Toggle theme"

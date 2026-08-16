@@ -244,12 +244,17 @@ export function SpotTradingTerminal({
   return (
     <>
       <TerminalHeaderBar
+        accountCngn={accountCngn}
+        accountUsdc={accountUsdc}
         changePercent24h={changePercent}
         depositControl={depositControl}
+        hasWallet={hasWallet}
         high24h={high}
         lastPrice={lastPrice}
         low24h={low}
         onPortfolioSelect={showPortfolio}
+        spendableCngn={spendableCngn}
+        spendableUsdc={spendableUsdc}
         volume24hLabel={volumeLabel}
       />
 
