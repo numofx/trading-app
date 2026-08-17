@@ -122,6 +122,82 @@ function getSpotAssetAddress() {
   );
 }
 
+/**
+ * How many distinct nonces one millisecond can carry: the clock is multiplied up by this and a
+ * sequence number fills the space below it, so the two never overlap.
+ *
+ * Sized so the packed nonce stays a **float64-exact integer** — `Date.now() * 4096` runs to about
+ * 7.3e15, inside the 2^53 (~9.0e15) range where JSON numbers survive a parse unrounded. It crosses
+ * 2^53 at 2039-09-07T15:47:35Z, after which nonces silently start rounding again and this constant
+ * has to shrink. That ceiling, not int64, is the binding one: the nonce is a public
+ * identity that crosses markets-service JSON, the WS feed, telemetry and whatever jq or notebook an
+ * operator points at it, and markets-service emits integers unquoted (`last_trade_timestamp`,
+ * `PresentedOrder.expiry`). A nonce above 2^53 would round on any such hop and produce an order
+ * that submits under one identity and cannot be cancelled under another — silent, and worst exactly
+ * during the fast quoting this scheme exists to serve.
+ */
+const NONCE_SEQUENCE_RANGE = 2n ** 12n;
+
+/** Sequence state for `createOrderNonce`, module-scoped so the counter spans every order signed. */
+let lastIssuedNonce = 0n;
+let nonceSequenceSeed: bigint | null = null;
+
+/**
+ * A nonce unique to each signed order.
+ *
+ * `(owner_address, nonce)` is the venue's *cancel key*, not just replay protection —
+ * `POST /v1/orders/cancel` takes that pair and nothing else, and `collectOpenOrders` drops book
+ * rows missing either field because they cannot be acted on. So two orders sharing a nonce are not
+ * merely a rejection risk: they cannot be cancelled independently. The previous `BigInt(Date.now())`
+ * collided for any two orders signed in the same millisecond — unreachable for a human clicking the
+ * ticket, routine for a quoting loop replacing both sides across several levels.
+ *
+ * The clock stays in the high bits because the old scheme gave away the signing time for free, and
+ * that is worth keeping: the nonce is what identifies an order on the book and in the
+ * `server_order_cancel_received` telemetry, so being able to read when it was signed off the value
+ * itself is a real debugging affordance.
+ *
+ * Below the clock is a strictly increasing sequence number rather than random bits. Uniqueness is
+ * only required per owner and one owner signs from one process, so a counter rules collisions out
+ * within that process instead of merely making them unlikely — which matters because the room under
+ * 2^53 is 4096 nonces per millisecond, narrow enough that random draws would collide by the
+ * birthday bound at a few dozen orders in one millisecond. Signing more than 4096 in a millisecond
+ * simply borrows from the next one's space, staying unique and reading a millisecond or two late.
+ *
+ * The sequence starts at a random offset, seeded lazily on first use so nothing touches `crypto` at
+ * import time: two tabs signing for the same owner in the same millisecond would otherwise both
+ * start at zero. That leaves one uncovered window, since the counter is per-process and cannot see
+ * a sibling tab: two tabs signing for the same owner in the same millisecond collide if they drew
+ * the same seed, which is 1 in 4096 per such pair, or if one has issued enough orders inside that
+ * millisecond to walk up onto the other's seed. Nothing here closes it — a venue-side reject on a
+ * duplicate `(owner_address, nonce)` is what would, and this only makes the case rare enough to be
+ * worth living with.
+ */
+function createOrderNonce() {
+  if (nonceSequenceSeed === null) {
+    const entropy = new Uint32Array(1);
+    crypto.getRandomValues(entropy);
+    nonceSequenceSeed = BigInt(entropy[0]) % NONCE_SEQUENCE_RANGE;
+  }
+
+  const fromClock = BigInt(Date.now()) * NONCE_SEQUENCE_RANGE + nonceSequenceSeed;
+  lastIssuedNonce = fromClock > lastIssuedNonce ? fromClock : lastIssuedNonce + 1n;
+
+  return lastIssuedNonce;
+}
+
+/**
+ * When an order carrying this nonce was signed, in epoch milliseconds.
+ *
+ * The counterpart to `createOrderNonce`. Exported because the nonce is how an order is identified
+ * on the book, in Open Orders and in the `server_order_cancel_received` telemetry, and recovering
+ * the signing time from that identity alone is the debugging affordance the packed layout exists
+ * to preserve.
+ */
+export function getNonceSignedAtMs(nonce: bigint | string) {
+  return Number(BigInt(nonce) / NONCE_SEQUENCE_RANGE);
+}
+
 export function buildSpotOrderEnvelope({
   uiPrice,
   uiSize,
@@ -192,7 +268,7 @@ export function buildSpotOrderEnvelope({
   const spotAsset = getSpotAssetAddress();
   const chainId = getMatchingChainId();
 
-  const nonce = BigInt(Date.now());
+  const nonce = createOrderNonce();
   const expiry = BigInt(Math.floor(Date.now() / 1000) + SPOT_ORDER_LIFETIME_SECONDS);
   const recipientId = BigInt(subaccountId);
 
