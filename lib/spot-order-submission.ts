@@ -129,12 +129,19 @@ function getSpotAssetAddress() {
  * Sized so the packed nonce stays a **float64-exact integer** — `Date.now() * 4096` runs to about
  * 7.3e15, inside the 2^53 (~9.0e15) range where JSON numbers survive a parse unrounded. It crosses
  * 2^53 at 2039-09-07T15:47:35Z, after which nonces silently start rounding again and this constant
- * has to shrink. That ceiling, not int64, is the binding one: the nonce is a public
- * identity that crosses markets-service JSON, the WS feed, telemetry and whatever jq or notebook an
- * operator points at it, and markets-service emits integers unquoted (`last_trade_timestamp`,
- * `PresentedOrder.expiry`). A nonce above 2^53 would round on any such hop and produce an order
- * that submits under one identity and cannot be cancelled under another — silent, and worst exactly
- * during the fast quoting this scheme exists to serve.
+ * has to shrink. Above 2^53 a nonce rounds to a multiple of 1024 on any JSON-number hop, producing
+ * an order that submits under one identity and rests under another — and `(owner_address, nonce)`
+ * is the cancel key, so it could never be cancelled. Silent, and worst exactly during the fast
+ * quoting this scheme exists to serve.
+ *
+ * This is a defensive bound rather than a live requirement: `/v1/book` was checked with orders
+ * resting on 2026-08-17 and markets-service quotes `nonce` as a string, so today no hop rounds it.
+ * It is kept because that quoting is incidental rather than principled — in one response `expiry`
+ * arrives bare at the order level (`"expiry":1786983830`) and quoted inside `action_json`
+ * (`"expiry":"1786983830"`), the same value treated two ways, and `last_trade_timestamp` is bare
+ * too. Nothing on either side of the repo boundary pins the nonce's quoting, a Go struct tag losing
+ * its `,string` would flip it silently, and a PostHog cast or a `jq '... | tonumber'` reintroduces
+ * the hop downstream regardless. 4096 nonces per millisecond is ample, so the bound costs nothing.
  */
 const NONCE_SEQUENCE_RANGE = 2n ** 12n;
 
