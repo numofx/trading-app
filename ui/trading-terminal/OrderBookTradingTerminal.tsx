@@ -1,11 +1,14 @@
 "use client";
 
 import { useLogin, usePrivy, useWallets } from "@privy-io/react-auth";
+import { Duration } from "effect";
 import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
 import { useEffect, useState } from "react";
 import { createWalletClient, custom } from "viem";
 import { getAppChain } from "@/lib/base-public-client";
+import type { OrderOutcome } from "@/lib/order-settlement";
+import { pollOrderOutcome } from "@/lib/order-settlement";
 import { getMarketableLimitPrice } from "@/lib/spot-market";
 import {
   buildCancelEnvelope,
@@ -102,7 +105,10 @@ async function postSignedOrder(payload: object, signature: string): Promise<Sign
   return { body, ok: response.ok, status: response.status };
 }
 
-type OrderOutcome = { status?: string; filled_amount?: string; remaining_amount?: string };
+// An order rests in `active_orders` a few seconds after it is accepted; poll the per-order status
+// across that window so the book refresh lands after the order exists, not before.
+const ORDER_SETTLE_POLL_INTERVAL_MS = Duration.toMillis("1 second");
+const ORDER_SETTLE_TIMEOUT_MS = Duration.toMillis("8 seconds");
 
 /**
  * What the venue did with the order, in the trader's terms.
@@ -326,8 +332,14 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
         order_id: body?.order?.order_id ?? null,
       });
       setLastAction("Order accepted. Checking whether it filled…");
-      // The engine matches on submission, so the outcome settles within a moment of acceptance.
-      const outcome = await readOrderOutcome(envelope.payload.order_id);
+      // Poll until the venue has recorded the order, so the refresh below fetches a book that lists
+      // it. A resting order reaches `active_orders` a few seconds after acceptance, and the book
+      // reads that same store — refreshing before it lands left Open Orders empty until a later
+      // render happened to catch up.
+      const outcome = await pollOrderOutcome(() => readOrderOutcome(envelope.payload.order_id), {
+        intervalMs: ORDER_SETTLE_POLL_INTERVAL_MS,
+        timeoutMs: ORDER_SETTLE_TIMEOUT_MS,
+      });
       setLastAction(describeOrderOutcome(outcome, size, executionPrice));
       // Read balances after the outcome, not before it: refreshing on acceptance alone showed the
       // pre-fill account and left the strip disagreeing with the trade that had just happened.
