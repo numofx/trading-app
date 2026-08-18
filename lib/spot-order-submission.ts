@@ -19,20 +19,21 @@ const ENGINE_DECIMALS = 18;
 export const SPOT_TAKER_FEE_RATE = "0.0005";
 
 /**
- * How long a signed order stays valid. The engine drops it at this point whether or not it filled.
+ * How long a signed order stays valid. The engine drops it at this point whether or not it filled,
+ * and — because `expiry` is inside the signed action — it is also the window in which the signature
+ * authorizes a fill, so a resting limit order can fill at its price until it expires or is cancelled.
  *
- * Exported because the ticket has to say so: five minutes is an IOC lifetime attached to an order
- * type whose purpose is to rest, so an unfilled limit order silently leaves the book. A trader who
- * watched their order become the best bid and then vanish has no way to tell that from a bug.
- *
- * It stays short on purpose for now — `/v1/orders` is POST-only, so expiry is currently the only
- * way an order ever leaves the book, and a long-lived order could not be withdrawn. Lengthen it
- * once cancellation exists (numofx/exchange#7).
+ * This was five minutes while `/v1/orders` was POST-only: expiry was the only way an order could
+ * ever leave the book, so a long lifetime meant an order that could not be withdrawn. That reason
+ * is gone — cancellation now exists (signed `Cancel`, `buildCancelEnvelope`), and a cancel frees its
+ * reservation immediately (`withoutCancelledOrders`) — so the lifetime is a full trading day, long
+ * enough for a limit order to actually rest. A trader who leaves one out can cancel it from Open
+ * Orders; one they forget stays visible there until it expires.
  */
-export const SPOT_ORDER_LIFETIME_SECONDS = Duration.toSeconds("5 minutes");
+export const SPOT_ORDER_LIFETIME_SECONDS = Duration.toSeconds("1 day");
 
-/** The order lifetime as ticket copy, e.g. "5 minutes". */
-export const SPOT_ORDER_LIFETIME_LABEL = `${SPOT_ORDER_LIFETIME_SECONDS / 60} minutes`;
+/** The order lifetime as ticket copy, e.g. "24 hours". */
+export const SPOT_ORDER_LIFETIME_LABEL = `${SPOT_ORDER_LIFETIME_SECONDS / 3600} hours`;
 
 const DECIMAL_INPUT_PATTERN = /^(\d+(\.\d+)?|\.\d+)$/;
 const TRAILING_ZEROES_PATTERN = /0+$/;
