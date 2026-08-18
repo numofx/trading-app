@@ -14,6 +14,7 @@ import {
   getCommittedBalances,
   getNextExpiryMs,
   getWorkingOrders,
+  withoutCancelledOrders,
 } from "@/lib/spot-market";
 import {
   ACTIVITY_VIEWS,
@@ -114,6 +115,11 @@ export function SpotTradingTerminal({
   // what the server rendered. An effect supplies the real time straight after mount.
   const [nowMs, setNowMs] = useState(0);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  // Nonces this trader has cancelled but the server snapshot may not have caught up to. Applied as
+  // an overlay so `Available` recovers and the Open Orders row disappears the instant a cancel is
+  // accepted, not on the next successful refresh — a refresh fired right after a cancel can race
+  // the venue and come back still listing the order.
+  const [cancelledNonces, setCancelledNonces] = useState<ReadonlySet<string>>(() => new Set());
   const activityPanelRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
@@ -139,6 +145,20 @@ export function SpotTradingTerminal({
   // Supplies the clock after mount, and again whenever the book changes.
   useEffect(() => {
     setNowMs(Date.now());
+  }, [spotMarket.openOrders]);
+
+  // Once the server snapshot stops listing a cancelled nonce, the venue and the snapshot agree, so
+  // drop it from the overlay — keeping it would hide nothing and the set would only grow. Returning
+  // the same set when nothing changed keeps this from looping.
+  useEffect(() => {
+    setCancelledNonces((prev) => {
+      if (prev.size === 0) {
+        return prev;
+      }
+      const present = new Set(spotMarket.openOrders.map((order) => order.nonce));
+      const next = new Set([...prev].filter((nonce) => present.has(nonce)));
+      return next.size === prev.size ? prev : next;
+    });
   }, [spotMarket.openOrders]);
 
   useEffect(() => {
@@ -188,7 +208,10 @@ export function SpotTradingTerminal({
   // instead of the placeholder-free static views.
   // Orders leave the book when they expire and nothing announces it, so a snapshot taken while one
   // was alive keeps counting it. Ageing them out here is what lets `Available` recover on its own.
-  const workingOrders = getWorkingOrders(spotMarket.openOrders, nowMs);
+  const workingOrders = withoutCancelledOrders(
+    getWorkingOrders(spotMarket.openOrders, nowMs),
+    cancelledNonces
+  );
   const ownedOpenOrders = getOwnedOpenOrders(workingOrders, walletAddress);
   /*
    * What a new order can actually spend: the account balance less what this trader's own resting
@@ -239,6 +262,8 @@ export function SpotTradingTerminal({
         setCancelError(result.error ?? "Cancel failed");
         return;
       }
+      // The venue has dropped it; reflect that at once rather than waiting for the refresh to land.
+      setCancelledNonces((prev) => new Set(prev).add(nonce));
       router.refresh();
     } catch (error) {
       setCancelError(error instanceof Error ? error.message : "Cancel failed");

@@ -104,6 +104,28 @@ export function getWorkingOrders(openOrders: SpotOpenOrder[], nowMs: number) {
   return openOrders.filter((order) => order.expiresAtMs === null || order.expiresAtMs > nowMs);
 }
 
+/**
+ * Drops orders the trader has just cancelled but the server snapshot has not caught up to yet.
+ *
+ * A cancel takes effect on the venue the moment it is accepted, but `openOrders` is a
+ * server-rendered snapshot that only changes on the next render. The `router.refresh()` fired right
+ * after a cancel can race the venue's own book update and return still listing the order, and
+ * nothing retries — so without this overlay the order's cost stayed reserved against `Available`,
+ * and its row stayed in Open Orders, until it aged out at `expiresAtMs`. Applying it before both
+ * the balance and the Open Orders computation makes `Available` recover and the row disappear at
+ * once. `cancelledNonces` is reconciled away by the caller once the snapshot stops listing the
+ * nonce, so the overlay is a no-op again as soon as the server agrees.
+ */
+export function withoutCancelledOrders(
+  openOrders: SpotOpenOrder[],
+  cancelledNonces: ReadonlySet<string>
+) {
+  if (cancelledNonces.size === 0) {
+    return openOrders;
+  }
+  return openOrders.filter((order) => !cancelledNonces.has(order.nonce));
+}
+
 /** When the soonest of these orders expires, so a caller can re-render exactly then. */
 export function getNextExpiryMs(openOrders: SpotOpenOrder[]) {
   const expiries = openOrders
