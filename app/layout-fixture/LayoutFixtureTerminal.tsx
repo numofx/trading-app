@@ -103,6 +103,7 @@ export function LayoutFixtureTerminal() {
         }
         hasWallet
         isSignedIn
+        onCancelOrder={() => Promise.resolve({ ok: true })}
         onSubmitOrder={() => undefined}
         spotMarket={FIXTURE_MARKET}
         usdcBalanceLabel="0 USDC"

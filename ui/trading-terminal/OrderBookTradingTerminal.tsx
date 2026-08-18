@@ -7,7 +7,11 @@ import { useEffect, useState } from "react";
 import { createWalletClient, custom } from "viem";
 import { getAppChain } from "@/lib/base-public-client";
 import { getMarketableLimitPrice } from "@/lib/spot-market";
-import { buildSpotOrderEnvelope, SPOT_ORDER_LIFETIME_LABEL } from "@/lib/spot-order-submission";
+import {
+  buildCancelEnvelope,
+  buildSpotOrderEnvelope,
+  SPOT_ORDER_LIFETIME_LABEL,
+} from "@/lib/spot-order-submission";
 import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
 import type { SpotMarket } from "@/lib/trading.types";
 import { buildDepositAccount, DepositDialog } from "@/ui/trading-terminal/DepositDialog";
@@ -346,6 +350,52 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
     }
   }
 
+  /**
+   * Signs and submits a cancel for one of this trader's resting orders.
+   *
+   * markets-service authorizes a cancel on a signature over Cancel(owner, signer, nonce, expiry),
+   * not on the public (owner_address, nonce) pair alone, so cancelling — like submitting — goes
+   * through the wallet. Returns the outcome rather than touching UI state; the activity panel owns
+   * the per-row cancelling/error state and the server refresh.
+   */
+  async function handleCancelSpot(
+    nonce: string,
+    ownerAddress: string
+  ): Promise<{ ok: boolean; error?: string }> {
+    if (!walletsReady || primaryWallet === null) {
+      return { error: "Connect a wallet before cancelling an order", ok: false };
+    }
+    try {
+      const appChain = getAppChain();
+      await primaryWallet.switchChain(appChain.id);
+      const provider = await primaryWallet.getEthereumProvider();
+      const walletClient = createWalletClient({ chain: appChain, transport: custom(provider) });
+
+      const envelope = buildCancelEnvelope({
+        nonce,
+        ownerAddress,
+        signerAddress: primaryWallet.address,
+      });
+      const signature = await walletClient.signTypedData({
+        account: primaryWallet.address as `0x${string}`,
+        ...envelope.typedData,
+      });
+
+      const response = await fetch("/api/orders/cancel", {
+        body: JSON.stringify({ ...envelope.payload, signature }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: string } | null;
+        return { error: body?.error ?? `Cancel failed (${response.status})`, ok: false };
+      }
+      return { ok: true };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : "Cancel failed", ok: false };
+    }
+  }
+
   return (
     <main className="flex min-h-screen flex-col bg-terminal-bg text-foreground transition-colors duration-300 xl:h-dvh xl:overflow-hidden">
       <MarketDocumentTitle pair="USDC/cNGN" price={spotMarket.mark} />
@@ -375,6 +425,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
         isSignedIn={isSignedIn}
         isSubmitting={isSubmittingOrder}
         lastAction={lastAction}
+        onCancelOrder={handleCancelSpot}
         onDepositRequest={(currency) => {
           if (currency !== undefined) {
             setDepositCurrency(currency);
