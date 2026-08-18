@@ -367,3 +367,72 @@ export function buildSpotOrderEnvelope({
     },
   };
 }
+
+/**
+ * How long a signed cancel stays valid, bounding how long its signature can be replayed.
+ *
+ * Kept short — a cancel is signed and sent immediately, so this only has to cover the wallet
+ * prompt, the round trip, and any clock skew between the browser and markets-service. It is not a
+ * resting lifetime like {@link SPOT_ORDER_LIFETIME_SECONDS}; the shorter it is, the smaller the
+ * window in which a captured cancel signature could be reused.
+ */
+export const CANCEL_SIGNATURE_LIFETIME_SECONDS = Duration.toSeconds("2 minutes");
+
+/**
+ * Builds the EIP-712 envelope that authorizes cancelling a resting order.
+ *
+ * markets-service used to cancel on `(owner_address, nonce)` alone — both public book data — so
+ * anyone could cancel anyone's order. It now verifies a signature over
+ * `Cancel(address owner,address signer,uint256 nonce,uint256 expiry)`, signed against the same
+ * `Matching` domain as an order. `signer` equals `owner` until session keys exist; `expiry` bounds
+ * replay. The address casing does not affect the digest — the contract encodes the 20 raw bytes —
+ * so the owner value the book exposes and the checksummed signer recover to the same signer.
+ */
+export function buildCancelEnvelope({
+  nonce,
+  ownerAddress,
+  signerAddress,
+}: {
+  nonce: string;
+  ownerAddress: string;
+  signerAddress: string;
+}) {
+  const owner = getAddress(ownerAddress);
+  const signer = getAddress(signerAddress);
+  const nonceValue = BigInt(nonce);
+  const expiry = BigInt(Math.floor(Date.now() / 1000) + CANCEL_SIGNATURE_LIFETIME_SECONDS);
+  const chainId = getMatchingChainId();
+  const matchingAddress = getMatchingAddress();
+
+  return {
+    payload: {
+      expiry: expiry.toString(),
+      nonce,
+      owner_address: ownerAddress,
+      signer_address: signerAddress,
+    },
+    typedData: {
+      primaryType: "Cancel" as const,
+      types: {
+        Cancel: [
+          { name: "owner", type: "address" },
+          { name: "signer", type: "address" },
+          { name: "nonce", type: "uint256" },
+          { name: "expiry", type: "uint256" },
+        ],
+      } as const,
+      domain: {
+        chainId,
+        name: "Matching" as const,
+        verifyingContract: matchingAddress,
+        version: "1.0" as const,
+      },
+      message: {
+        expiry,
+        nonce: nonceValue,
+        owner,
+        signer,
+      },
+    },
+  };
+}

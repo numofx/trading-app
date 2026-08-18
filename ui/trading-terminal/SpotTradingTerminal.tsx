@@ -49,6 +49,7 @@ export function SpotTradingTerminal({
   depositControl,
   onDepositRequest,
   onSubmitOrder,
+  onCancelOrder,
   hasWallet = false,
   isSignedIn = false,
   isPreparingAccount = false,
@@ -86,6 +87,12 @@ export function SpotTradingTerminal({
     /** The touch as displayed when the trader submitted; a market order crosses against it. */
     book: { bestAsk: number | null; bestBid: number | null };
   }) => void;
+  /**
+   * Signs and submits a cancel for one of this trader's resting orders, returning the outcome.
+   * markets-service authorizes a cancel on a signature, so the parent (which holds the wallet) owns
+   * this; the panel here only drives the per-row cancelling/error state and the server refresh.
+   */
+  onCancelOrder: (nonce: string, ownerAddress: string) => Promise<{ ok: boolean; error?: string }>;
   /** Whether a wallet is connected; gates the order ticket's submit CTA. */
   hasWallet?: boolean;
   /** Whether a wallet session is active; gates account-scoped rows in the activity panel. */
@@ -227,14 +234,9 @@ export function SpotTradingTerminal({
     setCancelError(null);
     setCancellingNonce(nonce);
     try {
-      const response = await fetch("/api/orders/cancel", {
-        body: JSON.stringify({ nonce, owner_address: ownerAddress }),
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      });
-      if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as { error?: string } | null;
-        setCancelError(body?.error ?? `Cancel failed (${response.status})`);
+      const result = await onCancelOrder(nonce, ownerAddress);
+      if (!result.ok) {
+        setCancelError(result.error ?? "Cancel failed");
         return;
       }
       router.refresh();
