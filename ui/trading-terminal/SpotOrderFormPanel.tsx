@@ -129,7 +129,7 @@ function FormField({
   value: string;
 }) {
   return (
-    <div className="rounded-[12px] bg-input-bg px-3 py-2 ring-1 ring-panel-border focus-within:ring-panel-text-muted">
+    <div className="rounded-sm bg-input-bg px-3 py-2 ring-1 ring-panel-border focus-within:ring-panel-text-muted">
       <div className="flex items-center justify-between gap-2">
         <label className="text-[10px] text-panel-text-muted" htmlFor={id}>
           {label}
@@ -167,7 +167,7 @@ function PriceQuickFill({
         { label: bestLabel, price: bestPrice },
       ].map((option) => (
         <button
-          className="cursor-pointer rounded-md px-1.5 py-0.5 font-semibold text-panel-text-muted transition-colors hover:bg-input-hover hover:text-panel-text-active disabled:cursor-not-allowed disabled:opacity-40"
+          className="cursor-pointer rounded-sm px-1.5 py-0.5 font-semibold text-panel-text-muted transition-colors hover:bg-input-hover hover:text-panel-text-active disabled:cursor-not-allowed disabled:opacity-40"
           disabled={option.price === null}
           key={option.label}
           onClick={() => option.price !== null && onSelect(option.price)}
@@ -296,10 +296,10 @@ function SideTabs({
   const isBuy = side === "buy";
 
   return (
-    <div className="grid grid-cols-2 gap-1 rounded-[12px] bg-input-bg p-1">
+    <div className="grid grid-cols-2 gap-1 rounded-sm bg-input-bg p-1">
       <button
         className={cn(
-          "h-9 cursor-pointer rounded-[9px] font-semibold text-[12px] transition-colors",
+          "h-9 cursor-pointer rounded-sm font-semibold text-[12px] transition-colors",
           isBuy
             ? "bg-bid-bg text-buy ring-1 ring-buy/40"
             : "text-panel-text-muted hover:bg-input-hover"
@@ -311,7 +311,7 @@ function SideTabs({
       </button>
       <button
         className={cn(
-          "h-9 cursor-pointer rounded-[9px] font-semibold text-[12px] transition-colors",
+          "h-9 cursor-pointer rounded-sm font-semibold text-[12px] transition-colors",
           isBuy
             ? "text-panel-text-muted hover:bg-input-hover"
             : "bg-ask-bg text-sell ring-1 ring-sell/40"
@@ -587,14 +587,14 @@ export function SpotOrderFormPanel({
   return (
     // The panel claims the column height itself so only the field list below can
     // scroll — the header and the submit footer stay in view without scrolling.
-    <section className="flex flex-col overflow-clip rounded-[20px] bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 xl:min-h-0 xl:flex-1">
+    <section className="flex flex-col overflow-clip bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 xl:min-h-0 xl:flex-1">
       {/*
        * The panel label only earns its space next to sibling panels. In the stacked
        * sub-xl layout this is the only form on screen, so the row is dropped there to
        * keep the submit button within the first screenful.
        */}
       <div className="hidden shrink-0 items-center border-panel-border border-b px-3 py-2 font-medium text-[11px] xl:flex">
-        <span className="rounded-xl bg-input-bg px-2 py-1 text-panel-text-active">Order form</span>
+        <span className="rounded-sm bg-input-bg px-2 py-1 text-panel-text-active">Order form</span>
       </div>
 
       <div className="space-y-2 p-3 xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
@@ -680,7 +680,7 @@ export function SpotOrderFormPanel({
 
         <button
           className={cn(
-            "h-11 w-full cursor-pointer rounded-[12px] font-semibold text-[13px] transition-colors",
+            "h-11 w-full cursor-pointer rounded-sm font-semibold text-[13px] transition-colors",
             isBuy
               ? "bg-buy text-background hover:bg-buy/90"
               : "bg-sell text-white hover:bg-sell/90",

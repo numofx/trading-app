@@ -69,13 +69,13 @@ export function TradingActivityPanel({
   const gridTemplateColumns = `repeat(${activityView.columns.length}, minmax(96px, 1fr))`;
 
   return (
-    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-[28px] bg-panel-bg/72 shadow-[0_24px_80px_var(--panel-shadow)] ring-1 ring-panel-ring transition-colors duration-300">
+    <section className="flex h-full min-h-0 flex-col overflow-hidden bg-panel-bg/72 shadow-[0_24px_80px_var(--panel-shadow)] ring-1 ring-panel-ring transition-colors duration-300">
       <div className="flex flex-wrap items-center gap-2 px-4 py-3">
         <div className="flex flex-wrap gap-1">
           {tabs.map((tab) => (
             <button
               className={cn(
-                "rounded-xl px-3 py-1.5 font-medium text-[10px] text-panel-text-muted transition-colors hover:bg-input-hover hover:text-panel-text-active",
+                "rounded-sm px-3 py-1.5 font-medium text-[10px] text-panel-text-muted transition-colors hover:bg-input-hover hover:text-panel-text-active",
                 selectedTab === tab.id && "bg-input-bg text-panel-text-active"
               )}
               key={tab.id}
@@ -103,7 +103,7 @@ export function TradingActivityPanel({
           </div>
 
           {isEmpty ? null : (
-            <div className="mt-2 flex min-h-[96px] flex-1 flex-col overflow-hidden rounded-[20px] bg-input-bg/50">
+            <div className="mt-2 flex min-h-[96px] flex-1 flex-col overflow-hidden rounded-sm bg-input-bg/50">
               <div className="flex flex-1 flex-col">
                 {rows.map((row, rowIndex) => (
                   <div
@@ -158,7 +158,7 @@ export function TradingActivityPanel({
          * copy stays centred in the visible area rather than in the wider scrollable width.
          */}
         {isEmpty ? (
-          <div className="sticky left-0 mt-2 flex min-h-[96px] flex-col items-center justify-center gap-4 rounded-[20px] bg-input-bg/50 text-center">
+          <div className="sticky left-0 mt-2 flex min-h-[96px] flex-col items-center justify-center gap-4 rounded-sm bg-input-bg/50 text-center">
             <div>
               <div className="font-medium text-panel-text-active text-sm">
                 {emptyStateCopy.title}

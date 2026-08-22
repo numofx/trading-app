@@ -449,7 +449,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
               refreshCngnBalance();
             }}
             open={depositOpen}
-            triggerClassName="flex h-10 cursor-pointer items-center whitespace-nowrap rounded-full bg-input-bg px-4 font-semibold text-[12px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active disabled:cursor-not-allowed disabled:opacity-60"
+            triggerClassName="flex h-10 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-4 font-semibold text-[12px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active disabled:cursor-not-allowed disabled:opacity-60"
             triggerId="header-deposit-trigger"
             walletBalances={{ cNGN: cngnBalance, USDC: usdcBalance }}
           />

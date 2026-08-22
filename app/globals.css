@@ -48,6 +48,10 @@
   --bid-bg: color-mix(in srgb, var(--buy) 9%, transparent);
   --ask-label: color-mix(in srgb, var(--sell) 70%, var(--panel-text-muted));
   --bid-label: color-mix(in srgb, var(--buy) 70%, var(--panel-text-muted));
+  /* The order book's depth bars. A step stronger than `--ask-bg`/`--bid-bg`: a bar has to read as
+     a magnitude across a 20px row, where a tinted panel background only has to not distract. */
+  --ask-depth: color-mix(in srgb, var(--sell) 18%, transparent);
+  --bid-depth: color-mix(in srgb, var(--buy) 18%, transparent);
   --mid-price: #eceef1;
   --spread-percent: #9aa1ac;
 
@@ -97,6 +101,8 @@
   --bid-bg: color-mix(in srgb, var(--buy) 7%, transparent);
   --ask-label: var(--sell);
   --bid-label: var(--buy);
+  --ask-depth: color-mix(in srgb, var(--sell) 12%, transparent);
+  --bid-depth: color-mix(in srgb, var(--buy) 12%, transparent);
   --mid-price: #1e3a8a;
   --spread-percent: #2563eb;
 
@@ -140,6 +146,8 @@
   --color-bid-bg: var(--bid-bg);
   --color-ask-label: var(--ask-label);
   --color-bid-label: var(--bid-label);
+  --color-ask-depth: var(--ask-depth);
+  --color-bid-depth: var(--bid-depth);
   --color-mid-price: var(--mid-price);
   --color-spread-percent: var(--spread-percent);
 }

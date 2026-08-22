@@ -288,22 +288,14 @@ function buildLiveBookSide(items: NonNullable<BookResponse["asks"]>, side: "ask"
     return side === "ask" ? left.price - right.price : right.price - left.price;
   });
 
-  if (side === "ask") {
-    let runningTotal = 0;
-    for (let index = ordered.length - 1; index >= 0; index -= 1) {
-      runningTotal += ordered[index]?.size ?? 0;
-      if (ordered[index]) {
-        ordered[index].size = roundSize(ordered[index].size);
-        (ordered[index] as { total?: number }).total = roundSize(runningTotal);
-      }
-    }
-  } else {
-    let runningTotal = 0;
-    for (const level of ordered) {
-      runningTotal += level.size;
-      level.size = roundSize(level.size);
-      (level as { total?: number }).total = roundSize(runningTotal);
-    }
+  // Cumulative depth runs from the touch outward on both sides, so a level's `total` is what a
+  // marketable order sweeping to that price would take. Asks used to accumulate from the far end,
+  // which put the whole side's depth on the best ask and its own size on the worst.
+  let runningTotal = 0;
+  for (const level of ordered) {
+    runningTotal += level.size;
+    level.size = roundSize(level.size);
+    (level as { total?: number }).total = roundSize(runningTotal);
   }
 
   return ordered.map((level) => ({
