@@ -1,6 +1,7 @@
 import type { ConnectedWallet } from "@privy-io/react-auth";
 import { formatUnits } from "viem";
 import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
+import { getDepositPauseReason } from "@/lib/subaccount-deposit-config";
 import { toTokenUnits } from "@/lib/subaccount-withdraw";
 import type { WithdrawableAsset } from "@/lib/withdrawable-assets";
 import { getAssetLedgerUnits } from "@/lib/withdrawable-assets";
@@ -13,6 +14,8 @@ import type {
 /** What one row of the asset screen needs, whichever side built it. */
 export type AssetOption = {
   balanceLabel: string | null;
+  /** Set when the row cannot be chosen, e.g. a currency whose deposits are paused. */
+  disabledReason?: string;
   iconSrc: string;
   id: string;
   label: string;
@@ -103,6 +106,7 @@ export function buildAssetOptions({
   if (mode === "deposit") {
     return currencies.map((option) => ({
       balanceLabel: getBalanceLabelFor(walletBalances, option),
+      disabledReason: getDepositPauseReason(option) === null ? undefined : "Paused",
       iconSrc: getTokenIconSrc(option),
       id: option,
       label: option,

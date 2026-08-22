@@ -16,6 +16,7 @@ import {
   SPOT_ORDER_LIFETIME_LABEL,
 } from "@/lib/spot-order-submission";
 import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
+import { getFirstDepositableCurrency } from "@/lib/subaccount-deposit-config";
 import type { SpotMarket } from "@/lib/trading.types";
 import { buildDepositAccount, DepositDialog } from "@/ui/trading-terminal/DepositDialog";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
@@ -183,7 +184,9 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
   const [depositOpen, setDepositOpen] = useState(false);
   // Which asset it opens on. Held here rather than inside the dialog because the ticket names the
   // currency when it sends the trader over — a "Deposit cNGN" button must not land on the USDC form.
-  const [depositCurrency, setDepositCurrency] = useState<DepositCurrency>("USDC");
+  const [depositCurrency, setDepositCurrency] = useState<DepositCurrency>(
+    getFirstDepositableCurrency
+  );
   const [resumeDepositAfterLogin, setResumeDepositAfterLogin] = useState(false);
   // Stays false while Privy is still restoring a session, so account-scoped panels never flash for visitors.
   const isSignedIn = privyReady && authenticated;

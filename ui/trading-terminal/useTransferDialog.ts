@@ -4,7 +4,11 @@ import type { ConnectedWallet } from "@privy-io/react-auth";
 import posthog from "posthog-js";
 import { useState } from "react";
 import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
-import { getDepositableCurrencies } from "@/lib/subaccount-deposit-config";
+import {
+  getDepositableCurrencies,
+  getDepositPauseReason,
+  getFirstDepositableCurrency,
+} from "@/lib/subaccount-deposit-config";
 import type { WithdrawableAsset } from "@/lib/withdrawable-assets";
 import {
   findSiblingAssetWithBalance,
@@ -109,7 +113,10 @@ export function useTransferDialog({
   const [screen, setScreen] = useState<DepositScreen>("form");
   const [withdrawAssetId, setWithdrawAssetId] = useState(withdrawableAssets[0].id);
   const [amount, setAmount] = useState("");
-  const [uncontrolledCurrency, setUncontrolledCurrency] = useState<DepositCurrency>("USDC");
+  // Opens on something depositable, so a paused currency is never the landing state.
+  const [uncontrolledCurrency, setUncontrolledCurrency] = useState<DepositCurrency>(
+    getFirstDepositableCurrency
+  );
   const { approve, clearInputError, deposit, flowState, inputError, reset, retry, startDeposit } =
     useSubaccountDeposit({ onDeposited });
   const {
@@ -266,6 +273,7 @@ export function useTransferDialog({
     currency,
     deposit,
     depositFlowState: flowState,
+    depositPauseReason: getDepositPauseReason(currency),
     handleAmountChange,
     handleFundWithBank,
     handleOpenChange,

@@ -227,7 +227,44 @@ export function getDepositAddresses(currency: DepositCurrency): DepositAddresses
   };
 }
 
-/** The currencies this deployment can accept, in display order. */
+/** The currencies this deployment lists, in display order. Some may be paused for deposits. */
 export function getDepositableCurrencies(): DepositCurrency[] {
   return ["USDC", "cNGN"];
+}
+
+/**
+ * Currencies whose deposits are closed, and why.
+ *
+ * USDC is paused on mainnet because deposits land in the CashAsset, whose accounting was corrupted
+ * by a mis-scaled mint: it holds 0.000001 USDC against a 1.368e40 claim, so every withdrawal from
+ * it reverts. Money deposited there today cannot come back out. cNGN is unaffected — its escrow
+ * backs its claims 1:1 — and USDC *withdrawals* stay open so balances can leave once the escrow is
+ * made whole.
+ *
+ * Set `NEXT_PUBLIC_PAUSED_DEPOSIT_CURRENCIES` to override: a comma-separated list, or `none` to
+ * reopen everything. Reopen only once the invariant holds — the escrow's token balance covers the
+ * sum of real claims.
+ */
+export function getDepositPauseReason(currency: DepositCurrency): string | null {
+  const configured = process.env.NEXT_PUBLIC_PAUSED_DEPOSIT_CURRENCIES?.trim();
+
+  if (configured === undefined || configured === "") {
+    return isAppMainnet() && currency === "USDC" ? CASH_ASSET_PAUSE_REASON : null;
+  }
+
+  if (configured.toLowerCase() === "none") {
+    return null;
+  }
+
+  const paused = configured.split(",").map((entry) => entry.trim().toLowerCase());
+  return paused.includes(currency.toLowerCase()) ? CASH_ASSET_PAUSE_REASON : null;
+}
+
+const CASH_ASSET_PAUSE_REASON =
+  "USDC deposits are paused. The venue's USDC escrow cannot pay withdrawals right now, so a deposit could not be taken back out. Withdrawals stay open, and cNGN is unaffected.";
+
+/** The first currency a deposit can actually be made in, for defaults and fallbacks. */
+export function getFirstDepositableCurrency(): DepositCurrency {
+  const currencies = getDepositableCurrencies();
+  return currencies.find((currency) => getDepositPauseReason(currency) === null) ?? currencies[0];
 }
