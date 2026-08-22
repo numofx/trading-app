@@ -4,18 +4,50 @@ import { getAppChain } from "@/lib/base-public-client";
 import type { DepositAddresses, DepositCurrency } from "@/lib/subaccount-deposit.types";
 
 /**
- * Address plumbing for the subaccount deposit flow (Base Sepolia defaults).
+ * Address plumbing for the subaccount deposit flow (Base mainnet defaults).
  *
  * Terminology follows the risk-core deployment artifacts, which is easy to invert:
  * - "base asset" / `base` = the WLWrappedERC20Asset contract that holds deposits
  * - `wrappedAsset` = the underlying ERC-20 token pulled from the wallet
  */
 
-const DEFAULT_WRAPPED_USDC_ASSET_ADDRESS = "0xdC3f31B61a2128B3D1ECB8b6f6d0DE82eBd6c7Ae";
-const DEFAULT_USDC_TOKEN_ADDRESS = "0x8b3C43D2b2555ca3fc4Fa1BC34544133B8576110";
-const DEFAULT_SUBACCOUNT_CREATOR_ADDRESS = "0x5448B304AD283f24A741B54AE9b3a71C8d7DCDF2";
-const DEFAULT_USDCCNGN_MANAGER_ADDRESS = "0x1917960763BF3a0DfA10a05f0a112E828C1A934f";
-const DEFAULT_MATCHING_ADDRESS = "0x1599636347FD5bA1fBE21D58AfE0b8B9cbe283FF";
+/**
+ * The matching stack, per chain. These used to be single Sepolia constants, which made a chain
+ * flip a silent misconfiguration: none of the Sepolia addresses have code on mainnet, so every
+ * deposit and order would have been built against contracts that do not exist.
+ *
+ * Every mainnet entry is verified on-chain (Base 8453):
+ * - `matching` emits the `DepositedSubAccount` / `ModuleAllowed` events this app decodes, and is
+ *   the contract the venue's own trades are submitted to.
+ * - `subaccountCreator` answers to `createAndDepositSubAccount(address,uint256,address)` and
+ *   points back at that same matching and subaccounts pair; accounts 11 and 12 were minted
+ *   through it.
+ * - `manager` is the manager of every live account from #4 onward.
+ * - `wrappedUsdcAsset` is the CashAsset, whose `wrappedAsset()` returns the USDC token below —
+ *   canonical Base USDC, 6 decimals.
+ */
+const MATCHING_STACK = {
+  mainnet: {
+    manager: "0xcE01f3D74400caE39bd7608cd2d286C2e3874d49",
+    matching: "0x9E90A9cD13d859Bd6a08168082FB1F6F7405F191",
+    subaccountCreator: "0x568890A8D63Ba8a03b6eCbEedA1bD9f6ea014D5D",
+    tradeModule: "0x44813aD30b2fFC1bB2871Eed9b19F63c8196eD1c",
+    usdcToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    wrappedUsdcAsset: "0x6B232A2155Bd0C9bf741dB4cf8E7e8A0176A6fc6",
+  },
+  sepolia: {
+    manager: "0x1917960763BF3a0DfA10a05f0a112E828C1A934f",
+    matching: "0x1599636347FD5bA1fBE21D58AfE0b8B9cbe283FF",
+    subaccountCreator: "0x5448B304AD283f24A741B54AE9b3a71C8d7DCDF2",
+    tradeModule: "0x0AAE65AaA66Fe7f54486cDbD007956d3De611990",
+    usdcToken: "0x8b3C43D2b2555ca3fc4Fa1BC34544133B8576110",
+    wrappedUsdcAsset: "0xdC3f31B61a2128B3D1ECB8b6f6d0DE82eBd6c7Ae",
+  },
+} as const;
+
+function getMatchingStack() {
+  return isAppMainnet() ? MATCHING_STACK.mainnet : MATCHING_STACK.sepolia;
+}
 
 /**
  * SubAccounts ERC-721 ledger — holds every subaccount's per-asset balances and is
@@ -67,13 +99,16 @@ export const depositedSubAccountEvent = parseAbiItem(
 );
 
 export function getMatchingAddress() {
-  return getAddress(process.env.NEXT_PUBLIC_MATCHING_ADDRESS?.trim() || DEFAULT_MATCHING_ADDRESS);
+  return getAddress(
+    process.env.NEXT_PUBLIC_MATCHING_ADDRESS?.trim() || getMatchingStack().matching
+  );
 }
 
 /** WLWrappedERC20Asset contract — the deposit target and spender for direct deposits. */
 export function getWrappedUsdcAssetAddress() {
   return getAddress(
-    process.env.NEXT_PUBLIC_WRAPPED_USDC_ASSET_ADDRESS?.trim() || DEFAULT_WRAPPED_USDC_ASSET_ADDRESS
+    process.env.NEXT_PUBLIC_WRAPPED_USDC_ASSET_ADDRESS?.trim() ||
+      getMatchingStack().wrappedUsdcAsset
   );
 }
 
@@ -86,19 +121,31 @@ export function getUsdcTokenAddress() {
   return getAddress(
     process.env.NEXT_PUBLIC_USDC_TOKEN_ADDRESS?.trim() ||
       process.env.NEXT_PUBLIC_USDC_DELIVERABLE_BASE_ASSET_ADDRESS?.trim() ||
-      DEFAULT_USDC_TOKEN_ADDRESS
+      getMatchingStack().usdcToken
+  );
+}
+
+/**
+ * The Matching module orders are submitted through, and the one a new subaccount is created
+ * against. Shared so those two can never disagree — a subaccount created against a module the
+ * engine does not trade on cannot be filled.
+ */
+export function getTradeModuleAddress() {
+  return getAddress(
+    process.env.NEXT_PUBLIC_TRADE_MODULE_ADDRESS?.trim() || getMatchingStack().tradeModule
   );
 }
 
 export function getSubaccountCreatorAddress() {
   return getAddress(
-    process.env.NEXT_PUBLIC_SUBACCOUNT_CREATOR_ADDRESS?.trim() || DEFAULT_SUBACCOUNT_CREATOR_ADDRESS
+    process.env.NEXT_PUBLIC_SUBACCOUNT_CREATOR_ADDRESS?.trim() ||
+      getMatchingStack().subaccountCreator
   );
 }
 
 export function getUsdcCngnManagerAddress() {
   return getAddress(
-    process.env.NEXT_PUBLIC_USDCCNGN_MANAGER_ADDRESS?.trim() || DEFAULT_USDCCNGN_MANAGER_ADDRESS
+    process.env.NEXT_PUBLIC_USDCCNGN_MANAGER_ADDRESS?.trim() || getMatchingStack().manager
   );
 }
 

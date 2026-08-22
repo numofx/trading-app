@@ -26,6 +26,14 @@
   --buy: #1fcb84;
   --sell: #f6465d;
 
+  /* Modal surface. A step below `--panel-bg`: over a dimmed page the panel tone read as grey,
+     and a dialog that floats above everything should sit closer to the terminal's base. */
+  --dialog-bg: #070809;
+
+  /* Badge behind a funding-source glyph (wallets, bank) in the deposit dialog's pickers. */
+  --source-badge: #2563eb;
+  --source-badge-fg: #ffffff;
+
   --input-bg: rgba(255, 255, 255, 0.035);
   --input-border: rgba(255, 255, 255, 0.1);
   --input-hover: rgba(255, 255, 255, 0.06);
@@ -66,6 +74,11 @@
   --panel-text: #1e293b;
   --panel-text-muted: #64748b;
   --panel-text-active: #0f172a;
+
+  --dialog-bg: #ffffff;
+
+  --source-badge: #2563eb;
+  --source-badge-fg: #ffffff;
 
   --input-bg: rgba(15, 23, 42, 0.04);
   --input-border: rgba(15, 23, 42, 0.08);
@@ -110,6 +123,9 @@
   --color-panel-text: var(--panel-text);
   --color-panel-text-muted: var(--panel-text-muted);
   --color-panel-text-active: var(--panel-text-active);
+  --color-dialog-bg: var(--dialog-bg);
+  --color-source-badge: var(--source-badge);
+  --color-source-badge-fg: var(--source-badge-fg);
   --color-input-bg: var(--input-bg);
   --color-input-border: var(--input-border);
   --color-input-hover: var(--input-hover);

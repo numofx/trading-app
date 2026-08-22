@@ -23,7 +23,13 @@ Set:
 
 - `MARKETS_SERVICE_URL`
 
-Local development:
+Local development against the live venue (what `.env.local` ships with):
+
+```bash
+MARKETS_SERVICE_URL=https://api.numofx.com
+```
+
+Against a local `markets-service`:
 
 ```bash
 MARKETS_SERVICE_URL=http://127.0.0.1:8080
@@ -96,9 +102,47 @@ contract below is what the engine actually expects.
 
 Legacy override envs: `NEXT_PUBLIC_USDCCNGN_APR_FUTURE_ASSET_ADDRESS` / `NEXT_PUBLIC_USDCCNGN_APR_FUTURE_SUB_ID` are no longer read at all — the code that applied them went with the futures UI. Leave them unset.
 
-## Base Sepolia execution
+## Chain and execution
 
-For Base Sepolia frontend execution, the matching stack env should point to deployed contracts:
+The app runs on **Base mainnet (8453)** — the chain the live venue settles on. `getAppChain`
+returns mainnet unless `NEXT_PUBLIC_MATCHING_CHAIN_ID=84532` asks for Sepolia by name; an unset or
+malformed value lands on mainnet rather than quietly on a testnet whose contracts do not exist here.
+
+### RPC
+
+`NEXT_PUBLIC_BASE_RPC_URL` must be set to the venue's keyed Alchemy endpoint on every deployment.
+The code falls back to the public `https://mainnet.base.org` only so a missing env does not hard-fail
+locally — that endpoint is shared and aggressively throttled, and a rate limit there is what made
+wallet balance reads silently come back empty. Because the var is `NEXT_PUBLIC_`, the key ships in
+the browser bundle: keep the Alchemy key domain-restricted, and rotate it there rather than in code.
+
+### Matching stack (Base mainnet)
+
+Defaults live in `MATCHING_STACK` (`lib/subaccount-deposit-config.ts`) and
+`lib/spot-order-submission.ts`; the envs below only override them.
+
+| Env | Mainnet address | What it is |
+| --- | --- | --- |
+| `NEXT_PUBLIC_MATCHING_ADDRESS` | `0x9E90A9cD13d859Bd6a08168082FB1F6F7405F191` | Matching — EIP-712 domain, `DepositedSubAccount` source |
+| `NEXT_PUBLIC_TRADE_MODULE_ADDRESS` | `0x44813aD30b2fFC1bB2871Eed9b19F63c8196eD1c` | the one module the venue's trades are submitted through |
+| `NEXT_PUBLIC_SUBACCOUNT_CREATOR_ADDRESS` | `0x568890A8D63Ba8a03b6eCbEedA1bD9f6ea014D5D` | periphery for `createAndDepositSubAccount` |
+| `NEXT_PUBLIC_USDCCNGN_MANAGER_ADDRESS` | `0xcE01f3D74400caE39bd7608cd2d286C2e3874d49` | manager of every live account from #4 on |
+| `NEXT_PUBLIC_SUBACCOUNTS_ADDRESS` | `0x7019244E25FA416e6Ca2ed2F3cA25277aef72843` | SubAccounts ERC-721 ledger |
+| `NEXT_PUBLIC_WRAPPED_USDC_ASSET_ADDRESS` | `0x6B232A2155Bd0C9bf741dB4cf8E7e8A0176A6fc6` | CashAsset — the USDC deposit escrow |
+| `NEXT_PUBLIC_USDC_TOKEN_ADDRESS` | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` | canonical Base USDC, 6 decimals |
+
+Each was verified against Base 8453 rather than copied: `Matching` emits the `ModuleAllowed` and
+`DepositedSubAccount` events this app decodes, the creator answers to
+`createAndDepositSubAccount(address,uint256,address)` and points back at that same Matching and
+SubAccounts pair, and `CashAsset.wrappedAsset()` returns the USDC token above.
+
+> **The stack moves as one.** None of the Sepolia addresses have code on mainnet, so a half-flipped
+> config is not a degraded app — it builds transactions against contracts that do not exist.
+> `lib/subaccount-deposit-config.test.mjs` pins both stacks and the mainnet default.
+
+### Base Sepolia (opt-in)
+
+Reachable only with `NEXT_PUBLIC_MATCHING_CHAIN_ID=84532`:
 
 - `NEXT_PUBLIC_MATCHING_ADDRESS=0x1599636347FD5bA1fBE21D58AfE0b8B9cbe283FF`
 - `NEXT_PUBLIC_TRADE_MODULE_ADDRESS=0x0AAE65AaA66Fe7f54486cDbD007956d3De611990`
