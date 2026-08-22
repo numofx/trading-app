@@ -469,12 +469,12 @@ export function SpotChartPanel({
     hoveredIndex !== null ? (candles[hoveredIndex] ?? null) : (candles.at(-1) ?? null);
 
   return (
-    <section className="flex h-full min-h-[380px] flex-col overflow-hidden rounded-[20px] bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 xl:min-h-0">
+    <section className="flex h-full min-h-[380px] flex-col overflow-hidden bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 xl:min-h-0">
       <div className="flex flex-wrap items-center justify-between gap-2 border-panel-border border-b px-3 py-2">
         <div className="flex items-center gap-1.5 font-medium text-[11px]">
           <button
             className={cn(
-              "cursor-pointer rounded-xl px-2 py-1 transition-colors",
+              "cursor-pointer rounded-sm px-2 py-1 transition-colors",
               chartTab === "price"
                 ? "bg-input-bg text-panel-text-active"
                 : "text-panel-text-muted hover:text-panel-text"
@@ -486,7 +486,7 @@ export function SpotChartPanel({
           </button>
           <button
             className={cn(
-              "cursor-pointer rounded-xl px-2 py-1 transition-colors",
+              "cursor-pointer rounded-sm px-2 py-1 transition-colors",
               chartTab === "depth"
                 ? "bg-input-bg text-panel-text-active"
                 : "text-panel-text-muted hover:text-panel-text"
@@ -503,7 +503,7 @@ export function SpotChartPanel({
             {timeframes.map((timeframe) => (
               <button
                 className={cn(
-                  "h-7 cursor-pointer rounded-lg px-2 font-medium text-[10px] transition-colors",
+                  "h-7 cursor-pointer rounded-sm px-2 font-medium text-[10px] transition-colors",
                   selectedTimeframe === timeframe
                     ? "bg-toolbar-active-bg text-toolbar-active-fg"
                     : "text-panel-text-muted hover:bg-input-hover hover:text-panel-text-active"
@@ -517,7 +517,7 @@ export function SpotChartPanel({
             ))}
             <button
               className={cn(
-                "h-7 cursor-pointer rounded-lg px-2 font-medium text-[10px] transition-colors",
+                "h-7 cursor-pointer rounded-sm px-2 font-medium text-[10px] transition-colors",
                 indicatorsEnabled
                   ? "bg-toolbar-active-bg text-toolbar-active-fg"
                   : "text-panel-text-muted hover:bg-input-hover hover:text-panel-text-active"
@@ -546,7 +546,7 @@ export function SpotChartPanel({
               return (
                 <button
                   className={cn(
-                    "flex size-6.5 shrink-0 cursor-pointer items-center justify-center rounded-lg text-panel-text-muted transition-colors hover:bg-input-hover hover:text-panel-text-active",
+                    "flex size-6.5 shrink-0 cursor-pointer items-center justify-center rounded-sm text-panel-text-muted transition-colors hover:bg-input-hover hover:text-panel-text-active",
                     selectedTool === tool.id && "bg-toolbar-active-bg text-toolbar-active-fg"
                   )}
                   key={tool.id}

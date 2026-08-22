@@ -168,8 +168,8 @@ function roundSize(value: number) {
 
 /**
  * Builds one side of the display ladder from book state: aggregates by displayed price, sorts, and
- * computes cumulative depth. Cumulative-total conventions mirror the REST book mapper so bar widths
- * render identically.
+ * computes cumulative depth from the touch outward. Cumulative-total conventions mirror the REST
+ * book mapper so bar widths render identically.
  */
 export function buildBookSide(state: BookState, side: "ask" | "bid"): OrderBookLevel[] {
   const bookSide = side === "ask" ? "sell" : "buy";
@@ -187,23 +187,11 @@ export function buildBookSide(state: BookState, side: "ask" | "bid"): OrderBookL
     .map(([price, size]) => ({ price, size, total: 0 }))
     .sort((left, right) => (side === "ask" ? left.price - right.price : right.price - left.price));
 
-  if (side === "ask") {
-    let runningTotal = 0;
-    for (let index = ordered.length - 1; index >= 0; index -= 1) {
-      const level = ordered[index];
-      if (level) {
-        runningTotal += level.size;
-        level.size = roundSize(level.size);
-        level.total = roundSize(runningTotal);
-      }
-    }
-  } else {
-    let runningTotal = 0;
-    for (const level of ordered) {
-      runningTotal += level.size;
-      level.size = roundSize(level.size);
-      level.total = roundSize(runningTotal);
-    }
+  let runningTotal = 0;
+  for (const level of ordered) {
+    runningTotal += level.size;
+    level.size = roundSize(level.size);
+    level.total = roundSize(runningTotal);
   }
 
   return ordered;

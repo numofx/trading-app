@@ -93,7 +93,7 @@ export function LayoutFixtureTerminal() {
         cngnBalanceLabel="0 cNGN"
         depositControl={
           <button
-            className="flex h-10 cursor-pointer items-center whitespace-nowrap rounded-full bg-input-bg px-4 font-semibold text-[12px] text-panel-text ring-1 ring-panel-border"
+            className="flex h-10 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-4 font-semibold text-[12px] text-panel-text ring-1 ring-panel-border"
             id="fixture-deposit"
             onClick={() => setDeposits((count) => count + 1)}
             type="button"
