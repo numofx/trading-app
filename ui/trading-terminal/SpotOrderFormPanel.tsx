@@ -587,17 +587,17 @@ export function SpotOrderFormPanel({
   return (
     // The panel claims the column height itself so only the field list below can
     // scroll — the header and the submit footer stay in view without scrolling.
-    <section className="flex flex-col overflow-clip bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 xl:min-h-0 xl:flex-1">
+    <section className="flex flex-col overflow-clip bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 md:min-h-0 md:flex-1">
       {/*
        * The panel label only earns its space next to sibling panels. In the stacked
        * sub-xl layout this is the only form on screen, so the row is dropped there to
        * keep the submit button within the first screenful.
        */}
-      <div className="hidden shrink-0 items-center border-panel-border border-b px-3 py-2 font-medium text-[11px] xl:flex">
+      <div className="hidden shrink-0 items-center border-panel-border border-b px-3 py-2 font-medium text-[11px] md:flex">
         <span className="rounded-sm bg-input-bg px-2 py-1 text-panel-text-active">Order form</span>
       </div>
 
-      <div className="space-y-2 p-3 xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
+      <div className="space-y-2 p-3 md:min-h-0 md:flex-1 md:overflow-y-auto">
         <SideTabs onSelect={setSide} side={side} />
 
         <OrderTypeTabs onSelect={setOrderType} orderTypes={ORDER_TYPES} selected={orderType} />

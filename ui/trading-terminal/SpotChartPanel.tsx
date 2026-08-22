@@ -469,7 +469,7 @@ export function SpotChartPanel({
     hoveredIndex !== null ? (candles[hoveredIndex] ?? null) : (candles.at(-1) ?? null);
 
   return (
-    <section className="flex h-full min-h-[380px] flex-col overflow-hidden bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 xl:min-h-0">
+    <section className="flex h-full min-h-[380px] flex-col overflow-hidden bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 md:min-h-0">
       <div className="flex flex-wrap items-center justify-between gap-2 border-panel-border border-b px-3 py-2">
         <div className="flex items-center gap-1.5 font-medium text-[11px]">
           <button

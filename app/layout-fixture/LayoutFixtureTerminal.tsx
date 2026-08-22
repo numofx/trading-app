@@ -83,7 +83,7 @@ export function LayoutFixtureTerminal() {
   const accountUsdc = OPENING_BALANCES.usdc + deposits * DEPOSIT_AMOUNT.usdc;
 
   return (
-    <main className="flex min-h-screen flex-col bg-terminal-bg text-foreground xl:h-dvh xl:overflow-hidden">
+    <main className="flex min-h-screen flex-col bg-terminal-bg text-foreground md:h-dvh md:overflow-hidden">
       <SpotTradingTerminal
         accountCngn={accountCngn}
         accountCngnLabel={tickerLabel(accountCngn, "cNGN")}
