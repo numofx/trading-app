@@ -1,9 +1,9 @@
 import { Duration } from "effect";
 import { encodeAbiParameters, getAddress } from "viem";
 import { getAppChain } from "@/lib/base-public-client";
+import { getTradeModuleAddress as getConfiguredTradeModuleAddress } from "@/lib/subaccount-deposit-config";
 
 const DEFAULT_MATCHING_ADDRESS = "0x9E90A9cD13d859Bd6a08168082FB1F6F7405F191";
-const DEFAULT_TRADE_MODULE_ADDRESS = "0x44813aD30b2fFC1bB2871Eed9b19F63c8196eD1c";
 // The spot instrument's asset in markets-service (/v1/markets USDCcNGN-SPOT.asset_address):
 // the wrapped-cNGN WLWrappedERC20Asset, always sub_id 0.
 const DEFAULT_SPOT_ASSET_ADDRESS = "0x9d806fd040a719d27a8e5e77dc5ae0ed1e089493";
@@ -112,9 +112,7 @@ function getMatchingAddress() {
 }
 
 function getTradeModuleAddress() {
-  return getAddress(
-    process.env.NEXT_PUBLIC_TRADE_MODULE_ADDRESS?.trim() || DEFAULT_TRADE_MODULE_ADDRESS
-  );
+  return getConfiguredTradeModuleAddress();
 }
 
 function getSpotAssetAddress() {

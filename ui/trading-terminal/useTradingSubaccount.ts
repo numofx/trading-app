@@ -7,6 +7,7 @@ import { base } from "viem/chains";
 import { createBasePublicClient, getAppChain } from "@/lib/base-public-client";
 import {
   depositedSubAccountEvent,
+  getTradeModuleAddress as getConfiguredTradeModuleAddress,
   getMatchingAddress,
   getSubaccountCreatorAddress,
   getUsdcCngnManagerAddress,
@@ -19,13 +20,12 @@ import {
   writeSubaccountCache,
 } from "@/lib/trading-subaccount-cache";
 
-const DEFAULT_TRADE_MODULE_ADDRESS = "0x0AAE65AaA66Fe7f54486cDbD007956d3De611990";
 /**
  * Blocks per `eth_getLogs` query when scanning for a subaccount.
  *
- * The default is what the public Base RPCs accept, and it is slow: covering the ~840k blocks
- * since the Matching deployment takes ~418 sequential calls, around seven minutes, and grows by
- * ~22 calls a day. The submit button is disabled for that whole time.
+ * The default is what the public Base RPCs accept, and it is far too slow for mainnet: the ~1.5M
+ * blocks since the Matching deployment take ~750 sequential calls, and Base adds ~22 more a day.
+ * Until that finishes the app reports no trading account at all, offering to create a second one.
  *
  * Providers with a higher limit collapse this. Alchemy serves the entire range in one 1.1s call,
  * so set `NEXT_PUBLIC_LOG_QUERY_BLOCK_RANGE=1000000` alongside a `NEXT_PUBLIC_BASE_RPC_URL` that
@@ -75,10 +75,9 @@ function getMatchingChainId() {
   return getAppChain().id;
 }
 
+/** Shared with order submission so the module cannot differ between creating and trading. */
 function getTradeModuleAddress() {
-  return getAddress(
-    process.env.NEXT_PUBLIC_TRADE_MODULE_ADDRESS?.trim() || DEFAULT_TRADE_MODULE_ADDRESS
-  );
+  return getConfiguredTradeModuleAddress();
 }
 
 /**

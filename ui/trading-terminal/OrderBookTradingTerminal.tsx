@@ -200,7 +200,17 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
    * The cost is one extra click for a connect-only user; the alternative is a live Buy button in
    * front of someone who believes they are disconnected.
    */
-  const primaryWallet = isSignedIn ? (wallets[0] ?? null) : null;
+  /**
+   * Which connected wallet the terminal is acting as, chosen on the deposit dialog's Transfer from
+   * screen. It moves the whole identity, not just who signs the transfer: a first deposit creates
+   * the trading account and the account belongs to the signer, so a wallet that funds must also be
+   * the wallet whose subaccount, orders and cancels this session uses. Unset until the trader picks
+   * one, which leaves the first connected wallet in charge.
+   */
+  const [selectedWalletAddress, setSelectedWalletAddress] = useState<string | null>(null);
+  const primaryWallet = isSignedIn
+    ? (wallets.find((wallet) => wallet.address === selectedWalletAddress) ?? wallets[0] ?? null)
+    : null;
   /*
    * The ticket gates on the wallet rather than the session because a session can exist before its
    * embedded wallet does: an email login is authenticated while Privy is still provisioning one.
@@ -422,14 +432,23 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
         depositControl={
           <DepositDialog
             account={depositAccount}
+            accountRows={subaccountBalance?.rows ?? null}
             currency={depositCurrency}
+            fundingWallets={isSignedIn ? wallets : []}
             onConnectWallet={handleConnectWallet}
             onCurrencyChange={setDepositCurrency}
             onDeposited={handleDeposited}
             onOpenChange={setDepositOpen}
+            onSelectFundingWallet={(wallet) => setSelectedWalletAddress(wallet.address)}
+            onWithdrawn={() => {
+              refreshSubaccountBalance();
+              refreshUsdcBalance();
+              refreshCngnBalance();
+            }}
             open={depositOpen}
             triggerClassName="flex h-10 cursor-pointer items-center whitespace-nowrap rounded-full bg-input-bg px-4 font-semibold text-[12px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active disabled:cursor-not-allowed disabled:opacity-60"
             triggerId="header-deposit-trigger"
+            walletBalances={{ cNGN: cngnBalance, USDC: usdcBalance }}
           />
         }
         hasWallet={hasWallet}

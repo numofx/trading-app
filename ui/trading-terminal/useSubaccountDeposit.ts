@@ -416,8 +416,18 @@ export function useSubaccountDeposit({
     setInputError(null);
   }
 
+  /**
+   * Drops a rejected-amount message once the amount changes. Without this the error outlived the
+   * input it described: typing a valid amount left "Enter a valid USDC amount" sitting under a
+   * perfectly good number, with nothing on screen explaining what was still wrong.
+   */
+  function clearInputError() {
+    setInputError(null);
+  }
+
   return {
     approve,
+    clearInputError,
     deposit,
     flowState,
     inputError,
