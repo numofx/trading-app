@@ -14,6 +14,9 @@
   --panel-bg: #0c0d0f;
   --panel-bg-muted: #0c0d0f;
   --panel-bg-darker: #17181b;
+  /* Menus and dropdowns: a step above the raised layer, so a soft shadow alone separates them
+     from the panel beneath rather than a border drawn around the edge. */
+  --menu-surface: #1e2025;
   --panel-ring: rgba(255, 255, 255, 0.08);
   --panel-border: rgba(255, 255, 255, 0.1);
   --panel-shadow: rgba(0, 0, 0, 0.36);
@@ -71,6 +74,7 @@
   --panel-bg: #ffffff;
   --panel-bg-muted: #ffffff;
   --panel-bg-darker: #ffffff;
+  --menu-surface: #ffffff;
   --panel-ring: rgba(15, 23, 42, 0.08);
   --panel-border: rgba(15, 23, 42, 0.08);
   --panel-shadow: rgba(15, 23, 42, 0.04);
@@ -124,6 +128,7 @@
   --color-panel-bg: var(--panel-bg);
   --color-panel-bg-muted: var(--panel-bg-muted);
   --color-panel-bg-darker: var(--panel-bg-darker);
+  --color-menu-surface: var(--menu-surface);
   --color-panel-ring: var(--panel-ring);
   --color-panel-border: var(--panel-border);
   --color-panel-text: var(--panel-text);

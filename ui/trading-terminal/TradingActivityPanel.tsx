@@ -70,12 +70,16 @@ export function TradingActivityPanel({
 
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden bg-panel-bg/72 shadow-[0_24px_80px_var(--panel-shadow)] ring-1 ring-panel-ring transition-colors duration-300">
-      <div className="flex flex-wrap items-center gap-2 px-4 py-3">
-        <div className="flex flex-wrap gap-1">
+      <div className="flex items-center gap-2 px-4 py-3">
+        {/*
+         * Scrolls sideways rather than wrapping: in the narrow two-column layout five tabs wrapped
+         * to a second row, and the ~40px it cost came straight out of the rows below it.
+         */}
+        <div className="flex min-w-0 gap-1 overflow-x-auto">
           {tabs.map((tab) => (
             <button
               className={cn(
-                "rounded-sm px-3 py-1.5 font-medium text-[10px] text-panel-text-muted transition-colors hover:bg-input-hover hover:text-panel-text-active",
+                "shrink-0 whitespace-nowrap rounded-sm px-3 py-1.5 font-medium text-[10px] text-panel-text-muted transition-colors hover:bg-input-hover hover:text-panel-text-active",
                 selectedTab === tab.id && "bg-input-bg text-panel-text-active"
               )}
               key={tab.id}

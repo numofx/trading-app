@@ -289,52 +289,70 @@ export function SpotTradingTerminal({
         volume24hLabel={volumeLabel}
       />
 
-      <div className="flex min-w-0 flex-1 flex-col gap-3 p-3 xl:min-h-0 xl:overflow-hidden xl:px-4">
+      <div className="flex min-w-0 flex-1 flex-col gap-3 p-3 md:min-h-0 md:overflow-hidden md:px-4">
         {/*
          * One grid, two rows: the chart and order book take the top row, the activity panel spans the
          * bottom row beneath them, and the ticket column runs the full height alongside both. The
          * ticket used to be boxed into the top row's height, which cut its Amount field off mid-box
          * on the ~700-900px viewports most of this app's desktop traffic uses.
          *
+         * Three layouts, because one breakpoint cannot serve a 700px window and a 1600px one:
+         *
+         *   <768px   one column, ticket first — a phone.
+         *   768px+   two columns: chart over book on the left, ticket beside them. The page
+         *            scrolls rather than being pinned to the viewport; at this width three panels
+         *            stacked into a fixed height leaves each one a sliver.
+         *   1024px+  the fixed-height terminal: chart | book | ticket, activity spanning beneath.
+         *
+         * Gated at `xl` alone, the whole terminal stacked on any window under 1280px — a browser
+         * window a little under half a 27" screen got a single column with the ticket on top,
+         * while the venues it is compared against still had their columns. The two fixed columns
+         * and gutters cost 646px, so 1024px still leaves the chart ~378px; below that the second
+         * column has to give way, which is what the 768px layout is for.
+         *
          * The bottom row takes 3/10 rather than 2/10: at 2/10 the activity panel was a ~144px sliver
          * whose own empty state ran past its bottom edge, so it read as a strip of tab labels rather
          * than a panel holding anything.
          */}
-        <div className="grid grid-cols-1 gap-3 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_270px_320px] xl:grid-rows-[minmax(0,7fr)_minmax(0,3fr)] xl:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_300px_340px]">
-          <SpotChartPanel
-            asks={bookAsks}
-            bids={bookBids}
-            candles={liveCandles}
-            chartTab={chartTab}
-            indicatorsEnabled={indicatorsEnabled}
-            onChartTabChange={setChartTab}
-            onIndicatorsToggle={() => setIndicatorsEnabled((current) => !current)}
-            onTimeframeChange={setTimeframe}
-            onToolSelect={setSelectedTool}
-            selectedTimeframe={timeframe}
-            selectedTool={selectedTool}
-            timeframes={SPOT_TIMEFRAME_OPTIONS}
-          />
+        <div className="grid grid-cols-1 gap-3 md:min-h-0 md:flex-1 md:grid-cols-[minmax(0,1fr)_300px] md:grid-rows-[minmax(0,5fr)_minmax(0,5fr)_minmax(0,3fr)] md:overflow-hidden lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_270px_320px] lg:grid-rows-[minmax(0,7fr)_minmax(0,3fr)] lg:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_300px_340px]">
+          <div className="md:col-start-1 md:row-start-1 md:min-h-0 md:overflow-hidden lg:row-start-1">
+            <SpotChartPanel
+              asks={bookAsks}
+              bids={bookBids}
+              candles={liveCandles}
+              chartTab={chartTab}
+              indicatorsEnabled={indicatorsEnabled}
+              onChartTabChange={setChartTab}
+              onIndicatorsToggle={() => setIndicatorsEnabled((current) => !current)}
+              onTimeframeChange={setTimeframe}
+              onToolSelect={setSelectedTool}
+              selectedTimeframe={timeframe}
+              selectedTool={selectedTool}
+              timeframes={SPOT_TIMEFRAME_OPTIONS}
+            />
+          </div>
 
-          <SpotOrderBookPanel
-            asks={bookAsks}
-            bids={bookBids}
-            lastPrice={lastPrice}
-            onTabChange={setBookTab}
-            tab={bookTab}
-            trades={bookTrades}
-          />
+          <div className="md:col-start-1 md:row-start-2 md:min-h-0 md:overflow-hidden lg:col-start-2 lg:row-start-1">
+            <SpotOrderBookPanel
+              asks={bookAsks}
+              bids={bookBids}
+              lastPrice={lastPrice}
+              onTabChange={setBookTab}
+              tab={bookTab}
+              trades={bookTrades}
+            />
+          </div>
 
           {/*
-           * `order-first` on phones only: in the stacked single column the ticket would sit
-           * below the chart and order book, putting the submit button ~2.5 screens down the
-           * document. The xl grid places columns explicitly, so order resets there.
+           * `order-first` below the grid breakpoint only: in the stacked single column the ticket
+           * would sit below the chart and order book, putting the submit button ~2.5 screens down
+           * the document. The lg grid places columns explicitly, so order resets there.
            *
            * The ticket is the whole column. It used to share it with an "Account" balance strip,
            * which restated the two figures the header already carries — so the header now reports
            * the balances at every width and the ticket gets the rows back.
            */}
-          <div className="order-first flex min-h-[420px] flex-col xl:order-0 xl:row-span-2 xl:min-h-0 xl:overflow-hidden">
+          <div className="order-first flex min-h-[420px] flex-col md:order-0 md:col-start-2 md:row-span-3 md:row-start-1 md:min-h-0 md:overflow-hidden lg:col-start-3 lg:row-span-2 lg:row-start-1">
             <SpotOrderFormPanel
               anchorPrice={anchorPrice}
               availableCngn={spendableCngn}
@@ -350,7 +368,10 @@ export function SpotTradingTerminal({
             />
           </div>
 
-          <div className="min-h-[200px] xl:col-span-2 xl:min-h-0" ref={activityPanelRef}>
+          <div
+            className="min-h-[200px] md:col-start-1 md:row-start-3 md:min-h-0 lg:col-span-2 lg:col-start-1 lg:row-start-2"
+            ref={activityPanelRef}
+          >
             <TradingActivityPanel
               activityView={activityView}
               footerLinks={FOOTER_LINKS}

@@ -282,7 +282,7 @@ export function SpotOrderBookPanel({
   const lastSide = trades[0]?.side ?? null;
 
   return (
-    <section className="flex h-full min-h-[380px] flex-col overflow-hidden bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 xl:min-h-0">
+    <section className="flex h-full min-h-[380px] flex-col overflow-hidden bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 md:min-h-0">
       <div className="flex items-center gap-1.5 px-3 py-2 font-medium text-[12px]">
         <button
           className={cn(
