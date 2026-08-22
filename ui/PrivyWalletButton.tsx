@@ -9,7 +9,7 @@ import { cn } from "@/lib/cn";
 
 /** The shared pill shape, so the connected menu trigger and the connect button stay identical. */
 const WALLET_PILL_CLASSNAME =
-  "inline-flex h-10 cursor-pointer items-center gap-2 rounded-sm bg-white px-4 font-medium text-[#111111] text-[13px] outline-none ring-1 ring-black/10 transition-colors hover:bg-white/90";
+  "inline-flex h-10 cursor-pointer items-center gap-2 rounded-sm bg-[#9BDBF8] px-4 font-medium text-[#111111] text-[13px] outline-none ring-1 ring-black/10 transition-colors hover:bg-[#9BDBF8]/90";
 
 export function PrivyWalletButton({ onPortfolioSelect }: { onPortfolioSelect?: () => void }) {
   const privyAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID?.trim();
