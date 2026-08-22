@@ -1,7 +1,7 @@
 "use client";
 
 import { Popover } from "@base-ui/react/popover";
-import { ChevronDown, Lock, Moon, Sun } from "lucide-react";
+import { Check, ChevronDown, Lock, Moon, Sun } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import {
@@ -285,14 +285,22 @@ export function TerminalHeaderBar({
         </Popover.Trigger>
 
         <Popover.Portal>
-          <Popover.Positioner align="start" sideOffset={8}>
-            <Popover.Popup className="z-50 min-w-[280px] overflow-hidden rounded-2xl border border-panel-border bg-panel-bg-darker p-1.5 shadow-[0_20px_60px_var(--panel-shadow)] outline-none transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
+          <Popover.Positioner align="start" sideOffset={6}>
+            <Popover.Popup className="z-50 min-w-(--anchor-width) overflow-hidden rounded-sm border border-panel-border bg-menu-surface p-1 shadow-[0_10px_28px_var(--panel-shadow)] outline-none transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
+              {/*
+               * The venue serves one spot market, so this row is always the selected one and the
+               * check is unconditional. A second market would make it conditional, not decorative.
+               */}
               <button
-                className="flex w-full cursor-pointer items-center gap-3 rounded-xl bg-input-bg p-2.5 text-left text-panel-text-active transition-colors"
+                className="flex w-full cursor-pointer items-center gap-2 rounded-sm p-2 text-left text-panel-text-active transition-colors hover:bg-input-hover"
                 onClick={() => setDropdownOpen(false)}
                 type="button"
               >
                 <MarketIdentity compact />
+                <Check
+                  aria-label="Selected market"
+                  className="ml-auto size-4 shrink-0 text-panel-text-muted"
+                />
               </button>
             </Popover.Popup>
           </Popover.Positioner>
