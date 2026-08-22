@@ -361,6 +361,27 @@ function AmountField({
   );
 }
 
+/**
+ * Stands in for the amount step when the selected currency's deposits are closed.
+ *
+ * A disabled button would say "no" without saying why, and the why matters here: the money would
+ * go somewhere it cannot come back from. The other asset is offered when there is one.
+ */
+function DepositPaused({ onPickAsset, reason }: { onPickAsset: () => void; reason: string }) {
+  return (
+    <>
+      <p className="mt-5 text-[13px] text-panel-text">{reason}</p>
+      <button
+        className={cn(SECONDARY_BUTTON_CLASSES, "mt-5 w-full")}
+        onClick={onPickAsset}
+        type="button"
+      >
+        Choose another asset
+      </button>
+    </>
+  );
+}
+
 /** The amount step: what to send, where it comes from, where it lands, and the CTA. */
 function DepositForm({
   account,
@@ -373,6 +394,7 @@ function DepositForm({
   onPickAsset,
   onPickWallet,
   onSubmit,
+  pauseReason,
 }: {
   account: DepositAccount;
   amount: string;
@@ -384,7 +406,13 @@ function DepositForm({
   onPickAsset: () => void;
   onPickWallet: (() => void) | null;
   onSubmit: () => void;
+  /** Non-null when this currency cannot be deposited right now. */
+  pauseReason: string | null;
 }) {
+  if (pauseReason !== null) {
+    return <DepositPaused onPickAsset={onPickAsset} reason={pauseReason} />;
+  }
+
   return (
     <>
       <AmountField amount={amount} currency={currency} onAmountChange={onAmountChange} />
@@ -441,6 +469,7 @@ function PickerHeader({ onBack, title }: { onBack: () => void; title: string }) 
 function AssetRow({
   balanceCaption,
   balanceLabel,
+  disabledReason,
   iconSrc,
   isSelected,
   label,
@@ -448,18 +477,23 @@ function AssetRow({
 }: {
   balanceCaption: string;
   balanceLabel: string | null;
+  disabledReason?: string;
   iconSrc: string;
   isSelected: boolean;
   label: string;
   onSelect: () => void;
 }) {
+  const isDisabled = disabledReason !== undefined;
+
   return (
     <button
       aria-current={isSelected ? "true" : undefined}
       className={cn(
-        "flex w-full cursor-pointer items-center gap-3 rounded-[14px] px-2 py-3 text-left transition-colors hover:bg-input-hover",
-        isSelected && "bg-input-bg"
+        "flex w-full items-center gap-3 rounded-[14px] px-2 py-3 text-left transition-colors",
+        isDisabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-input-hover",
+        isSelected && !isDisabled && "bg-input-bg"
       )}
+      disabled={isDisabled}
       onClick={onSelect}
       type="button"
     >
@@ -476,7 +510,7 @@ function AssetRow({
           {balanceLabel ?? "—"}
         </span>
         <span className="block text-[12px] text-panel-text-muted">
-          {balanceLabel === null ? "Balance unavailable" : balanceCaption}
+          {disabledReason ?? (balanceLabel === null ? "Balance unavailable" : balanceCaption)}
         </span>
       </span>
     </button>
@@ -513,6 +547,7 @@ function AssetPickerScreen({
           <AssetRow
             balanceCaption={balanceCaption}
             balanceLabel={option.balanceLabel}
+            disabledReason={option.disabledReason}
             iconSrc={option.iconSrc}
             isSelected={option.id === selectedId}
             key={option.id}
@@ -1040,6 +1075,7 @@ function DepositSide({
   onPickAsset,
   onPickWallet,
   onReview,
+  pauseReason,
   reset,
   retry,
 }: {
@@ -1058,6 +1094,7 @@ function DepositSide({
   onPickAsset: () => void;
   onPickWallet: (() => void) | null;
   onReview: (account: DepositAccount) => void;
+  pauseReason: string | null;
   reset: () => void;
   retry: () => void;
 }) {
@@ -1078,6 +1115,7 @@ function DepositSide({
         onPickAsset={onPickAsset}
         onPickWallet={onPickWallet}
         onSubmit={() => onReview(account)}
+        pauseReason={pauseReason}
       />
     );
   }
@@ -1117,6 +1155,7 @@ function TransferSide({
   onPickWallet,
   onReview,
   onWithdraw,
+  pauseReason,
   reset,
   resetWithdraw,
   retry,
@@ -1141,6 +1180,7 @@ function TransferSide({
   onPickWallet: (() => void) | null;
   onReview: (account: DepositAccount) => void;
   onWithdraw: (account: DepositAccount) => void;
+  pauseReason: string | null;
   reset: () => void;
   resetWithdraw: () => void;
   retry: () => void;
@@ -1186,6 +1226,7 @@ function TransferSide({
       onPickAsset={onPickAsset}
       onPickWallet={onPickWallet}
       onReview={onReview}
+      pauseReason={pauseReason}
       reset={reset}
       retry={retry}
     />
@@ -1402,6 +1443,7 @@ export function DepositDialog({
               onPickWallet={dialog.openWalletPicker}
               onReview={dialog.handleReviewDeposit}
               onWithdraw={dialog.handleWithdraw}
+              pauseReason={dialog.depositPauseReason}
               reset={dialog.reset}
               resetWithdraw={dialog.resetWithdraw}
               retry={dialog.retry}
