@@ -90,11 +90,15 @@ function getStepCopy(flowState: DepositFlowState, currency: DepositCurrency) {
   }
 }
 
+/**
+ * The dialog's call to action. The label is pinned dark rather than left on `text-background`:
+ * the fill no longer flips with the theme, so a theme-flipping label would go white on light blue.
+ */
 const PRIMARY_BUTTON_CLASSES =
-  "min-h-[52px] flex-1 cursor-pointer rounded-[16px] bg-foreground font-semibold text-[14px] text-background transition-colors hover:bg-foreground/90";
+  "min-h-[52px] flex-1 cursor-pointer rounded-sm bg-[#9BDBF8] font-semibold text-[#111111] text-[14px] transition-colors hover:bg-[#9BDBF8]/90";
 
 const SECONDARY_BUTTON_CLASSES =
-  "min-h-[52px] flex-1 cursor-pointer rounded-[16px] bg-input-bg font-semibold text-[14px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover";
+  "min-h-[52px] flex-1 cursor-pointer rounded-sm bg-input-bg font-semibold text-[14px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover";
 
 /**
  * First step for a visitor with no wallet. The deposit form itself is useless without one — there
@@ -151,7 +155,7 @@ function RouteRow({
       {onOpen === undefined ? null : (
         <button
           aria-label={openLabel}
-          className="absolute -inset-x-2 -inset-y-1.5 cursor-pointer rounded-[14px] transition-colors hover:bg-input-hover"
+          className="absolute -inset-x-2 -inset-y-1.5 cursor-pointer rounded-sm transition-colors hover:bg-input-hover"
           onClick={onOpen}
           type="button"
         />
@@ -212,7 +216,7 @@ function TransferRoute({
         action={
           onMax === null || onMax === undefined ? null : (
             <button
-              className="shrink-0 cursor-pointer rounded-full bg-input-bg px-3.5 py-1.5 font-semibold text-[12px] text-panel-text-active ring-1 ring-panel-border transition-colors hover:bg-input-hover"
+              className="shrink-0 cursor-pointer rounded-sm bg-input-bg px-3.5 py-1.5 font-semibold text-[12px] text-panel-text-active ring-1 ring-panel-border transition-colors hover:bg-input-hover"
               onClick={onMax}
               type="button"
             >
@@ -273,7 +277,7 @@ function WithdrawRoute({
         action={
           onMax === null || onMax === undefined ? null : (
             <button
-              className="shrink-0 cursor-pointer rounded-full bg-input-bg px-3.5 py-1.5 font-semibold text-[12px] text-panel-text-active ring-1 ring-panel-border transition-colors hover:bg-input-hover"
+              className="shrink-0 cursor-pointer rounded-sm bg-input-bg px-3.5 py-1.5 font-semibold text-[12px] text-panel-text-active ring-1 ring-panel-border transition-colors hover:bg-input-hover"
               onClick={onMax}
               type="button"
             >
@@ -489,7 +493,7 @@ function AssetRow({
     <button
       aria-current={isSelected ? "true" : undefined}
       className={cn(
-        "flex w-full items-center gap-3 rounded-[14px] px-2 py-3 text-left transition-colors",
+        "flex w-full items-center gap-3 rounded-sm px-2 py-3 text-left transition-colors",
         isDisabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-input-hover",
         isSelected && !isDisabled && "bg-input-bg"
       )}
@@ -580,7 +584,7 @@ function SourceBadge({ children }: { children: React.ReactNode }) {
 function BankAccountRow({ onSelect }: { onSelect: () => void }) {
   return (
     <button
-      className="flex w-full cursor-pointer items-center gap-3 rounded-[14px] px-2 py-3 text-left transition-colors hover:bg-input-hover"
+      className="flex w-full cursor-pointer items-center gap-3 rounded-sm px-2 py-3 text-left transition-colors hover:bg-input-hover"
       onClick={onSelect}
       type="button"
     >
@@ -617,7 +621,7 @@ function WalletRow({
     <button
       aria-current={isSelected ? "true" : undefined}
       className={cn(
-        "flex w-full cursor-pointer items-center gap-3 rounded-[14px] px-2 py-3 text-left transition-colors hover:bg-input-hover",
+        "flex w-full cursor-pointer items-center gap-3 rounded-sm px-2 py-3 text-left transition-colors hover:bg-input-hover",
         isSelected && "bg-input-bg"
       )}
       onClick={onSelect}
@@ -707,9 +711,15 @@ export type DepositScreen = "asset" | "form" | "wallet";
 /** Which side of the toggle is showing. Withdrawals have no flow behind them yet. */
 export type TransferMode = "deposit" | "withdraw";
 
-const MODE_PILL_CLASSES = "min-h-8 rounded-full px-4 font-semibold text-[14px] transition-colors";
+const MODE_PILL_CLASSES = "min-h-8 rounded-sm px-4 font-semibold text-[14px] transition-colors";
 
-const ACTIVE_MODE_PILL_CLASSES = cn(MODE_PILL_CLASSES, "bg-foreground text-background");
+/**
+ * The selected pill's fill. Dark label pinned alongside it: the fill no longer flips with the
+ * theme, so `text-background` would go white on light blue.
+ */
+const ACTIVE_MODE_FILL = "bg-[#9BDBF8] text-[#111111]";
+
+const ACTIVE_MODE_PILL_CLASSES = cn(MODE_PILL_CLASSES, ACTIVE_MODE_FILL);
 
 /**
  * Deposit / Withdraw switch.
@@ -725,15 +735,13 @@ function ModeTabs({
   onSelect: (mode: TransferMode) => void;
 }) {
   return (
-    <div className="inline-flex gap-1 rounded-full bg-input-bg p-1">
+    <div className="inline-flex gap-1 rounded-sm bg-input-bg p-1">
       <button
         aria-pressed={mode === "deposit"}
         className={cn(
           MODE_PILL_CLASSES,
           "cursor-pointer",
-          mode === "deposit"
-            ? "bg-foreground text-background"
-            : "text-panel-text-muted hover:text-panel-text"
+          mode === "deposit" ? ACTIVE_MODE_FILL : "text-panel-text-muted hover:text-panel-text"
         )}
         onClick={() => onSelect("deposit")}
         type="button"
@@ -745,9 +753,7 @@ function ModeTabs({
         className={cn(
           MODE_PILL_CLASSES,
           "cursor-pointer",
-          mode === "withdraw"
-            ? "bg-foreground text-background"
-            : "text-panel-text-muted hover:text-panel-text"
+          mode === "withdraw" ? ACTIVE_MODE_FILL : "text-panel-text-muted hover:text-panel-text"
         )}
         onClick={() => onSelect("withdraw")}
         type="button"
@@ -1374,7 +1380,7 @@ export function DepositDialog({
       <Dialog.Trigger
         className={
           triggerClassName ??
-          "rounded-lg bg-input-bg px-2 py-0.5 font-semibold text-[11px] text-panel-text-active ring-1 ring-panel-border transition-colors hover:bg-input-hover"
+          "rounded-sm bg-input-bg px-2 py-0.5 font-semibold text-[11px] text-panel-text-active ring-1 ring-panel-border transition-colors hover:bg-input-hover"
         }
         id={triggerId}
       >
@@ -1386,7 +1392,7 @@ export function DepositDialog({
          * over the popup — order book rows were rendering on top of this dialog's own controls.
          */}
         <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/60 transition-opacity data-ending-style:opacity-0 data-starting-style:opacity-0" />
-        <Dialog.Popup className="-translate-1/2 fixed top-1/2 left-1/2 z-50 w-[min(92vw,420px)] rounded-[24px] bg-dialog-bg p-6 text-foreground shadow-[0_28px_90px_var(--panel-shadow)] ring-1 ring-panel-ring transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
+        <Dialog.Popup className="-translate-1/2 fixed top-1/2 left-1/2 z-50 w-[min(92vw,420px)] bg-dialog-bg p-6 text-foreground shadow-[0_28px_90px_var(--panel-shadow)] ring-1 ring-panel-ring transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
           <DepositPicker
             account={account}
             assetOptions={dialog.assetOptions}
