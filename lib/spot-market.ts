@@ -209,6 +209,73 @@ export function getCrossingPrice(
   return side === "buy" ? bestAsk : bestBid;
 }
 
+/**
+ * What a market order of `size` USDC would actually fill at, walked level by level through the
+ * depth on screen.
+ *
+ * A market order does not trade at the touch — it trades at the touch and then at every level
+ * behind it until it is filled, so on a thin book the price a trader gets can sit well past the
+ * one the ticket quoted. The touch alone understates that, which is exactly the case where the
+ * trader most needs to know.
+ *
+ * `averagePrice` is the size-weighted mean over the levels the order would consume, and is null
+ * when nothing on that side can fill. `filledSize` is how much of the order the resting depth
+ * covers: less than `size` means the remainder rests as a limit at the marketable price rather
+ * than filling, which is the venue's behaviour and not an error.
+ */
+export function getMarketFill(
+  side: "buy" | "sell",
+  asks: OrderBookLevel[],
+  bids: OrderBookLevel[],
+  size: number
+) {
+  // A buy lifts the asks, a sell hits the bids. Both arrays run from the touch outward, so the
+  // walk is in array order on either side.
+  const levels = side === "buy" ? asks : bids;
+
+  if (!Number.isFinite(size) || size <= 0) {
+    return { averagePrice: null, filledSize: 0, isFullyFilled: false };
+  }
+
+  let remaining = size;
+  let filledSize = 0;
+  let cost = 0;
+
+  for (const level of levels) {
+    const taken = Math.min(remaining, level.size);
+    cost += taken * level.price;
+    filledSize += taken;
+    remaining -= taken;
+    if (remaining <= 0) {
+      break;
+    }
+  }
+
+  return {
+    averagePrice: filledSize > 0 ? cost / filledSize : null,
+    filledSize,
+    isFullyFilled: filledSize >= size,
+  };
+}
+
+/**
+ * A market order's size in USDC, whichever currency the trader entered it in.
+ *
+ * The Amount field can be denominated in either leg — USDC, the notional the order is signed for,
+ * or cNGN, what the trader is spending or receiving. Only the USDC figure is submittable, so a
+ * cNGN entry is converted at the price the order would cross at. Null when there is no price to
+ * convert with, rather than a size derived from a guess.
+ */
+export function toOrderSizeUsdc(amount: number, unit: "USDC" | "cNGN", price: number | null) {
+  if (!Number.isFinite(amount)) {
+    return Number.NaN;
+  }
+  if (unit === "USDC") {
+    return amount;
+  }
+  return price === null || price <= 0 ? Number.NaN : amount / price;
+}
+
 export type LiveSpotRuntime = {
   book: BookResponse | null;
   /** Real OHLCV from markets-service; empty when the market has not traded yet. */

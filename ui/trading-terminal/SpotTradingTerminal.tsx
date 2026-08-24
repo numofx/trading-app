@@ -352,10 +352,12 @@ export function SpotTradingTerminal({
           <div className="order-first flex min-h-[420px] flex-col gap-3 md:order-0 md:col-start-2 md:row-span-3 md:row-start-1 md:min-h-0 md:gap-2 md:overflow-y-auto lg:col-start-3 lg:row-span-2 lg:row-start-1">
             <SpotOrderFormPanel
               anchorPrice={anchorPrice}
+              asks={bookAsks}
               availableCngn={spendableCngn}
               availableUsdc={spendableUsdc}
               bestAsk={bestAsk}
               bestBid={bestBid}
+              bids={bookBids}
               hasWallet={hasWallet}
               isPreparingAccount={isPreparingAccount}
               isSubmitting={isSubmitting}

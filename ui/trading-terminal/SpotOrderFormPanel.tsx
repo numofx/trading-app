@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowUpDown } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { formatBalance, formatBalanceFigure } from "@/lib/account-balance-display";
@@ -8,11 +9,14 @@ import { formatNaira } from "@/lib/market-formatting";
 import {
   getCrossingPrice,
   getMarketableLimitPrice,
+  getMarketFill,
   getMaxOrderSize,
   getOrderCost,
   SPOT_MARKET_SLIPPAGE,
+  toOrderSizeUsdc,
 } from "@/lib/spot-market";
 import { SPOT_ORDER_LIFETIME_LABEL, SPOT_TAKER_FEE_RATE } from "@/lib/spot-order-submission";
+import type { OrderBookLevel } from "@/lib/trading.types";
 import { ConfirmOrderDialog } from "@/ui/trading-terminal/ConfirmOrderDialog";
 import { OrderTypeTabs } from "@/ui/trading-terminal/OrderTypeTabs";
 
@@ -204,7 +208,9 @@ function CostRow({ emphasis, label, value }: { emphasis?: boolean; label: string
  * means the panel reads as layout rather than arithmetic.
  */
 function deriveOrderEconomics({
-  amount,
+  asks,
+  bids,
+  sizeUsdc,
   anchorPrice,
   availableCngn,
   availableUsdc,
@@ -214,7 +220,10 @@ function deriveOrderEconomics({
   orderType,
   side,
 }: {
-  amount: string;
+  asks: OrderBookLevel[];
+  bids: OrderBookLevel[];
+  /** The order size in USDC, already converted from whichever unit the Amount field is in. */
+  sizeUsdc: number;
   anchorPrice: number | null;
   availableCngn: number | null;
   availableUsdc: number | null;
@@ -226,12 +235,19 @@ function deriveOrderEconomics({
 }) {
   const isBuy = side === "buy";
   const crossingPrice = getCrossingPrice(side, bestAsk, bestBid);
-  // A market order costs what it crosses at, so the total quotes the touch rather than a price
-  // the order will never trade at.
-  const effectivePrice = orderType === "Market" ? crossingPrice : parseAmount(limitPrice);
-  const hasPrice = effectivePrice !== null && Number.isFinite(effectivePrice);
-  const parsedAmount = parseAmount(amount);
+  const parsedAmount = sizeUsdc;
   const hasAmount = Number.isFinite(parsedAmount);
+  /*
+   * What a market order of this size would really fill at, walked through the resting depth. The
+   * touch is only the first level: on a thin book the rest of the order fills behind it, so
+   * quoting the touch understates the cost precisely when it matters most.
+   */
+  const fill = orderType === "Market" ? getMarketFill(side, asks, bids, parsedAmount) : null;
+  // A market order costs what it crosses at — the walked average where the book can price it,
+  // the touch until a size has been entered.
+  const effectivePrice =
+    orderType === "Market" ? (fill?.averagePrice ?? crossingPrice) : parseAmount(limitPrice);
+  const hasPrice = effectivePrice !== null && Number.isFinite(effectivePrice);
   const total = hasPrice && hasAmount ? parsedAmount * (effectivePrice as number) : null;
 
   /*
@@ -269,8 +285,11 @@ function deriveOrderEconomics({
       : null;
 
   return {
+    // Surfaced beside the fill itself so the panel never has to reach through it.
+    averagePrice: fill === null ? null : fill.averagePrice,
     canSizeByPercent,
     crossingPrice,
+    fill,
     shortfall,
     signedPrice,
     maxOrderSize,
@@ -362,6 +381,28 @@ function AvailableRow({
 }
 
 /**
+ * Switches which leg the Amount field is denominated in.
+ *
+ * A market order is as often sized by what a trader wants to spend as by what they want to hold,
+ * and on this pair those are different currencies. Only the USDC figure is submittable, so a cNGN
+ * entry is converted at the price the order crosses at — the line under the field always shows the
+ * other leg, so whichever way it is entered, both numbers are on screen before signing.
+ */
+function AmountUnitToggle({ onToggle, unit }: { onToggle: () => void; unit: PayCurrency }) {
+  return (
+    <button
+      aria-label={`Amount in ${unit} — switch currency`}
+      className="flex cursor-pointer items-center gap-1 rounded-sm px-1 py-0.5 text-[10px] text-panel-text-muted transition-colors hover:bg-input-hover hover:text-panel-text-active"
+      onClick={onToggle}
+      type="button"
+    >
+      {unit}
+      <ArrowUpDown aria-hidden className="size-3" />
+    </button>
+  );
+}
+
+/**
  * Sizes the order as a share of what the account can fund. Inert — and visibly so — when that
  * ceiling is unknown, rather than sliding against an invented balance.
  */
@@ -440,12 +481,197 @@ function toAffordableSize(size: number) {
   return (Math.floor(size * 10_000) / 10_000).toFixed(4);
 }
 
+/**
+ * The same order counted in the other leg, for the line under the Amount field.
+ *
+ * Null — rendered as an em dash — whenever the book cannot price the conversion. A market ticket
+ * with no touch has no honest counterpart to show, and inventing one would put a number on screen
+ * that nothing can fill at.
+ */
+function getCounterpart({
+  averagePrice,
+  conversionPrice,
+  sizeUsdc,
+  unit,
+}: {
+  /** The walked fill average, where the book has one; it is what the Total is priced at. */
+  averagePrice: number | null;
+  conversionPrice: number | null;
+  sizeUsdc: number;
+  unit: PayCurrency;
+}) {
+  const currency: PayCurrency = unit === "USDC" ? "cNGN" : "USDC";
+  // The same price the Total uses, so the two are one quantity rather than two nearby ones.
+  const price = averagePrice ?? conversionPrice;
+
+  if (!Number.isFinite(sizeUsdc) || price === null) {
+    return formatBalance(null, currency);
+  }
+
+  // Entered in cNGN, `sizeUsdc` is already the counterpart; entered in USDC, it has to be priced.
+  return formatBalance(unit === "USDC" ? sizeUsdc * price : sizeUsdc, currency);
+}
+
+/**
+ * Rewrites the Amount field when its currency changes, carrying the order across rather than the
+ * digits: what was 100 USDC becomes the cNGN it costs, not a 100 cNGN order a hundredth the size.
+ * Returns null when there is no price to convert at, which leaves whatever was typed alone.
+ */
+function convertAmountToUnit(amount: number, nextUnit: PayCurrency, price: number | null) {
+  if (!Number.isFinite(amount) || price === null || price <= 0) {
+    return null;
+  }
+
+  return toAffordableSize(nextUnit === "cNGN" ? amount * price : amount / price);
+}
+
+/**
+ * How the Amount field is denominated, and the order that entry describes.
+ *
+ * Everything downstream works in USDC — the ceiling, the cost, the fee, the signed envelope — so
+ * this is where a cNGN entry becomes a USDC size, once, rather than at each of those call sites.
+ * The counterpart shown under the field is priced later, off the walked average this size produces.
+ */
+function deriveAmountEntry({
+  amount,
+  anchorPrice,
+  bestAsk,
+  bestBid,
+  isMarket,
+  side,
+  unit,
+}: {
+  amount: string;
+  anchorPrice: number | null;
+  bestAsk: number | null;
+  bestBid: number | null;
+  isMarket: boolean;
+  side: "buy" | "sell";
+  unit: PayCurrency;
+}) {
+  // A limit ticket is always in USDC, so the unit resets with the tab rather than carrying a cNGN
+  // entry into a field that no longer offers the switch.
+  const activeUnit: PayCurrency = isMarket ? unit : "USDC";
+  const parsedAmount = parseAmount(amount);
+  /*
+   * The conversion runs off the touch rather than the walked average, which would depend on the
+   * size this very conversion produces. The average is then walked for the size that results.
+   */
+  const conversionPrice = getCrossingPrice(side, bestAsk, bestBid) ?? anchorPrice;
+  const sizeUsdc = toOrderSizeUsdc(parsedAmount, activeUnit, conversionPrice);
+
+  return { activeUnit, conversionPrice, parsedAmount, sizeUsdc };
+}
+
+/** The Amount field's trailing control: a currency switch on a market ticket, a label otherwise. */
+function AmountAdornment({
+  isMarket,
+  onToggle,
+  unit,
+}: {
+  isMarket: boolean;
+  onToggle: () => void;
+  unit: PayCurrency;
+}) {
+  if (!isMarket) {
+    return <span className="text-[10px] text-panel-text-muted">USDC</span>;
+  }
+
+  return <AmountUnitToggle onToggle={onToggle} unit={unit} />;
+}
+
+/**
+ * The other leg of the same order, so a size entered in one currency is never signed without its
+ * counterpart on screen. An em dash until the book can price it: a conversion needs a touch, and
+ * inventing one would put a number on screen that nothing can fill at.
+ */
+function ConversionLine({ isMarket, label }: { isMarket: boolean; label: string }) {
+  if (!isMarket) {
+    return null;
+  }
+
+  return <p className="text-[10px] text-panel-text-muted">≈ {label}</p>;
+}
+
+/** What a market order fills at, and the room it is signed with. A limit ticket has neither. */
+function MarketFillRows({
+  averagePrice,
+  isMarket,
+}: {
+  averagePrice: number | null;
+  isMarket: boolean;
+}) {
+  if (!isMarket) {
+    return null;
+  }
+
+  return (
+    <>
+      {/*
+       * What the order fills at, walked through the resting depth rather than quoted off the
+       * touch — on a thin book the two are not the same number, and the average is the one the
+       * trader is charged.
+       */}
+      <CostRow label="Average price" value={formatNaira(averagePrice)} />
+      {/*
+       * Not a cost: the room the order has to still cross if the quote moves between signing and
+       * settlement. The fill itself lands at the maker's price, which `Average price` above quotes.
+       */}
+      <CostRow label="Slippage" value={`<${(SPOT_MARKET_SLIPPAGE * 100).toFixed(1)}%`} />
+    </>
+  );
+}
+
+/**
+ * How long an order that does not fill stays on the book.
+ *
+ * A limit ticket's most surprising term — it leaves the book on its own and nothing else on screen
+ * would say so. A market order crosses on submission, so the lifetime only ever applies to a
+ * remainder the book could not cover, which the depth note above already names.
+ */
+function OrderLifetimeRow({ isMarket }: { isMarket: boolean }) {
+  if (isMarket) {
+    return null;
+  }
+
+  return <CostRow label="Expires" value={`${SPOT_ORDER_LIFETIME_LABEL} after signing`} />;
+}
+
+/**
+ * A market order larger than the book: the venue fills what rests and leaves the remainder working
+ * at the signed limit until it expires. Muted rather than red — it is the venue behaving normally,
+ * not the order being refused.
+ *
+ * Stands down while a shortfall is showing. That note is about an order that cannot be funded at
+ * all, which settles the question this one is a footnote to — and stacked, the two pushed the
+ * column past its height on a 700px viewport.
+ */
+function MarketDepthNote({
+  fill,
+  hasShortfall,
+}: {
+  fill: { filledSize: number; isFullyFilled: boolean } | null;
+  hasShortfall: boolean;
+}) {
+  if (hasShortfall || fill === null || fill.isFullyFilled || fill.filledSize <= 0) {
+    return null;
+  }
+
+  return (
+    <p className="text-[10px] text-panel-text-muted leading-snug">
+      Book covers {formatBalance(fill.filledSize, "USDC")} — the rest rests until it expires.
+    </p>
+  );
+}
+
 export function SpotOrderFormPanel({
   anchorPrice,
+  asks,
   availableCngn,
   availableUsdc,
   bestAsk,
   bestBid,
+  bids,
   onDepositRequest,
   onSubmitOrder,
   isPreparingAccount = false,
@@ -455,6 +681,12 @@ export function SpotOrderFormPanel({
 }: {
   /** Mid of the displayed book — seeds the limit price, and cannot cross on either side. */
   anchorPrice: number | null;
+  /**
+   * The ladder as displayed, so a market order's average price is walked through the same depth
+   * the trader is looking at rather than estimated off the touch.
+   */
+  asks: OrderBookLevel[];
+  bids: OrderBookLevel[];
   /**
    * What a new order can actually spend: the trading-account balance less what this trader's own
    * resting orders already claim. The connected wallet's balance funds a deposit, not an order, so
@@ -498,38 +730,62 @@ export function SpotOrderFormPanel({
     anchorPrice === null ? "" : String(anchorPrice.toFixed(2))
   );
   const [amount, setAmount] = useState("100");
+  // Which leg the Amount field is counted in. USDC is the order's own notional; cNGN is what the
+  // trader spends or receives. Market orders alone offer the switch — a limit order is priced by
+  // the trader, so its size is the one number the ticket should not be restating for them.
+  const [amountUnit, setAmountUnit] = useState<PayCurrency>("USDC");
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const isBuy = side === "buy";
   const needsLimitPrice = orderType !== "Market";
+  const isMarket = orderType === "Market";
   const spendCurrency: PayCurrency = isBuy ? "cNGN" : "USDC";
+  const { activeUnit, conversionPrice, parsedAmount, sizeUsdc } = deriveAmountEntry({
+    amount,
+    anchorPrice,
+    bestAsk,
+    bestBid,
+    isMarket,
+    side,
+    unit: amountUnit,
+  });
   const availableLabel = formatBalanceFigure(
     spendCurrency === "USDC" ? availableUsdc : availableCngn,
     spendCurrency
   );
   const {
+    averagePrice,
     canSizeByPercent,
     crossingPrice,
+    fill,
     maxOrderSize,
     shortfall,
-    signedPrice,
     sizePercent,
     takerFee,
     totalLabel,
   } = deriveOrderEconomics({
-    amount,
     anchorPrice,
+    asks,
     availableCngn,
     availableUsdc,
     bestAsk,
     bestBid,
+    bids,
     limitPrice,
     orderType,
     side,
+    sizeUsdc,
+  });
+
+  const counterpartLabel = getCounterpart({
+    averagePrice,
+    conversionPrice,
+    sizeUsdc,
+    unit: activeUnit,
   });
 
   const confirmation = buildSpotConfirmation({
-    amount,
+    amount: Number.isFinite(sizeUsdc) ? toAffordableSize(sizeUsdc) : "",
     isBuy,
     orderType,
     takerFeeLabel: formatSpotFee(takerFee),
@@ -540,7 +796,23 @@ export function SpotOrderFormPanel({
     if (!canSizeByPercent) {
       return;
     }
-    setAmount(toAffordableSize((maxOrderSize as number) * (percent / 100)));
+    // The ceiling is a USDC size; the field may be counting cNGN, so the notch is written back in
+    // the unit on screen rather than dropping a USDC figure into a cNGN field.
+    const sizeAtPercent = (maxOrderSize as number) * (percent / 100);
+    const inCngn =
+      activeUnit === "cNGN" ? convertAmountToUnit(sizeAtPercent, "cNGN", conversionPrice) : null;
+    setAmount(inCngn ?? toAffordableSize(sizeAtPercent));
+  }
+
+  /** Switches the Amount field's currency, converting what is in it to match. */
+  function handleUnitToggle() {
+    const nextUnit: PayCurrency = amountUnit === "USDC" ? "cNGN" : "USDC";
+    setAmountUnit(nextUnit);
+
+    const converted = convertAmountToUnit(parsedAmount, nextUnit, conversionPrice);
+    if (converted !== null) {
+      setAmount(converted);
+    }
   }
 
   function handleSubmit() {
@@ -564,7 +836,9 @@ export function SpotOrderFormPanel({
       orderType,
       price: resolveOrderPrice({ crossingPrice, limitPrice, orderType }),
       side,
-      size: amount,
+      // Always the USDC notional: the signed envelope carries no other unit, so a cNGN-denominated
+      // ticket is converted here rather than sending the figure the trader typed.
+      size: toAffordableSize(sizeUsdc),
     });
   }
 
@@ -636,13 +910,17 @@ export function SpotOrderFormPanel({
         ) : null}
 
         <FormField
-          adornment={<span className="text-[10px] text-panel-text-muted">USDC</span>}
+          adornment={
+            <AmountAdornment isMarket={isMarket} onToggle={handleUnitToggle} unit={activeUnit} />
+          }
           id="spot-amount"
           label="Amount"
           onChange={setAmount}
           placeholder="0.0000"
           value={amount}
         />
+
+        <ConversionLine isMarket={isMarket} label={counterpartLabel} />
 
         <SizeSlider
           disabled={!canSizeByPercent}
@@ -665,28 +943,16 @@ export function SpotOrderFormPanel({
         <div className="space-y-1 text-[11px]">
           <CostRow emphasis label="Total" value={totalLabel} />
           {/*
-           * Both fee tiers on one line. They are one disclosure — what this order costs if it
-           * takes, and what it costs if it rests — and as separate rows they cost the ticket a
-           * row of height that the balance summary below it needs.
+           * Approximate, and marked so: this is the taker charge on the whole order, and an order
+           * that only partly fills — or rests and never takes at all — is charged less. The figure
+           * is the ceiling the envelope is signed with, not a quote.
            */}
-          <CostRow
-            label={`Fee (${SPOT_TAKER_FEE_BPS} bps taker)`}
-            value={`${formatSpotFee(takerFee)} · maker free`}
-          />
-          {/*
-           * Not a cost, but the term a trader is most likely to be surprised by: an unfilled order
-           * leaves the book on its own, and nothing else on screen would say so.
-           */}
-          {orderType === "Market" && signedPrice !== null ? (
-            // Not a cost either: it is the room the order has to still cross if the quote moves,
-            // and the price it is signed at. The fill itself lands at the maker's price.
-            <CostRow
-              label={`Crosses to ₦${signedPrice.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 })}`}
-              value={`${(SPOT_MARKET_SLIPPAGE * 100).toFixed(1)}% tolerance`}
-            />
-          ) : null}
-          <CostRow label="Expires" value={`${SPOT_ORDER_LIFETIME_LABEL} after signing`} />
+          <CostRow label="Fee" value={`~${formatSpotFee(takerFee)}`} />
+          <MarketFillRows averagePrice={averagePrice} isMarket={isMarket} />
+          <OrderLifetimeRow isMarket={isMarket} />
         </div>
+
+        <MarketDepthNote fill={fill} hasShortfall={shortfallCurrency !== null} />
 
         {shortfall === null || !hasWallet ? null : (
           <p className="text-[10px] text-sell leading-snug">
