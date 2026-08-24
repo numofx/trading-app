@@ -129,7 +129,7 @@ function FormField({
   value: string;
 }) {
   return (
-    <div className="rounded-sm bg-input-bg px-3 py-2 ring-1 ring-panel-border focus-within:ring-panel-text-muted">
+    <div className="rounded-sm bg-input-bg px-3 py-1.5 ring-1 ring-panel-border focus-within:ring-panel-text-muted">
       <div className="flex items-center justify-between gap-2">
         <label className="text-[10px] text-panel-text-muted" htmlFor={id}>
           {label}
@@ -296,10 +296,10 @@ function SideTabs({
   const isBuy = side === "buy";
 
   return (
-    <div className="grid grid-cols-2 gap-1 rounded-sm bg-input-bg p-1">
+    <div className="grid grid-cols-2 gap-1 rounded-sm bg-input-bg p-0.5">
       <button
         className={cn(
-          "h-9 cursor-pointer rounded-sm font-semibold text-[12px] transition-colors",
+          "h-8 cursor-pointer rounded-sm font-semibold text-[12px] transition-colors",
           isBuy
             ? "bg-bid-bg text-buy ring-1 ring-buy/40"
             : "text-panel-text-muted hover:bg-input-hover"
@@ -311,7 +311,7 @@ function SideTabs({
       </button>
       <button
         className={cn(
-          "h-9 cursor-pointer rounded-sm font-semibold text-[12px] transition-colors",
+          "h-8 cursor-pointer rounded-sm font-semibold text-[12px] transition-colors",
           isBuy
             ? "text-panel-text-muted hover:bg-input-hover"
             : "bg-ask-bg text-sell ring-1 ring-sell/40"
@@ -598,13 +598,15 @@ export function SpotOrderFormPanel({
        * sub-xl layout this is the only form on screen, so the row is dropped there to
        * keep the submit button within the first screenful.
        */}
-      <div className="hidden shrink-0 items-center border-panel-border border-b px-3 py-2 font-medium text-[11px] md:flex">
-        <span className="rounded-sm bg-input-bg px-2 py-1 text-panel-text-active">Order form</span>
+      <div className="hidden shrink-0 items-center border-panel-border border-b px-3 py-1.5 font-medium text-[11px] md:flex">
+        <span className="rounded-sm bg-input-bg px-2 py-0.5 text-panel-text-active">
+          Order form
+        </span>
       </div>
 
       {/* No scroller of its own — the column is the one scroll region, so a squeezed ticket
           scrolls the whole column rather than hiding fields inside an unmarked box. */}
-      <div className="space-y-2 p-3 md:min-h-0 md:flex-1">
+      <div className="space-y-1.5 px-3 py-1.5 md:min-h-0 md:flex-1">
         <SideTabs onSelect={setSide} side={side} />
 
         <OrderTypeTabs onSelect={setOrderType} orderTypes={ORDER_TYPES} selected={orderType} />
@@ -654,19 +656,23 @@ export function SpotOrderFormPanel({
        * sticky to the column's scrollport, so on a viewport too short for the whole ticket the CTA
        * rides at the bottom of the column instead of sitting below the fold.
        */}
-      <div className="shrink-0 space-y-2.5 border-panel-border border-t bg-panel-bg-muted px-3 pt-2.5 pb-3 md:sticky md:bottom-0 md:z-10">
+      <div className="shrink-0 space-y-2 border-panel-border border-t bg-panel-bg-muted px-3 pt-1.5 pb-2 md:sticky md:bottom-0 md:z-10">
         {/*
          * One total, not a Subtotal/Total pair. The fee is charged on the USDC leg while the total
          * is the cNGN one, so Total never differs from Subtotal — printing both implied the fee was
          * added into it, and cost the two rows the Amount field needed on a 700px screen.
          */}
-        <div className="space-y-1.5 text-[11px]">
+        <div className="space-y-1 text-[11px]">
           <CostRow emphasis label="Total" value={totalLabel} />
+          {/*
+           * Both fee tiers on one line. They are one disclosure — what this order costs if it
+           * takes, and what it costs if it rests — and as separate rows they cost the ticket a
+           * row of height that the balance summary below it needs.
+           */}
           <CostRow
-            label={`Taker fee (${SPOT_TAKER_FEE_BPS} bps)`}
-            value={formatSpotFee(takerFee)}
+            label={`Fee (${SPOT_TAKER_FEE_BPS} bps taker)`}
+            value={`${formatSpotFee(takerFee)} · maker free`}
           />
-          <CostRow label="Maker fee" value="Free" />
           {/*
            * Not a cost, but the term a trader is most likely to be surprised by: an unfilled order
            * leaves the book on its own, and nothing else on screen would say so.
@@ -691,7 +697,7 @@ export function SpotOrderFormPanel({
 
         <button
           className={cn(
-            "h-11 w-full cursor-pointer rounded-sm font-semibold text-[13px] transition-colors",
+            "h-10 w-full cursor-pointer rounded-sm font-semibold text-[13px] transition-colors",
             isBuy
               ? "bg-buy text-background hover:bg-buy/90"
               : "bg-sell text-white hover:bg-sell/90",

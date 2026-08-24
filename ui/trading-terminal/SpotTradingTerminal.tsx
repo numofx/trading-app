@@ -354,7 +354,7 @@ export function SpotTradingTerminal({
            * account are readable at once while an order is being written; the header carries the
            * same two figures for the widths where this column is not on screen at all.
            */}
-          <div className="order-first flex min-h-[420px] flex-col gap-3 md:order-0 md:col-start-2 md:row-span-3 md:row-start-1 md:min-h-0 md:overflow-y-auto lg:col-start-3 lg:row-span-2 lg:row-start-1">
+          <div className="order-first flex min-h-[420px] flex-col gap-3 md:order-0 md:col-start-2 md:row-span-3 md:row-start-1 md:min-h-0 md:gap-2 md:overflow-y-auto lg:col-start-3 lg:row-span-2 lg:row-start-1">
             <SpotOrderFormPanel
               anchorPrice={anchorPrice}
               availableCngn={spendableCngn}

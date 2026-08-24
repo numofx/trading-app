@@ -64,6 +64,15 @@ const PROBE = `(() => {
   if (!cta) return JSON.stringify({ error: "no submit CTA found" });
   const rect = cta.getBoundingClientRect();
 
+  // The ticket column holds the order form and the balance summary beneath it. From the md
+  // breakpoint up it is a fixed-height scroller, and everything in it is meant to fit: a trader
+  // should not have to scroll a column to read their own balance. It overflowed by 74px when the
+  // summary landed, which is how the cNGN row came to sit under the fold.
+  const ticketColumn = cta.closest("div.order-first");
+  const columnOverflow = ticketColumn
+    ? Math.max(0, ticketColumn.scrollHeight - ticketColumn.clientHeight)
+    : 0;
+
   const navs = [...document.querySelectorAll("nav")].filter((n) => getComputedStyle(n).display !== "none");
   const doc = document.documentElement;
   const rootStyle = getComputedStyle(doc);
@@ -103,6 +112,7 @@ const PROBE = `(() => {
     ctaLabel: cta.textContent.trim(),
     // The page must sit still at its borders rather than rubber-banding away from them.
     overscrollPinned: rootStyle.overscrollBehaviorY === "none" && rootStyle.overscrollBehaviorX === "none",
+    columnOverflow,
     ctaVisible: rect.top >= 0 && rect.bottom <= innerHeight,
     ctaVisibleAfterScroll,
     ctaBottom: Math.round(rect.bottom + scrollY),
@@ -254,6 +264,12 @@ for (const viewport of VIEWPORTS) {
     // The app is a single spot terminal, so there is no primary nav to render: the Spot/Futures
     // rail and its phone-sized switcher went with the futures section.
     [result.visibleNavCount === 0, `expected no visible nav, got ${result.visibleNavCount}`],
+    // Below `md` the ticket column is not a scroller — the page itself scrolls — so the invariant
+    // only holds where the column has a fixed height of its own.
+    [
+      width < 768 || result.columnOverflow === 0,
+      `ticket column overflows its height by ${result.columnOverflow}px — the balance summary is cut off`,
+    ],
     [result.overscrollPinned, "page can overscroll — expected overscroll-behavior: none on the root"],
     [result.pageHorizontalScroll === false, "page scrolls horizontally"],
     [
