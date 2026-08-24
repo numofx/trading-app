@@ -48,7 +48,7 @@ const VIEWPORTS = [
     connected: true,
     ctaVisible: true,
     height: 667,
-    note: "iPhone SE, funded — header carries both balances",
+    note: "iPhone SE, funded — balances live under the ticket",
     path: "/layout-fixture",
     width: 375,
   },
@@ -128,13 +128,10 @@ const PROBE = `(() => {
  *
  * Three things, in the order a trader meets them:
  *
- *  1. Both balances are on screen. Below `xl` this header is the only place either one is reported
- *     — the strip that used to carry them under the ticket is gone — so a phone that drops them
- *     leaves a funded trader with no account balance anywhere.
- *  2. The claim breakdown opens on a tap. The inline "🔒 12,224 cNGN" note only fits from `xl`, and
- *     below that the explanation used to live in a `title` tooltip, which a touch device cannot
- *     reach at all. It is a real control with a real tap target now, and this asserts both.
- *  3. A deposit clears a shortfall without costing the trader their order. The ticket's CTA becomes
+ *  1. Both balances are on screen, in the balance summary under the ticket. That panel is now the
+ *     only place either one is reported — the header pair beside the deposit control is gone — so
+ *     a width that drops it leaves a funded trader with no account balance anywhere.
+ *  2. A deposit clears a shortfall without costing the trader their order. The ticket's CTA becomes
  *     "Deposit …" rather than going dead, and the deposit that follows must leave the typed amount
  *     alone — the ticket is never unmounted, so re-entry would mean something reset state that had
  *     no business resetting.
@@ -154,9 +151,6 @@ const CONNECTED_PROBE = `(async () => {
   const header = document.querySelector("header");
   if (!(header && cta() && amountField())) return JSON.stringify({ error: "fixture terminal did not render" });
 
-  const headerText = header.textContent;
-  const balancesShown = /[\\d,.]+ USDC/.test(headerText) && /[\\d,.]+ cNGN/.test(headerText);
-
   // The balance summary under the ticket, found by the pair of deposit buttons only it has — the
   // ticket's own "Available" row carries one of the two, never both. Its panel label is hidden at
   // these widths, so the rows themselves are what identifies it.
@@ -168,18 +162,6 @@ const CONNECTED_PROBE = `(async () => {
   const summaryText = summaryPanel ? summaryPanel.textContent : "";
   const summaryShowsBothLegs =
     /[\\d,.]+ USDC/.test(summaryText) && /[\\d,.]+ cNGN/.test(summaryText);
-
-  // The disclosure is found the way an assistive technology would find it, not by class.
-  const triggers = [...header.querySelectorAll("button")].filter(
-    (b) => /balance breakdown/i.test(b.getAttribute("aria-label") || "")
-  );
-  const tapTargets = triggers.map((b) => Math.round(b.getBoundingClientRect().height));
-  const claimVisibleBeforeTap = document.body.textContent.includes("Claimed by resting orders");
-  triggers[0]?.click();
-  await sleep(400);
-  const claimVisibleAfterTap = document.body.textContent.includes("Claimed by resting orders");
-  triggers[0]?.click();
-  await sleep(300);
 
   // 25 USDC at the fixture's ~1,400 mid costs ~35,000 cNGN against ~29,000 spendable.
   setValue(amountField(), "25");
@@ -193,12 +175,8 @@ const CONNECTED_PROBE = `(async () => {
   await sleep(600);
 
   return JSON.stringify({
-    balancesShown,
     summaryShowsBothLegs,
-    claimTapOpensBreakdown: claimVisibleBeforeTap === false && claimVisibleAfterTap === true,
     ctaVisibleWithShortfall,
-    disclosureCount: triggers.length,
-    minTapTarget: tapTargets.length === 0 ? 0 : Math.min(...tapTargets),
     shortfallLabel,
     shortfallNoted,
     // After the deposit: the order survives untouched and the CTA is an order button again.
@@ -295,24 +273,9 @@ for (const viewport of VIEWPORTS) {
 
     if (funded) {
       checks.push(
-        [funded.balancesShown, "header does not show both account balances in ticker form"],
         [
           funded.summaryShowsBothLegs,
           "the balance summary under the ticket does not report both account legs",
-        ],
-        [
-          funded.disclosureCount === 2,
-          `expected a claim disclosure on each balance, found ${funded.disclosureCount}`,
-        ],
-        [
-          funded.claimTapOpensBreakdown,
-          "tapping a balance does not open its claim breakdown — the note is hover-only again",
-        ],
-        // 24px is the floor a fingertip can reliably hit; the trigger buys it with padding that a
-        // negative margin bleeds back out, so it costs the header row nothing.
-        [
-          funded.minTapTarget >= 24,
-          `claim disclosure tap target is ${funded.minTapTarget}px tall, under the 24px floor`,
         ],
         [
           /^Deposit /.test(funded.shortfallLabel),
