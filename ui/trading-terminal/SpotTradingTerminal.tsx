@@ -25,6 +25,7 @@ import {
 import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
 import { get24hStats, getVenueLastPrice } from "@/lib/ticker-stats";
 import type { Candle, SpotMarket } from "@/lib/trading.types";
+import { SpotBalanceSummary } from "@/ui/trading-terminal/SpotBalanceSummary";
 import type { SpotChartTab, SpotTimeframe } from "@/ui/trading-terminal/SpotChartPanel";
 import { SpotChartPanel } from "@/ui/trading-terminal/SpotChartPanel";
 import type { SpotBookTab } from "@/ui/trading-terminal/SpotOrderBookPanel";
@@ -348,11 +349,12 @@ export function SpotTradingTerminal({
            * would sit below the chart and order book, putting the submit button ~2.5 screens down
            * the document. The lg grid places columns explicitly, so order resets there.
            *
-           * The ticket is the whole column. It used to share it with an "Account" balance strip,
-           * which restated the two figures the header already carries — so the header now reports
-           * the balances at every width and the ticket gets the rows back.
+           * The ticket shares the column with the balance summary beneath it. The ticket only ever
+           * reports the leg the selected side spends, so the summary is where both legs of the
+           * account are readable at once while an order is being written; the header carries the
+           * same two figures for the widths where this column is not on screen at all.
            */}
-          <div className="order-first flex min-h-[420px] flex-col md:order-0 md:col-start-2 md:row-span-3 md:row-start-1 md:min-h-0 md:overflow-hidden lg:col-start-3 lg:row-span-2 lg:row-start-1">
+          <div className="order-first flex min-h-[420px] flex-col gap-3 md:order-0 md:col-start-2 md:row-span-3 md:row-start-1 md:min-h-0 md:overflow-y-auto lg:col-start-3 lg:row-span-2 lg:row-start-1">
             <SpotOrderFormPanel
               anchorPrice={anchorPrice}
               availableCngn={spendableCngn}
@@ -365,6 +367,11 @@ export function SpotTradingTerminal({
               lastAction={lastAction}
               onDepositRequest={onDepositRequest}
               onSubmitOrder={handleSubmitOrder}
+            />
+            <SpotBalanceSummary
+              accountCngn={accountCngn}
+              accountUsdc={accountUsdc}
+              onDepositRequest={onDepositRequest}
             />
           </div>
 

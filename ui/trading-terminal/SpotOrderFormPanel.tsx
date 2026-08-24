@@ -585,9 +585,14 @@ export function SpotOrderFormPanel({
   });
 
   return (
-    // The panel claims the column height itself so only the field list below can
-    // scroll — the header and the submit footer stay in view without scrolling.
-    <section className="flex flex-col overflow-clip bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 md:min-h-0 md:flex-1">
+    /*
+     * `min-h-fit` is what keeps the fields on screen: the ticket shares its column with the
+     * balance summary, and as a plain flex child it gave up whatever height the summary took —
+     * on a 700px window that left the price and amount fields a ~20px sliver behind an inner
+     * scrollbar. Refusing to shrink below its own content makes the *column* scroll instead,
+     * and the footer below sticks so the submit button never leaves the viewport.
+     */
+    <section className="flex flex-col overflow-clip bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 md:min-h-fit md:flex-1">
       {/*
        * The panel label only earns its space next to sibling panels. In the stacked
        * sub-xl layout this is the only form on screen, so the row is dropped there to
@@ -597,7 +602,9 @@ export function SpotOrderFormPanel({
         <span className="rounded-sm bg-input-bg px-2 py-1 text-panel-text-active">Order form</span>
       </div>
 
-      <div className="space-y-2 p-3 md:min-h-0 md:flex-1 md:overflow-y-auto">
+      {/* No scroller of its own — the column is the one scroll region, so a squeezed ticket
+          scrolls the whole column rather than hiding fields inside an unmarked box. */}
+      <div className="space-y-2 p-3 md:min-h-0 md:flex-1">
         <SideTabs onSelect={setSide} side={side} />
 
         <OrderTypeTabs onSelect={setOrderType} orderTypes={ORDER_TYPES} selected={orderType} />
@@ -642,8 +649,12 @@ export function SpotOrderFormPanel({
         />
       </div>
 
-      {/* Fees and the submit CTA stay pinned so the primary action is never scrolled out of reach. */}
-      <div className="shrink-0 space-y-2.5 border-panel-border border-t bg-panel-bg-muted px-3 pt-2.5 pb-3">
+      {/*
+       * Fees and the submit CTA stay pinned so the primary action is never scrolled out of reach —
+       * sticky to the column's scrollport, so on a viewport too short for the whole ticket the CTA
+       * rides at the bottom of the column instead of sitting below the fold.
+       */}
+      <div className="shrink-0 space-y-2.5 border-panel-border border-t bg-panel-bg-muted px-3 pt-2.5 pb-3 md:sticky md:bottom-0 md:z-10">
         {/*
          * One total, not a Subtotal/Total pair. The fee is charged on the USDC leg while the total
          * is the cNGN one, so Total never differs from Subtotal — printing both implied the fee was

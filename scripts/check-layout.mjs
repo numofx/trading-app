@@ -147,6 +147,18 @@ const CONNECTED_PROBE = `(async () => {
   const headerText = header.textContent;
   const balancesShown = /[\\d,.]+ USDC/.test(headerText) && /[\\d,.]+ cNGN/.test(headerText);
 
+  // The balance summary under the ticket, found by the pair of deposit buttons only it has — the
+  // ticket's own "Available" row carries one of the two, never both. Its panel label is hidden at
+  // these widths, so the rows themselves are what identifies it.
+  const summaryPanel = [...document.querySelectorAll("section")].find(
+    (s) =>
+      s.querySelector('button[aria-label="Deposit USDC"]') &&
+      s.querySelector('button[aria-label="Deposit cNGN"]')
+  );
+  const summaryText = summaryPanel ? summaryPanel.textContent : "";
+  const summaryShowsBothLegs =
+    /[\\d,.]+ USDC/.test(summaryText) && /[\\d,.]+ cNGN/.test(summaryText);
+
   // The disclosure is found the way an assistive technology would find it, not by class.
   const triggers = [...header.querySelectorAll("button")].filter(
     (b) => /balance breakdown/i.test(b.getAttribute("aria-label") || "")
@@ -172,6 +184,7 @@ const CONNECTED_PROBE = `(async () => {
 
   return JSON.stringify({
     balancesShown,
+    summaryShowsBothLegs,
     claimTapOpensBreakdown: claimVisibleBeforeTap === false && claimVisibleAfterTap === true,
     ctaVisibleWithShortfall,
     disclosureCount: triggers.length,
@@ -267,6 +280,10 @@ for (const viewport of VIEWPORTS) {
     if (funded) {
       checks.push(
         [funded.balancesShown, "header does not show both account balances in ticker form"],
+        [
+          funded.summaryShowsBothLegs,
+          "the balance summary under the ticket does not report both account legs",
+        ],
         [
           funded.disclosureCount === 2,
           `expected a claim disclosure on each balance, found ${funded.disclosureCount}`,
