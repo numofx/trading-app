@@ -26,6 +26,16 @@ export type MarketPresentation = {
   settlement_note?: string;
   settlement_type?: string;
   sub_id?: string;
+  /**
+   * The venue's fee schedule, in basis points of the quote notional. Served by /v1/markets so
+   * this app never carries its own copy: a fee that lives in two repos disagrees the first time
+   * one of them changes, and the trader sees the wrong number in the one place they look.
+   *
+   * Optional only because an older markets-service will omit them; treat absent as unknown, not
+   * as zero.
+   */
+  taker_fee_bps?: number;
+  maker_fee_bps?: number;
   tick_size?: string;
 };
 
