@@ -101,13 +101,16 @@ function buildSpotConfirmation({
     // trader receives that currency on a sell, and a confirmation should not assert either.
     summaryRows: [
       { label: isBuy ? "You pay" : "You receive", value: totalLabel },
-      { label: `Taker fee (${SPOT_TAKER_FEE_BPS} bps)`, value: takerFeeLabel },
+      { label: `Max taker fee (${SPOT_TAKER_FEE_BPS} bps)`, value: takerFeeLabel },
       { label: "Expires", value: `${SPOT_ORDER_LIFETIME_LABEL} after signing` },
     ],
   };
 }
 
-/** Taker fee is charged on the USDC notional (the order Amount), matching the signed worstFee bound. */
+/**
+ * The signed worstFee bound, expressed on the USDC notional (the order Amount). This is the most
+ * the order can be charged, not the expected charge — the venue currently charges nothing.
+ */
 function formatSpotFee(usdc: number) {
   return `${usdc.toLocaleString("en-US", { maximumFractionDigits: 4, minimumFractionDigits: 2 })} USDC`;
 }
@@ -943,11 +946,17 @@ export function SpotOrderFormPanel({
         <div className="space-y-1 text-[11px]">
           <CostRow emphasis label="Total" value={totalLabel} />
           {/*
-           * Approximate, and marked so: this is the taker charge on the whole order, and an order
-           * that only partly fills — or rests and never takes at all — is charged less. The figure
-           * is the ceiling the envelope is signed with, not a quote.
+           * A CEILING, not a quote, and now labelled as one. This is the worstFee the order is
+           * signed with — the most the trader will tolerate before TradeModule reverts
+           * TM_FeeTooHigh — and an order that partly fills, or rests and never takes, is charged
+           * less. The venue charges zero today: every resting order carries worstFee 0 from the
+           * maker, and no fill has ever moved the fee recipient. Showing "~0.05 USDC" read as a
+           * charge and overstated the cost of a 100 USDC order by the whole amount.
+           *
+           * The bound itself stays. It is protective headroom: signing worstFee 0 would make
+           * every order revert the moment the venue turned fees on.
            */}
-          <CostRow label="Fee" value={`~${formatSpotFee(takerFee)}`} />
+          <CostRow label="Max fee" value={formatSpotFee(takerFee)} />
           <MarketFillRows averagePrice={averagePrice} isMarket={isMarket} />
           <OrderLifetimeRow isMarket={isMarket} />
         </div>
