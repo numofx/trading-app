@@ -16,7 +16,17 @@ const ENGINE_DECIMALS = 18;
  * markets-service exposes fee tiers; TradeModule rejects any fill whose realized fee-per-unit
  * exceeds the signed worstFee, so it bounds what the keeper can charge.
  */
-export const SPOT_TAKER_FEE_RATE = "0.0005";
+/**
+ * The CEILING signed into every order's worstFee — not the fee the venue charges. That comes from
+ * /v1/markets (`taker_fee_bps`), which is the single source; this is the most the trader will
+ * tolerate before TradeModule reverts TM_FeeTooHigh.
+ *
+ * 30 bps against a 25 bps schedule: enough headroom that a fee change does not instantly brick
+ * every resting order, and low enough to still be a real bound. Raising the venue's schedule
+ * above this makes orders signed under it revert until they are re-signed, so the two move
+ * together — schedule first, ceiling already above it.
+ */
+export const SPOT_TAKER_FEE_RATE = "0.0030";
 
 /**
  * How long a signed order stays valid. The engine drops it at this point whether or not it filled,

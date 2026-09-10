@@ -291,6 +291,7 @@ const EMPTY_SPOT_MARKET: SpotMarket = {
   orderBookAsks: [],
   orderBookBids: [],
   orderEntrySpec: null,
+  takerFeeBps: null,
   trades: [],
 };
 
@@ -435,6 +436,7 @@ export function buildSpotMarket(liveSpot: LiveSpotRuntime | null): SpotMarket {
     orderBookBids,
     // Taken from the venue rather than assumed: it is what tells the stream to invert engine values.
     orderEntrySpec: liveSpot.book?.market_presentation?.order_entry_spec ?? null,
+    takerFeeBps: liveSpot.book?.market_presentation?.taker_fee_bps ?? null,
     trades,
   };
 }

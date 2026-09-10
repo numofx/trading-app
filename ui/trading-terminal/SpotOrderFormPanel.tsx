@@ -35,8 +35,16 @@ type PayCurrency = "cNGN" | "USDC";
 
 const ORDER_TYPES = ["Limit", "Market"] as const satisfies readonly SpotOrderType[];
 
-/** 5 bps taker tier as basis points, derived from the engine-bound rate so the two stay in sync. */
+/** The signed ceiling as basis points, derived from the rate the order is signed with. */
 const SPOT_TAKER_FEE_BPS = Number(SPOT_TAKER_FEE_RATE) * 10_000;
+
+/** The fee the venue will actually charge, from /v1/markets. Null means the service did not say. */
+function venueFee(amountUsdc: number, takerFeeBps: number | null): number | null {
+  if (takerFeeBps === null || !Number.isFinite(amountUsdc)) {
+    return null;
+  }
+  return (amountUsdc * takerFeeBps) / 10_000;
+}
 
 /**
  * Market orders cross the opposing touch; everything else executes at the entered limit price.
@@ -81,12 +89,15 @@ function buildSpotConfirmation({
   isBuy,
   orderType,
   takerFeeLabel,
+  venueFeeLabel,
   totalLabel,
 }: {
   amount: string;
   isBuy: boolean;
   orderType: SpotOrderType;
   takerFeeLabel: string;
+  /** The charge the venue reported for this size, or null when it reported no schedule. */
+  venueFeeLabel: string | null;
   totalLabel: string;
 }) {
   const action = isBuy ? "buy" : "sell";
@@ -101,15 +112,23 @@ function buildSpotConfirmation({
     // trader receives that currency on a sell, and a confirmation should not assert either.
     summaryRows: [
       { label: isBuy ? "You pay" : "You receive", value: totalLabel },
-      { label: `Max taker fee (${SPOT_TAKER_FEE_BPS} bps)`, value: takerFeeLabel },
+      // The charge first, the ceiling under it. The ceiling was the only row here when the venue
+      // charged nothing; now that it charges, leading with it would quote a number no fill hits.
+      ...(venueFeeLabel === null ? [] : [{ label: "Taker fee", value: venueFeeLabel }]),
+      {
+        label:
+          venueFeeLabel === null ? `Max taker fee (${SPOT_TAKER_FEE_BPS} bps)` : "Max fee (signed)",
+        value: takerFeeLabel,
+      },
       { label: "Expires", value: `${SPOT_ORDER_LIFETIME_LABEL} after signing` },
     ],
   };
 }
 
 /**
- * The signed worstFee bound, expressed on the USDC notional (the order Amount). This is the most
- * the order can be charged, not the expected charge — the venue currently charges nothing.
+ * A fee on the USDC notional (the order Amount). Used for both figures the ticket shows: what the
+ * venue's schedule charges, and the signed worstFee ceiling, which is the most the order can be
+ * charged regardless of what the schedule says when it fills.
  */
 function formatSpotFee(usdc: number) {
   return `${usdc.toLocaleString("en-US", { maximumFractionDigits: 4, minimumFractionDigits: 2 })} USDC`;
@@ -222,6 +241,7 @@ function deriveOrderEconomics({
   limitPrice,
   orderType,
   side,
+  takerFeeBps,
 }: {
   asks: OrderBookLevel[];
   bids: OrderBookLevel[];
@@ -235,6 +255,8 @@ function deriveOrderEconomics({
   limitPrice: string;
   orderType: SpotOrderType;
   side: "buy" | "sell";
+  /** The venue's schedule from /v1/markets. Null when it did not report one — unknown, not free. */
+  takerFeeBps: number | null;
 }) {
   const isBuy = side === "buy";
   const crossingPrice = getCrossingPrice(side, bestAsk, bestBid);
@@ -296,6 +318,7 @@ function deriveOrderEconomics({
     shortfall,
     signedPrice,
     maxOrderSize,
+    feeFromVenue: hasAmount ? venueFee(parsedAmount, takerFeeBps) : venueFee(0, takerFeeBps),
     // Derived from the amount rather than held separately, so typing a size moves the slider and
     // the two can never disagree about what is being ordered.
     sizePercent:
@@ -667,6 +690,31 @@ function MarketDepthNote({
   );
 }
 
+/**
+ * The two fee figures, and the trader needs both.
+ *
+ * `charged` is what the venue takes: its own published schedule, served by /v1/markets, so this
+ * app never carries a second copy of the rate to disagree with. Null means the service reported no
+ * schedule — the fee is then UNKNOWN, not zero, and the row is omitted rather than printing a
+ * confident "0.00 USDC" that a market which does charge would make wrong by the whole fee.
+ *
+ * `ceiling` is the worstFee the order is signed with: the most that can be charged before
+ * TradeModule reverts TM_FeeTooHigh. It is a bound, never a quote — an order that partly fills, or
+ * rests and never takes, is charged less. It stays on screen next to the charge because it is the
+ * number that decides whether the order can fill at all: a ceiling below the schedule reverts.
+ */
+function FeeRows({ ceiling, charged }: { ceiling: number; charged: number | null }) {
+  return (
+    <>
+      {charged === null ? null : <CostRow label="Fee" value={formatSpotFee(charged)} />}
+      <CostRow
+        label={charged === null ? "Max fee" : "Max fee (signed)"}
+        value={formatSpotFee(ceiling)}
+      />
+    </>
+  );
+}
+
 export function SpotOrderFormPanel({
   anchorPrice,
   asks,
@@ -677,6 +725,7 @@ export function SpotOrderFormPanel({
   bids,
   onDepositRequest,
   onSubmitOrder,
+  takerFeeBps,
   isPreparingAccount = false,
   hasWallet = false,
   isSubmitting = false,
@@ -701,6 +750,13 @@ export function SpotOrderFormPanel({
    */
   availableCngn: number | null;
   availableUsdc: number | null;
+  /**
+   * The venue's taker fee, in basis points of the quote notional, exactly as /v1/markets reports
+   * it. Null means the API did not report one — the fee is then unknown, not zero, and the ticket
+   * shows only the signed ceiling. The schedule is never hardcoded here: the matcher charges what
+   * this same field says, so a copy in the UI would be a second source of truth that drifts.
+   */
+  takerFeeBps: number | null;
   /** The touch as displayed in the ladder, so the ticket quotes the book on screen. */
   bestAsk: number | null;
   bestBid: number | null;
@@ -765,6 +821,7 @@ export function SpotOrderFormPanel({
     shortfall,
     sizePercent,
     takerFee,
+    feeFromVenue,
     totalLabel,
   } = deriveOrderEconomics({
     anchorPrice,
@@ -778,6 +835,7 @@ export function SpotOrderFormPanel({
     orderType,
     side,
     sizeUsdc,
+    takerFeeBps,
   });
 
   const counterpartLabel = getCounterpart({
@@ -792,6 +850,7 @@ export function SpotOrderFormPanel({
     isBuy,
     orderType,
     takerFeeLabel: formatSpotFee(takerFee),
+    venueFeeLabel: feeFromVenue === null ? null : formatSpotFee(feeFromVenue),
     totalLabel,
   });
 
@@ -945,18 +1004,7 @@ export function SpotOrderFormPanel({
          */}
         <div className="space-y-1 text-[11px]">
           <CostRow emphasis label="Total" value={totalLabel} />
-          {/*
-           * A CEILING, not a quote, and now labelled as one. This is the worstFee the order is
-           * signed with — the most the trader will tolerate before TradeModule reverts
-           * TM_FeeTooHigh — and an order that partly fills, or rests and never takes, is charged
-           * less. The venue charges zero today: every resting order carries worstFee 0 from the
-           * maker, and no fill has ever moved the fee recipient. Showing "~0.05 USDC" read as a
-           * charge and overstated the cost of a 100 USDC order by the whole amount.
-           *
-           * The bound itself stays. It is protective headroom: signing worstFee 0 would make
-           * every order revert the moment the venue turned fees on.
-           */}
-          <CostRow label="Max fee" value={formatSpotFee(takerFee)} />
+          <FeeRows ceiling={takerFee} charged={feeFromVenue} />
           <MarketFillRows averagePrice={averagePrice} isMarket={isMarket} />
           <OrderLifetimeRow isMarket={isMarket} />
         </div>

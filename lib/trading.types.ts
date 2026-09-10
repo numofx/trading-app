@@ -81,6 +81,12 @@ export type SpotMarket = {
    */
   orderEntrySpec: string | null;
   /**
+   * The venue's taker fee, in basis points of the quote notional, straight from /v1/markets.
+   * Null when the markets-service did not report one — which is "unknown", not "free", so the
+   * ticket falls back to showing the signed ceiling rather than inventing a rate.
+   */
+  takerFeeBps: number | null;
+  /**
    * Every order resting on the book, with the identity needed to cancel one. The terminal filters
    * these to the connected wallet — the venue's private `orders` stream carries the same set, but
    * needs a signed auth frame for data the public book already exposes.
