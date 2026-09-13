@@ -17,6 +17,7 @@ import {
 } from "@/lib/spot-order-submission";
 import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
 import { getFirstDepositableCurrency } from "@/lib/subaccount-deposit-config";
+import { getAccountLegs } from "@/lib/subaccount-ledger";
 import type { SpotMarket } from "@/lib/trading.types";
 import { buildDepositAccount, DepositDialog } from "@/ui/trading-terminal/DepositDialog";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
@@ -223,6 +224,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
     adoptSubaccountId,
     ensureTradingSubaccount,
     isLoading: isResolvingTradingSubaccount,
+    isResolved: isTradingSubaccountResolved,
     subaccountId: tradingSubaccountId,
   } = useTradingSubaccount(primaryWallet?.address ?? null);
   const depositAccount = buildDepositAccount(primaryWallet, tradingSubaccountId);
@@ -239,8 +241,15 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
   );
   const { balance: subaccountBalance, refresh: refreshSubaccountBalance } =
     useSubaccountBalance(tradingSubaccountId);
-  const accountUsdcLabel = formatSubaccountUsdcLabel(subaccountBalance?.cashUnits ?? null);
-  const accountCngnLabel = formatSubaccountCngnLabel(subaccountBalance?.cngnUnits ?? null);
+  // A wallet with no trading account holds zero, not an unknown amount, so the ticket's shortfall
+  // check can stop an order that would otherwise be signed against an empty account.
+  const accountLegs = getAccountLegs({
+    balance: subaccountBalance,
+    isAccountResolved: isTradingSubaccountResolved,
+    subaccountId: tradingSubaccountId,
+  });
+  const accountUsdcLabel = formatSubaccountUsdcLabel(accountLegs.cashUnits);
+  const accountCngnLabel = formatSubaccountCngnLabel(accountLegs.cngnUnits);
 
   function handleDeposited(depositedSubaccountId: string) {
     adoptSubaccountId(depositedSubaccountId);
@@ -426,9 +435,9 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
       <MarketDocumentTitle pair="USDC/cNGN" price={spotMarket.mark} />
 
       <SpotTradingTerminal
-        accountCngn={toLedgerAmount(subaccountBalance?.cngnUnits ?? null)}
+        accountCngn={toLedgerAmount(accountLegs.cngnUnits)}
         accountCngnLabel={accountCngnLabel}
-        accountUsdc={toLedgerAmount(subaccountBalance?.cashUnits ?? null)}
+        accountUsdc={toLedgerAmount(accountLegs.cashUnits)}
         accountUsdcLabel={accountUsdcLabel}
         candles={spotMarket.candles}
         cngnBalanceLabel={formatCngnBalanceLabel(cngnBalance)}
