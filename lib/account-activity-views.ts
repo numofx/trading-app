@@ -1,4 +1,9 @@
-import type { OrderHistoryOrder, OrderHistoryStatus } from "@/lib/order-history.types";
+import type {
+  AccountFill,
+  FillLiquidity,
+  OrderHistoryOrder,
+  OrderHistoryStatus,
+} from "@/lib/order-history.types";
 import type { ActivityView, SpotOpenOrder } from "@/lib/trading.types";
 
 /** Rendered when a balance is genuinely unknown — never substitute a zero or a placeholder figure. */
@@ -131,13 +136,12 @@ function formatOrderTime(createdAt: string, timeZone: string | undefined) {
   return `${day}, ${time}`;
 }
 
-/** The trader's side, from the UI intent; a dash when the order carries none. */
-function formatIntentDirection(order: OrderHistoryOrder) {
-  const side = order.spot_contract?.ui_intent.side;
-  if (side === undefined) {
+/** The trader's side, from a UI intent; a dash when there is none. */
+function formatIntentDirection(intent: { side: "buy" | "sell" } | undefined) {
+  if (intent === undefined) {
     return UNKNOWN_BALANCE;
   }
-  return side === "buy" ? "Buy" : "Sell";
+  return intent.side === "buy" ? "Buy" : "Sell";
 }
 
 function formatNairaPrice(price: number) {
@@ -191,11 +195,75 @@ export function buildOrderHistoryActivityView(
         cells: [
           formatOrderTime(order.created_at, timeZone),
           order.display_name ?? order.market ?? "USDC/cNGN",
-          formatIntentDirection(order),
+          formatIntentDirection(order.spot_contract?.ui_intent),
           filledUsdc === null ? UNKNOWN_BALANCE : formatHistoryUsdc(filledUsdc),
           averagePrice === null ? UNKNOWN_BALANCE : formatNairaPrice(averagePrice),
           Number.isFinite(limit) ? formatNairaPrice(limit) : UNKNOWN_BALANCE,
           ORDER_STATUS_LABELS[order.status] ?? order.status,
+        ],
+      };
+    }),
+  };
+}
+
+/**
+ * Columns for the Trade History tab: one row per fill.
+ *
+ * "Size" is the USDC that changed hands and "Total" the cNGN, both as the fill executed, so each row
+ * reconciles against the account's balances. "Role" says whether the order crossed the book or
+ * rested and was hit. Fees are not shown: the venue's fill record does not carry them.
+ */
+export const TRADE_HISTORY_COLUMNS = [
+  "Time",
+  "Instrument",
+  "Direction",
+  "Price",
+  "Size",
+  "Total",
+  "Role",
+] as const;
+
+const TRADE_HISTORY_DIRECTION_COLUMN = TRADE_HISTORY_COLUMNS.indexOf("Direction");
+
+const LIQUIDITY_LABELS = {
+  maker: "Maker",
+  taker: "Taker",
+} satisfies Record<FillLiquidity, string>;
+
+function formatCngn(value: number) {
+  return `${value.toLocaleString("en-US", { maximumFractionDigits: 2 })} cNGN`;
+}
+
+/**
+ * The fills on the connected wallet's orders, newest first, as `GET /v1/fills` returns them.
+ *
+ * Direction, price and size are read from the fill's UI intent, which markets-service derives from
+ * the wallet's own order — not from the engine fields, whose side is inverted on this pair and whose
+ * price is USDC per cNGN. A fill without an intent shows dashes rather than engine figures in the
+ * trader's columns; its cNGN total needs no translation.
+ */
+export function buildTradeHistoryActivityView(
+  fills: AccountFill[],
+  timeZone?: string
+): ActivityView {
+  return {
+    columns: [...TRADE_HISTORY_COLUMNS],
+    rows: fills.map((fill) => {
+      const intent = fill.spot_contract?.ui_intent;
+      const price = Number(intent?.price);
+      const sizeUsdc = Number(intent?.size);
+      const totalCngn = Number(fill.size);
+
+      return {
+        positiveCellIndexes: intent?.side === "buy" ? [TRADE_HISTORY_DIRECTION_COLUMN] : undefined,
+        cells: [
+          formatOrderTime(fill.created_at, timeZone),
+          fill.display_name ?? fill.market ?? "USDC/cNGN",
+          formatIntentDirection(intent),
+          Number.isFinite(price) ? formatNairaPrice(price) : UNKNOWN_BALANCE,
+          Number.isFinite(sizeUsdc) ? formatHistoryUsdc(sizeUsdc) : UNKNOWN_BALANCE,
+          Number.isFinite(totalCngn) ? formatCngn(totalCngn) : UNKNOWN_BALANCE,
+          LIQUIDITY_LABELS[fill.liquidity] ?? fill.liquidity,
         ],
       };
     }),

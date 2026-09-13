@@ -16,7 +16,6 @@ import {
 import type { ActivityTab, ActivityView, ChartTool } from "@/lib/trading.types";
 
 export const SPOT_BOTTOM_TABS = [
-  { id: "positions", label: "Positions" },
   { id: "open-orders", label: "Open Orders" },
   { id: "order-history", label: "Order History" },
   { id: "trade-history", label: "Trade History" },
@@ -39,12 +38,12 @@ export const SPOT_TIMEFRAME_OPTIONS = ["D"] as const;
 
 /**
  * Bottom-panel column sets, with no rows on purpose: any row here would render as a trader's own
- * order or position when it is not. Positions and trade history have no per-account data behind them
- * yet, so the panel's empty state is the honest render. Assets, Open Orders and Order History are
- * built from live data (see `account-activity-views`); their entries here are only the headers shown
- * before that data arrives.
+ * order or trade when it is not. Every tab is built from live data (see `account-activity-views`);
+ * these entries are only the headers shown before that data arrives.
+ *
+ * There is no Positions tab. It came with the removed futures terminal: on spot a fill changes the
+ * account's balances, which Assets shows, and opens nothing with an entry price or PnL.
  */
-// TODO: populate positions and trade history once they have a per-account data source.
 export const ACTIVITY_VIEWS = {
   "open-orders": {
     columns: ["Instrument", "Direction", "Type", "Size", "Price"],
@@ -54,12 +53,8 @@ export const ACTIVITY_VIEWS = {
     columns: ["Time", "Instrument", "Direction", "Filled", "Avg price", "Limit", "Status"],
     rows: [],
   },
-  positions: {
-    columns: ["Instrument", "Position", "Entry Price", "Mark Price", "Unrealized PnL"],
-    rows: [],
-  },
   "trade-history": {
-    columns: ["Time", "Instrument", "Direction", "Size", "Price"],
+    columns: ["Time", "Instrument", "Direction", "Price", "Size", "Total", "Role"],
     rows: [],
   },
 } satisfies Record<string, ActivityView>;
