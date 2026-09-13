@@ -210,8 +210,8 @@ export function buildOrderHistoryActivityView(
  * Columns for the Trade History tab: one row per fill.
  *
  * "Size" is the USDC that changed hands and "Total" the cNGN, both as the fill executed, so each row
- * reconciles against the account's balances. "Role" says whether the order crossed the book or
- * rested and was hit. Fees are not shown: the venue's fill record does not carry them.
+ * reconciles against the account's balances. "Fee" is what the order paid, which is nothing for a
+ * maker. "Role" says whether the order crossed the book or rested and was hit.
  */
 export const TRADE_HISTORY_COLUMNS = [
   "Time",
@@ -220,6 +220,7 @@ export const TRADE_HISTORY_COLUMNS = [
   "Price",
   "Size",
   "Total",
+  "Fee",
   "Role",
 ] as const;
 
@@ -232,6 +233,17 @@ const LIQUIDITY_LABELS = {
 
 function formatCngn(value: number) {
   return `${value.toLocaleString("en-US", { maximumFractionDigits: 2 })} cNGN`;
+}
+
+/**
+ * A fill's fee, to 6 places so a fee on a small fill does not round away to zero. A dash when the
+ * venue did not record it: an unknown fee must never read as one it did not charge.
+ */
+function formatFillFee(fee: string | undefined) {
+  const value = fee === undefined ? Number.NaN : Number(fee);
+  return Number.isFinite(value)
+    ? `${value.toLocaleString("en-US", { maximumFractionDigits: 6 })} USDC`
+    : UNKNOWN_BALANCE;
 }
 
 /**
@@ -263,6 +275,7 @@ export function buildTradeHistoryActivityView(
           Number.isFinite(price) ? formatNairaPrice(price) : UNKNOWN_BALANCE,
           Number.isFinite(sizeUsdc) ? formatHistoryUsdc(sizeUsdc) : UNKNOWN_BALANCE,
           Number.isFinite(totalCngn) ? formatCngn(totalCngn) : UNKNOWN_BALANCE,
+          formatFillFee(fill.fee),
           LIQUIDITY_LABELS[fill.liquidity] ?? fill.liquidity,
         ],
       };
