@@ -447,6 +447,22 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
     }
   }
 
+  /**
+   * Signs the order-history login with personal_sign. Unlike an order or a cancel it authorizes
+   * nothing on chain, so there is no chain to switch to; the wallet shows the plain-text message.
+   */
+  async function handleSignOrderHistory(message: string) {
+    if (!walletsReady || primaryWallet === null) {
+      throw new Error("Connect a wallet to view your order history");
+    }
+    const provider = await primaryWallet.getEthereumProvider();
+    const walletClient = createWalletClient({ chain: getAppChain(), transport: custom(provider) });
+    return walletClient.signMessage({
+      account: primaryWallet.address as `0x${string}`,
+      message,
+    });
+  }
+
   return (
     <main className="flex min-h-screen flex-col bg-terminal-bg text-foreground transition-colors duration-300 md:h-dvh md:overflow-hidden">
       <MarketDocumentTitle pair="USDC/cNGN" price={spotMarket.mark} />
@@ -488,6 +504,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
           }
           setDepositOpen(true);
         }}
+        onSignOrderHistory={handleSignOrderHistory}
         onSubmitOrder={handleSubmitSpot}
         spotMarket={spotMarket}
         usdcBalanceLabel={formatUsdcBalanceLabel(usdcBalance)}

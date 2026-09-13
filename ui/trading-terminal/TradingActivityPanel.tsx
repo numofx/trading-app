@@ -19,12 +19,25 @@ const EMPTY_STATE_COPY = {
   },
 } as const;
 
-function getEmptyStateCopy(selectedTab: string, isSignedIn: boolean) {
+type EmptyState = {
+  /** A control under the copy, e.g. Order History's signature prompt. */
+  action?: ReactNode;
+  body: string;
+  title: string;
+};
+
+function getEmptyStateCopy(
+  selectedTab: string,
+  isSignedIn: boolean,
+  override: EmptyState | undefined
+): EmptyState {
+  // Signed out always wins: an override describes the viewer's account, and there is none yet.
   if (ACCOUNT_SCOPED_TABS.has(selectedTab) && !isSignedIn) {
     return { body: "Connect your wallet to see your account activity.", title: "Not connected" };
   }
 
   return (
+    override ??
     EMPTY_STATE_COPY[selectedTab as keyof typeof EMPTY_STATE_COPY] ?? {
       body: "This panel will populate as trading activity comes in.",
       title: "No activity yet",
@@ -34,6 +47,7 @@ function getEmptyStateCopy(selectedTab: string, isSignedIn: boolean) {
 
 export function TradingActivityPanel({
   activityView,
+  emptyState,
   footerLinks,
   isSignedIn = false,
   rowAction,
@@ -42,6 +56,8 @@ export function TradingActivityPanel({
   onTabSelect,
 }: {
   activityView: ActivityView;
+  /** Replaces the selected tab's default empty state. Ignored while signed out. */
+  emptyState?: EmptyState;
   footerLinks: readonly { href: string; label: string }[];
   /** Whether a wallet session is active. Defaults to false so rows stay hidden unless proven otherwise. */
   isSignedIn?: boolean;
@@ -58,7 +74,7 @@ export function TradingActivityPanel({
   // Account rows read as the viewer's own balances, orders, and positions. A signed-out visitor has
   // no account for them to belong to, so they get the empty state instead.
   const rows = ACCOUNT_SCOPED_TABS.has(selectedTab) && !isSignedIn ? [] : activityView.rows;
-  const emptyStateCopy = getEmptyStateCopy(selectedTab, isSignedIn);
+  const emptyStateCopy = getEmptyStateCopy(selectedTab, isSignedIn, emptyState);
   const isEmpty = rows.length === 0;
   const fillerRowCount = Math.max(0, minimumVisibleRows - rows.length);
   const isMetricColumn = (column: string) =>
@@ -169,6 +185,7 @@ export function TradingActivityPanel({
               </div>
               <div className="mt-1 text-[11px] text-panel-text-muted">{emptyStateCopy.body}</div>
             </div>
+            {emptyStateCopy.action ?? null}
           </div>
         ) : null}
       </div>
