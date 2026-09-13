@@ -203,6 +203,51 @@ export function getMarketSizingPrice(
 }
 
 /**
+ * The trader's own resting order that an order about to be signed would trade against, if any.
+ *
+ * The venue cannot settle a trade between two orders on one account — SubAccounts refuses to move an
+ * asset from an account to itself (`AC_CannotTransferAssetToOneself`) — and until the matcher skips
+ * such a pair (numofx/exchange#50) it retries it every five minutes while both orders lock the top of
+ * the book. That happened on 2026-09-13 with a 1,346.18 buy and sell on one account.
+ *
+ * Judged at the price the order is signed at, which is where the matcher would cross it: a buy
+ * crosses a resting sell at or below it, a sell a resting buy at or above it. Returns the nearest
+ * such order — the one that would be hit first.
+ */
+export function findOwnCrossingOrder({
+  ownOrders,
+  side,
+  signedPrice,
+}: {
+  /** The connected wallet's own working orders, already filtered to its owner address. */
+  ownOrders: readonly SpotOpenOrder[];
+  side: "buy" | "sell";
+  signedPrice: number | null;
+}) {
+  if (signedPrice === null || !Number.isFinite(signedPrice) || signedPrice <= 0) {
+    return null;
+  }
+
+  let nearest: SpotOpenOrder | null = null;
+  for (const order of ownOrders) {
+    if (order.side === side || !Number.isFinite(order.price)) {
+      continue;
+    }
+    const crosses = side === "buy" ? order.price <= signedPrice : order.price >= signedPrice;
+    if (!crosses) {
+      continue;
+    }
+    const nearer =
+      nearest === null ||
+      (side === "buy" ? order.price < nearest.price : order.price > nearest.price);
+    if (nearer) {
+      nearest = order;
+    }
+  }
+  return nearest;
+}
+
+/**
  * The limit price a market order is signed at: through the opposing touch, not at it.
  *
  * Priced exactly at the touch, a market order stops being marketable the moment the quote moves —

@@ -414,6 +414,7 @@ export function SpotTradingTerminal({
               lastAction={lastAction}
               onDepositRequest={onDepositRequest}
               onSubmitOrder={handleSubmitOrder}
+              ownOpenOrders={ownedOpenOrders}
               takerFeeBps={spotMarket.takerFeeBps}
             />
             <SpotBalanceSummary
