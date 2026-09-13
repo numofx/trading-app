@@ -7,6 +7,7 @@ import { formatBalance, formatBalanceFigure } from "@/lib/account-balance-displa
 import { cn } from "@/lib/cn";
 import { formatNaira } from "@/lib/market-formatting";
 import {
+  findOwnCrossingOrder,
   getCrossingPrice,
   getMarketableLimitPrice,
   getMarketFill,
@@ -17,7 +18,7 @@ import {
   toOrderSizeUsdc,
 } from "@/lib/spot-market";
 import { SPOT_ORDER_LIFETIME_LABEL, SPOT_TAKER_FEE_RATE } from "@/lib/spot-order-submission";
-import type { OrderBookLevel } from "@/lib/trading.types";
+import type { OrderBookLevel, SpotOpenOrder } from "@/lib/trading.types";
 import { ConfirmOrderDialog } from "@/ui/trading-terminal/ConfirmOrderDialog";
 import { OrderTypeTabs } from "@/ui/trading-terminal/OrderTypeTabs";
 
@@ -755,6 +756,56 @@ function FeeRows({ ceiling, charged }: { ceiling: number; charged: number | null
   );
 }
 
+/**
+ * Why the ticket will not sign this order, when it would trade against the trader's own resting
+ * order; null when it would not. The venue cannot settle such a trade, so the submit control is
+ * disabled rather than letting the order be signed: see `findOwnCrossingOrder`. Judged at the signed
+ * price, where the matcher would cross it. Without a wallet there are no own orders to trade against.
+ *
+ * Lives outside the component so its branching does not count against that function's budget.
+ */
+function getOwnCrossingNote({
+  hasWallet,
+  ownOrders,
+  side,
+  signedPrice,
+}: {
+  hasWallet: boolean;
+  ownOrders: readonly SpotOpenOrder[];
+  side: "buy" | "sell";
+  signedPrice: number | null;
+}) {
+  if (!hasWallet) {
+    return null;
+  }
+  const order = findOwnCrossingOrder({ ownOrders, side, signedPrice });
+  if (order === null) {
+    return null;
+  }
+  return `This would trade against your own resting ${order.side} at ${formatNaira(order.price)}, which can't settle. Cancel it in Open Orders or change the price.`;
+}
+
+/** Why an order that would trade against the trader's own resting order is not signable; nothing otherwise. */
+function OwnCrossingNote({ note }: { note: string | null }) {
+  if (note === null) {
+    return null;
+  }
+
+  return <p className="text-[10px] text-sell leading-snug">{note}</p>;
+}
+
+/**
+ * Whether the submit control is inert, and how it reads when an own crossing is what stops it. Outside
+ * the component for the same reason as `getOwnCrossingNote`: its branching stays off that budget.
+ */
+function getSubmitBlock(isBusy: boolean, ownCrossingNote: string | null) {
+  const isBlocked = ownCrossingNote !== null;
+  return {
+    blockedClassName: isBlocked ? "cursor-not-allowed opacity-50" : undefined,
+    disabled: isBusy || isBlocked,
+  };
+}
+
 export function SpotOrderFormPanel({
   anchorPrice,
   asks,
@@ -765,6 +816,7 @@ export function SpotOrderFormPanel({
   bids,
   onDepositRequest,
   onSubmitOrder,
+  ownOpenOrders = [],
   takerFeeBps,
   isPreparingAccount = false,
   hasWallet = false,
@@ -811,6 +863,8 @@ export function SpotOrderFormPanel({
     size: string;
     orderType: SpotOrderType;
   }) => void;
+  /** The connected wallet's own working orders, so an order that would trade against one is stopped. */
+  ownOpenOrders?: readonly SpotOpenOrder[];
   /** The trading subaccount is still being resolved — distinct from an order in flight. */
   isPreparingAccount?: boolean;
   /**
@@ -858,6 +912,7 @@ export function SpotOrderFormPanel({
     fill,
     maxOrderSize,
     shortfall,
+    signedPrice,
     sizePercent,
     sizingPrice,
     takerFee,
@@ -917,6 +972,13 @@ export function SpotOrderFormPanel({
     }
   }
 
+  const ownCrossingNote = getOwnCrossingNote({
+    hasWallet,
+    ownOrders: ownOpenOrders,
+    side,
+    signedPrice,
+  });
+
   function handleSubmit() {
     // Without a wallet there is nothing to submit against, so the CTA funds an account instead.
     if (!hasWallet) {
@@ -949,6 +1011,7 @@ export function SpotOrderFormPanel({
   // Both states block submission, but they are not the same thing: "Submitting…" on a button the
   // user never pressed reads as a stuck order rather than a subaccount lookup still in flight.
   const isBusy = isSubmitting || isPreparingAccount;
+  const submitBlock = getSubmitBlock(isBusy, ownCrossingNote);
   // Only meaningful for a trader who has an account to measure against: with no wallet the CTA
   // already funds one, and there is no balance to be short of yet.
   const shortfallCurrency = hasWallet && shortfall !== null ? shortfall.currency : null;
@@ -1051,6 +1114,8 @@ export function SpotOrderFormPanel({
 
         <MarketDepthNote fill={fill} hasShortfall={shortfallCurrency !== null} />
 
+        <OwnCrossingNote note={ownCrossingNote} />
+
         {shortfall === null || !hasWallet ? null : (
           <p className="text-[10px] text-sell leading-snug">
             Needs {formatBalance(shortfall.needed, shortfall.currency)}; account holds{" "}
@@ -1068,9 +1133,10 @@ export function SpotOrderFormPanel({
             // green "Buy"-coloured control that will open a deposit dialog.
             shortfallCurrency !== null &&
               "bg-input-bg text-panel-text-active ring-1 ring-panel-border hover:bg-input-hover",
-            isBusy && "cursor-wait opacity-70"
+            isBusy && "cursor-wait opacity-70",
+            submitBlock.blockedClassName
           )}
-          disabled={isBusy}
+          disabled={submitBlock.disabled}
           // Stable hook for the layout invariant check: the label changes with wallet and
           // submission state ("Deposit", "Submitting…", "Buy USDC"), so text is not an identifier.
           id="spot-submit-cta"
