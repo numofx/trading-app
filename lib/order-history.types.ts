@@ -23,6 +23,12 @@ export type OrderHistoryOrder = {
   display_name?: string;
   /** Engine amount filled, in whole cNGN. */
   filled_amount: string;
+  /**
+   * What actually traded, in USDC: the sum of fill price × size over the order's fills. Absent when
+   * the order has no fills — or when the service predates the field, which only matters if
+   * `filled_amount` is above zero.
+   */
+  filled_quote?: string;
   limit_price: string;
   market?: string;
   order_id: string;

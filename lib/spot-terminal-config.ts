@@ -51,7 +51,7 @@ export const ACTIVITY_VIEWS = {
     rows: [],
   },
   "order-history": {
-    columns: ["Time", "Instrument", "Direction", "Size", "Filled", "Limit", "Status"],
+    columns: ["Time", "Instrument", "Direction", "Filled", "Avg price", "Limit", "Status"],
     rows: [],
   },
   positions: {

@@ -83,16 +83,20 @@ export function getOwnedOpenOrders(openOrders: SpotOpenOrder[], walletAddress: s
 }
 
 /**
- * Columns for the Order History tab. There is no "Type": markets-service does not record whether an
- * order was placed as limit or market — the ticket signs both as limits — so the column could only
- * be guessed.
+ * Columns for the Order History tab.
+ *
+ * No "Type": markets-service does not record whether an order was placed as limit or market — the
+ * ticket signs both as limits — so the column could only be guessed. No "Size" either: the only size
+ * an order carries is its amount valued at its signed limit, which for a marketable order includes
+ * slippage room the fill never used (trade #345 delivered 0.9994 USDC and read as 1.004). What
+ * traded comes from the fills instead.
  */
 export const ORDER_HISTORY_COLUMNS = [
   "Time",
   "Instrument",
   "Direction",
-  "Size",
   "Filled",
+  "Avg price",
   "Limit",
   "Status",
 ] as const;
@@ -136,24 +140,41 @@ function formatIntentDirection(order: OrderHistoryOrder) {
   return side === "buy" ? "Buy" : "Sell";
 }
 
-function formatFilledShare(order: OrderHistoryOrder) {
-  const desired = Number(order.desired_amount);
-  const filled = Number(order.filled_amount);
-  if (!(Number.isFinite(desired) && Number.isFinite(filled)) || desired <= 0) {
-    return UNKNOWN_BALANCE;
+function formatNairaPrice(price: number) {
+  return `\u20a6${price.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 })}`;
+}
+
+/**
+ * What the order actually traded, from its fills.
+ *
+ * `filledUsdc` is null when it cannot be known: the order filled (its cNGN `filled_amount` is above
+ * zero) but the service did not report `filled_quote`. That reads as a dash, never as a figure — a
+ * reconciliation built on a guess is worse than one with a gap in it. An order that filled nothing
+ * is a known zero.
+ */
+function getOrderFill(order: OrderHistoryOrder) {
+  const filledCngn = Number(order.filled_amount);
+  if (!Number.isFinite(filledCngn) || filledCngn <= 0) {
+    return { averagePrice: null, filledUsdc: 0 };
   }
-  return `${Math.round((filled / desired) * 100)}%`;
+  const filledUsdc = order.filled_quote === undefined ? Number.NaN : Number(order.filled_quote);
+  if (!Number.isFinite(filledUsdc) || filledUsdc <= 0) {
+    return { averagePrice: null, filledUsdc: null };
+  }
+  return { averagePrice: filledCngn / filledUsdc, filledUsdc };
+}
+
+function formatHistoryUsdc(value: number) {
+  return `${value.toLocaleString("en-US", { maximumFractionDigits: 4 })} USDC`;
 }
 
 /**
  * The connected wallet's orders in every status, newest first, as `GET /v1/orders` returns them.
  *
- * Direction, size and limit are read from the order's UI intent, not its engine fields: the engine
- * side is inverted on this pair and its amount is cNGN, so reading those would show a USDC buy as a
- * sell of 1,346. An order without an intent shows a dash rather than a guessed conversion.
- *
- * "Filled" is a share of the order rather than a USDC figure: the engine records cNGN filled, and
- * converting that at the limit would misstate a market order that filled inside its limit.
+ * Direction and limit are read from the order's UI intent, not its engine fields: the engine side is
+ * inverted on this pair and its price is USDC per cNGN, so reading those would show a USDC buy as a
+ * sell. "Filled" and "Avg price" come from the order's fills, so they are what the account was
+ * actually debited and credited.
  */
 export function buildOrderHistoryActivityView(
   orders: OrderHistoryOrder[],
@@ -162,9 +183,8 @@ export function buildOrderHistoryActivityView(
   return {
     columns: [...ORDER_HISTORY_COLUMNS],
     rows: orders.map((order) => {
-      const intent = order.spot_contract?.ui_intent;
-      const size = intent === undefined ? Number.NaN : Number(intent.size);
-      const price = intent === undefined ? Number.NaN : Number(intent.price);
+      const limit = Number(order.spot_contract?.ui_intent.price);
+      const { averagePrice, filledUsdc } = getOrderFill(order);
 
       return {
         positiveCellIndexes: order.status === "filled" ? [ORDER_HISTORY_STATUS_COLUMN] : undefined,
@@ -172,11 +192,9 @@ export function buildOrderHistoryActivityView(
           formatOrderTime(order.created_at, timeZone),
           order.display_name ?? order.market ?? "USDC/cNGN",
           formatIntentDirection(order),
-          Number.isFinite(size) ? formatUsdc(size) : UNKNOWN_BALANCE,
-          formatFilledShare(order),
-          Number.isFinite(price)
-            ? `\u20a6${price.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 })}`
-            : UNKNOWN_BALANCE,
+          filledUsdc === null ? UNKNOWN_BALANCE : formatHistoryUsdc(filledUsdc),
+          averagePrice === null ? UNKNOWN_BALANCE : formatNairaPrice(averagePrice),
+          Number.isFinite(limit) ? formatNairaPrice(limit) : UNKNOWN_BALANCE,
           ORDER_STATUS_LABELS[order.status] ?? order.status,
         ],
       };
