@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { formatUnits, isAddressEqual } from "viem";
+import { formatUnits } from "viem";
 import { createBasePublicClient } from "@/lib/base-public-client";
 import {
   getCngnAssetAddress,
   getQuoteAssetAddress,
   getSubaccountsAddress,
 } from "@/lib/subaccount-deposit-config";
+import { getLedgerLegs } from "@/lib/subaccount-ledger";
 
 /**
  * The SubAccounts ledger normalizes every asset's per-account balance to 18 decimals,
@@ -45,9 +46,12 @@ export type SubaccountAssetBalance = {
 export type SubaccountBalance = {
   /** Every asset the subaccount holds, as returned by the ledger. */
   rows: SubaccountAssetBalance[];
-  /** Balance of the CashAsset (USDC cash) in 1e18 units, or null if the cash asset is unknown for this chain. */
+  /**
+   * Balance of the trade module's quote asset (USDC) in 1e18 units: zero when the account holds
+   * none, null only when the quote asset is unknown for this chain.
+   */
   cashUnits: bigint | null;
-  /** Balance of the cNGN-side asset in 1e18 units, or null if the cNGN asset is unknown for this chain. */
+  /** Balance of the cNGN asset in 1e18 units; zero when the account holds none. */
   cngnUnits: bigint | null;
 };
 
@@ -80,23 +84,19 @@ export function useSubaccountBalance(subaccountId: string | null) {
         functionName: "getAccountBalances",
       });
 
-      const cashAsset = getQuoteAssetAddress();
-      const cngnAsset = getCngnAssetAddress();
-      let cashUnits: bigint | null = null;
-      let cngnUnits: bigint | null = null;
-
-      const mapped = rows.map((row) => {
-        if (cashAsset !== null && isAddressEqual(row.asset, cashAsset)) {
-          cashUnits = row.balance;
-        }
-        if (isAddressEqual(row.asset, cngnAsset)) {
-          cngnUnits = row.balance;
-        }
-        return { asset: row.asset, balance: row.balance, subId: row.subId };
+      const mapped = rows.map((row) => ({
+        asset: row.asset,
+        balance: row.balance,
+        subId: row.subId,
+      }));
+      const legs = getLedgerLegs({
+        cngnAsset: getCngnAssetAddress(),
+        quoteAsset: getQuoteAssetAddress(),
+        rows: mapped,
       });
 
       if (!cancelled) {
-        setBalance({ cashUnits, cngnUnits, rows: mapped });
+        setBalance({ ...legs, rows: mapped });
       }
     }
 

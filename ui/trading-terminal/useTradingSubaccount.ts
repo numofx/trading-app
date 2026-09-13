@@ -277,6 +277,9 @@ async function createTradingSubaccount(wallet: ConnectedWallet) {
 export function useTradingSubaccount(walletAddress: string | null) {
   const [subaccountId, setSubaccountId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  // The wallet the last completed lookup answered for. `isLoading` alone cannot say "finished":
+  // it is false on the render before the lookup starts too, when a null id means nothing yet.
+  const [resolvedWalletAddress, setResolvedWalletAddress] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -295,6 +298,7 @@ export function useTradingSubaccount(walletAddress: string | null) {
       .then((nextSubaccountId) => {
         if (!cancelled) {
           setSubaccountId(nextSubaccountId);
+          setResolvedWalletAddress(walletAddress);
         }
       })
       .finally(() => {
@@ -343,6 +347,8 @@ export function useTradingSubaccount(walletAddress: string | null) {
     adoptSubaccountId,
     ensureTradingSubaccount,
     isLoading,
+    /** The lookup for the current wallet has completed, so a null `subaccountId` means "none". */
+    isResolved: walletAddress !== null && resolvedWalletAddress === walletAddress,
     subaccountId,
   };
 }
