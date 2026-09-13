@@ -1,5 +1,5 @@
 /**
- * The signed login `GET /v1/orders` requires — markets-service's `wsauth.AuthFrame`, sent as the
+ * The signed login `GET /v1/orders` and `GET /v1/fills` require — markets-service's `wsauth.AuthFrame`, sent as the
  * `X-Numo-Auth` header. Times are unix seconds.
  */
 export type OrderHistoryAuthFrame = {
@@ -47,13 +47,47 @@ export type OrderHistoryResponse = {
   orders: OrderHistoryOrder[];
 };
 
-/** Where the Order History tab is: every step between opening it and seeing rows. */
-export type OrderHistoryState =
+/** Which side of the trade the wallet's order was on. */
+export type FillLiquidity = "maker" | "taker";
+
+/** One fill on one of the wallet's orders, as `GET /v1/fills` returns it. */
+export type AccountFill = {
+  created_at: string;
+  display_name?: string;
+  /** `taker` when the order crossed the book, `maker` when it rested and was hit. */
+  liquidity: FillLiquidity;
+  market?: string;
+  /** The wallet's order that filled. A trade between two of its own orders is listed once per order. */
+  order_id: string;
+  /** Engine price, in USDC per cNGN. */
+  price: string;
+  /** The order's engine side, which is the inverse of the trader's side on this pair. */
+  side: "buy" | "sell";
+  /** Engine size, in whole cNGN. */
+  size: string;
+  spot_contract?: {
+    /** The fill in trader terms: side, cNGN-per-USDC price and the USDC that changed hands. */
+    ui_intent: { price: string; side: "buy" | "sell"; size: string };
+  };
+  trade_id: number;
+};
+
+export type FillsResponse = {
+  fills: AccountFill[];
+  /** Pass back as `before` for older fills; absent on the last page. */
+  next_before?: string;
+};
+
+/**
+ * Where a signed history tab (Order History, Trade History) is: every step between opening it and
+ * seeing rows.
+ */
+export type SignedHistoryState<Row> =
   /** Not requested: the tab is closed or no wallet is connected. */
   | { status: "idle" }
   /** No usable login for this wallet; loading needs a signature first. */
   | { status: "needs-signature" }
   | { status: "signing" }
   | { status: "loading" }
-  | { orders: OrderHistoryOrder[]; status: "ready" }
+  | { rows: Row[]; status: "ready" }
   | { error: string; status: "error" };

@@ -3,20 +3,10 @@ import { cn } from "@/lib/cn";
 import type { ActivityTab, ActivityView } from "@/lib/trading.types";
 
 /** Tabs that describe the viewer's own account, so their rows must never render for a signed-out visitor. */
-const ACCOUNT_SCOPED_TABS = new Set([
-  "assets",
-  "open-orders",
-  "order-history",
-  "positions",
-  "trade-history",
-]);
+const ACCOUNT_SCOPED_TABS = new Set(["assets", "open-orders", "order-history", "trade-history"]);
 
 const EMPTY_STATE_COPY = {
   assets: { body: "Deposit USDC to fund your trading account.", title: "No assets" },
-  positions: {
-    body: "Your positions will appear here once orders are filled.",
-    title: "No positions",
-  },
 } as const;
 
 type EmptyState = {
@@ -71,7 +61,7 @@ export function TradingActivityPanel({
   onTabSelect: (tabId: string) => void;
 }) {
   const minimumVisibleRows = 3;
-  // Account rows read as the viewer's own balances, orders, and positions. A signed-out visitor has
+  // Account rows read as the viewer's own balances, orders, and trades. A signed-out visitor has
   // no account for them to belong to, so they get the empty state instead.
   const rows = ACCOUNT_SCOPED_TABS.has(selectedTab) && !isSignedIn ? [] : activityView.rows;
   const emptyStateCopy = getEmptyStateCopy(selectedTab, isSignedIn, emptyState);
