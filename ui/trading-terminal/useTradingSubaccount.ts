@@ -2,7 +2,14 @@
 
 import type { ConnectedWallet } from "@privy-io/react-auth";
 import { useEffect, useState } from "react";
-import { createWalletClient, custom, decodeEventLog, getAddress } from "viem";
+import {
+  createWalletClient,
+  custom,
+  decodeEventLog,
+  getAddress,
+  isAddressEqual,
+  parseAbi,
+} from "viem";
 import { base } from "viem/chains";
 import { createBasePublicClient, getAppChain } from "@/lib/base-public-client";
 import {
@@ -10,6 +17,7 @@ import {
   getTradeModuleAddress as getConfiguredTradeModuleAddress,
   getMatchingAddress,
   getSubaccountCreatorAddress,
+  getSubaccountsAddress,
   getUsdcCngnManagerAddress,
   getWrappedUsdcAssetAddress,
 } from "@/lib/subaccount-deposit-config";
@@ -80,9 +88,18 @@ function getTradeModuleAddress() {
   return getConfiguredTradeModuleAddress();
 }
 
+const subAccountManagerAbi = parseAbi([
+  "function manager(uint256 accountId) view returns (address)",
+]);
+
 /**
  * Scans `DepositedSubAccount` logs backwards from `latestBlock` to `floorBlock`, returning the
- * most recent subaccount for the owner, or null once the floor is reached without a match.
+ * most recent subaccount for the owner under the configured manager, or null once the floor is
+ * reached without a match.
+ *
+ * The manager check is what keeps a wallet off an account that can never settle. An account's
+ * manager is fixed at creation, and spot moved from DeliverableFXManager to the SRM on
+ * 2026-09-10 — a wallet's newest account can still be one created under the retired manager.
  */
 async function scanForSubaccountId(
   ownerAddress: `0x${string}`,
@@ -91,6 +108,7 @@ async function scanForSubaccountId(
 ) {
   const publicClient = createBasePublicClient();
   const normalizedOwnerAddress = ownerAddress;
+  const expectedManager = getUsdcCngnManagerAddress();
   const blockRange = getLogQueryBlockRange();
   let windowEnd = latestBlock;
 
@@ -106,10 +124,23 @@ async function scanForSubaccountId(
         owner: normalizedOwnerAddress,
       },
     });
-    const latestLog = logs.at(-1);
 
-    if (latestLog?.args.accountId) {
-      return latestLog.args.accountId.toString();
+    for (const log of [...logs].reverse()) {
+      const accountId = log.args.accountId;
+      if (accountId === undefined) {
+        continue;
+      }
+
+      const manager = await publicClient.readContract({
+        abi: subAccountManagerAbi,
+        address: getSubaccountsAddress(),
+        args: [accountId],
+        functionName: "manager",
+      });
+
+      if (isAddressEqual(manager, expectedManager)) {
+        return accountId.toString();
+      }
     }
 
     if (windowStart === floorBlock) {
@@ -138,6 +169,7 @@ async function findTradingSubaccountId(ownerAddress: string) {
 
   const cacheKey = buildSubaccountCacheKey({
     chainId: getMatchingChainId(),
+    managerAddress: getUsdcCngnManagerAddress(),
     matchingAddress: getMatchingAddress(),
     ownerAddress: normalizedOwnerAddress,
   });

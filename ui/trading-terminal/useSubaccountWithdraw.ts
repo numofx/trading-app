@@ -68,8 +68,8 @@ async function createConnectedWalletClient(wallet: ConnectedWallet) {
 /**
  * The withdrawal flow: one transaction, but only after the chain agrees it would succeed.
  *
- * The simulation is the point. Both mainnet escrows can be short of the tokens their ledger claims
- * — the USDC CashAsset is short venue-wide — and without a dry run the trader signs, pays gas, and
+ * The simulation is the point. An escrow can be short of the tokens its ledger claims — the legacy
+ * USDC CashAsset is short venue-wide — and without a dry run the trader signs, pays gas, and
  * watches it revert. Simulating first turns that into a sentence on screen with nothing spent.
  */
 export function useSubaccountWithdraw({ onWithdrawn }: { onWithdrawn?: () => void }) {

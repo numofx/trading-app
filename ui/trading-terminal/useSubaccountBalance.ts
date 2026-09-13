@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { formatUnits, isAddressEqual } from "viem";
 import { createBasePublicClient } from "@/lib/base-public-client";
 import {
-  getCashAssetAddress,
   getCngnAssetAddress,
+  getQuoteAssetAddress,
   getSubaccountsAddress,
 } from "@/lib/subaccount-deposit-config";
 
@@ -80,7 +80,7 @@ export function useSubaccountBalance(subaccountId: string | null) {
         functionName: "getAccountBalances",
       });
 
-      const cashAsset = getCashAssetAddress();
+      const cashAsset = getQuoteAssetAddress();
       const cngnAsset = getCngnAssetAddress();
       let cashUnits: bigint | null = null;
       let cngnUnits: bigint | null = null;

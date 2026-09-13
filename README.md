@@ -124,17 +124,26 @@ Defaults live in `MATCHING_STACK` (`lib/subaccount-deposit-config.ts`) and
 | Env | Mainnet address | What it is |
 | --- | --- | --- |
 | `NEXT_PUBLIC_MATCHING_ADDRESS` | `0x9E90A9cD13d859Bd6a08168082FB1F6F7405F191` | Matching — EIP-712 domain, `DepositedSubAccount` source |
-| `NEXT_PUBLIC_TRADE_MODULE_ADDRESS` | `0x44813aD30b2fFC1bB2871Eed9b19F63c8196eD1c` | the one module the venue's trades are submitted through |
+| `NEXT_PUBLIC_TRADE_MODULE_ADDRESS` | `0x12423B366F6F07130961900bE00d05Ea63Acd071` | wrapped-quote TradeModule — the one module the venue's trades are submitted through |
 | `NEXT_PUBLIC_SUBACCOUNT_CREATOR_ADDRESS` | `0x568890A8D63Ba8a03b6eCbEedA1bD9f6ea014D5D` | periphery for `createAndDepositSubAccount` |
-| `NEXT_PUBLIC_USDCCNGN_MANAGER_ADDRESS` | `0xcE01f3D74400caE39bd7608cd2d286C2e3874d49` | manager of every live account from #4 on |
+| `NEXT_PUBLIC_USDCCNGN_MANAGER_ADDRESS` | `0x3195Bd7e02d93982bCF8b34DF5B941fFCaE1E49b` | StandardManager (SRM) — manager new trading accounts are created under |
 | `NEXT_PUBLIC_SUBACCOUNTS_ADDRESS` | `0x7019244E25FA416e6Ca2ed2F3cA25277aef72843` | SubAccounts ERC-721 ledger |
-| `NEXT_PUBLIC_WRAPPED_USDC_ASSET_ADDRESS` | `0x6B232A2155Bd0C9bf741dB4cf8E7e8A0176A6fc6` | CashAsset — the USDC deposit escrow |
+| `NEXT_PUBLIC_WRAPPED_USDC_ASSET_ADDRESS` | `0x364058aFF6f36E01505fB2Cc870f8B6BD4835e84` | wrapped USDC — the USDC deposit escrow and the module's `quoteAsset()` |
 | `NEXT_PUBLIC_USDC_TOKEN_ADDRESS` | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` | canonical Base USDC, 6 decimals |
 
 Each was verified against Base 8453 rather than copied: `Matching` emits the `ModuleAllowed` and
-`DepositedSubAccount` events this app decodes, the creator answers to
-`createAndDepositSubAccount(address,uint256,address)` and points back at that same Matching and
-SubAccounts pair, and `CashAsset.wrappedAsset()` returns the USDC token above.
+`DepositedSubAccount` events this app decodes and answers `allowedModules` true for the trade module
+above, the creator answers to `createAndDepositSubAccount(address,uint256,address)` and points back
+at that same Matching and SubAccounts pair, and the module's `quoteAsset()` is the wrapped USDC
+escrow, whose `wrappedAsset()` returns the USDC token above.
+
+> **Spot moved to the SRM on 2026-09-10** (numofx/exchange `c779ed9`). The CashAsset-quoted module
+> `0x44813aD3…eD1c` is disallowed on Matching, and DeliverableFXManager `0xcE01f3D7…4d49` is
+> deprecated: its accounts can never settle a trade, and SubAccounts cannot change an account's
+> manager. The app therefore only resolves a wallet's trading account among accounts under the
+> configured manager, and creates a fresh one under the SRM otherwise. A deployment still carrying
+> the old addresses as env overrides fails at submit with `action_json.module … is not this venue's
+> trade module`. The CashAsset `0x6B232A21…6fc6` stays reachable as a legacy withdrawal row only.
 
 > **The stack moves as one.** None of the Sepolia addresses have code on mainnet, so a half-flipped
 > config is not a degraded app — it builds transactions against contracts that do not exist.

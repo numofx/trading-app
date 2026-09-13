@@ -1,15 +1,20 @@
 import { getAddress } from "viem";
 import { base } from "viem/chains";
 import { getAppChain } from "@/lib/base-public-client";
-import { getCngnAssetAddress, getCngnTokenAddress } from "@/lib/subaccount-deposit-config";
+import {
+  getCngnAssetAddress,
+  getCngnTokenAddress,
+  getUsdcTokenAddress,
+  getWrappedUsdcAssetAddress,
+} from "@/lib/subaccount-deposit-config";
 
 /**
  * One escrow an account can be paid out of.
  *
  * Withdrawals are keyed by escrow rather than by the deposit currency, because the two are not
- * one-to-one: Base mainnet holds USDC in two separate assets — the CashAsset the spot engine
- * settles in, and a plain wrapped-USDC escrow — and an account can hold a balance in either. Only
- * naming both makes the second one reachable.
+ * one-to-one: Base mainnet holds USDC in two separate assets — the wrapped-USDC escrow the spot
+ * engine settles in, and the legacy CashAsset it settled in before 2026-09-10 — and an account can
+ * hold a balance in either. Only naming both makes the second one reachable.
  */
 export type WithdrawableAsset = {
   /** The contract the withdrawal is called on, and the id the ledger reports a balance under. */
@@ -24,24 +29,28 @@ export type WithdrawableAsset = {
   token: `0x${string}`;
 };
 
-const USDC_TOKEN_MAINNET = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-
 /**
- * The wrapped-USDC escrow (`WRAPPED_USDC_DELIVERABLE`), distinct from the CashAsset.
- *
- * Verified on Base mainnet: `wrappedAsset()` is canonical USDC, it holds the tokens backing its
- * ledger claims, and it has no `netSettledCash` — it is a plain `WrappedERC20Asset`, not cash.
+ * The legacy USDC CashAsset. Nothing deposits into or settles in it any more; it is listed so
+ * balances left there stay withdrawable once it can pay.
  */
-const WRAPPED_USDC_ASSET_MAINNET = "0x364058aFF6f36E01505fB2Cc870f8B6BD4835e84";
+const LEGACY_CASH_ASSET_MAINNET = "0x6B232A2155Bd0C9bf741dB4cf8E7e8A0176A6fc6";
 
 /**
  * Everything an account can withdraw, in display order.
  *
- * Both USDC entries are listed because their balances are separate and neither substitutes for the
- * other: cash is what trading settles in, and the wrapped escrow is where earlier deposits landed.
- * A trader with a balance in one and not the other would otherwise be told they have nothing.
+ * Both mainnet USDC entries are listed because their balances are separate and neither substitutes
+ * for the other: the wrapped escrow is what deposits fund and trading settles in, and the CashAsset
+ * holds whatever earlier trading left there. A trader with a balance in one and not the other would
+ * otherwise be told they have nothing.
  */
 export function getWithdrawableAssets(): WithdrawableAsset[] {
+  const usdc: WithdrawableAsset = {
+    escrow: getWrappedUsdcAssetAddress(),
+    id: "usdc-wrapped",
+    label: "USDC",
+    symbol: "USDC",
+    token: getUsdcTokenAddress(),
+  };
   const cngn: WithdrawableAsset = {
     escrow: getCngnAssetAddress(),
     id: "cngn",
@@ -51,41 +60,19 @@ export function getWithdrawableAssets(): WithdrawableAsset[] {
   };
 
   if (getAppChain().id !== base.id) {
-    return [
-      {
-        escrow: getAddress(
-          process.env.NEXT_PUBLIC_WRAPPED_USDC_ASSET_ADDRESS?.trim() ||
-            "0xdC3f31B61a2128B3D1ECB8b6f6d0DE82eBd6c7Ae"
-        ),
-        id: "usdc",
-        label: "USDC",
-        symbol: "USDC",
-        token: getAddress(
-          process.env.NEXT_PUBLIC_USDC_TOKEN_ADDRESS?.trim() ||
-            "0x8b3C43D2b2555ca3fc4Fa1BC34544133B8576110"
-        ),
-      },
-      cngn,
-    ];
+    return [{ ...usdc, id: "usdc" }, cngn];
   }
 
   return [
+    usdc,
     {
       escrow: getAddress(
-        process.env.NEXT_PUBLIC_CASH_ASSET_ADDRESS?.trim() ||
-          "0x6B232A2155Bd0C9bf741dB4cf8E7e8A0176A6fc6"
+        process.env.NEXT_PUBLIC_CASH_ASSET_ADDRESS?.trim() || LEGACY_CASH_ASSET_MAINNET
       ),
       id: "usdc-cash",
-      label: "USDC",
+      label: "Legacy USDC",
       symbol: "USDC",
-      token: getAddress(process.env.NEXT_PUBLIC_USDC_TOKEN_ADDRESS?.trim() || USDC_TOKEN_MAINNET),
-    },
-    {
-      escrow: getAddress(WRAPPED_USDC_ASSET_MAINNET),
-      id: "usdc-wrapped",
-      label: "Wrapped USDC",
-      symbol: "USDC",
-      token: getAddress(USDC_TOKEN_MAINNET),
+      token: getUsdcTokenAddress(),
     },
     cngn,
   ];
