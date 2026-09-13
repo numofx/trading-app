@@ -22,18 +22,22 @@ import type { DepositAddresses, DepositCurrency } from "@/lib/subaccount-deposit
  * - `subaccountCreator` answers to `createAndDepositSubAccount(address,uint256,address)` and
  *   points back at that same matching and subaccounts pair; accounts 11 and 12 were minted
  *   through it.
- * - `manager` is the manager of every live account from #4 onward.
- * - `wrappedUsdcAsset` is the CashAsset, whose `wrappedAsset()` returns the USDC token below —
- *   canonical Base USDC, 6 decimals.
+ * - `manager` is the StandardManager (SRM) spot moved onto on 2026-09-10. The previous manager,
+ *   DeliverableFXManager `0xcE01…4d49`, is deprecated: the settlement vault reverts
+ *   `MW_UnknownManager` on its accounts, and SubAccounts has no way to change an account's manager.
+ * - `tradeModule` is the wrapped-quote TradeModule, the only module Matching still allows and the
+ *   one markets-service pins every order to. The CashAsset-quoted module `0x4481…eD1c` is disabled.
+ * - `wrappedUsdcAsset` is that module's `quoteAsset()`: a plain WrappedERC20Asset over canonical
+ *   Base USDC (6 decimals), token-backed 1:1 — not the CashAsset, whose accounting is corrupted.
  */
 const MATCHING_STACK = {
   mainnet: {
-    manager: "0xcE01f3D74400caE39bd7608cd2d286C2e3874d49",
+    manager: "0x3195Bd7e02d93982bCF8b34DF5B941fFCaE1E49b",
     matching: "0x9E90A9cD13d859Bd6a08168082FB1F6F7405F191",
     subaccountCreator: "0x568890A8D63Ba8a03b6eCbEedA1bD9f6ea014D5D",
-    tradeModule: "0x44813aD30b2fFC1bB2871Eed9b19F63c8196eD1c",
+    tradeModule: "0x12423B366F6F07130961900bE00d05Ea63Acd071",
     usdcToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-    wrappedUsdcAsset: "0x6B232A2155Bd0C9bf741dB4cf8E7e8A0176A6fc6",
+    wrappedUsdcAsset: "0x364058aFF6f36E01505fB2Cc870f8B6BD4835e84",
   },
   sepolia: {
     manager: "0x1917960763BF3a0DfA10a05f0a112E828C1A934f",
@@ -57,8 +61,6 @@ function getMatchingStack() {
 const DEFAULT_SUBACCOUNTS_ADDRESS_MAINNET = "0x7019244e25fa416e6ca2ed2f3ca25277aef72843";
 const DEFAULT_SUBACCOUNTS_ADDRESS_SEPOLIA = "0xdEEF5903FEfEEde7A4F4369050AFd228dFB3E9c0";
 
-/** Numo CashAsset — deposited USDC is minted into this per-subaccount cash balance. */
-const DEFAULT_CASH_ASSET_ADDRESS_MAINNET = "0x6b232a2155bd0c9bf741db4cf8e7e8a0176a6fc6";
 /**
  * cNGN deployment per chain, mirroring `risk-core/deployments/<chainId>/WRAPPED_CNGN.json`
  * (`asset` is the artifact's `base`, `token` its `wrappedAsset`).
@@ -161,16 +163,13 @@ export function getSubaccountsAddress() {
 }
 
 /**
- * CashAsset address used to label the USDC cash leg of a subaccount balance.
- * Returns null when unknown for the active chain (only mainnet has a baked-in default),
- * in which case the cash balance is left unlabeled rather than guessed.
+ * The asset the trade module settles the USDC leg in, used to label the USDC leg of a subaccount
+ * balance. On mainnet that is the wrapped USDC deposit escrow itself, so a deposit and the balance
+ * it funds can never be read off different ledgers. Null on Sepolia, where the module's quote
+ * asset is not pinned, so the balance is left unlabeled rather than guessed.
  */
-export function getCashAssetAddress(): `0x${string}` | null {
-  const override = process.env.NEXT_PUBLIC_CASH_ASSET_ADDRESS?.trim();
-  if (override) {
-    return getAddress(override);
-  }
-  return isAppMainnet() ? getAddress(DEFAULT_CASH_ASSET_ADDRESS_MAINNET) : null;
+export function getQuoteAssetAddress(): `0x${string}` | null {
+  return isAppMainnet() ? getWrappedUsdcAssetAddress() : null;
 }
 
 /**
@@ -235,33 +234,26 @@ export function getDepositableCurrencies(): DepositCurrency[] {
 /**
  * Currencies whose deposits are closed, and why.
  *
- * USDC is paused on mainnet because deposits land in the CashAsset, whose accounting was corrupted
- * by a mis-scaled mint: it holds 0.000001 USDC against a 1.368e40 claim, so every withdrawal from
- * it reverts. Money deposited there today cannot come back out. cNGN is unaffected — its escrow
- * backs its claims 1:1 — and USDC *withdrawals* stay open so balances can leave once the escrow is
- * made whole.
+ * Nothing is paused by default. USDC used to be, because deposits landed in the CashAsset, whose
+ * accounting a mis-scaled mint corrupted (0.000001 USDC held against a 1.368e40 claim). USDC
+ * deposits now land in the wrapped USDC escrow the trade module settles in, which is token-backed
+ * 1:1, so that reason no longer applies to anything a deposit touches.
  *
- * Set `NEXT_PUBLIC_PAUSED_DEPOSIT_CURRENCIES` to override: a comma-separated list, or `none` to
- * reopen everything. Reopen only once the invariant holds — the escrow's token balance covers the
- * sum of real claims.
+ * Set `NEXT_PUBLIC_PAUSED_DEPOSIT_CURRENCIES` to close some: a comma-separated list, or `none`.
+ * Withdrawals stay open either way.
  */
 export function getDepositPauseReason(currency: DepositCurrency): string | null {
   const configured = process.env.NEXT_PUBLIC_PAUSED_DEPOSIT_CURRENCIES?.trim();
 
-  if (configured === undefined || configured === "") {
-    return isAppMainnet() && currency === "USDC" ? CASH_ASSET_PAUSE_REASON : null;
-  }
-
-  if (configured.toLowerCase() === "none") {
+  if (configured === undefined || configured === "" || configured.toLowerCase() === "none") {
     return null;
   }
 
   const paused = configured.split(",").map((entry) => entry.trim().toLowerCase());
-  return paused.includes(currency.toLowerCase()) ? CASH_ASSET_PAUSE_REASON : null;
+  return paused.includes(currency.toLowerCase())
+    ? `${currency} deposits are paused. Withdrawals stay open.`
+    : null;
 }
-
-const CASH_ASSET_PAUSE_REASON =
-  "USDC deposits are paused. The venue's USDC escrow cannot pay withdrawals right now, so a deposit could not be taken back out. Withdrawals stay open, and cNGN is unaffected.";
 
 /** The first currency a deposit can actually be made in, for defaults and fallbacks. */
 export function getFirstDepositableCurrency(): DepositCurrency {

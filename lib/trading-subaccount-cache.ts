@@ -27,14 +27,18 @@ export type SubaccountScanCache = {
 
 /**
  * Cache identity. The chain and Matching address are part of the key because a subaccount id is
- * only meaningful against one deployment — pointing the app at another must not reuse this.
+ * only meaningful against one deployment — pointing the app at another must not reuse this. The
+ * manager is too: an account's manager is fixed at creation, so a wallet's account under a retired
+ * manager is not its trading account under the current one.
  */
 export function buildSubaccountCacheKey({
   chainId,
+  managerAddress,
   matchingAddress,
   ownerAddress,
 }: {
   chainId: number;
+  managerAddress: string;
   matchingAddress: string;
   ownerAddress: string;
 }) {
@@ -43,6 +47,7 @@ export function buildSubaccountCacheKey({
     CACHE_VERSION,
     String(chainId),
     matchingAddress.toLowerCase(),
+    managerAddress.toLowerCase(),
     ownerAddress.toLowerCase(),
   ].join(".");
 }
