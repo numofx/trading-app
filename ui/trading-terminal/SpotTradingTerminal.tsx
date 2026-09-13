@@ -6,8 +6,10 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 import {
   buildAssetsActivityView,
   buildOpenOrdersActivityView,
+  buildOrderHistoryActivityView,
   getOwnedOpenOrders,
 } from "@/lib/account-activity-views";
+import type { OrderHistoryState } from "@/lib/order-history.types";
 import {
   getAnchorPrice,
   getBestPrices,
@@ -34,9 +36,41 @@ import { SpotOrderFormPanel } from "@/ui/trading-terminal/SpotOrderFormPanel";
 import { TerminalHeaderBar } from "@/ui/trading-terminal/TerminalHeaderBar";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
 import { useMarketOrderBook } from "@/ui/trading-terminal/useMarketOrderBook";
+import { useOrderHistory } from "@/ui/trading-terminal/useOrderHistory";
 
 /** The venue's symbol for this market; markets-service resolves the stream subscription from it. */
 const SPOT_MARKET_SYMBOL = "USDCcNGN-SPOT";
+
+/**
+ * What the Order History tab says while it has no rows, and which control it offers. Lives outside
+ * the component so the state-by-state branching stays off its complexity budget.
+ */
+function getOrderHistoryEmptyState(
+  state: OrderHistoryState
+): { action: "retry" | "sign" | null; body: string; title: string } | null {
+  switch (state.status) {
+    case "needs-signature":
+      return {
+        action: "sign",
+        body: "Your order history is private. Sign a message with your wallet to view it — it costs no gas and lasts 12 hours.",
+        title: "Sign to view order history",
+      };
+    case "signing":
+      return {
+        action: null,
+        body: "Approve the signature request in your wallet.",
+        title: "Waiting for your wallet",
+      };
+    case "loading":
+      return { action: null, body: "Fetching your orders.", title: "Loading order history" };
+    case "error":
+      return { action: "retry", body: state.error, title: "Couldn't load order history" };
+    case "ready":
+      return { action: null, body: "Orders you place will appear here.", title: "No orders yet" };
+    default:
+      return null;
+  }
+}
 
 export function SpotTradingTerminal({
   candles,
@@ -52,6 +86,7 @@ export function SpotTradingTerminal({
   onDepositRequest,
   onSubmitOrder,
   onCancelOrder,
+  onSignOrderHistory,
   hasWallet = false,
   isSignedIn = false,
   isPreparingAccount = false,
@@ -95,6 +130,11 @@ export function SpotTradingTerminal({
    * this; the panel here only drives the per-row cancelling/error state and the server refresh.
    */
   onCancelOrder: (nonce: string, ownerAddress: string) => Promise<{ ok: boolean; error?: string }>;
+  /**
+   * personal_sign with the connected wallet, for the Order History login. The parent holds the
+   * wallet, so it owns this; absent when there is none to sign with.
+   */
+  onSignOrderHistory?: (message: string) => Promise<string>;
   /** Whether a wallet is connected; gates the order ticket's submit CTA. */
   hasWallet?: boolean;
   /** Whether a wallet session is active; gates account-scoped rows in the activity panel. */
@@ -123,6 +163,11 @@ export function SpotTradingTerminal({
   const [cancelledNonces, setCancelledNonces] = useState<ReadonlySet<string>>(() => new Set());
   const activityPanelRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const orderHistory = useOrderHistory({
+    enabled: isSignedIn && bottomTab === "order-history",
+    signMessage: onSignOrderHistory,
+    walletAddress,
+  });
 
   useEffect(() => {
     setLiveCandles(candles);
@@ -235,10 +280,15 @@ export function SpotTradingTerminal({
     if (bottomTab === "open-orders") {
       return buildOpenOrdersActivityView(workingOrders, walletAddress);
     }
+    if (bottomTab === "order-history" && orderHistory.state.status === "ready") {
+      return buildOrderHistoryActivityView(orderHistory.state.orders);
+    }
     return ACTIVITY_VIEWS[bottomTab as keyof typeof ACTIVITY_VIEWS] ?? { columns: [], rows: [] };
   }
 
   const activityView = buildActivityView();
+  const orderHistoryEmptyState =
+    bottomTab === "order-history" ? getOrderHistoryEmptyState(orderHistory.state) : null;
 
   /**
    * The wallet menu's Portfolio item. There is no separate portfolio route — the account's holdings
@@ -379,6 +429,32 @@ export function SpotTradingTerminal({
           >
             <TradingActivityPanel
               activityView={activityView}
+              emptyState={
+                orderHistoryEmptyState === null
+                  ? undefined
+                  : {
+                      action:
+                        orderHistoryEmptyState.action === null ? undefined : (
+                          <button
+                            className="cursor-pointer rounded-sm bg-input-bg px-3 py-1.5 font-medium text-[11px] text-panel-text-active ring-1 ring-panel-border transition-colors hover:bg-input-hover disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={
+                              orderHistoryEmptyState.action === "sign" &&
+                              onSignOrderHistory === undefined
+                            }
+                            onClick={
+                              orderHistoryEmptyState.action === "sign"
+                                ? orderHistory.authorize
+                                : orderHistory.reload
+                            }
+                            type="button"
+                          >
+                            {orderHistoryEmptyState.action === "sign" ? "Sign to view" : "Retry"}
+                          </button>
+                        ),
+                      body: orderHistoryEmptyState.body,
+                      title: orderHistoryEmptyState.title,
+                    }
+              }
               footerLinks={FOOTER_LINKS}
               isSignedIn={isSignedIn}
               onTabSelect={setBottomTab}
