@@ -54,7 +54,7 @@ export const ACTIVITY_VIEWS = {
     rows: [],
   },
   "trade-history": {
-    columns: ["Time", "Instrument", "Direction", "Price", "Size", "Total", "Role"],
+    columns: ["Time", "Instrument", "Direction", "Price", "Size", "Total", "Fee", "Role"],
     rows: [],
   },
 } satisfies Record<string, ActivityView>;

@@ -54,6 +54,8 @@ export type FillLiquidity = "maker" | "taker";
 export type AccountFill = {
   created_at: string;
   display_name?: string;
+  /** What this order paid on the fill, in USDC: `0` for a maker; absent when the fee is not known. */
+  fee?: string;
   /** `taker` when the order crossed the book, `maker` when it rested and was hit. */
   liquidity: FillLiquidity;
   market?: string;
@@ -70,6 +72,8 @@ export type AccountFill = {
     ui_intent: { price: string; side: "buy" | "sell"; size: string };
   };
   trade_id: number;
+  /** The Base transaction that settled the fill, when it was recorded. */
+  tx_hash?: string;
 };
 
 export type FillsResponse = {
