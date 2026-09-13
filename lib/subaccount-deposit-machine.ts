@@ -149,7 +149,13 @@ export function transitionDepositFlow(
         };
       }
 
-      return { context: state.context, status: "success", subaccountId, txHash: state.txHash };
+      return {
+        blockNumber: event.blockNumber ?? null,
+        context: state.context,
+        status: "success",
+        subaccountId,
+        txHash: state.txHash,
+      };
     }
 
     case "failed": {

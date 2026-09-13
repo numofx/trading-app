@@ -251,11 +251,19 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
   const accountUsdcLabel = formatSubaccountUsdcLabel(accountLegs.cashUnits);
   const accountCngnLabel = formatSubaccountCngnLabel(accountLegs.cngnUnits);
 
-  function handleDeposited(depositedSubaccountId: string) {
+  /**
+   * Re-reads every balance a transfer moves, at or past the transfer's block. Reading latest instead
+   * could hit an RPC node a block behind and leave the pre-transfer figures on screen.
+   */
+  function refreshBalancesAfter(blockNumber: bigint | null) {
+    refreshUsdcBalance(blockNumber);
+    refreshCngnBalance(blockNumber);
+    refreshSubaccountBalance(blockNumber);
+  }
+
+  function handleDeposited(depositedSubaccountId: string, blockNumber: bigint | null) {
     adoptSubaccountId(depositedSubaccountId);
-    refreshUsdcBalance();
-    refreshCngnBalance();
-    refreshSubaccountBalance();
+    refreshBalancesAfter(blockNumber);
   }
 
   /**
@@ -452,11 +460,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
             onDeposited={handleDeposited}
             onOpenChange={setDepositOpen}
             onSelectFundingWallet={(wallet) => setSelectedWalletAddress(wallet.address)}
-            onWithdrawn={() => {
-              refreshSubaccountBalance();
-              refreshUsdcBalance();
-              refreshCngnBalance();
-            }}
+            onWithdrawn={refreshBalancesAfter}
             open={depositOpen}
             triggerClassName="flex h-10 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-4 font-semibold text-[12px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active disabled:cursor-not-allowed disabled:opacity-60"
             triggerId="header-deposit-trigger"

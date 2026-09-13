@@ -72,7 +72,12 @@ async function createConnectedWalletClient(wallet: ConnectedWallet) {
  * USDC CashAsset is short venue-wide — and without a dry run the trader signs, pays gas, and
  * watches it revert. Simulating first turns that into a sentence on screen with nothing spent.
  */
-export function useSubaccountWithdraw({ onWithdrawn }: { onWithdrawn?: () => void }) {
+export function useSubaccountWithdraw({
+  onWithdrawn,
+}: {
+  /** Receives the withdrawal receipt's block, so balances can be re-read at or past it. */
+  onWithdrawn?: (blockNumber: bigint) => void;
+}) {
   const [flowState, setFlowState] = useState<WithdrawFlowState | null>(null);
   const [inputError, setInputError] = useState<string | null>(null);
 
@@ -189,7 +194,7 @@ export function useSubaccountWithdraw({ onWithdrawn }: { onWithdrawn?: () => voi
         withdraw_asset: asset.id,
       });
       setFlowState({ status: "success", txHash });
-      onWithdrawn?.();
+      onWithdrawn?.(receipt.blockNumber);
     } catch (error) {
       const message = describeWithdrawFailure(getErrorMessage(error), currency);
       posthog.capture("withdraw_failed", { error_message: message, withdraw_asset: asset.id });

@@ -206,8 +206,12 @@ async function resolveReceiptEvent(
 
   const createdSubaccountId = extractDepositedSubaccountId(receipt);
   return createdSubaccountId === null
-    ? { type: "DEPOSIT_CONFIRMED" }
-    : { subaccountId: createdSubaccountId, type: "DEPOSIT_CONFIRMED" };
+    ? { blockNumber: receipt.blockNumber, type: "DEPOSIT_CONFIRMED" }
+    : {
+        blockNumber: receipt.blockNumber,
+        subaccountId: createdSubaccountId,
+        type: "DEPOSIT_CONFIRMED",
+      };
 }
 
 /**
@@ -218,7 +222,8 @@ async function resolveReceiptEvent(
 export function useSubaccountDeposit({
   onDeposited,
 }: {
-  onDeposited?: (subaccountId: string) => void;
+  /** Receives the deposit receipt's block (null if unknown) so balances can be re-read past it. */
+  onDeposited?: (subaccountId: string, blockNumber: bigint | null) => void;
 } = {}) {
   const [flowState, setFlowState] = useState<DepositFlowState | null>(null);
   const [activeWallet, setActiveWallet] = useState<ConnectedWallet | null>(null);
@@ -228,8 +233,8 @@ export function useSubaccountDeposit({
     setFlowState((current) => (current === null ? current : transitionDepositFlow(current, event)));
   }
 
-  const notifyDeposited = useEffectEvent((subaccountId: string) => {
-    onDeposited?.(subaccountId);
+  const notifyDeposited = useEffectEvent((subaccountId: string, blockNumber: bigint | null) => {
+    onDeposited?.(subaccountId, blockNumber);
   });
 
   useEffect(() => {
@@ -241,7 +246,7 @@ export function useSubaccountDeposit({
       posthog.capture("deposit_confirmed", {
         subaccount_id: flowState.subaccountId,
       });
-      notifyDeposited(flowState.subaccountId);
+      notifyDeposited(flowState.subaccountId, flowState.blockNumber);
       return;
     }
 

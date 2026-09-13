@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { formatUnits } from "viem";
 import { createBasePublicClient } from "@/lib/base-public-client";
+import { readAtOrAfterBlock } from "@/lib/read-at-block";
 import {
   getCngnAssetAddress,
   getQuoteAssetAddress,
@@ -63,7 +64,10 @@ export type SubaccountBalance = {
  */
 export function useSubaccountBalance(subaccountId: string | null) {
   const [balance, setBalance] = useState<SubaccountBalance | null>(null);
-  const [refreshCount, setRefreshCount] = useState(0);
+  // A fresh object per refresh, so repeating the same block still re-runs the read.
+  const [refreshRequest, setRefreshRequest] = useState<{ minBlock: bigint | null }>({
+    minBlock: null,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -75,13 +79,19 @@ export function useSubaccountBalance(subaccountId: string | null) {
       };
     }
 
-    async function readBalance(accountId: string) {
+    async function readBalance(accountId: string, minBlock: bigint | null) {
       const publicClient = createBasePublicClient();
-      const rows = await publicClient.readContract({
-        abi: getAccountBalancesAbi,
-        address: getSubaccountsAddress(),
-        args: [BigInt(accountId)],
-        functionName: "getAccountBalances",
+      const rows = await readAtOrAfterBlock({
+        getBlockNumber: () => publicClient.getBlockNumber({ cacheTime: 0 }),
+        minBlock,
+        read: (blockNumber) =>
+          publicClient.readContract({
+            abi: getAccountBalancesAbi,
+            address: getSubaccountsAddress(),
+            args: [BigInt(accountId)],
+            blockNumber,
+            functionName: "getAccountBalances",
+          }),
       });
 
       const mapped = rows.map((row) => ({
@@ -100,7 +110,7 @@ export function useSubaccountBalance(subaccountId: string | null) {
       }
     }
 
-    readBalance(subaccountId).catch(() => {
+    readBalance(subaccountId, refreshRequest.minBlock).catch(() => {
       if (!cancelled) {
         setBalance(null);
       }
@@ -109,10 +119,11 @@ export function useSubaccountBalance(subaccountId: string | null) {
     return () => {
       cancelled = true;
     };
-  }, [subaccountId, refreshCount]);
+  }, [subaccountId, refreshRequest]);
 
-  function refresh() {
-    setRefreshCount((current) => current + 1);
+  /** Re-reads the balance; pass a confirmed transaction's block to wait until the read reflects it. */
+  function refresh(minBlock: bigint | null = null) {
+    setRefreshRequest({ minBlock });
   }
 
   return { balance, refresh };

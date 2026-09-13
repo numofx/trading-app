@@ -1327,9 +1327,10 @@ export function DepositDialog({
   onConnectWallet?: () => void;
   /** Fires for both the asset picker and the "deposit the other asset" step. */
   onCurrencyChange?: (currency: DepositCurrency) => void;
-  onDeposited: (subaccountId: string) => void;
-  /** Fires after a confirmed withdrawal, so balances upstream can be re-read. */
-  onWithdrawn?: () => void;
+  /** Fires after a confirmed deposit, with its receipt's block (null if unknown). */
+  onDeposited: (subaccountId: string, blockNumber: bigint | null) => void;
+  /** Fires after a confirmed withdrawal with its receipt's block, so balances upstream can be re-read. */
+  onWithdrawn?: (blockNumber: bigint) => void;
   /** Pass with `open` to drive the dialog from outside, e.g. the order ticket's Deposit CTA. */
   onOpenChange?: (open: boolean) => void;
   /** Controlled open state; omit to let the dialog own it from its own trigger. */
