@@ -373,7 +373,10 @@ export function buildSpotOrderEnvelope({
       signer_address: ownerAddress,
       sub_id: "0",
       subaccount_id: subaccountId,
-      worst_fee: formatFixedPointUnits(worstFeeUnits, ENGINE_DECIMALS),
+      // Integer wei per unit — the exact value signed into the action above, in the format the
+      // venue documents and the market maker sends. A decimal here was stored verbatim but could not
+      // be parsed by the matcher's fee-ceiling check, which then skipped it (numofx/exchange#52).
+      worst_fee: worstFeeUnits.toString(),
     },
     typedData: {
       primaryType: "Action" as const,
