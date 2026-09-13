@@ -1,6 +1,6 @@
 "use client";
 
-import { useLogin, usePrivy, useWallets } from "@privy-io/react-auth";
+import { useLogin, usePrivy } from "@privy-io/react-auth";
 import { Duration } from "effect";
 import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
@@ -31,6 +31,7 @@ import {
 } from "@/ui/trading-terminal/useSubaccountBalance";
 import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
 import { formatUsdcBalanceLabel, useUsdcBalance } from "@/ui/trading-terminal/useUsdcBalance";
+import { usePrimaryWallet } from "@/ui/usePrimaryWallet";
 
 type SpotExecutionPrice = { error: string } | { price: string; sizingPrice?: string };
 
@@ -188,7 +189,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
   // No callbacks here: PrivyWalletButton owns the analytics side of login, and a second
   // useLogin with its own onComplete would double-count every connection.
   const { login } = useLogin();
-  const { ready: walletsReady, wallets } = useWallets();
+  const { primaryWallet: pinnedWallet, selectWallet, wallets, walletsReady } = usePrimaryWallet();
   // The header hosts the one deposit dialog; the order ticket opens it through this state.
   const [depositOpen, setDepositOpen] = useState(false);
   // Which asset it opens on. Held here rather than inside the dialog because the ticket names the
@@ -213,16 +214,14 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
    * front of someone who believes they are disconnected.
    */
   /**
-   * Which connected wallet the terminal is acting as, chosen on the deposit dialog's Transfer from
-   * screen. It moves the whole identity, not just who signs the transfer: a first deposit creates
-   * the trading account and the account belongs to the signer, so a wallet that funds must also be
-   * the wallet whose subaccount, orders and cancels this session uses. Unset until the trader picks
-   * one, which leaves the first connected wallet in charge.
+   * Which connected wallet the terminal is acting as, held steady by `usePrimaryWallet` and changed
+   * only on the deposit dialog's Transfer from screen. It moves the whole identity, not just who
+   * signs the transfer: a first deposit creates the trading account and the account belongs to the
+   * signer, so a wallet that funds must also be the wallet whose subaccount, orders and cancels this
+   * session uses. It is no longer `wallets[0]` by default — that list reorders, and a trader who had
+   * picked nothing was switched to another wallet mid-session.
    */
-  const [selectedWalletAddress, setSelectedWalletAddress] = useState<string | null>(null);
-  const primaryWallet = isSignedIn
-    ? (wallets.find((wallet) => wallet.address === selectedWalletAddress) ?? wallets[0] ?? null)
-    : null;
+  const primaryWallet = isSignedIn ? pinnedWallet : null;
   /*
    * The ticket gates on the wallet rather than the session because a session can exist before its
    * embedded wallet does: an email login is authenticated while Privy is still provisioning one.
@@ -484,7 +483,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
             onCurrencyChange={setDepositCurrency}
             onDeposited={handleDeposited}
             onOpenChange={setDepositOpen}
-            onSelectFundingWallet={(wallet) => setSelectedWalletAddress(wallet.address)}
+            onSelectFundingWallet={(wallet) => selectWallet(wallet.address)}
             onWithdrawn={refreshBalancesAfter}
             open={depositOpen}
             triggerClassName="flex h-10 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-4 font-semibold text-[12px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active disabled:cursor-not-allowed disabled:opacity-60"

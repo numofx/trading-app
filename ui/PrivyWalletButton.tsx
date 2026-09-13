@@ -1,11 +1,12 @@
 "use client";
 
 import { Menu } from "@base-ui/react/menu";
-import { useLogin, useLogout, usePrivy, useWallets } from "@privy-io/react-auth";
+import { useLogin, useLogout, usePrivy } from "@privy-io/react-auth";
 import { LogOut, PieChart, Wallet } from "lucide-react";
 import posthog from "posthog-js";
 import { formatAddressShort } from "@/lib/address-display";
 import { cn } from "@/lib/cn";
+import { usePrimaryWallet } from "@/ui/usePrimaryWallet";
 
 /** The shared pill shape, so the connected menu trigger and the connect button stay identical. */
 const WALLET_PILL_CLASSNAME =
@@ -62,8 +63,9 @@ function PrivyWalletButtonInner({ onPortfolioSelect }: { onPortfolioSelect?: () 
       posthog.reset();
     },
   });
-  const { ready: walletsReady, wallets } = useWallets();
-  const primaryWallet = wallets[0];
+  // The same wallet the terminal acts as — not `wallets[0]`, whose order is not stable, and which let
+  // the header show one address while orders and balances belonged to another.
+  const { primaryWallet, walletsReady } = usePrimaryWallet();
   const walletAddress = primaryWallet?.address ? formatAddressShort(primaryWallet.address) : null;
   const isReady = ready && walletsReady;
 
