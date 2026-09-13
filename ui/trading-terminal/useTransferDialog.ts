@@ -99,10 +99,10 @@ export function useTransferDialog({
   controlledCurrency?: DepositCurrency;
   fundingWallets?: ConnectedWallet[];
   onCurrencyChange?: (currency: DepositCurrency) => void;
-  onDeposited: (subaccountId: string) => void;
+  onDeposited: (subaccountId: string, blockNumber: bigint | null) => void;
   onOpenChange?: (open: boolean) => void;
   onSelectFundingWallet?: (wallet: ConnectedWallet) => void;
-  onWithdrawn?: () => void;
+  onWithdrawn?: (blockNumber: bigint) => void;
   open?: boolean;
   walletBalances?: DepositWalletBalances;
 }) {

@@ -66,12 +66,19 @@ export type DepositFlowState =
   | { context: DepositFlowContext; status: "awaiting-deposit" }
   | { context: DepositFlowContext; status: "depositing"; txHash: `0x${string}` }
   | { context: DepositFlowContext; status: "preflight" }
-  | { context: DepositFlowContext; status: "success"; subaccountId: string; txHash: `0x${string}` };
+  | {
+      /** The deposit receipt's block, so balances can be re-read at or past it; null if unknown. */
+      blockNumber: bigint | null;
+      context: DepositFlowContext;
+      status: "success";
+      subaccountId: string;
+      txHash: `0x${string}`;
+    };
 
 export type DepositFlowEvent =
   | { error: string; type: "ERRORED" }
   | { preflight: DepositPreflight; type: "PREFLIGHT_RESOLVED" }
-  | { subaccountId?: string; type: "DEPOSIT_CONFIRMED" }
+  | { blockNumber?: bigint; subaccountId?: string; type: "DEPOSIT_CONFIRMED" }
   | { txHash: `0x${string}`; type: "APPROVAL_SUBMITTED" }
   | { txHash: `0x${string}`; type: "DEPOSIT_SUBMITTED" }
   | { type: "APPROVAL_CONFIRMED" }

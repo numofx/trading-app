@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { erc20Abi, formatUnits, getAddress } from "viem";
 import { createBasePublicClient } from "@/lib/base-public-client";
+import { readAtOrAfterBlock } from "@/lib/read-at-block";
 import { getCngnTokenAddress } from "@/lib/subaccount-deposit-config";
 
 export type CngnBalance = {
@@ -17,7 +18,10 @@ export type CngnBalance = {
  */
 export function useCngnBalance(walletAddress: string | null) {
   const [balance, setBalance] = useState<CngnBalance | null>(null);
-  const [refreshCount, setRefreshCount] = useState(0);
+  // A fresh object per refresh, so repeating the same block still re-runs the read.
+  const [refreshRequest, setRefreshRequest] = useState<{ minBlock: bigint | null }>({
+    minBlock: null,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -29,41 +33,55 @@ export function useCngnBalance(walletAddress: string | null) {
       };
     }
 
-    async function readBalance(tokenAddress: `0x${string}`, owner: `0x${string}`) {
+    async function readBalance(
+      tokenAddress: `0x${string}`,
+      owner: `0x${string}`,
+      minBlock: bigint | null
+    ) {
       const publicClient = createBasePublicClient();
 
-      const [units, decimals] = await Promise.all([
-        publicClient.readContract({
-          abi: erc20Abi,
-          address: tokenAddress,
-          args: [owner],
-          functionName: "balanceOf",
-        }),
-        publicClient.readContract({
-          abi: erc20Abi,
-          address: tokenAddress,
-          functionName: "decimals",
-        }),
-      ]);
+      const [units, decimals] = await readAtOrAfterBlock({
+        getBlockNumber: () => publicClient.getBlockNumber({ cacheTime: 0 }),
+        minBlock,
+        read: (blockNumber) =>
+          Promise.all([
+            publicClient.readContract({
+              abi: erc20Abi,
+              address: tokenAddress,
+              args: [owner],
+              blockNumber,
+              functionName: "balanceOf",
+            }),
+            publicClient.readContract({
+              abi: erc20Abi,
+              address: tokenAddress,
+              blockNumber,
+              functionName: "decimals",
+            }),
+          ]),
+      });
 
       if (!cancelled) {
         setBalance({ decimals, units });
       }
     }
 
-    readBalance(getCngnTokenAddress(), getAddress(walletAddress)).catch(() => {
-      if (!cancelled) {
-        setBalance(null);
+    readBalance(getCngnTokenAddress(), getAddress(walletAddress), refreshRequest.minBlock).catch(
+      () => {
+        if (!cancelled) {
+          setBalance(null);
+        }
       }
-    });
+    );
 
     return () => {
       cancelled = true;
     };
-  }, [walletAddress, refreshCount]);
+  }, [walletAddress, refreshRequest]);
 
-  function refresh() {
-    setRefreshCount((current) => current + 1);
+  /** Re-reads the balance; pass a confirmed transaction's block to wait until the read reflects it. */
+  function refresh(minBlock: bigint | null = null) {
+    setRefreshRequest({ minBlock });
   }
 
   return { balance, refresh };
