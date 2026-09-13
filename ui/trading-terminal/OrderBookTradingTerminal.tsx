@@ -9,7 +9,7 @@ import { createWalletClient, custom } from "viem";
 import { getAppChain } from "@/lib/base-public-client";
 import type { OrderOutcome } from "@/lib/order-settlement";
 import { pollOrderOutcome } from "@/lib/order-settlement";
-import { getMarketableLimitPrice } from "@/lib/spot-market";
+import { getMarketableLimitPrice, getMarketSizingPrice } from "@/lib/spot-market";
 import {
   buildCancelEnvelope,
   buildSpotOrderEnvelope,
@@ -32,7 +32,7 @@ import {
 import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
 import { formatUsdcBalanceLabel, useUsdcBalance } from "@/ui/trading-terminal/useUsdcBalance";
 
-type SpotExecutionPrice = { price: string } | { error: string };
+type SpotExecutionPrice = { error: string } | { price: string; sizingPrice?: string };
 
 /** The touch as displayed in the ladder at the moment the trader submitted. */
 type SubmittedBook = { bestAsk: number | null; bestBid: number | null };
@@ -65,7 +65,15 @@ function resolveSpotExecutionPrice(
     return { error: "No opposing spot liquidity to cross. Use a limit order." };
   }
 
-  return { price: String(marketable) };
+  // Its size, though, is counted at the expected fill the ticket sent, held inside that limit —
+  // counted at the limit itself, the slippage room was spent as extra size.
+  const sizing = getMarketSizingPrice(side, Number(enteredPrice), marketable);
+
+  if (sizing === null) {
+    return { error: "No price to size the market order at. Use a limit order." };
+  }
+
+  return { price: String(marketable), sizingPrice: String(sizing) };
 }
 
 /**
@@ -337,6 +345,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
         subaccountId: resolvedTradingSubaccountId,
         uiPrice: executionPrice,
         uiSize: size,
+        uiSizingPrice: resolvedPrice.sizingPrice,
         walletAddress: primaryWallet.address,
       });
       setLastAction(
