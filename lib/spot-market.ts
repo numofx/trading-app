@@ -178,6 +178,31 @@ export function getCommittedBalances(openOrders: SpotOpenOrder[], walletAddress:
 export const SPOT_MARKET_SLIPPAGE = 0.005;
 
 /**
+ * The price a market order's USDC size is counted in cNGN at: where it is expected to fill, held
+ * inside the signed limit.
+ *
+ * The engine amount is whole cNGN, so the USDC a trader asks for is only what they get if cNGN is
+ * counted at the fill. Counted at the signed limit — the touch plus slippage room — "buy 1 USDC"
+ * spent 1,346 cNGN for 1.0049 USDC (trades #341 and #342), and a market sell delivered ~0.995 USDC.
+ * The room belongs in the limit alone. Held at the limit because a size counted past it is exactly
+ * that inflated amount. Null when either price is unusable, rather than falling back to the limit.
+ */
+export function getMarketSizingPrice(
+  side: "buy" | "sell",
+  expectedPrice: number | null,
+  limitPrice: number | null
+) {
+  if (limitPrice === null || !Number.isFinite(limitPrice) || limitPrice <= 0) {
+    return null;
+  }
+  if (expectedPrice === null || !Number.isFinite(expectedPrice) || expectedPrice <= 0) {
+    return null;
+  }
+
+  return side === "buy" ? Math.min(expectedPrice, limitPrice) : Math.max(expectedPrice, limitPrice);
+}
+
+/**
  * The limit price a market order is signed at: through the opposing touch, not at it.
  *
  * Priced exactly at the touch, a market order stops being marketable the moment the quote moves —

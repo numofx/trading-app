@@ -57,8 +57,11 @@ const UNSIGNED_INTEGER_PATTERN = /^\d+$/;
  *
  *   engineSide  = ui buy -> sell, ui sell -> buy   (BUY acquires USDC by selling cNGN)
  *   enginePrice = 1 / uiPrice
- *   engineAmount = floor(uiSize * uiPrice)          (whole cNGN; markets-service enforces
+ *   engineAmount = floor(uiSize * sizingPrice)      (whole cNGN; markets-service enforces
  *                                                    an atomic amount step of "1")
+ *
+ * `sizingPrice` is the limit for a limit order and the expected fill for a market order, whose
+ * limit is signed through the touch with slippage room that must not also be spent as size.
  *
  * The order BODY carries the engine-native values (side/limit_price/desired_amount) with
  * no ui_intent — markets-service's ui_intent path recomputes ui_size*ui_price as an exact
@@ -217,12 +220,21 @@ export function getNonceSignedAtMs(nonce: bigint | string) {
 export function buildSpotOrderEnvelope({
   uiPrice,
   uiSize,
+  uiSizingPrice,
   side,
   subaccountId,
   walletAddress,
 }: {
+  /** The signed limit, in cNGN per USDC. */
   uiPrice: string;
   uiSize: string;
+  /**
+   * The price the USDC size is counted in whole cNGN at, when it should differ from the limit — a
+   * market order's expected fill. Omitted for a limit order, which is sized at its own price. It may
+   * not sit past the limit: a buy counted above it, or a sell below it, is the inflated amount this
+   * parameter exists to prevent.
+   */
+  uiSizingPrice?: string;
   side: "buy" | "sell";
   subaccountId: string;
   walletAddress: string;
@@ -243,15 +255,33 @@ export function buildSpotOrderEnvelope({
     throw new Error("Size must be greater than zero");
   }
 
+  const sizingRational =
+    uiSizingPrice === undefined
+      ? priceRational
+      : parseDecimalToRational(sanitizeDecimalInput(uiSizingPrice, "Sizing price"));
+
+  if (sizingRational.numerator <= 0n) {
+    throw new Error("Sizing price must be greater than zero");
+  }
+
+  // sizing - limit, cross-multiplied so the comparison stays exact.
+  const sizingPastLimit =
+    sizingRational.numerator * priceRational.denominator -
+    priceRational.numerator * sizingRational.denominator;
+  if (side === "buy" ? sizingPastLimit > 0n : sizingPastLimit < 0n) {
+    throw new Error("Sizing price must not be past the limit price");
+  }
+
   // enginePrice = 1 / uiPrice, as an 18-decimal fixed-point wei value.
   const enginePriceWei = roundRationalToScaledUnits(
     { denominator: priceRational.numerator, numerator: priceRational.denominator },
     ENGINE_DECIMALS
   );
 
-  // engineAmount = floor(uiSize * uiPrice), in whole cNGN.
-  const productNumerator = sizeRational.numerator * priceRational.numerator;
-  const productDenominator = sizeRational.denominator * priceRational.denominator;
+  // engineAmount = floor(uiSize * sizingPrice), in whole cNGN. The sizing price is the limit unless
+  // one was given, so a limit order is sized exactly as before.
+  const productNumerator = sizeRational.numerator * sizingRational.numerator;
+  const productDenominator = sizeRational.denominator * sizingRational.denominator;
   const engineAmountWhole = productNumerator / productDenominator;
 
   if (engineAmountWhole < 1n) {

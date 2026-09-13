@@ -10,6 +10,7 @@ import {
   getCrossingPrice,
   getMarketableLimitPrice,
   getMarketFill,
+  getMarketSizingPrice,
   getMaxOrderSize,
   getOrderCost,
   SPOT_MARKET_SLIPPAGE,
@@ -47,26 +48,28 @@ function venueFee(amountUsdc: number, takerFeeBps: number | null): number | null
 }
 
 /**
- * Market orders cross the opposing touch; everything else executes at the entered limit price.
+ * The price sent with the order: the entered limit, or for a market order the price its size is
+ * counted at — the expected fill. The terminal signs a market order's limit through the touch
+ * itself, so this is never the limit for one.
  *
- * This previously sent the last traded price, which on a quiet market is days old and can rest
+ * A market order once sent the last traded price, which on a quiet market is days old and can rest
  * past the touch — a "market" order priced behind the book does not cross, so it silently rests
  * as a limit instead of filling.
  */
 function resolveOrderPrice({
-  crossingPrice,
   limitPrice,
   orderType,
+  sizingPrice,
 }: {
-  crossingPrice: number | null;
   limitPrice: string;
   orderType: SpotOrderType;
+  sizingPrice: number | null;
 }) {
   if (orderType !== "Market") {
     return limitPrice;
   }
 
-  return crossingPrice === null ? "" : String(crossingPrice);
+  return sizingPrice === null ? "" : String(sizingPrice);
 }
 
 function parseAmount(value: string) {
@@ -224,6 +227,33 @@ function CostRow({ emphasis, label, value }: { emphasis?: boolean; label: string
 }
 
 /**
+ * The price an order's size is counted at: the entered limit for a limit order; for a market order,
+ * its expected fill held inside the signed limit (see `getMarketSizingPrice`). Lives outside the
+ * economics function so its branching does not count against that function's complexity budget.
+ */
+function resolveSizingPrice({
+  crossingPrice,
+  enteredPrice,
+  fill,
+  orderType,
+  side,
+  signedPrice,
+}: {
+  crossingPrice: number | null;
+  enteredPrice: number | null;
+  fill: { averagePrice: number | null } | null;
+  orderType: SpotOrderType;
+  side: "buy" | "sell";
+  signedPrice: number | null;
+}) {
+  if (orderType !== "Market") {
+    return enteredPrice;
+  }
+
+  return getMarketSizingPrice(side, fill?.averagePrice ?? crossingPrice, signedPrice);
+}
+
+/**
  * Everything the ticket derives from the book, the entered values and the account balance.
  *
  * A pure function outside the component: it is where all the branching lives, and keeping it here
@@ -275,19 +305,28 @@ function deriveOrderEconomics({
   const hasPrice = effectivePrice !== null && Number.isFinite(effectivePrice);
   const total = hasPrice && hasAmount ? parsedAmount * (effectivePrice as number) : null;
 
-  /*
-   * Checked against the price the order is *signed* at, not the one it is expected to fill at. A
-   * market order is signed through the touch, and the engine holds collateral against that limit —
-   * so a buy that looks affordable at the ask can still be short of what the venue requires.
-   */
   const enteredPrice = hasPrice ? (effectivePrice as number) : null;
+  // A market order is signed through the touch, so a moving quote cannot strand it as a resting limit.
   const signedPrice =
     orderType === "Market" ? getMarketableLimitPrice(side, bestAsk, bestBid) : enteredPrice;
+  /*
+   * What the order spends is its size counted at this price: a market order's expected fill, held
+   * inside the signed limit. Counted at the signed limit, the slippage room was spent as size too —
+   * "buy 1 USDC" took 1,346 cNGN for 1.0049 USDC (trades #341 and #342).
+   */
+  const sizingPrice = resolveSizingPrice({
+    crossingPrice,
+    enteredPrice,
+    fill,
+    orderType,
+    side,
+    signedPrice,
+  });
 
   /*
-   * The ceiling is priced off `signedPrice` for the same reason. Sized against the touch instead, a
-   * market buy at 100% cost 0.5% more than the account held the moment it was sized — the slider's
-   * own top notch produced an order the ticket then refused to submit.
+   * The ceiling stays priced off `signedPrice`, the most a unit of this order can be counted at. The
+   * spend is counted at `sizingPrice`, which never exceeds it on a buy, so the slider's top notch is
+   * always affordable — even when a larger size walks the average deeper into the book.
    */
   const maxOrderSize = getMaxOrderSize({
     availableCngn,
@@ -297,7 +336,7 @@ function deriveOrderEconomics({
   });
   const canSizeByPercent = maxOrderSize !== null && maxOrderSize > 0;
 
-  const cost = getOrderCost(side, signedPrice, parsedAmount);
+  const cost = getOrderCost(side, sizingPrice, parsedAmount);
   const availableForCost = cost?.currency === "USDC" ? availableUsdc : availableCngn;
   /*
    * A shortfall, not a rejection: the venue accepts an order the account cannot cover, rests it,
@@ -317,6 +356,7 @@ function deriveOrderEconomics({
     fill,
     shortfall,
     signedPrice,
+    sizingPrice,
     maxOrderSize,
     feeFromVenue: hasAmount ? venueFee(parsedAmount, takerFeeBps) : venueFee(0, takerFeeBps),
     // Derived from the amount rather than held separately, so typing a size moves the slider and
@@ -815,11 +855,11 @@ export function SpotOrderFormPanel({
   const {
     averagePrice,
     canSizeByPercent,
-    crossingPrice,
     fill,
     maxOrderSize,
     shortfall,
     sizePercent,
+    sizingPrice,
     takerFee,
     feeFromVenue,
     totalLabel,
@@ -896,7 +936,7 @@ export function SpotOrderFormPanel({
     setConfirmOpen(false);
     onSubmitOrder({
       orderType,
-      price: resolveOrderPrice({ crossingPrice, limitPrice, orderType }),
+      price: resolveOrderPrice({ limitPrice, orderType, sizingPrice }),
       side,
       // Always the USDC notional: the signed envelope carries no other unit, so a cNGN-denominated
       // ticket is converted here rather than sending the figure the trader typed.
