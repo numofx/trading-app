@@ -100,6 +100,14 @@ const PRIMARY_BUTTON_CLASSES =
 const SECONDARY_BUTTON_CLASSES =
   "min-h-[52px] flex-1 cursor-pointer rounded-sm bg-input-bg font-semibold text-[14px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover";
 
+/** A settled withdrawal's only control: it closes the dialog, in the order form's buy green. */
+const CONFIRMED_BUTTON_CLASSES =
+  "min-h-[52px] flex-1 cursor-pointer rounded-sm bg-buy font-semibold text-[14px] text-background transition-colors hover:bg-buy/90";
+
+/** Back to the form after a withdrawal that did not go through, in the order form's sell red. */
+const RETRY_BUTTON_CLASSES =
+  "min-h-[52px] flex-1 cursor-pointer rounded-sm bg-sell font-semibold text-[14px] text-white transition-colors hover:bg-sell/90";
+
 /**
  * First step for a visitor with no wallet. The deposit form itself is useless without one — there
  * is no address to pull USDC from — so the dialog offers login instead of a dead disabled field.
@@ -814,12 +822,6 @@ function WithdrawProgress({
         <p className="wrap-break-word text-[12px] text-ask-text">{flowState.error}</p>
       ) : null}
 
-      {flowState.status === "success" ? (
-        <p className="text-[12px] text-panel-text-active">
-          Withdrawal confirmed. The {currency} is in your wallet.
-        </p>
-      ) : null}
-
       {/*
        * The way out of a short escrow: the same money in the other one. Worth surfacing here
        * because the balance is real but sits behind a row the trader has no reason to open.
@@ -833,8 +835,8 @@ function WithdrawProgress({
       {/* The shared button classes size with flex-1, so every one of these needs a flex parent. */}
       {flowState.status === "blocked" || flowState.status === "failed" ? (
         <div className="flex gap-2">
-          <button className={SECONDARY_BUTTON_CLASSES} onClick={reset} type="button">
-            Back
+          <button className={RETRY_BUTTON_CLASSES} onClick={reset} type="button">
+            Try again
           </button>
           {flowState.status === "blocked" && fallback !== null ? (
             <button className={PRIMARY_BUTTON_CLASSES} onClick={fallback.onSelect} type="button">
@@ -846,10 +848,7 @@ function WithdrawProgress({
 
       {flowState.status === "success" ? (
         <div className="flex gap-2">
-          <button className={SECONDARY_BUTTON_CLASSES} onClick={reset} type="button">
-            Withdraw more
-          </button>
-          <Dialog.Close className={PRIMARY_BUTTON_CLASSES}>Done</Dialog.Close>
+          <Dialog.Close className={CONFIRMED_BUTTON_CLASSES}>Confirmed</Dialog.Close>
         </div>
       ) : null}
     </div>
