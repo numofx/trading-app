@@ -224,6 +224,9 @@ export function presentStreamTrade(
     // quotes a notional size that can be fractional (a 0.073 USDC trade rounds to 0), whereas
     // futures sizes are contract counts. Mirrors the REST trade mapper.
     size: presenter.type === "spot" ? Number(quote.size.toFixed(3)) : Math.round(quote.size),
+    // Streamed prints are live by definition, but carry the timestamp anyway: the tape and the
+    // header must not have to care whether a print arrived over the socket or the REST snapshot.
+    timestamp: trade.created_at ?? "",
     time,
   };
 }

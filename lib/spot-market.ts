@@ -475,6 +475,7 @@ function presentTrades(trades: PresentedTrade[]) {
         minute: "2-digit",
         timeZone: "UTC",
       }).format(new Date(trade.created_at)),
+      timestamp: trade.created_at,
     }))
     .filter(
       (trade) =>

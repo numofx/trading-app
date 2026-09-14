@@ -523,7 +523,11 @@ function getSpotSubmitLabel({
   sideLabel: string;
 }) {
   if (!hasWallet) {
-    return "Deposit";
+    // The dialog this opens starts on its connect step -- there is no address to pull USDC from
+    // yet -- so "Deposit" promised an action the click could not perform. Naming the step that
+    // actually happens next costs nothing and stops the ticket contradicting the header, which
+    // says "Connect Wallet" at the same moment.
+    return "Connect wallet";
   }
   if (isSubmitting) {
     return "Submitting…";

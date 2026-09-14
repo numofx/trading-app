@@ -29,7 +29,7 @@ import {
   SPOT_TIMEFRAME_OPTIONS,
 } from "@/lib/spot-terminal-config";
 import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
-import { get24hStats, getVenueLastPrice } from "@/lib/ticker-stats";
+import { get24hStats, getVenueLastPrice, lastTradeAgeLabel } from "@/lib/ticker-stats";
 import type { ActivityView, Candle, SpotMarket } from "@/lib/trading.types";
 import { SpotBalanceSummary } from "@/ui/trading-terminal/SpotBalanceSummary";
 import type { SpotChartTab, SpotTimeframe } from "@/ui/trading-terminal/SpotChartPanel";
@@ -346,6 +346,9 @@ export function SpotTradingTerminal({
     spotBook.isLive && spotBook.trades.length > 0 ? spotBook.trades : spotMarket.trades;
 
   const lastPrice = getVenueLastPrice(bookTrades, liveCandles, spotMarket.mark);
+  // Only the venue's own print carries an age. A candle close or the mark is not a trade, so there
+  // is nothing to be stale about and no suffix is shown.
+  const lastTradeAge = lastTradeAgeLabel(bookTrades);
   // The touch the trader is actually looking at. It drives the ticket's prefill and cost estimate
   // and rides along on submission, so an order can never be priced off a book that is no longer
   // on screen — the server-rendered snapshot goes stale the moment the stream moves.
@@ -444,6 +447,7 @@ export function SpotTradingTerminal({
         depositControl={depositControl}
         high24h={high}
         lastPrice={lastPrice}
+        lastTradeAge={lastTradeAge}
         low24h={low}
         onPortfolioSelect={showPortfolio}
         volume24hLabel={volumeLabel}
