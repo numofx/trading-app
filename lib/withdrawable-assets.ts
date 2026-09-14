@@ -1,6 +1,3 @@
-import { getAddress } from "viem";
-import { base } from "viem/chains";
-import { getAppChain } from "@/lib/base-public-client";
 import {
   getCngnAssetAddress,
   getCngnTokenAddress,
@@ -11,10 +8,8 @@ import {
 /**
  * One escrow an account can be paid out of.
  *
- * Withdrawals are keyed by escrow rather than by the deposit currency, because the two are not
- * one-to-one: Base mainnet holds USDC in two separate assets — the wrapped-USDC escrow the spot
- * engine settles in, and the legacy CashAsset it settled in before 2026-09-10 — and an account can
- * hold a balance in either. Only naming both makes the second one reachable.
+ * Withdrawals are keyed by escrow rather than by the deposit currency: the escrow is the contract a
+ * withdrawal is called on, and the id the ledger reports a balance under.
  */
 export type WithdrawableAsset = {
   /** The contract the withdrawal is called on, and the id the ledger reports a balance under. */
@@ -30,51 +25,30 @@ export type WithdrawableAsset = {
 };
 
 /**
- * The legacy USDC CashAsset. Nothing deposits into or settles in it any more; it is listed so
- * balances left there stay withdrawable once it can pay.
- */
-const LEGACY_CASH_ASSET_MAINNET = "0x6B232A2155Bd0C9bf741dB4cf8E7e8A0176A6fc6";
-
-/**
- * Everything an account can withdraw, in display order.
+ * Everything an account can withdraw, in display order: the wrapped-USDC escrow the spot engine
+ * settles in, then cNGN. The same on Base mainnet and Sepolia.
  *
- * Both mainnet USDC entries are listed because their balances are separate and neither substitutes
- * for the other: the wrapped escrow is what deposits fund and trading settles in, and the CashAsset
- * holds whatever earlier trading left there. A trader with a balance in one and not the other would
- * otherwise be told they have nothing.
+ * The legacy USDC CashAsset (`0x6B232A21…6fc6`), which spot settled in before 2026-09-10, is
+ * deliberately not offered. Its ledger claims far exceed the USDC it holds, so a withdrawal from it
+ * cannot be paid, and listing it — at zero for nearly every account — only suggested a second USDC
+ * balance to go looking for. Do not add it back until that escrow can pay out.
  */
 export function getWithdrawableAssets(): WithdrawableAsset[] {
-  const usdc: WithdrawableAsset = {
-    escrow: getWrappedUsdcAssetAddress(),
-    id: "usdc-wrapped",
-    label: "USDC",
-    symbol: "USDC",
-    token: getUsdcTokenAddress(),
-  };
-  const cngn: WithdrawableAsset = {
-    escrow: getCngnAssetAddress(),
-    id: "cngn",
-    label: "cNGN",
-    symbol: "cNGN",
-    token: getCngnTokenAddress(),
-  };
-
-  if (getAppChain().id !== base.id) {
-    return [{ ...usdc, id: "usdc" }, cngn];
-  }
-
   return [
-    usdc,
     {
-      escrow: getAddress(
-        process.env.NEXT_PUBLIC_CASH_ASSET_ADDRESS?.trim() || LEGACY_CASH_ASSET_MAINNET
-      ),
-      id: "usdc-cash",
-      label: "Legacy USDC",
+      escrow: getWrappedUsdcAssetAddress(),
+      id: "usdc",
+      label: "USDC",
       symbol: "USDC",
       token: getUsdcTokenAddress(),
     },
-    cngn,
+    {
+      escrow: getCngnAssetAddress(),
+      id: "cngn",
+      label: "cNGN",
+      symbol: "cNGN",
+      token: getCngnTokenAddress(),
+    },
   ];
 }
 
@@ -103,9 +77,9 @@ export function getAssetLedgerUnits(
 /**
  * Another escrow holding the same ticker, when the chosen one cannot pay.
  *
- * Mainnet's two USDC escrows are the reason this exists: an account can hold a claim on both, one
- * of them can be short of tokens, and the trader has no way to know the other row is the live one.
- * Offering it turns a dead end into the next tap.
+ * It applies only when the list names two escrows for one ticker, as it did while the legacy USDC
+ * CashAsset was offered beside the wrapped one. Today's list has one escrow per ticker, so this finds
+ * nothing; the progress panel's "switch" offer stays dormant until a ticker has two escrows again.
  *
  * Deliberately says nothing about whether the alternative will settle — only that a balance exists
  * there. Solvency is not knowable without simulating, which happens when they try it.
