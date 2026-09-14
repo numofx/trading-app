@@ -4,7 +4,9 @@ import { Dialog } from "@base-ui/react/dialog";
 import type { ConnectedWallet } from "@privy-io/react-auth";
 import { ArrowLeft, ChevronRight, Landmark, Wallet, X } from "lucide-react";
 import { formatAddressShort } from "@/lib/address-display";
+import { getAppChain } from "@/lib/base-public-client";
 import { cn } from "@/lib/cn";
+import { getExplorerTransactionUrl } from "@/lib/explorer-links";
 import type {
   DepositBlockedReason,
   DepositCurrency,
@@ -99,6 +101,14 @@ const PRIMARY_BUTTON_CLASSES =
 
 const SECONDARY_BUTTON_CLASSES =
   "min-h-[52px] flex-1 cursor-pointer rounded-sm bg-input-bg font-semibold text-[14px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover";
+
+/** A settled withdrawal's only control, in the order form's buy green. */
+const CONFIRMED_BUTTON_CLASSES =
+  "min-h-[52px] flex-1 cursor-pointer rounded-sm bg-buy font-semibold text-[14px] text-background transition-colors hover:bg-buy/90";
+
+/** Back to the form after a withdrawal that did not go through, in the order form's sell red. */
+const RETRY_BUTTON_CLASSES =
+  "min-h-[52px] flex-1 cursor-pointer rounded-sm bg-sell font-semibold text-[14px] text-white transition-colors hover:bg-sell/90";
 
 /**
  * First step for a visitor with no wallet. The deposit form itself is useless without one — there
@@ -781,6 +791,29 @@ function getWithdrawStepCopy(flowState: WithdrawFlowState, currency: string) {
   }
 }
 
+/**
+ * A settled withdrawal's Confirmed control. It opens the transaction on Basescan: a signed withdrawal is sent by
+ * the venue's executor, so the trader's own wallet shows no transaction, and this is where they can see it landed.
+ * Without a hash to link it just closes the dialog.
+ */
+function ConfirmedControl({ txHash }: { txHash: `0x${string}` }) {
+  const href = getExplorerTransactionUrl(txHash, getAppChain().blockExplorers?.default.url);
+  if (href === null) {
+    return <Dialog.Close className={CONFIRMED_BUTTON_CLASSES}>Confirmed</Dialog.Close>;
+  }
+  return (
+    <a
+      className={cn(CONFIRMED_BUTTON_CLASSES, "flex items-center justify-center")}
+      href={href}
+      rel="noopener noreferrer"
+      target="_blank"
+      title="View the withdrawal on Basescan"
+    >
+      Confirmed
+    </a>
+  );
+}
+
 /** What the withdrawal is doing, and the way back out of a stopped one. */
 function WithdrawProgress({
   currency,
@@ -814,12 +847,6 @@ function WithdrawProgress({
         <p className="wrap-break-word text-[12px] text-ask-text">{flowState.error}</p>
       ) : null}
 
-      {flowState.status === "success" ? (
-        <p className="text-[12px] text-panel-text-active">
-          Withdrawal confirmed. The {currency} is in your wallet.
-        </p>
-      ) : null}
-
       {/*
        * The way out of a short escrow: the same money in the other one. Worth surfacing here
        * because the balance is real but sits behind a row the trader has no reason to open.
@@ -833,8 +860,8 @@ function WithdrawProgress({
       {/* The shared button classes size with flex-1, so every one of these needs a flex parent. */}
       {flowState.status === "blocked" || flowState.status === "failed" ? (
         <div className="flex gap-2">
-          <button className={SECONDARY_BUTTON_CLASSES} onClick={reset} type="button">
-            Back
+          <button className={RETRY_BUTTON_CLASSES} onClick={reset} type="button">
+            Try again
           </button>
           {flowState.status === "blocked" && fallback !== null ? (
             <button className={PRIMARY_BUTTON_CLASSES} onClick={fallback.onSelect} type="button">
@@ -846,10 +873,7 @@ function WithdrawProgress({
 
       {flowState.status === "success" ? (
         <div className="flex gap-2">
-          <button className={SECONDARY_BUTTON_CLASSES} onClick={reset} type="button">
-            Withdraw more
-          </button>
-          <Dialog.Close className={PRIMARY_BUTTON_CLASSES}>Done</Dialog.Close>
+          <ConfirmedControl txHash={flowState.txHash} />
         </div>
       ) : null}
     </div>

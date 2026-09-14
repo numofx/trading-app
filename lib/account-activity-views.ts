@@ -1,3 +1,4 @@
+import { getExplorerTransactionUrl } from "@/lib/explorer-links";
 import type {
   AccountFill,
   FillLiquidity,
@@ -227,23 +228,13 @@ export const TRADE_HISTORY_COLUMNS = [
   "",
 ] as const;
 
-/** A 32-byte transaction hash; anything else is never turned into a link. */
-const TRANSACTION_HASH_PATTERN = /^0x[0-9a-fA-F]{64}$/;
-const TRAILING_SLASH_PATTERN = /\/+$/;
-
 /**
  * Where a fill's settling transaction can be checked on the chain's explorer — Basescan on Base — or
  * null when there is nothing to link. Fills recorded before the venue stored transaction hashes carry
  * none; those rows get no link rather than a dead one.
  */
 export function getFillTransactionUrl(fill: AccountFill, explorerUrl: string | undefined) {
-  if (explorerUrl === undefined || fill.tx_hash === undefined) {
-    return null;
-  }
-  if (!TRANSACTION_HASH_PATTERN.test(fill.tx_hash)) {
-    return null;
-  }
-  return `${explorerUrl.replace(TRAILING_SLASH_PATTERN, "")}/tx/${fill.tx_hash}`;
+  return getExplorerTransactionUrl(fill.tx_hash, explorerUrl);
 }
 
 const TRADE_HISTORY_DIRECTION_COLUMN = TRADE_HISTORY_COLUMNS.indexOf("Direction");
