@@ -784,8 +784,8 @@ function getWithdrawStepCopy(flowState: WithdrawFlowState, currency: string) {
 }
 
 /**
- * A settled withdrawal's Confirmed control. It opens the transaction on Basescan: a signed withdrawal is sent by
- * the venue's executor, so the trader's own wallet shows no transaction, and this is where they can see it landed.
+ * A finished deposit's or withdrawal's Confirmed control. It opens the transaction on Basescan, where the trader
+ * can see it landed — for a signed withdrawal the venue's executor sent it, so their wallet has no record of it.
  * Without a hash to link it just closes the dialog.
  */
 function ConfirmedControl({ txHash }: { txHash: `0x${string}` }) {
@@ -799,7 +799,7 @@ function ConfirmedControl({ txHash }: { txHash: `0x${string}` }) {
       href={href}
       rel="noopener noreferrer"
       target="_blank"
-      title="View the withdrawal on Basescan"
+      title="View the transaction on Basescan"
     >
       Confirmed
     </a>
@@ -954,7 +954,6 @@ function DepositProgress({
   approve,
   currency,
   deposit,
-  onDepositAnother,
   reset,
   retry,
   flowState,
@@ -963,8 +962,6 @@ function DepositProgress({
   currency: DepositCurrency;
   deposit: () => Promise<void>;
   flowState: DepositFlowState;
-  /** Returns to the amount step for the other asset, so funding both is one visit. */
-  onDepositAnother: (() => void) | null;
   reset: () => void;
   retry: () => void;
 }) {
@@ -988,12 +985,6 @@ function DepositProgress({
 
       {flowState.status === "failed" ? (
         <p className="wrap-break-word text-[12px] text-ask-text">{flowState.error}</p>
-      ) : null}
-
-      {flowState.status === "success" ? (
-        <p className="text-[12px] text-panel-text-active">
-          Deposit confirmed to trading account #{flowState.subaccountId}.
-        </p>
       ) : null}
 
       <div className="flex gap-2">
@@ -1021,21 +1012,7 @@ function DepositProgress({
           </button>
         ) : null}
 
-        {flowState.status === "success" && onDepositAnother !== null ? (
-          <button className={PRIMARY_BUTTON_CLASSES} onClick={onDepositAnother} type="button">
-            Deposit another asset
-          </button>
-        ) : null}
-
-        {flowState.status === "success" ? (
-          <Dialog.Close
-            className={
-              onDepositAnother === null ? PRIMARY_BUTTON_CLASSES : SECONDARY_BUTTON_CLASSES
-            }
-          >
-            Done
-          </Dialog.Close>
-        ) : null}
+        {flowState.status === "success" ? <ConfirmedControl txHash={flowState.txHash} /> : null}
       </div>
     </div>
   );
@@ -1050,7 +1027,6 @@ function DepositFlowStep({
   currency,
   deposit,
   flowState,
-  onDepositAnother,
   reset,
   retry,
 }: {
@@ -1061,7 +1037,6 @@ function DepositFlowStep({
   currency: DepositCurrency;
   deposit: () => Promise<void>;
   flowState: DepositFlowState;
-  onDepositAnother: (() => void) | null;
   reset: () => void;
   retry: () => void;
 }) {
@@ -1074,7 +1049,6 @@ function DepositFlowStep({
         currency={currency}
         deposit={deposit}
         flowState={flowState}
-        onDepositAnother={onDepositAnother}
         reset={reset}
         retry={retry}
       />
@@ -1099,7 +1073,6 @@ function DepositSide({
   inputError,
   onAmountChange,
   onConnectWallet,
-  onDepositAnother,
   onMax,
   onPickAsset,
   onPickWallet,
@@ -1118,7 +1091,6 @@ function DepositSide({
   inputError: string | null;
   onAmountChange: (amount: string) => void;
   onConnectWallet?: () => void;
-  onDepositAnother: (() => void) | null;
   onMax: (() => void) | null;
   onPickAsset: () => void;
   onPickWallet: (() => void) | null;
@@ -1158,7 +1130,6 @@ function DepositSide({
       currency={currency}
       deposit={deposit}
       flowState={flowState}
-      onDepositAnother={onDepositAnother}
       reset={reset}
       retry={retry}
     />
@@ -1178,7 +1149,6 @@ function TransferSide({
   mode,
   onAmountChange,
   onConnectWallet,
-  onDepositAnother,
   onMax,
   onPickAsset,
   onPickWallet,
@@ -1203,7 +1173,6 @@ function TransferSide({
   mode: TransferMode;
   onAmountChange: (amount: string) => void;
   onConnectWallet?: () => void;
-  onDepositAnother: (() => void) | null;
   onMax: (() => void) | null;
   onPickAsset: () => void;
   onPickWallet: (() => void) | null;
@@ -1250,7 +1219,6 @@ function TransferSide({
       inputError={inputError}
       onAmountChange={onAmountChange}
       onConnectWallet={onConnectWallet}
-      onDepositAnother={onDepositAnother}
       onMax={onMax}
       onPickAsset={onPickAsset}
       onPickWallet={onPickWallet}
@@ -1444,7 +1412,9 @@ export function DepositDialog({
             {dialog.depositFlowState === null ? (
               <ModeTabs mode={dialog.mode} onSelect={dialog.handleSelectMode} />
             ) : (
-              <span className={ACTIVE_MODE_PILL_CLASSES}>Deposit</span>
+              <span className={cn(ACTIVE_MODE_PILL_CLASSES, "inline-flex items-center")}>
+                Deposit
+              </span>
             )}
             <Dialog.Close
               aria-label="Close deposit dialog"
@@ -1467,7 +1437,6 @@ export function DepositDialog({
               mode={dialog.mode}
               onAmountChange={dialog.handleAmountChange}
               onConnectWallet={onConnectWallet}
-              onDepositAnother={dialog.depositAnother}
               onMax={dialog.setMaxAmount}
               onPickAsset={dialog.openAssetPicker}
               onPickWallet={dialog.openWalletPicker}

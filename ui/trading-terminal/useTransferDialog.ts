@@ -32,21 +32,6 @@ import {
 import { useSubaccountDeposit } from "@/ui/trading-terminal/useSubaccountDeposit";
 import { useSubaccountWithdraw } from "@/ui/trading-terminal/useSubaccountWithdraw";
 
-/**
- * The "deposit the other asset" callback, or null on a deployment with only one.
- *
- * Funding a new account means two deposits — margin in USDC and inventory in cNGN — so a confirmed
- * deposit offers the other asset rather than only closing.
- */
-function getDepositAnother(
-  currencies: DepositCurrency[],
-  currency: DepositCurrency,
-  onSelect: (next: DepositCurrency) => void
-) {
-  const other = currencies.find((option) => option !== currency);
-  return other === undefined ? null : () => onSelect(other);
-}
-
 /** The sibling escrow as the progress panel needs it: what to call it, how much, and how to switch. */
 function buildWithdrawFallback({
   asset,
@@ -168,12 +153,6 @@ export function useTransferDialog({
     onCurrencyChange?.(next);
   }
 
-  function handleDepositAnother(next: DepositCurrency) {
-    reset();
-    setAmount("");
-    selectCurrency(next);
-  }
-
   /** Hands the amount to the flow machine; everything after this is on-chain steps. */
   function handleReviewDeposit(depositAccount: DepositAccount) {
     posthog.capture("deposit_started", {
@@ -287,7 +266,6 @@ export function useTransferDialog({
     isOnPicker: screen !== "form",
     isOpen: open ?? uncontrolledOpen,
     mode,
-    depositAnother: getDepositAnother(depositableCurrencies, currency, handleDepositAnother),
     openWalletPicker: canPickFundingWallet(account, connectedWallets)
       ? () => setScreen("wallet")
       : null,
