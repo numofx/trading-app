@@ -708,7 +708,7 @@ function WalletPickerScreen({
 /** The drill-downs reachable from the amount step, each replacing the whole popup body. */
 export type DepositScreen = "asset" | "form" | "wallet";
 
-/** Which side of the toggle is showing. Withdrawals have no flow behind them yet. */
+/** Which side of the toggle is showing. */
 export type TransferMode = "deposit" | "withdraw";
 
 const MODE_PILL_CLASSES = "min-h-8 rounded-sm px-4 font-semibold text-[14px] transition-colors";
@@ -769,7 +769,11 @@ function getWithdrawStepCopy(flowState: WithdrawFlowState, currency: string) {
     case "checking":
       return `Checking your ${currency} balance and that the escrow can pay it out...`;
     case "signing":
-      return "Confirm the withdrawal in your wallet.";
+      return flowState.method === "signature"
+        ? "Sign the withdrawal in your wallet. Signing costs no gas."
+        : "Confirm the withdrawal in your wallet.";
+    case "submitting":
+      return "The venue is checking your withdrawal and sending it...";
     case "confirming":
       return "Waiting for the withdrawal to confirm...";
     default:
@@ -790,7 +794,10 @@ function WithdrawProgress({
   flowState: WithdrawFlowState;
   reset: () => void;
 }) {
-  const isBusy = flowState.status === "checking" || flowState.status === "confirming";
+  const isBusy =
+    flowState.status === "checking" ||
+    flowState.status === "submitting" ||
+    flowState.status === "confirming";
   const stepCopy = getWithdrawStepCopy(flowState, currency);
 
   return (
