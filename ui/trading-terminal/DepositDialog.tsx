@@ -955,7 +955,6 @@ function DepositProgress({
   currency,
   deposit,
   reset,
-  retry,
   flowState,
 }: {
   approve: () => Promise<void>;
@@ -963,7 +962,6 @@ function DepositProgress({
   deposit: () => Promise<void>;
   flowState: DepositFlowState;
   reset: () => void;
-  retry: () => void;
 }) {
   const isBusy =
     flowState.status === "preflight" ||
@@ -1000,15 +998,9 @@ function DepositProgress({
           </button>
         ) : null}
 
-        {flowState.status === "failed" ? (
-          <button className={PRIMARY_BUTTON_CLASSES} onClick={retry} type="button">
-            Retry
-          </button>
-        ) : null}
-
         {flowState.status === "blocked" || flowState.status === "failed" ? (
-          <button className={SECONDARY_BUTTON_CLASSES} onClick={reset} type="button">
-            Back
+          <button className={PRIMARY_BUTTON_CLASSES} onClick={reset} type="button">
+            Try again
           </button>
         ) : null}
 
@@ -1028,7 +1020,6 @@ function DepositFlowStep({
   deposit,
   flowState,
   reset,
-  retry,
 }: {
   account: DepositAccount;
   amount: string;
@@ -1038,7 +1029,6 @@ function DepositFlowStep({
   deposit: () => Promise<void>;
   flowState: DepositFlowState;
   reset: () => void;
-  retry: () => void;
 }) {
   return (
     <>
@@ -1050,7 +1040,6 @@ function DepositFlowStep({
         deposit={deposit}
         flowState={flowState}
         reset={reset}
-        retry={retry}
       />
     </>
   );
@@ -1079,7 +1068,6 @@ function DepositSide({
   onReview,
   pauseReason,
   reset,
-  retry,
 }: {
   account: DepositAccount | null;
   amount: string;
@@ -1097,7 +1085,6 @@ function DepositSide({
   onReview: (account: DepositAccount) => void;
   pauseReason: string | null;
   reset: () => void;
-  retry: () => void;
 }) {
   if (account === null) {
     return <ConnectWalletStep onConnectWallet={onConnectWallet} />;
@@ -1131,7 +1118,6 @@ function DepositSide({
       deposit={deposit}
       flowState={flowState}
       reset={reset}
-      retry={retry}
     />
   );
 }
@@ -1157,7 +1143,6 @@ function TransferSide({
   pauseReason,
   reset,
   resetWithdraw,
-  retry,
   withdrawAsset,
   withdrawFallback,
   withdrawFlowState,
@@ -1181,7 +1166,6 @@ function TransferSide({
   pauseReason: string | null;
   reset: () => void;
   resetWithdraw: () => void;
-  retry: () => void;
   withdrawAsset: WithdrawableAsset;
   withdrawFallback: { balanceLabel: string | null; label: string; onSelect: () => void } | null;
   withdrawFlowState: WithdrawFlowState | null;
@@ -1225,7 +1209,6 @@ function TransferSide({
       onReview={onReview}
       pauseReason={pauseReason}
       reset={reset}
-      retry={retry}
     />
   );
 }
@@ -1445,7 +1428,6 @@ export function DepositDialog({
               pauseReason={dialog.depositPauseReason}
               reset={dialog.reset}
               resetWithdraw={dialog.resetWithdraw}
-              retry={dialog.retry}
               withdrawAsset={dialog.withdrawAsset}
               withdrawFallback={dialog.withdrawFallback}
               withdrawFlowState={dialog.withdrawFlowState}
