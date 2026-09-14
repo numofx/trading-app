@@ -23,7 +23,16 @@ export type TradePrint = {
   price: number;
   side: "buy" | "sell";
   size: number;
+  /** HH:MM in UTC, for the tape. */
   time: string;
+  /**
+   * When it actually traded, ISO-8601.
+   *
+   * `time` carries no date, so on a venue that trades rarely a print from days ago renders as an
+   * ordinary time of day and reads as recent. This is what lets the header say how old the last
+   * trade is instead of presenting it as the current price.
+   */
+  timestamp: string;
 };
 
 export type ActivityTab = {

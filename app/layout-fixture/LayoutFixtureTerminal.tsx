@@ -29,7 +29,6 @@ const FIXTURE_MARKET: SpotMarket = {
   orderEntrySpec: "usdc_cngn_spot_v1",
   stats24h: null,
   takerFeeBps: 25,
-  trades: [{ price: FIXTURE_PRICE, side: "buy", size: 3, time: "12:00:00" }],
   // One order per leg, so both header balances carry a claim and both disclosures are on screen.
   openOrders: [
     {
@@ -60,6 +59,15 @@ const FIXTURE_MARKET: SpotMarket = {
   orderBookBids: [
     { price: 1399, size: 14, total: 14 },
     { price: 1397, size: 25, total: 39 },
+  ],
+  trades: [
+    {
+      price: FIXTURE_PRICE,
+      side: "buy",
+      size: 3,
+      time: "12:00",
+      timestamp: "2026-09-14T12:00:00Z",
+    },
   ],
 };
 

@@ -92,6 +92,7 @@ export function TerminalHeaderBar({
   depositControl,
   high24h,
   lastPrice,
+  lastTradeAge,
   low24h,
   onPortfolioSelect,
   volume24hLabel,
@@ -101,6 +102,11 @@ export function TerminalHeaderBar({
   /** Extremes over the same window as the volume; null when nothing traded in it. */
   high24h: number | null;
   lastPrice: number | null;
+  /**
+   * How old the last trade is, e.g. "2d ago", or null when it is recent enough to stand alone.
+   * Shown because this figure is read as the current price, and on a thin venue it may not be.
+   */
+  lastTradeAge: string | null;
   low24h: number | null;
   /** Fired by the connected wallet menu's Portfolio item. */
   onPortfolioSelect?: () => void;
@@ -193,11 +199,21 @@ export function TerminalHeaderBar({
        * than clip.
        */}
       <div className="hidden min-w-0 items-center gap-6 overflow-hidden lg:flex">
-        <HeaderMetric label="Price">
+        {/*
+         * "Last trade", not "Price". The figure is the venue's own last print and nothing else --
+         * a mid is not something that traded here, and showing one as the last price once put a
+         * number below the best bid. Naming it honestly is what lets it stay truthful, and the age
+         * appears beside it when the print is old enough that a trader would otherwise read a
+         * days-old fill as the market.
+         */}
+        <HeaderMetric label="Last trade">
           {formatNaira(lastPrice)}
           <span className={cn("text-[11px]", getChangeClassName(changePercent24h))}>
             {formatChangePercent(changePercent24h)}
           </span>
+          {lastTradeAge === null ? null : (
+            <span className="text-[11px] text-panel-text-muted">{lastTradeAge}</span>
+          )}
         </HeaderMetric>
         {/*
          * Volume stands down below `xl` for the same reason the extremes stand down below `2xl`:
