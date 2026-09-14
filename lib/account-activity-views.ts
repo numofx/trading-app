@@ -212,6 +212,8 @@ export function buildOrderHistoryActivityView(
  * "Size" is the USDC that changed hands and "Total" the cNGN, both as the fill executed, so each row
  * reconciles against the account's balances. "Fee" is what the order paid, which is nothing for a
  * maker. "Role" says whether the order crossed the book or rested and was hit.
+ *
+ * The trailing column holds the link to the fill's settling transaction on Basescan.
  */
 export const TRADE_HISTORY_COLUMNS = [
   "Time",
@@ -222,7 +224,27 @@ export const TRADE_HISTORY_COLUMNS = [
   "Total",
   "Fee",
   "Role",
+  "",
 ] as const;
+
+/** A 32-byte transaction hash; anything else is never turned into a link. */
+const TRANSACTION_HASH_PATTERN = /^0x[0-9a-fA-F]{64}$/;
+const TRAILING_SLASH_PATTERN = /\/+$/;
+
+/**
+ * Where a fill's settling transaction can be checked on the chain's explorer — Basescan on Base — or
+ * null when there is nothing to link. Fills recorded before the venue stored transaction hashes carry
+ * none; those rows get no link rather than a dead one.
+ */
+export function getFillTransactionUrl(fill: AccountFill, explorerUrl: string | undefined) {
+  if (explorerUrl === undefined || fill.tx_hash === undefined) {
+    return null;
+  }
+  if (!TRANSACTION_HASH_PATTERN.test(fill.tx_hash)) {
+    return null;
+  }
+  return `${explorerUrl.replace(TRAILING_SLASH_PATTERN, "")}/tx/${fill.tx_hash}`;
+}
 
 const TRADE_HISTORY_DIRECTION_COLUMN = TRADE_HISTORY_COLUMNS.indexOf("Direction");
 

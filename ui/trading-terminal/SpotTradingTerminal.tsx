@@ -1,5 +1,6 @@
 "use client";
 
+import { ExternalLink } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
@@ -8,8 +9,10 @@ import {
   buildOpenOrdersActivityView,
   buildOrderHistoryActivityView,
   buildTradeHistoryActivityView,
+  getFillTransactionUrl,
   getOwnedOpenOrders,
 } from "@/lib/account-activity-views";
+import { getAppChain } from "@/lib/base-public-client";
 import type { AccountFill, OrderHistoryOrder, SignedHistoryState } from "@/lib/order-history.types";
 import {
   getAnchorPrice,
@@ -137,6 +140,42 @@ function getSignedHistoryView(
     return buildTradeHistoryActivityView(tradeHistory.rows);
   }
   return null;
+}
+
+/**
+ * The Trade History row control: a link to the fill's settling transaction on Basescan, when the venue
+ * recorded one. Undefined on any other tab, so no trailing cell is added there. Outside the component
+ * for the same complexity budget as the helpers above.
+ */
+function getTradeHistoryRowAction(
+  tab: string,
+  tradeHistory: SignedHistoryState<AccountFill>
+): ((rowIndex: number) => ReactNode) | undefined {
+  if (tab !== "trade-history" || tradeHistory.status !== "ready") {
+    return undefined;
+  }
+  const explorerUrl = getAppChain().blockExplorers?.default.url;
+  const fills = tradeHistory.rows;
+
+  return function renderTransactionLink(rowIndex: number) {
+    const fill = fills[rowIndex];
+    const href = fill === undefined ? null : getFillTransactionUrl(fill, explorerUrl);
+    if (href === null) {
+      return null;
+    }
+    return (
+      <a
+        aria-label="View transaction on Basescan"
+        className="inline-flex text-panel-text-muted transition-colors hover:text-panel-text-active"
+        href={href}
+        rel="noopener noreferrer"
+        target="_blank"
+        title="View on Basescan"
+      >
+        <ExternalLink aria-hidden="true" className="size-3.5" />
+      </a>
+    );
+  };
 }
 
 export function SpotTradingTerminal({
@@ -552,7 +591,7 @@ export function SpotTradingTerminal({
                         </button>
                       );
                     }
-                  : undefined
+                  : getTradeHistoryRowAction(bottomTab, tradeHistory.state)
               }
               selectedTab={bottomTab}
               tabs={SPOT_BOTTOM_TABS}
