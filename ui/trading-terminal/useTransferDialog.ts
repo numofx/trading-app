@@ -102,7 +102,7 @@ export function useTransferDialog({
   const [uncontrolledCurrency, setUncontrolledCurrency] = useState<DepositCurrency>(
     getFirstDepositableCurrency
   );
-  const { approve, clearInputError, deposit, flowState, inputError, reset, retry, startDeposit } =
+  const { approve, clearInputError, deposit, flowState, inputError, reset, startDeposit } =
     useSubaccountDeposit({ onDeposited });
   const {
     clearInputError: clearWithdrawInputError,
@@ -272,7 +272,6 @@ export function useTransferDialog({
     openAssetPicker: () => setScreen("asset"),
     reset,
     resetWithdraw,
-    retry,
     returnToForm: () => setScreen("form"),
     screen,
     selectedAssetId: mode === "deposit" ? currency : withdrawAssetId,
