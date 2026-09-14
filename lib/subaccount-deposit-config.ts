@@ -37,6 +37,7 @@ const MATCHING_STACK = {
     subaccountCreator: "0x568890A8D63Ba8a03b6eCbEedA1bD9f6ea014D5D",
     tradeModule: "0x12423B366F6F07130961900bE00d05Ea63Acd071",
     usdcToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    withdrawalModule: "0x0a10AE2f5D2482cE1e43bC309D430B8861C2b5aB",
     wrappedUsdcAsset: "0x364058aFF6f36E01505fB2Cc870f8B6BD4835e84",
   },
   sepolia: {
@@ -45,6 +46,7 @@ const MATCHING_STACK = {
     subaccountCreator: "0x5448B304AD283f24A741B54AE9b3a71C8d7DCDF2",
     tradeModule: "0x0AAE65AaA66Fe7f54486cDbD007956d3De611990",
     usdcToken: "0x8b3C43D2b2555ca3fc4Fa1BC34544133B8576110",
+    withdrawalModule: "0xfdDb0D00Df6d1569E46e72D35e7B6CEE4Bb7F9FB",
     wrappedUsdcAsset: "0xdC3f31B61a2128B3D1ECB8b6f6d0DE82eBd6c7Ae",
   },
 } as const;
@@ -135,6 +137,16 @@ export function getUsdcTokenAddress() {
 export function getTradeModuleAddress() {
   return getAddress(
     process.env.NEXT_PUBLIC_TRADE_MODULE_ADDRESS?.trim() || getMatchingStack().tradeModule
+  );
+}
+
+/**
+ * The Matching module a signed withdrawal is submitted through. It pays the action's owner out of an account
+ * Matching holds, which is every account the app creates, without taking the account out of Matching.
+ */
+export function getWithdrawalModuleAddress() {
+  return getAddress(
+    process.env.NEXT_PUBLIC_WITHDRAWAL_MODULE_ADDRESS?.trim() || getMatchingStack().withdrawalModule
   );
 }
 

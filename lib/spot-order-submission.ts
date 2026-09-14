@@ -192,7 +192,7 @@ let nonceSequenceSeed: bigint | null = null;
  * duplicate `(owner_address, nonce)` is what would, and this only makes the case rare enough to be
  * worth living with.
  */
-function createOrderNonce() {
+export function createOrderNonce() {
   if (nonceSequenceSeed === null) {
     const entropy = new Uint32Array(1);
     crypto.getRandomValues(entropy);

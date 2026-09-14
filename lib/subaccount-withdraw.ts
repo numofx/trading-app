@@ -104,7 +104,7 @@ export function describeWithdrawFailure(message: string, currency: string) {
   }
 
   if (WALLET_REJECTION_PATTERN.test(message)) {
-    return "You rejected the transaction in your wallet.";
+    return "You rejected the request in your wallet.";
   }
 
   return message;
