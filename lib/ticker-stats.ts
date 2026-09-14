@@ -1,4 +1,4 @@
-import type { Candle, TradePrint } from "@/lib/trading.types";
+import type { Candle, Stats24h, TradePrint } from "@/lib/trading.types";
 
 export function formatCompactVolume(value: number) {
   if (!Number.isFinite(value) || value <= 0) {
@@ -15,8 +15,6 @@ export function formatCompactVolume(value: number) {
 
   return `${Math.round(value).toLocaleString("en-US")} USDC`;
 }
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * The venue's own last traded price.
@@ -41,31 +39,27 @@ export function getVenueLastPrice(trades: TradePrint[], candles: Candle[], mark:
 }
 
 /**
- * Stats over the trailing 24 hours.
+ * The header's 24h change, high, low and volume, from the venue's own trailing-24h stats.
  *
- * Previously this spanned every candle it was given, so "24H volume" was really all-time — on a
- * market this quiet that meant a figure five times the real one. High and low share the window for
- * the same reason.
+ * These used to come from daily candles, keeping any candle that had started within the last 24
+ * hours. At 00:00Z the day's candle aged out, so every figure blanked while the day's trades were
+ * still inside the window — at 2026-09-14 00:13Z, six trades from the previous 7.5 hours all read
+ * "—". The venue computes its window from the fills themselves, so it holds at any hour.
+ *
+ * Change is measured to the live last price, so a trade streamed after the page rendered still
+ * moves it. High, low and volume are as of the render. With no stats, or nothing traded in the
+ * window, each figure is blank rather than guessed; the last price is reported separately.
  */
-export function get24hStats(candles: Candle[], lastPrice: number | null, nowMs: number) {
-  const recent = candles.filter((candle) => nowMs - candle.bucketStartMs <= DAY_MS);
-  const firstCandle = recent[0];
-
-  if (!firstCandle) {
-    // Nothing traded in the window. A change, high or low would be invented, but the last price
-    // is still real, so report it and leave the rest blank.
-    return { changePercent: null, high: null, low: null, volumeLabel: "—" };
-  }
-
-  const resolvedLast = lastPrice ?? recent.at(-1)?.close ?? firstCandle.close;
+export function get24hStats(stats: Stats24h | null, lastPrice: number | null) {
+  const firstPrice = stats?.firstPrice ?? null;
 
   return {
     changePercent:
-      firstCandle.open > 0 ? ((resolvedLast - firstCandle.open) / firstCandle.open) * 100 : null,
-    // Extremes over the same window the volume and change use, so the whole group describes one
-    // period rather than mixing a 24h volume with an all-time high.
-    high: Math.max(...recent.map((candle) => candle.high)),
-    low: Math.min(...recent.map((candle) => candle.low)),
-    volumeLabel: formatCompactVolume(recent.reduce((sum, candle) => sum + candle.volume, 0)),
+      firstPrice !== null && lastPrice !== null
+        ? ((lastPrice - firstPrice) / firstPrice) * 100
+        : null,
+    high: stats?.high ?? null,
+    low: stats?.low ?? null,
+    volumeLabel: formatCompactVolume(stats?.quoteVolume ?? Number.NaN),
   };
 }

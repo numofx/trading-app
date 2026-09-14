@@ -360,7 +360,7 @@ export function SpotTradingTerminal({
   }) {
     onSubmitOrder({ ...args, book: { bestAsk, bestBid } });
   }
-  const { changePercent, high, low, volumeLabel } = get24hStats(liveCandles, lastPrice, Date.now());
+  const { changePercent, high, low, volumeLabel } = get24hStats(spotMarket.stats24h, lastPrice);
   // Assets is the one bottom tab with a real data source today, so it's built from live balances
   // instead of the placeholder-free static views.
   // Orders leave the book when they expire and nothing announces it, so a snapshot taken while one

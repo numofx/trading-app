@@ -112,10 +112,14 @@ export type TradeStats24h = {
   high?: string;
   last?: string;
   low?: string;
+  /** The 24h fill notional in the quote asset (USDC). Absent from a service that predates it. */
+  quote_volume?: string;
+  /** The 24h fill size in the engine's traded unit (whole cNGN) — not the USDC a ticker shows. */
   volume?: string;
 };
 
 export type TradesResponse = {
+  market_presentation?: MarketPresentation;
   next_before_trade_id?: number;
   stats_24h?: TradeStats24h;
   trades?: PresentedTrade[];
@@ -211,7 +215,18 @@ export async function getMarketTrades(assetAddress: string, subId: string, limit
   }
 
   const payload = (await response.json()) as TradesResponse;
-  return payload.trades ?? [];
+  return {
+    // The stats travel with the spec their prices are quoted under, read from the same response, so
+    // they are never inverted under another contract than the one they were computed in.
+    stats24h:
+      payload.stats_24h === undefined
+        ? null
+        : {
+            orderEntrySpec: payload.market_presentation?.order_entry_spec ?? null,
+            stats: payload.stats_24h,
+          },
+    trades: payload.trades ?? [],
+  };
 }
 
 export type PresentedCandle = {

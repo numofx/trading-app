@@ -1,9 +1,10 @@
-import type { BookResponse, PresentedTrade } from "@/lib/markets-service";
+import type { BookResponse, PresentedTrade, TradeStats24h } from "@/lib/markets-service";
 import type {
   Candle,
   OrderBookLevel,
   SpotMarket,
   SpotOpenOrder,
+  Stats24h,
   TradePrint,
 } from "@/lib/trading.types";
 
@@ -350,6 +351,11 @@ export type LiveSpotRuntime = {
   book: BookResponse | null;
   /** Real OHLCV from markets-service; empty when the market has not traded yet. */
   candles?: Candle[];
+  /**
+   * markets-service's trailing-24h `stats_24h`, with the `order_entry_spec` of the trades response it
+   * came in. Null when the service did not report stats.
+   */
+  stats24h?: { orderEntrySpec: string | null; stats: TradeStats24h } | null;
   trades: PresentedTrade[];
 };
 
@@ -361,6 +367,7 @@ const EMPTY_SPOT_MARKET: SpotMarket = {
   orderBookAsks: [],
   orderBookBids: [],
   orderEntrySpec: null,
+  stats24h: null,
   takerFeeBps: null,
   trades: [],
 };
@@ -478,6 +485,62 @@ function presentTrades(trades: PresentedTrade[]) {
     ) satisfies TradePrint[];
 }
 
+/** The contract under which engine prices are USDC per cNGN and are inverted for display. */
+const INVERTED_SPOT_SPEC = "usdc_cngn_spot_v1";
+
+/** A positive decimal, or null for anything else — an empty field is "nothing traded", not zero. */
+function positiveDecimal(value: string | undefined) {
+  if (value === undefined || value.trim() === "") {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function positiveOrNull(value: number | null) {
+  return value !== null && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function inverted(value: number | null) {
+  const positive = positiveOrNull(value);
+  return positive === null ? null : 1 / positive;
+}
+
+/**
+ * markets-service's `stats_24h` in the terms the header shows.
+ *
+ * The venue reports engine prices and a change (last minus the window's first price). Under
+ * `usdc_cngn_spot_v1` those are USDC per cNGN, so each price is inverted — which swaps the extremes:
+ * the engine's lowest USDC-per-cNGN is the highest cNGN-per-USDC. The window's first price is
+ * recovered as last minus change. Volume is the quote-asset notional (USDC), never the cNGN size sum.
+ */
+export function presentStats24h(runtime: LiveSpotRuntime["stats24h"]): Stats24h | null {
+  if (!runtime) {
+    return null;
+  }
+  const { orderEntrySpec, stats } = runtime;
+  const last = positiveDecimal(stats.last);
+  const change =
+    stats.change === undefined || stats.change.trim() === "" ? Number.NaN : Number(stats.change);
+  const engineFirst = last !== null && Number.isFinite(change) ? last - change : null;
+  const quoteVolume = positiveDecimal(stats.quote_volume);
+
+  if (orderEntrySpec !== INVERTED_SPOT_SPEC) {
+    return {
+      firstPrice: positiveOrNull(engineFirst),
+      high: positiveDecimal(stats.high),
+      low: positiveDecimal(stats.low),
+      quoteVolume,
+    };
+  }
+  return {
+    firstPrice: inverted(engineFirst),
+    high: inverted(positiveDecimal(stats.low)),
+    low: inverted(positiveDecimal(stats.high)),
+    quoteVolume,
+  };
+}
+
 /**
  * The spot market the terminal renders, built entirely from what markets-service served.
  *
@@ -506,6 +569,7 @@ export function buildSpotMarket(liveSpot: LiveSpotRuntime | null): SpotMarket {
     orderBookBids,
     // Taken from the venue rather than assumed: it is what tells the stream to invert engine values.
     orderEntrySpec: liveSpot.book?.market_presentation?.order_entry_spec ?? null,
+    stats24h: presentStats24h(liveSpot.stats24h),
     takerFeeBps: liveSpot.book?.market_presentation?.taker_fee_bps ?? null,
     trades,
   };

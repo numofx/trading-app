@@ -81,6 +81,11 @@ export type SpotMarket = {
    */
   orderEntrySpec: string | null;
   /**
+   * The venue's own trailing-24h stats in trader-facing terms, or null when markets-service did not
+   * report them. The venue computes the window from its fills, so it is exact at any hour.
+   */
+  stats24h: Stats24h | null;
+  /**
    * The venue's taker fee, in basis points of the quote notional, straight from /v1/markets.
    * Null when the markets-service did not report one — which is "unknown", not "free", so the
    * ticket falls back to showing the signed ceiling rather than inventing a rate.
@@ -93,6 +98,16 @@ export type SpotMarket = {
    */
   openOrders: SpotOpenOrder[];
   trades: TradePrint[];
+};
+
+/** Trailing-24h market stats in trader-facing terms: prices in cNGN per USDC, volume in USDC. */
+export type Stats24h = {
+  /** The window's first traded price, which the 24h change is measured from; null when none traded. */
+  firstPrice: number | null;
+  high: number | null;
+  low: number | null;
+  /** USDC notional traded in the window; null when nothing traded or the venue did not report it. */
+  quoteVolume: number | null;
 };
 
 export type DeliveryTerm = {
