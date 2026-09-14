@@ -6,6 +6,7 @@ import {
   getMarketCandles,
   getMarketTrades,
 } from "@/lib/markets-service";
+import type { LiveSpotRuntime } from "@/lib/spot-market";
 import { buildSpotMarket } from "@/lib/spot-market";
 import type { Candle } from "@/lib/trading.types";
 import { OrderBookTradingTerminal } from "@/ui/trading-terminal/OrderBookTradingTerminal";
@@ -21,8 +22,7 @@ const CHART_CANDLE_LIMIT = 120;
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  let liveSpot: { book: BookResponse | null; candles: Candle[]; trades: PresentedTrade[] } | null =
-    null;
+  let liveSpot: LiveSpotRuntime | null = null;
 
   try {
     const spotMarket = await getLiveSpotMarket();
@@ -31,6 +31,7 @@ export default async function Home() {
       let book: BookResponse | null = null;
       let candles: Candle[] = [];
       let trades: PresentedTrade[] = [];
+      let stats24h: LiveSpotRuntime["stats24h"] = null;
 
       try {
         book = await getMarketBook(spotMarket.asset_address, spotMarket.sub_id);
@@ -54,12 +55,13 @@ export default async function Home() {
       }
 
       try {
-        trades = await getMarketTrades(spotMarket.asset_address, spotMarket.sub_id);
+        ({ stats24h, trades } = await getMarketTrades(spotMarket.asset_address, spotMarket.sub_id));
       } catch {
+        stats24h = null;
         trades = [];
       }
 
-      liveSpot = { book, candles, trades };
+      liveSpot = { book, candles, stats24h, trades };
     }
   } catch {
     liveSpot = null;
