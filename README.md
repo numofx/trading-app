@@ -143,7 +143,8 @@ escrow, whose `wrappedAsset()` returns the USDC token above.
 > manager. The app therefore only resolves a wallet's trading account among accounts under the
 > configured manager, and creates a fresh one under the SRM otherwise. A deployment still carrying
 > the old addresses as env overrides fails at submit with `action_json.module … is not this venue's
-> trade module`. The CashAsset `0x6B232A21…6fc6` stays reachable as a legacy withdrawal row only.
+> trade module`. The CashAsset `0x6B232A21…6fc6` is not offered anywhere in the app, withdrawals included:
+> its ledger claims exceed the USDC it holds, so it cannot pay out.
 
 > **The stack moves as one.** None of the Sepolia addresses have code on mainnet, so a half-flipped
 > config is not a degraded app — it builds transactions against contracts that do not exist.
