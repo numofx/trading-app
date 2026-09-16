@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import type { ActivityTab, ActivityView } from "@/lib/trading.types";
+import { SmartLink } from "@/ui/SmartLink";
 
 /** Tabs that describe the viewer's own account, so their rows must never render for a signed-out visitor. */
 const ACCOUNT_SCOPED_TABS = new Set(["assets", "open-orders", "order-history", "trade-history"]);
@@ -182,13 +183,13 @@ export function TradingActivityPanel({
 
       <div className="flex flex-col gap-2 px-4 pb-3 text-[10px] text-panel-text-muted sm:flex-row sm:items-center sm:justify-end">
         {footerLinks.map((link) => (
-          <a
+          <SmartLink
             className="transition-colors hover:text-panel-text-active"
             href={link.href}
             key={link.label}
           >
             {link.label}
-          </a>
+          </SmartLink>
         ))}
       </div>
     </section>
