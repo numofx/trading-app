@@ -382,18 +382,43 @@ export function collectOpenOrders(book: BookResponse | null): SpotOpenOrder[] {
   return [...(book?.bids ?? []), ...(book?.asks ?? [])]
     .map((order) => {
       const intent = order.spot_contract?.ui_intent;
+      if (intent === undefined) {
+        // Every field below would otherwise be an engine value wearing a UI label: the price
+        // rendered as ₦0.0007 instead of ₦1,374, the size as 1,374 USDC instead of 1. The old
+        // fallback read the engine fields and presented them as though they were UI ones, which is
+        // a wrong number rather than a missing row. No spot order has ever arrived without this
+        // presentation, so dropping it costs nothing real — but it must not do so quietly.
+        console.warn("dropping an open order with no ui_intent presentation", {
+          nonce: order.nonce,
+          orderId: order.order_id,
+        });
+        return null;
+      }
       const expiry = Number(order.expiry);
+      // desired_amount and filled_amount are engine cNGN; limit_price is engine USDC-per-cNGN.
+      // Their product is the USDC notional the trader signed, which is what `filled` promises and
+      // what every reader of it assumes: `size - filled` for the reservation, and the Filled cell.
+      // Reported as "1,307 USDC filled" on a 0.995 USDC buy — the raw engine amount, printed with a
+      // USDC label. Verified against the live book: desired_amount * limit_price == ui_intent.size
+      // on every resting order, and 1/limit_price == ui_intent.price.
+      const enginePrice = Number(order.limit_price);
+      const filledEngine = Number(order.filled_amount ?? "0");
+      const filled =
+        Number.isFinite(enginePrice) && Number.isFinite(filledEngine)
+          ? filledEngine * enginePrice
+          : 0;
       return {
         expiresAtMs: Number.isFinite(expiry) && expiry > 0 ? expiry * 1000 : null,
-        filled: Number(order.filled_amount ?? "0"),
+        filled,
         nonce: order.nonce ?? "",
         orderId: order.order_id ?? "",
         ownerAddress: order.owner_address ?? "",
-        price: Number(intent?.price ?? Number(order.limit_price)),
-        side: intent?.side ?? order.side,
-        size: Number(intent?.size ?? order.desired_amount),
+        price: Number(intent.price),
+        side: intent.side,
+        size: Number(intent.size),
       };
     })
+    .filter((order): order is SpotOpenOrder => order !== null)
     .filter(
       (order) =>
         order.ownerAddress !== "" &&
