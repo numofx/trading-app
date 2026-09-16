@@ -60,8 +60,8 @@ export const ACTIVITY_VIEWS = {
 } satisfies Record<string, ActivityView>;
 
 export const FOOTER_LINKS = [
-  { href: "#", label: "Docs" },
-  { href: "#", label: "Support" },
+  { href: "https://docs.numofx.com", label: "Docs" },
+  { href: "https://support.numofx.com", label: "Support" },
   { href: "#", label: "Terms" },
   { href: "#", label: "Privacy Policy" },
 ] as const;
