@@ -91,19 +91,26 @@ export function TerminalHeaderBar({
   changePercent24h,
   depositControl,
   high24h,
-  lastPrice,
   low24h,
   onPortfolioSelect,
+  price,
   volume24hLabel,
 }: {
   changePercent24h: number | null;
   depositControl?: ReactNode;
   /** Extremes over the same window as the volume; null when nothing traded in it. */
   high24h: number | null;
-  lastPrice: number | null;
   low24h: number | null;
   /** Fired by the connected wallet menu's Portfolio item. */
   onPortfolioSelect?: () => void;
+  /**
+   * What the market is worth here now: the book's mid, else its one resting side, else the last
+   * trade. NOT the last trade alone — on a quiet venue that print can be days old and sit outside
+   * the current spread. On 2026-09-16 the header read 1,327.34 from a trade two days earlier while
+   * every resting order stood between 1,361 and 1,383, and the order ticket, which prices off the
+   * same anchor the order book centres on, was seeded at 1,372.15.
+   */
+  price: number | null;
   volume24hLabel: string;
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -194,7 +201,7 @@ export function TerminalHeaderBar({
        */}
       <div className="hidden min-w-0 items-center gap-6 overflow-hidden lg:flex">
         <HeaderMetric label="Price">
-          {formatNaira(lastPrice)}
+          {formatNaira(price)}
           <span className={cn("text-[11px]", getChangeClassName(changePercent24h))}>
             {formatChangePercent(changePercent24h)}
           </span>
