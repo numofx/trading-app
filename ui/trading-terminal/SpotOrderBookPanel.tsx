@@ -162,16 +162,33 @@ function BookLadder({
   // One scale for both sides: normalising each side against its own deepest row made a thin side
   // look as deep as a heavy one, which is the comparison the bars exist to make.
   const maxTotal = Math.max(getMaxLadderTotal(askRows), getMaxLadderTotal(bidRows));
-  // Coinbase-style ladder: best ask sits directly above the spread row.
-  const descendingAsks = [...askRows].reverse();
+  // Coinbase-style ladder: best ask sits directly above the spread row. The asks render in
+  // ascending order into a `flex-col-reverse` container, which paints them bottom-up — so the
+  // best ask lands against the spread without reversing the array.
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="flex min-h-0 flex-1 flex-col justify-end overflow-hidden">
+      {/*
+       * `flex-col-reverse` rather than `justify-end`, and `auto` rather than `hidden`.
+       *
+       * The panel is shorter than the book on most screens — 84% of desktop sessions are under
+       * 1000px tall — and with `overflow-hidden` the rungs past the fold were not merely
+       * offscreen, they were unreachable and unannounced: at 1280x577 an 8-rung side showed 4,
+       * with no scrollbar and nothing to say the rest existed. A book that hides half its depth
+       * misreports the market.
+       *
+       * `justify-end` cannot simply become `overflow-y-auto`: content overflowing a
+       * `justify-content: flex-end` container is clipped at the start edge and cannot be
+       * scrolled to. Column-reverse puts the scroll origin at the visual bottom instead, so the
+       * touch stays pinned against the spread, depth grows upward without shifting the view, and
+       * a reader who scrolls out to the far side stays there across the 2s book updates. An
+       * effect that re-anchored scrollTop on every render would fight them for the scrollbar.
+       */}
+      <div className="flex min-h-0 flex-1 flex-col-reverse overflow-y-auto">
         {askRows.length === 0 ? (
           <BookEmptyState message="No resting asks" />
         ) : (
-          descendingAsks.map((row) => (
+          askRows.map((row) => (
             <BookLevelRow
               digits={digits}
               key={row.price}
@@ -215,7 +232,9 @@ function BookLadder({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      {/* Bids already grow downward from the touch, so plain `auto` is enough: the scroll origin
+       * is the top, which is where the best bid sits. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {bidRows.length === 0 ? (
           <BookEmptyState message="No resting bids" />
         ) : (
