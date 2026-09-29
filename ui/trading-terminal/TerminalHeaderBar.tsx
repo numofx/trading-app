@@ -8,6 +8,15 @@ import { cn } from "@/lib/cn";
 import { formatNaira } from "@/lib/market-formatting";
 import { PrivyWalletButton } from "@/ui/PrivyWalletButton";
 import { SmartImage } from "@/ui/SmartImage";
+import { SmartLink } from "@/ui/SmartLink";
+
+/** The markets the selector offers; each is its own route, so the terminals never share state. */
+const TERMINAL_MARKETS = [
+  { href: "/", id: "spot", symbol: "USDC-cNGN" },
+  { href: "/perp", id: "perp", symbol: "USDC-cNGN-PERP" },
+] as const;
+
+export type TerminalMarket = (typeof TERMINAL_MARKETS)[number]["id"];
 
 /** Change is only coloured when there is one — an empty window shows a neutral dash. */
 function getChangeClassName(value: number | null) {
@@ -92,6 +101,7 @@ export function TerminalHeaderBar({
   depositControl,
   high24h,
   low24h,
+  market = "spot",
   onPortfolioSelect,
   price,
   volume24hLabel,
@@ -101,6 +111,8 @@ export function TerminalHeaderBar({
   /** Extremes over the same window as the volume; null when nothing traded in it. */
   high24h: number | null;
   low24h: number | null;
+  /** Which terminal is showing; the selector's pill and check follow it. */
+  market?: TerminalMarket;
   /** Fired by the connected wallet menu's Portfolio item. */
   onPortfolioSelect?: () => void;
   /**
@@ -115,6 +127,8 @@ export function TerminalHeaderBar({
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const selectedSymbol =
+    TERMINAL_MARKETS.find((entry) => entry.id === market)?.symbol ?? TERMINAL_MARKETS[0].symbol;
 
   useEffect(() => {
     const isLight = document.documentElement.classList.contains("light");
@@ -156,7 +170,7 @@ export function TerminalHeaderBar({
           className="flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-full bg-input-bg px-2.5 outline-none ring-1 ring-panel-border transition-colors hover:bg-input-hover focus-visible:ring-2 focus-visible:ring-panel-text-muted"
           id="spot-ticker-market-trigger"
         >
-          <MarketIdentity />
+          <MarketIdentity symbol={selectedSymbol} />
           <ChevronDown
             className={cn(
               "size-4 text-panel-text-muted transition-transform duration-200",
@@ -169,35 +183,25 @@ export function TerminalHeaderBar({
           <Popover.Positioner align="start" sideOffset={6}>
             <Popover.Popup className="z-50 min-w-(--anchor-width) overflow-hidden rounded-sm border border-panel-border bg-menu-surface p-1 shadow-[0_10px_28px_var(--panel-shadow)] outline-none transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
               {/*
-               * The venue serves one spot market, so this row is always the selected one and the
-               * check is unconditional. A second tradable market would make it conditional.
+               * Rows are links, not state: spot and perp are separate routes, so switching never
+               * carries one terminal's ticket or book into the other, and each has its own URL.
                */}
-              <button
-                className="flex w-full cursor-pointer items-center gap-2 rounded-sm p-2 text-left text-panel-text-active transition-colors hover:bg-input-hover"
-                onClick={() => setDropdownOpen(false)}
-                type="button"
-              >
-                <MarketIdentity compact />
-                <Check
-                  aria-label="Selected market"
-                  className="ml-auto size-4 shrink-0 text-panel-text-muted"
-                />
-              </button>
-              {/*
-               * Announced, not tradable: markets-service serves no perp yet, so this row cannot be
-               * selected and renders no book behind it. Make it a real option once `/v1/markets`
-               * lists a perp and the terminal can trade one.
-               */}
-              <button
-                className="flex w-full cursor-not-allowed items-center gap-2 rounded-sm p-2 text-left opacity-50"
-                disabled
-                type="button"
-              >
-                <MarketIdentity compact symbol="USDC-cNGN-PERP" />
-                <span className="ml-auto shrink-0 whitespace-nowrap pl-3 text-[10px] text-panel-text-muted">
-                  Coming soon
-                </span>
-              </button>
+              {TERMINAL_MARKETS.map((entry) => (
+                <SmartLink
+                  className="flex w-full cursor-pointer items-center gap-2 rounded-sm p-2 text-left text-panel-text-active transition-colors hover:bg-input-hover"
+                  href={entry.href}
+                  key={entry.id}
+                  onClick={() => setDropdownOpen(false)}
+                >
+                  <MarketIdentity compact symbol={entry.symbol} />
+                  {entry.id === market ? (
+                    <Check
+                      aria-label="Selected market"
+                      className="ml-auto size-4 shrink-0 text-panel-text-muted"
+                    />
+                  ) : null}
+                </SmartLink>
+              ))}
             </Popover.Popup>
           </Popover.Positioner>
         </Popover.Portal>
