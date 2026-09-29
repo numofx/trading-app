@@ -18,6 +18,11 @@ export type PerpState = {
   maintenanceMarginRate: number;
   /** 1 / initial margin rate: the most leverage the SRM will open. */
   maxLeverage: number;
+  /**
+   * Whether the venue accepts perp orders: the trade module is allowed on Matching and the position
+   * cap is above zero. The stack deploys closed, so this is false until the launch vault action.
+   */
+  tradingEnabled: boolean;
 };
 
 /** Where perp orders are signed for and margin is deposited. Checksummed by the caller. */

@@ -16,6 +16,7 @@ export type PerpStatePresentation = {
   initial_margin_rate?: string;
   maintenance_margin_rate?: string;
   max_leverage?: string;
+  trading_enabled?: boolean;
   trade_module_address?: string;
   quote_asset_address?: string;
   margin_manager_address?: string;
@@ -66,6 +67,8 @@ export function parsePerpState(perp: PerpStatePresentation | undefined): PerpSta
     markPrice,
     maxLeverage,
     openInterestUsd: finite(perp.open_interest_usd) ?? 0,
+    // Absent reads as closed: an older markets-service that does not report it cannot vouch for it.
+    tradingEnabled: perp.trading_enabled === true,
     uiLongFundingRate1h,
   };
 }

@@ -358,6 +358,13 @@ function isButtonEnabled(inputs: ButtonInputs) {
   );
 }
 
+function notLiveMessage(state: PerpState | null) {
+  if (state !== null && !state.tradingEnabled) {
+    return "The market opens at launch. Prices are live; orders are not accepted yet.";
+  }
+  return "Perp trading isn't live yet. Orders open when the market launches.";
+}
+
 function buttonClassName(enabled: boolean, isLong: boolean) {
   if (!enabled) {
     return "cursor-not-allowed bg-input-bg text-panel-text-muted ring-1 ring-panel-border";
@@ -408,7 +415,7 @@ export function PerpOrderFormPanel({
   const [size, setSize] = useState("");
   const [leverage, setLeverage] = useState(1);
 
-  const isLive = state !== null && onSubmit !== undefined;
+  const isLive = state?.tradingEnabled === true && onSubmit !== undefined;
   const ceiling = getLeverageCeiling(state);
   const effectiveLeverage = Math.min(leverage, ceiling);
   const isLong = side === "long";
@@ -567,7 +574,7 @@ export function PerpOrderFormPanel({
         <p className="text-[10px] text-panel-text-muted leading-snug">
           {isLive
             ? (lastAction ?? "Orders rest for 24 hours unless filled or cancelled.")
-            : "Perp trading isn't live yet. Orders open when the market launches."}
+            : notLiveMessage(state)}
         </p>
       </div>
     </section>
