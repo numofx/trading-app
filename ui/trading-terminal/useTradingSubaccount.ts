@@ -104,11 +104,11 @@ const subAccountManagerAbi = parseAbi([
 async function scanForSubaccountId(
   ownerAddress: `0x${string}`,
   latestBlock: bigint,
-  floorBlock: bigint
+  floorBlock: bigint,
+  expectedManager: `0x${string}`
 ) {
   const publicClient = createBasePublicClient();
   const normalizedOwnerAddress = ownerAddress;
-  const expectedManager = getUsdcCngnManagerAddress();
   const blockRange = getLogQueryBlockRange();
   let windowEnd = latestBlock;
 
@@ -162,14 +162,14 @@ async function scanForSubaccountId(
  * instead of the ~800k (and growing) between the Matching deployment and the chain head. A null
  * result is cached too — a wallet with no subaccount is the case that scans the whole range.
  */
-async function findTradingSubaccountId(ownerAddress: string) {
+async function findTradingSubaccountId(ownerAddress: string, stack: TradingAccountStack) {
   const publicClient = createBasePublicClient();
   const latestBlock = await publicClient.getBlockNumber();
   const normalizedOwnerAddress = getAddress(ownerAddress);
 
   const cacheKey = buildSubaccountCacheKey({
     chainId: getMatchingChainId(),
-    managerAddress: getUsdcCngnManagerAddress(),
+    managerAddress: stack.manager,
     matchingAddress: getMatchingAddress(),
     ownerAddress: normalizedOwnerAddress,
   });
@@ -182,7 +182,12 @@ async function findTradingSubaccountId(ownerAddress: string) {
   });
 
   // A hit in the newly scanned range wins: it is a subaccount created since the cache was written.
-  const found = await scanForSubaccountId(normalizedOwnerAddress, latestBlock, scanFloor);
+  const found = await scanForSubaccountId(
+    normalizedOwnerAddress,
+    latestBlock,
+    scanFloor,
+    stack.manager
+  );
   const resolved = found ?? cached?.subaccountId ?? null;
 
   writeSubaccountCache(cacheKey, {
@@ -193,7 +198,7 @@ async function findTradingSubaccountId(ownerAddress: string) {
   return resolved;
 }
 
-async function createTradingSubaccount(wallet: ConnectedWallet) {
+async function createTradingSubaccount(wallet: ConnectedWallet, stack: TradingAccountStack) {
   const targetChainId = getMatchingChainId();
 
   await wallet.switchChain(targetChainId);
@@ -246,7 +251,7 @@ async function createTradingSubaccount(wallet: ConnectedWallet) {
       ? [getTradeModuleAddress()]
       : // The creator expects the WLWrappedERC20Asset contract, not the ERC-20 token:
         // it calls baseAsset.wrappedAsset() to resolve the token when initDeposit > 0.
-        [getWrappedUsdcAssetAddress(), 0n, getUsdcCngnManagerAddress()],
+        [stack.depositAsset, 0n, stack.manager],
     functionName: shouldFallbackToMatching ? "createSubAccount" : "createAndDepositSubAccount",
   });
 
@@ -271,10 +276,31 @@ async function createTradingSubaccount(wallet: ConnectedWallet) {
     return decodedLog.args.accountId.toString();
   }
 
-  return await findTradingSubaccountId(account);
+  return await findTradingSubaccountId(account, stack);
 }
 
-export function useTradingSubaccount(walletAddress: string | null) {
+/**
+ * Which stack a trading account lives on. Spot's by default: the configured SRM, funded in wrapped
+ * USDC. The perp's is its own SRM and its own cash, so a wallet has one trading account per stack --
+ * an account's manager is fixed at creation, and each stack's assets only accept their own manager.
+ */
+export type TradingAccountStack = {
+  manager: `0x${string}`;
+  /** The asset the creator periphery deposits into when it opens the account. */
+  depositAsset: `0x${string}`;
+};
+
+function getSpotAccountStack(): TradingAccountStack {
+  return { depositAsset: getWrappedUsdcAssetAddress(), manager: getUsdcCngnManagerAddress() };
+}
+
+export function useTradingSubaccount(walletAddress: string | null, stack?: TradingAccountStack) {
+  // Keyed on the addresses, not the object: a caller passing a fresh literal each render must not
+  // re-run the lookup every render.
+  const manager = stack?.manager ?? null;
+  const depositAsset = stack?.depositAsset ?? null;
+  const resolveStack = (): TradingAccountStack =>
+    manager !== null && depositAsset !== null ? { depositAsset, manager } : getSpotAccountStack();
   const [subaccountId, setSubaccountId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   // The wallet the last completed lookup answered for. `isLoading` alone cannot say "finished":
@@ -294,7 +320,9 @@ export function useTradingSubaccount(walletAddress: string | null) {
 
     setIsLoading(true);
 
-    void findTradingSubaccountId(walletAddress)
+    const stack: TradingAccountStack =
+      manager !== null && depositAsset !== null ? { depositAsset, manager } : getSpotAccountStack();
+    void findTradingSubaccountId(walletAddress, stack)
       .then((nextSubaccountId) => {
         if (!cancelled) {
           setSubaccountId(nextSubaccountId);
@@ -310,10 +338,10 @@ export function useTradingSubaccount(walletAddress: string | null) {
     return () => {
       cancelled = true;
     };
-  }, [walletAddress]);
+  }, [walletAddress, manager, depositAsset]);
 
   async function ensureTradingSubaccount(wallet: ConnectedWallet) {
-    const existingSubaccountId = await findTradingSubaccountId(wallet.address);
+    const existingSubaccountId = await findTradingSubaccountId(wallet.address, resolveStack());
 
     if (existingSubaccountId) {
       setSubaccountId(existingSubaccountId);
@@ -323,7 +351,7 @@ export function useTradingSubaccount(walletAddress: string | null) {
     setIsLoading(true);
 
     try {
-      const createdSubaccountId = await createTradingSubaccount(wallet);
+      const createdSubaccountId = await createTradingSubaccount(wallet, resolveStack());
 
       if (!createdSubaccountId) {
         throw new Error(

@@ -6,6 +6,7 @@ import { useEffect, useEffectEvent, useState } from "react";
 import { createWalletClient, custom, decodeEventLog, erc20Abi, getAddress, parseUnits } from "viem";
 import { createBasePublicClient, getAppChain } from "@/lib/base-public-client";
 import type {
+  DepositAddresses,
   DepositCurrency,
   DepositFlowEvent,
   DepositFlowState,
@@ -307,7 +308,12 @@ export function useSubaccountDeposit({
     wallet: ConnectedWallet,
     amountInput: string,
     subaccountId: string | null,
-    currency: DepositCurrency
+    currency: DepositCurrency,
+    /**
+     * Another stack's deposit plumbing: the perp funds its margin account in its own cash, under its
+     * own SRM. Omitted for spot, which resolves the currency's addresses as before.
+     */
+    addressesOverride?: DepositAddresses
   ) {
     const trimmedAmount = amountInput.trim().replaceAll(",", "");
 
@@ -316,7 +322,7 @@ export function useSubaccountDeposit({
       return;
     }
 
-    const addresses = getDepositAddresses(currency);
+    const addresses = addressesOverride ?? getDepositAddresses(currency);
 
     if (addresses === null) {
       setInputError(`${currency} deposits are not configured for this network.`);

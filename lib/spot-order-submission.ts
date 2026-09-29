@@ -217,6 +217,19 @@ export function getNonceSignedAtMs(nonce: bigint | string) {
   return Number(BigInt(nonce) / NONCE_SEQUENCE_RANGE);
 }
 
+/**
+ * Where an order is signed for when it is not spot. The perp shares spot's translation (both are
+ * quoted in USD per cNGN/NGN on chain) but lives on its own stack: its own asset, and its own
+ * TradeModule settling in its own cash. markets-service rejects an order naming the other market's
+ * module, so these must come from the perp's `/v1/markets` entry, never from spot's defaults.
+ */
+export type OrderMarketOverride = {
+  assetAddress: `0x${string}`;
+  tradeModuleAddress: `0x${string}`;
+  /** Prefix of the order_id, so the book and history can tell the markets apart at a glance. */
+  orderIdPrefix: string;
+};
+
 export function buildSpotOrderEnvelope({
   uiPrice,
   uiSize,
@@ -224,6 +237,7 @@ export function buildSpotOrderEnvelope({
   side,
   subaccountId,
   walletAddress,
+  market,
 }: {
   /** The signed limit, in cNGN per USDC. */
   uiPrice: string;
@@ -238,6 +252,8 @@ export function buildSpotOrderEnvelope({
   side: "buy" | "sell";
   subaccountId: string;
   walletAddress: string;
+  /** Omit for spot. */
+  market?: OrderMarketOverride;
 }) {
   if (!UNSIGNED_INTEGER_PATTERN.test(subaccountId)) {
     throw new Error("Trading subaccount ID must be an unsigned integer");
@@ -310,8 +326,10 @@ export function buildSpotOrderEnvelope({
 
   const ownerAddress = getAddress(walletAddress);
   const matchingAddress = getMatchingAddress();
-  const tradeModuleAddress = getTradeModuleAddress();
-  const spotAsset = getSpotAssetAddress();
+  const tradeModuleAddress = market
+    ? getAddress(market.tradeModuleAddress)
+    : getTradeModuleAddress();
+  const spotAsset = market ? getAddress(market.assetAddress) : getSpotAssetAddress();
   const chainId = getMatchingChainId();
 
   const nonce = createOrderNonce();
@@ -366,7 +384,7 @@ export function buildSpotOrderEnvelope({
       filled_amount: "0",
       limit_price: formatFixedPointUnits(enginePriceWei, ENGINE_DECIMALS),
       nonce: nonce.toString(),
-      order_id: `spot-${crypto.randomUUID()}`,
+      order_id: `${market?.orderIdPrefix ?? "spot"}-${crypto.randomUUID()}`,
       owner_address: ownerAddress,
       recipient_id: subaccountId,
       side: engineSide,

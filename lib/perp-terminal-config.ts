@@ -3,36 +3,36 @@ import type { ActivityTab, ActivityView } from "@/lib/trading.types";
 /** The venue's symbol for the perp, as the market selector and document title name it. */
 export const PERP_MARKET_LABEL = "USDC-cNGN-PERP";
 
+/** The perp's stream and book symbol in markets-service. */
+export const PERP_MARKET_SYMBOL = "USDCcNGN-PERP";
+
 export const PERP_BOTTOM_TABS = [
   { id: "positions", label: "Positions" },
   { id: "open-orders", label: "Open Orders" },
-  { id: "order-history", label: "Order History" },
+  { id: "margin", label: "Margin" },
 ] satisfies ActivityTab[];
 
 /**
- * Column headers only. markets-service serves no perp market, so there are no positions or orders
- * to list — any row here would read as a trader's own when it is not.
+ * Column headers for each tab before data arrives. No "Entry price": the SRM marks positions to
+ * market and keeps no entry price on chain, so the column could only be invented.
  */
 export const PERP_ACTIVITY_VIEWS = {
-  "open-orders": {
-    columns: ["Instrument", "Direction", "Type", "Size", "Price", "Leverage"],
+  margin: {
+    columns: ["Cash", "Initial margin headroom", "Maintenance margin headroom"],
     rows: [],
   },
-  "order-history": {
-    columns: ["Time", "Instrument", "Direction", "Filled", "Avg price", "Limit", "Status"],
+  "open-orders": {
+    columns: ["Side", "Price", "Size", "Filled"],
     rows: [],
   },
   positions: {
-    columns: ["Instrument", "Size", "Entry price", "Mark price", "Liq. price", "Unrealized PnL"],
+    columns: ["Instrument", "Side", "Size", "Mark price", "Liq. price", "Unrealized PnL"],
     rows: [],
   },
 } satisfies Record<(typeof PERP_BOTTOM_TABS)[number]["id"], ActivityView>;
 
 /**
- * The ticket's leverage ceiling. A UI limit, not the venue's: there is no perp risk config to read
- * one from yet, so replace this with the market's served maximum when it exists.
+ * Quick picks under the leverage slider. The ceiling itself is the SRM's (1 / initial margin, from
+ * /v1/markets); presets above it are not shown.
  */
-export const PERP_MAX_LEVERAGE = 10;
-
-/** Quick picks under the leverage slider; each must sit within `PERP_MAX_LEVERAGE`. */
 export const PERP_LEVERAGE_PRESETS = [1, 2, 3, 5, 10] as const;
