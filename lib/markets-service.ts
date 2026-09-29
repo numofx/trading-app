@@ -1,5 +1,7 @@
 import "server-only";
 
+import { Duration } from "effect";
+
 export type MarketPresentation = {
   asset_address?: string;
   base_asset_symbol?: string;
@@ -152,9 +154,16 @@ export function getMarketsServiceUrl() {
   return resolvedUrl;
 }
 
+/**
+ * How long the market list is reused across requests. It changes only when a market is configured
+ * on the markets-service deployment, so a minute of staleness costs nothing, while refetching it
+ * held every spot render behind one more round trip before the book could even be requested.
+ */
+const MARKETS_LIST_REVALIDATE_SECONDS = Duration.toSeconds("1 minute");
+
 export async function getMarketsServiceMarkets() {
   const response = await fetch(`${getMarketsServiceUrl()}/v1/markets`, {
-    cache: "no-store",
+    next: { revalidate: MARKETS_LIST_REVALIDATE_SECONDS },
     headers: {
       accept: "application/json",
     },

@@ -1,5 +1,5 @@
 import { toUiCandles } from "@/lib/market-candles";
-import type { BookResponse, CandleInterval, PresentedTrade } from "@/lib/markets-service";
+import type { BookResponse, CandleInterval } from "@/lib/markets-service";
 import {
   getLiveSpotMarket,
   getMarketBook,
@@ -21,6 +21,15 @@ const CHART_CANDLE_LIMIT = 120;
  */
 export const dynamic = "force-dynamic";
 
+/** Converts served candles for the chart; a payload it cannot read renders no candles, as before. */
+function presentCandles(candles: Awaited<ReturnType<typeof getMarketCandles>>): Candle[] {
+  try {
+    return toUiCandles(candles, "spot", CHART_CANDLE_INTERVAL);
+  } catch {
+    return [];
+  }
+}
+
 export default async function Home() {
   let liveSpot: LiveSpotRuntime | null = null;
 
@@ -28,38 +37,20 @@ export default async function Home() {
     const spotMarket = await getLiveSpotMarket();
 
     if (spotMarket?.asset_address && spotMarket.sub_id != null) {
-      let book: BookResponse | null = null;
-      let candles: Candle[] = [];
-      let trades: PresentedTrade[] = [];
-      let stats24h: LiveSpotRuntime["stats24h"] = null;
+      const { asset_address: assetAddress, sub_id: subId } = spotMarket;
+      // Independent reads, so they run together: the page waits on the slowest, not the sum. Each
+      // settles on its own, so one failing still renders the others' data.
+      const [bookResult, candlesResult, tradesResult] = await Promise.allSettled([
+        getMarketBook(assetAddress, subId),
+        getMarketCandles(assetAddress, subId, CHART_CANDLE_INTERVAL, CHART_CANDLE_LIMIT),
+        getMarketTrades(assetAddress, subId),
+      ]);
 
-      try {
-        book = await getMarketBook(spotMarket.asset_address, spotMarket.sub_id);
-      } catch {
-        book = null;
-      }
-
-      try {
-        candles = toUiCandles(
-          await getMarketCandles(
-            spotMarket.asset_address,
-            spotMarket.sub_id,
-            CHART_CANDLE_INTERVAL,
-            CHART_CANDLE_LIMIT
-          ),
-          "spot",
-          CHART_CANDLE_INTERVAL
-        );
-      } catch {
-        candles = [];
-      }
-
-      try {
-        ({ stats24h, trades } = await getMarketTrades(spotMarket.asset_address, spotMarket.sub_id));
-      } catch {
-        stats24h = null;
-        trades = [];
-      }
+      const book: BookResponse | null = bookResult.status === "fulfilled" ? bookResult.value : null;
+      const candles =
+        candlesResult.status === "fulfilled" ? presentCandles(candlesResult.value) : [];
+      const { stats24h, trades }: Pick<LiveSpotRuntime, "stats24h" | "trades"> =
+        tradesResult.status === "fulfilled" ? tradesResult.value : { stats24h: null, trades: [] };
 
       liveSpot = { book, candles, stats24h, trades };
     }
