@@ -50,8 +50,8 @@ function HeaderMetric({
   );
 }
 
-/** The paired token marks and symbol, shared by the pill and its dropdown row. */
-function MarketIdentity({ compact }: { compact?: boolean }) {
+/** The paired token marks and symbol, shared by the pill and its dropdown rows. */
+function MarketIdentity({ compact, symbol = "USDC-cNGN" }: { compact?: boolean; symbol?: string }) {
   return (
     <>
       <span className="flex shrink-0 items-center -space-x-1.5">
@@ -73,7 +73,7 @@ function MarketIdentity({ compact }: { compact?: boolean }) {
         />
       </span>
       <span className="font-semibold text-[13px] text-panel-text-active leading-none">
-        USDC-cNGN
+        {symbol}
       </span>
     </>
   );
@@ -170,7 +170,7 @@ export function TerminalHeaderBar({
             <Popover.Popup className="z-50 min-w-(--anchor-width) overflow-hidden rounded-sm border border-panel-border bg-menu-surface p-1 shadow-[0_10px_28px_var(--panel-shadow)] outline-none transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
               {/*
                * The venue serves one spot market, so this row is always the selected one and the
-               * check is unconditional. A second market would make it conditional, not decorative.
+               * check is unconditional. A second tradable market would make it conditional.
                */}
               <button
                 className="flex w-full cursor-pointer items-center gap-2 rounded-sm p-2 text-left text-panel-text-active transition-colors hover:bg-input-hover"
@@ -182,6 +182,21 @@ export function TerminalHeaderBar({
                   aria-label="Selected market"
                   className="ml-auto size-4 shrink-0 text-panel-text-muted"
                 />
+              </button>
+              {/*
+               * Announced, not tradable: markets-service serves no perp yet, so this row cannot be
+               * selected and renders no book behind it. Make it a real option once `/v1/markets`
+               * lists a perp and the terminal can trade one.
+               */}
+              <button
+                className="flex w-full cursor-not-allowed items-center gap-2 rounded-sm p-2 text-left opacity-50"
+                disabled
+                type="button"
+              >
+                <MarketIdentity compact symbol="USDC-cNGN-PERP" />
+                <span className="ml-auto shrink-0 whitespace-nowrap pl-3 text-[10px] text-panel-text-muted">
+                  Coming soon
+                </span>
               </button>
             </Popover.Popup>
           </Popover.Positioner>
