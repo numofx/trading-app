@@ -1,9 +1,12 @@
 import "server-only";
 
 import { Duration } from "effect";
+import type { PerpStatePresentation } from "@/lib/perp-market";
 
 export type MarketPresentation = {
   asset_address?: string;
+  /** USDCcNGN-PERP's chain state; absent for spot, and for the perp when the chain was unreadable. */
+  perp?: PerpStatePresentation;
   base_asset_symbol?: string;
   contract_type?: string;
   display_label?: string;
@@ -183,6 +186,21 @@ export async function getLiveSpotMarket() {
     markets.find((market) => {
       return (
         market.contract_type === "spot" &&
+        market.base_asset_symbol === "USDC" &&
+        market.quote_asset_symbol === "cNGN"
+      );
+    }) ?? null
+  );
+}
+
+/** USDCcNGN-PERP, when markets-service lists it: contract_type `perpetual`, USDC/cNGN. */
+export async function getLivePerpMarket() {
+  const markets = await getMarketsServiceMarkets();
+
+  return (
+    markets.find((market) => {
+      return (
+        market.contract_type === "perpetual" &&
         market.base_asset_symbol === "USDC" &&
         market.quote_asset_symbol === "cNGN"
       );

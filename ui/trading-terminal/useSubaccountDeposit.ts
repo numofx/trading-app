@@ -5,7 +5,9 @@ import posthog from "posthog-js";
 import { useEffect, useEffectEvent, useState } from "react";
 import { createWalletClient, custom, decodeEventLog, erc20Abi, getAddress, parseUnits } from "viem";
 import { createBasePublicClient, getAppChain } from "@/lib/base-public-client";
+import { withGasHeadroom } from "@/lib/gas-headroom";
 import type {
+  DepositAddresses,
   DepositCurrency,
   DepositFlowEvent,
   DepositFlowState,
@@ -64,6 +66,24 @@ const subaccountCreatorAbi = [
     ],
   },
 ] as const;
+
+/**
+ * The gas limit to send a deposit with: our own estimate plus headroom, rather than the wallet's
+ * exact one. A perp deposit pays into a CashAsset whose interest accrual costs more in the block it
+ * lands in than in the block it was estimated against (lib/gas-headroom.ts). Undefined when the
+ * estimate itself fails, which leaves the wallet to estimate (and to surface any real revert).
+ */
+async function depositGasLimit(
+  request: Parameters<ReturnType<typeof createBasePublicClient>["estimateContractGas"]>[0],
+  account: `0x${string}`
+) {
+  try {
+    const estimate = await createBasePublicClient().estimateContractGas({ ...request, account });
+    return withGasHeadroom(estimate);
+  } catch {
+    return undefined;
+  }
+}
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Deposit step failed";
@@ -307,7 +327,12 @@ export function useSubaccountDeposit({
     wallet: ConnectedWallet,
     amountInput: string,
     subaccountId: string | null,
-    currency: DepositCurrency
+    currency: DepositCurrency,
+    /**
+     * Another stack's deposit plumbing: the perp funds its margin account in its own cash, under its
+     * own SRM. Omitted for spot, which resolves the currency's addresses as before.
+     */
+    addressesOverride?: DepositAddresses
   ) {
     const trimmedAmount = amountInput.trim().replaceAll(",", "");
 
@@ -316,7 +341,7 @@ export function useSubaccountDeposit({
       return;
     }
 
-    const addresses = getDepositAddresses(currency);
+    const addresses = addressesOverride ?? getDepositAddresses(currency);
 
     if (addresses === null) {
       setInputError(`${currency} deposits are not configured for this network.`);
@@ -383,25 +408,34 @@ export function useSubaccountDeposit({
 
     try {
       const walletClient = await createConnectedWalletClient(activeWallet);
+      const account = getAddress(activeWallet.address);
       let txHash: `0x${string}`;
 
       if (effect.path === "create-and-deposit") {
-        txHash = await walletClient.writeContract({
+        const request = {
           abi: subaccountCreatorAbi,
           address: effect.addresses.subaccountCreator,
           args: [effect.addresses.baseAssetContract, effect.amountUnits, effect.addresses.manager],
           functionName: "createAndDepositSubAccount",
+        } as const;
+        txHash = await walletClient.writeContract({
+          ...request,
+          gas: await depositGasLimit(request, account),
         });
       } else {
         if (effect.subaccountId === null) {
           dispatch({ error: "Deposit requires a trading subaccount id", type: "ERRORED" });
           return;
         }
-        txHash = await walletClient.writeContract({
+        const request = {
           abi: wrappedAssetAbi,
           address: effect.addresses.baseAssetContract,
           args: [BigInt(effect.subaccountId), effect.amountUnits],
           functionName: "deposit",
+        } as const;
+        txHash = await walletClient.writeContract({
+          ...request,
+          gas: await depositGasLimit(request, account),
         });
       }
 

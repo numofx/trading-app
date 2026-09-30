@@ -4,9 +4,20 @@
 
 Renders the USDC/cNGN spot market through an orderbook UI, with off/on ramping via Busha and Coinbase APIs for instant USD/USDC and NGN/cNGN conversions. Integrated with `markets-service` for live books and trades.
 
-The app renders **spot only**. The futures section — a second terminal behind a sidebar rail, its
-order ticket, margin/position hooks and order-submission envelope — was removed; `markets-service`
-still serves the deliverable futures documented below, but nothing in this app reads them.
+The app renders spot at `/` and **USDC-cNGN-PERP** at `/perp`, switched from the market selector in
+the header. The perp is a USDC-settled perpetual on its own stack (numofx/exchange
+`deploy-cngn-perp-stack.s.sol`): its own CashAsset, SRM and TradeModule. The app reads everything
+about it from `markets-service`, with no env of its own:
+
+- `/v1/markets` lists `USDCcNGN-PERP` (`contract_type: perpetual`) with a `perp` object: mark, index,
+  funding, margin rates, max leverage, and the module, cash and SRM a trader signs and deposits for.
+  Until it does, `/perp` renders its not-live state: empty panels and a ticket that cannot submit.
+- Orders use spot's translation (cNGN per USDC on screen, USDC per cNGN on chain, side flipped) but are
+  signed for the perp's module and asset. A trader's perp margin is a separate account under the perp
+  SRM, opened by the first "Deposit margin"; it is not the spot account.
+- `/v1/positions` (proxied at `/api/positions`) serves positions and margin, polled every 15s.
+
+The earlier dated-futures terminal was removed; the perp is a new market, not a restoration of it.
 
 ## Runtime config
 

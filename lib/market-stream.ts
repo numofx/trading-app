@@ -5,6 +5,7 @@ import type {
   StreamBookOrder,
   StreamTrade,
 } from "@/lib/market-stream.types";
+import { isInvertedOrderEntrySpec } from "@/lib/order-entry-spec";
 import type { OrderBookLevel, TradePrint } from "@/lib/trading.types";
 
 /**
@@ -31,12 +32,6 @@ export function parseDecimal(value: string | null | undefined): number {
 }
 
 /**
- * The one order-entry contract whose engine values are inverted relative to the UI. markets-service
- * sets `order_entry_spec` only for this contract; every other market presents engine values directly.
- */
-const SPOT_TRANSLATION_SPEC = "usdc_cngn_spot_v1";
-
-/**
  * Whether this market's engine values need the USDC/cNGN inversion.
  *
  * Keyed on the spec rather than `type === "spot"` deliberately. The inversion is a property of
@@ -44,7 +39,7 @@ const SPOT_TRANSLATION_SPEC = "usdc_cngn_spot_v1";
  * would file every order into the wrong ladder and read as a crossed book, which fails silently.
  */
 function usesSpotTranslation(presenter: MarketStreamPresenter) {
-  return presenter.orderEntrySpec === SPOT_TRANSLATION_SPEC;
+  return isInvertedOrderEntrySpec(presenter.orderEntrySpec);
 }
 
 /**

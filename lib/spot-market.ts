@@ -1,4 +1,5 @@
 import type { BookResponse, PresentedTrade, TradeStats24h } from "@/lib/markets-service";
+import { isInvertedOrderEntrySpec } from "@/lib/order-entry-spec";
 import type {
   Candle,
   OrderBookLevel,
@@ -510,9 +511,6 @@ function presentTrades(trades: PresentedTrade[]) {
     ) satisfies TradePrint[];
 }
 
-/** The contract under which engine prices are USDC per cNGN and are inverted for display. */
-const INVERTED_SPOT_SPEC = "usdc_cngn_spot_v1";
-
 /** A positive decimal, or null for anything else — an empty field is "nothing traded", not zero. */
 function positiveDecimal(value: string | undefined) {
   if (value === undefined || value.trim() === "") {
@@ -550,7 +548,7 @@ export function presentStats24h(runtime: LiveSpotRuntime["stats24h"]): Stats24h 
   const engineFirst = last !== null && Number.isFinite(change) ? last - change : null;
   const quoteVolume = positiveDecimal(stats.quote_volume);
 
-  if (orderEntrySpec !== INVERTED_SPOT_SPEC) {
+  if (!isInvertedOrderEntrySpec(orderEntrySpec)) {
     return {
       firstPrice: positiveOrNull(engineFirst),
       high: positiveDecimal(stats.high),

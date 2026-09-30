@@ -3,7 +3,9 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
-import { PERP_LEVERAGE_PRESETS, PERP_MAX_LEVERAGE } from "@/lib/perp-terminal-config";
+import { estimateLiquidationPrice, getLeverageCeiling } from "@/lib/perp-market";
+import type { PerpState } from "@/lib/perp-market.types";
+import { PERP_LEVERAGE_PRESETS } from "@/lib/perp-terminal-config";
 import { SmartImage } from "@/ui/SmartImage";
 
 type PerpSide = "long" | "short";
@@ -11,6 +13,21 @@ type PerpSide = "long" | "short";
 const ORDER_TYPES = ["Market", "Limit"] as const;
 
 type PerpOrderType = (typeof ORDER_TYPES)[number];
+
+export type PerpOrderRequest = {
+  side: PerpSide;
+  orderType: PerpOrderType;
+  /** cNGN per USDC; the limit for a limit order, ignored for a market order (priced off the touch). */
+  limitPrice: string;
+  /** USD notional. */
+  size: string;
+};
+
+const USD = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 });
+const PRICE = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 2,
+  minimumFractionDigits: 2,
+});
 
 function parseAmount(value: string) {
   const parsed = Number(value.replaceAll(",", ""));
@@ -130,24 +147,28 @@ function PerpCardField({
 }
 
 /**
- * Leverage as a typed value, a filled slider and presets, all driving one number. A typed value
+ * Leverage as a typed value, a filled slider and presets, all driving one number, bounded by the
+ * SRM's own ceiling (1 / initial margin) rather than a number of the app's choosing. A typed value
  * applies as soon as it is a whole number in range; blurring drops any draft that is not.
  */
 function LeverageSelector({
+  ceiling,
   leverage,
   onSelect,
 }: {
+  ceiling: number;
   leverage: number;
   onSelect: (leverage: number) => void;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
-  const fillPercent = ((leverage - 1) / (PERP_MAX_LEVERAGE - 1)) * 100;
+  const fillPercent = ceiling > 1 ? ((leverage - 1) / (ceiling - 1)) * 100 : 0;
+  const presets = PERP_LEVERAGE_PRESETS.filter((preset) => preset <= ceiling);
 
   function handleDraftChange(value: string) {
     const digits = value.replace(/\D/g, "");
     setDraft(digits);
     const parsed = Number(digits);
-    if (digits !== "" && parsed >= 1 && parsed <= PERP_MAX_LEVERAGE) {
+    if (digits !== "" && parsed >= 1 && parsed <= ceiling) {
       onSelect(parsed);
     }
   }
@@ -180,8 +201,9 @@ function LeverageSelector({
         aria-label="Leverage slider"
         aria-valuetext={`${leverage}x`}
         className="h-1.5 w-full cursor-pointer appearance-none rounded-full [&::-moz-range-thumb]:size-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-panel-text-active [&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-panel-text-active"
+        disabled={ceiling <= 1}
         id="perp-leverage"
-        max={PERP_MAX_LEVERAGE}
+        max={ceiling}
         min={1}
         onChange={(event) => selectFromControl(Number(event.target.value))}
         step={1}
@@ -191,8 +213,11 @@ function LeverageSelector({
         type="range"
         value={leverage}
       />
-      <div className="grid grid-cols-5 gap-1.5">
-        {PERP_LEVERAGE_PRESETS.map((option) => (
+      <div
+        className="grid gap-1.5"
+        style={{ gridTemplateColumns: `repeat(${presets.length}, minmax(0, 1fr))` }}
+      >
+        {presets.map((option) => (
           <button
             aria-pressed={option === leverage}
             className={cn(
@@ -213,25 +238,176 @@ function LeverageSelector({
   );
 }
 
-function SummaryRow({ label, value }: { label: string; value: string }) {
+function SummaryRow({ label, title, value }: { label: string; title?: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-2">
-      <span className="text-panel-text-muted">{label}</span>
+      <span
+        className={cn(
+          "text-panel-text-muted",
+          title && "cursor-help underline decoration-dotted underline-offset-4"
+        )}
+        title={title}
+      >
+        {label}
+      </span>
       <span className="truncate text-panel-text">{value}</span>
     </div>
   );
 }
 
+/** Hourly funding from the chosen side's point of view: what it pays or receives. */
+function describeFunding(state: PerpState | null, side: PerpSide) {
+  if (state === null) {
+    return "—";
+  }
+  const sideRate = side === "long" ? state.uiLongFundingRate1h : -state.uiLongFundingRate1h;
+  if (sideRate === 0) {
+    return "0%/h";
+  }
+  const pct = `${(Math.abs(sideRate) * 100).toFixed(4)}%/h`;
+  return sideRate > 0 ? `pays ${pct}` : `receives ${pct}`;
+}
+
+type TicketInputs = {
+  availableMargin: number | null;
+  limitPrice: string;
+  margin: string;
+  orderType: PerpOrderType;
+  referencePrice: number | null;
+  side: PerpSide;
+  size: string;
+  state: PerpState | null;
+  takerFeeBps: number | null;
+};
+
+/** Everything the ticket shows that follows from its inputs: fee, margin needed, shortfall, liq. price. */
+function deriveTicket(inputs: TicketInputs) {
+  const sizeUsd = parseAmount(inputs.size);
+  const marginUsd = parseAmount(inputs.margin);
+  const entryPrice =
+    inputs.orderType === "Limit" ? parseAmount(inputs.limitPrice) : inputs.referencePrice;
+  const feeUsd =
+    sizeUsd !== null && inputs.takerFeeBps !== null
+      ? (sizeUsd * inputs.takerFeeBps) / 10_000
+      : null;
+  const requiredMargin =
+    sizeUsd !== null && inputs.state !== null
+      ? sizeUsd * inputs.state.initialMarginRate + (feeUsd ?? 0)
+      : null;
+  const shortfall =
+    requiredMargin !== null &&
+    inputs.availableMargin !== null &&
+    requiredMargin > inputs.availableMargin
+      ? requiredMargin - inputs.availableMargin
+      : null;
+  const liquidation =
+    inputs.state !== null && sizeUsd !== null && entryPrice !== null && marginUsd !== null
+      ? estimateLiquidationPrice({
+          entryPrice,
+          maintenanceMarginRate: inputs.state.maintenanceMarginRate,
+          margin: marginUsd,
+          side: inputs.side,
+          sizeUsd,
+        })
+      : null;
+  const needsPrice = inputs.orderType === "Limit" && parseAmount(inputs.limitPrice) === null;
+  return { feeUsd, liquidation, needsPrice, requiredMargin, shortfall, sizeUsd };
+}
+
+type ButtonInputs = {
+  availableMargin: number | null;
+  canSubmit: boolean;
+  hasWallet: boolean;
+  isLive: boolean;
+  isLong: boolean;
+  isPreparingAccount: boolean;
+  isSubmitting: boolean;
+  shortfall: number | null;
+};
+
+/** What the one button says: it connects, deposits, or trades, depending on what is missing. */
+function submitLabel(inputs: ButtonInputs) {
+  const trade = `${inputs.isLong ? "Long" : "Short"} USDC-cNGN-PERP`;
+  if (!inputs.isLive) {
+    return trade;
+  }
+  if (!inputs.hasWallet) {
+    return "Connect wallet";
+  }
+  if (inputs.isPreparingAccount) {
+    return "Loading account…";
+  }
+  if (inputs.isSubmitting) {
+    return "Submitting…";
+  }
+  if (inputs.availableMargin === null || inputs.shortfall !== null) {
+    return "Deposit margin";
+  }
+  return trade;
+}
+
+function isButtonEnabled(inputs: ButtonInputs) {
+  if (!inputs.isLive) {
+    return false;
+  }
+  return (
+    !inputs.hasWallet ||
+    inputs.availableMargin === null ||
+    inputs.shortfall !== null ||
+    inputs.canSubmit
+  );
+}
+
+function notLiveMessage(state: PerpState | null) {
+  if (state !== null && !state.tradingEnabled) {
+    return "The market opens at launch. Prices are live; orders are not accepted yet.";
+  }
+  return "Perp trading isn't live yet. Orders open when the market launches.";
+}
+
+function buttonClassName(enabled: boolean, isLong: boolean) {
+  if (!enabled) {
+    return "cursor-not-allowed bg-input-bg text-panel-text-muted ring-1 ring-panel-border";
+  }
+  return isLong
+    ? "cursor-pointer bg-buy text-background hover:bg-buy/90"
+    : "cursor-pointer bg-sell text-white hover:bg-sell/90";
+}
+
 /**
- * The perp order ticket. Every field works so the ticket can be read and filled in, but it cannot
- * submit: markets-service serves no perp market, so there is no order spec to sign against, no perp
- * account to report available collateral from, and no mark, funding rate or margin config to
- * quote. Those read `—` rather than an estimate.
- *
- * Margin and size are linked through leverage (size = margin × leverage), and either can be typed:
- * editing one rewrites the other, and moving leverage keeps the margin and resizes the position.
+ * The perp order ticket. Without a live perp (`state` null) it renders the form but cannot submit.
+ * With one, leverage is bounded by the SRM's ceiling, margin and size are linked through it
+ * (size = margin × leverage), and the order is checked against the account's initial-margin surplus
+ * before it is signed. Leverage only sizes the order: the SRM margins the whole account together,
+ * so there is no per-position leverage to set on chain.
  */
-export function PerpOrderFormPanel() {
+export function PerpOrderFormPanel({
+  availableMargin = null,
+  hasWallet = false,
+  isPreparingAccount = false,
+  isSubmitting = false,
+  lastAction = null,
+  onConnect,
+  onDepositRequest,
+  onSubmit,
+  referencePrice = null,
+  state = null,
+  takerFeeBps = null,
+}: {
+  /** The perp account's initial-margin surplus, USD; null before an account exists or is read. */
+  availableMargin?: number | null;
+  hasWallet?: boolean;
+  isPreparingAccount?: boolean;
+  isSubmitting?: boolean;
+  lastAction?: string | null;
+  onConnect?: () => void;
+  onDepositRequest?: () => void;
+  onSubmit?: (request: PerpOrderRequest) => void;
+  /** The price a market order would fill near, cNGN per USDC: the touch, else the mark. */
+  referencePrice?: number | null;
+  state?: PerpState | null;
+  takerFeeBps?: number | null;
+}) {
   const [side, setSide] = useState<PerpSide>("long");
   const [orderType, setOrderType] = useState<PerpOrderType>("Market");
   const [limitPrice, setLimitPrice] = useState("");
@@ -239,18 +415,33 @@ export function PerpOrderFormPanel() {
   const [size, setSize] = useState("");
   const [leverage, setLeverage] = useState(1);
 
+  const isLive = state?.tradingEnabled === true && onSubmit !== undefined;
+  const ceiling = getLeverageCeiling(state);
+  const effectiveLeverage = Math.min(leverage, ceiling);
   const isLong = side === "long";
+
+  const { feeUsd, liquidation, needsPrice, requiredMargin, shortfall, sizeUsd } = deriveTicket({
+    availableMargin,
+    limitPrice,
+    margin,
+    orderType,
+    referencePrice,
+    side,
+    size,
+    state,
+    takerFeeBps,
+  });
 
   function handleMarginChange(value: string) {
     setMargin(value);
     const parsed = parseAmount(value);
-    setSize(parsed === null ? "" : formatDerived(parsed * leverage));
+    setSize(parsed === null ? "" : formatDerived(parsed * effectiveLeverage));
   }
 
   function handleSizeChange(value: string) {
     setSize(value);
     const parsed = parseAmount(value);
-    setMargin(parsed === null ? "" : formatDerived(parsed / leverage));
+    setMargin(parsed === null ? "" : formatDerived(parsed / effectiveLeverage));
   }
 
   function handleLeverageChange(next: number) {
@@ -258,6 +449,37 @@ export function PerpOrderFormPanel() {
     const parsed = parseAmount(margin);
     if (parsed !== null) {
       setSize(formatDerived(parsed * next));
+    }
+  }
+
+  const canSubmit =
+    isLive && hasWallet && !isSubmitting && !isPreparingAccount && sizeUsd !== null && !needsPrice;
+  const buttonInputs: ButtonInputs = {
+    availableMargin,
+    canSubmit,
+    hasWallet,
+    isLive,
+    isLong,
+    isPreparingAccount,
+    isSubmitting,
+    shortfall,
+  };
+  const buttonEnabled = isButtonEnabled(buttonInputs);
+
+  function handleSubmitClick() {
+    if (!isLive) {
+      return;
+    }
+    if (!hasWallet) {
+      onConnect?.();
+      return;
+    }
+    if (availableMargin === null || shortfall !== null) {
+      onDepositRequest?.();
+      return;
+    }
+    if (canSubmit) {
+      onSubmit({ limitPrice, orderType, side, size });
     }
   }
 
@@ -277,11 +499,13 @@ export function PerpOrderFormPanel() {
         <div className="flex items-center justify-between gap-2 text-[11px]">
           <span
             className="cursor-help text-panel-text-muted underline decoration-dotted underline-offset-4"
-            title="Collateral in your perp account that can open new positions"
+            title="Initial-margin headroom in your perp account: what can back new positions"
           >
             Available to trade
           </span>
-          <span className="font-mono text-panel-text">— USDC</span>
+          <span className="font-mono text-panel-text">
+            {availableMargin === null ? "—" : USD.format(Math.max(0, availableMargin))} USDC
+          </span>
         </div>
 
         <div className="divide-y divide-panel-border rounded-sm bg-input-bg ring-1 ring-panel-border">
@@ -308,28 +532,49 @@ export function PerpOrderFormPanel() {
             unit={<TokenUnit icon="/tokens/usdc.svg" symbol="USDC" />}
             value={size}
           />
-          <LeverageSelector leverage={leverage} onSelect={handleLeverageChange} />
+          <LeverageSelector
+            ceiling={ceiling}
+            leverage={effectiveLeverage}
+            onSelect={handleLeverageChange}
+          />
         </div>
       </div>
 
       <div className="shrink-0 space-y-2 border-panel-border border-t bg-panel-bg-muted px-3 pt-1.5 pb-2 md:sticky md:bottom-0 md:z-10">
         <div className="space-y-1 text-[11px]">
-          <SummaryRow label="Est. liquidation price" value="—" />
-          <SummaryRow label="Funding rate" value="—" />
-          <SummaryRow label="Fee" value="—" />
+          <SummaryRow
+            label="Est. liquidation price"
+            title="For this margin alone; your whole perp account backs the position"
+            value={liquidation === null ? "—" : PRICE.format(liquidation)}
+          />
+          <SummaryRow label="Funding rate" value={describeFunding(state, side)} />
+          <SummaryRow label="Fee" value={feeUsd === null ? "—" : `${USD.format(feeUsd)} USDC`} />
         </div>
 
+        {shortfall !== null && hasWallet ? (
+          <p className="text-[10px] text-sell leading-snug">
+            Needs {USD.format(requiredMargin ?? 0)} USDC of margin; the account has{" "}
+            {USD.format(availableMargin ?? 0)}.
+          </p>
+        ) : null}
+
         <button
-          className="h-10 w-full cursor-not-allowed rounded-sm bg-input-bg font-semibold text-[13px] text-panel-text-muted ring-1 ring-panel-border"
-          disabled
+          className={cn(
+            "h-10 w-full rounded-sm font-semibold text-[13px] transition-colors",
+            buttonClassName(buttonEnabled, isLong)
+          )}
+          disabled={!buttonEnabled}
           id="perp-submit-cta"
+          onClick={handleSubmitClick}
           type="button"
         >
-          {isLong ? "Long" : "Short"} USDC-cNGN-PERP
+          {submitLabel(buttonInputs)}
         </button>
 
         <p className="text-[10px] text-panel-text-muted leading-snug">
-          Perp trading isn't live yet. Orders open when the market launches.
+          {isLive
+            ? (lastAction ?? "Orders rest for 24 hours unless filled or cancelled.")
+            : notLiveMessage(state)}
         </p>
       </div>
     </section>

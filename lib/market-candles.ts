@@ -59,7 +59,8 @@ export function toUiCandle(
     return null;
   }
 
-  if (marketType === "spot") {
+  // USDCcNGN-SPOT and USDCcNGN-PERP are both quoted in USD per cNGN/NGN on chain and shown inverted.
+  if (marketType === "spot" || marketType === "perp") {
     // Every engine price must be positive to invert; a zero would produce Infinity.
     if (open <= 0 || high <= 0 || low <= 0 || close <= 0) {
       return null;
