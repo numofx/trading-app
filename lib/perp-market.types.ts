@@ -2,7 +2,7 @@ import type { SpotMarket } from "@/lib/trading.types";
 
 /**
  * USDCcNGN-PERP's live state from markets-service `/v1/markets` (`perp`), parsed. Prices are the
- * venue's orientation, NGN per USD; the on-chain engine is USD per NGN.
+ * venue's orientation, cNGN per USDC; the on-chain engine is USDC per cNGN.
  */
 export type PerpState = {
   markPrice: number;

@@ -101,8 +101,8 @@ export function getLeverageCeiling(state: PerpState | null): number {
 
 /**
  * Where a new position would be liquidated, for an account that holds only this position and
- * `margin` of cash. Venue orientation in and out (NGN per USD); the arithmetic runs in the engine's
- * (USD per NGN), where maintenance surplus is linear in price:
+ * `margin` of cash. Venue orientation in and out (cNGN per USDC); the arithmetic runs in the engine's
+ * (USDC per cNGN), where maintenance surplus is linear in price:
  *
  *   surplus(e) = C + S·(e − e0) − |S|·mm·e
  *

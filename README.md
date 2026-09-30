@@ -12,7 +12,7 @@ about it from `markets-service`, with no env of its own:
 - `/v1/markets` lists `USDCcNGN-PERP` (`contract_type: perpetual`) with a `perp` object: mark, index,
   funding, margin rates, max leverage, and the module, cash and SRM a trader signs and deposits for.
   Until it does, `/perp` renders its not-live state: empty panels and a ticket that cannot submit.
-- Orders use spot's translation (NGN per USD on screen, USD per NGN on chain, side flipped) but are
+- Orders use spot's translation (cNGN per USDC on screen, USDC per cNGN on chain, side flipped) but are
   signed for the perp's module and asset. A trader's perp margin is a separate account under the perp
   SRM, opened by the first "Deposit margin"; it is not the spot account.
 - `/v1/positions` (proxied at `/api/positions`) serves positions and margin, polled every 15s.

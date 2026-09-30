@@ -58,7 +58,7 @@ function perpOpenOrdersView(view: ActivityView): ActivityView {
 }
 
 /**
- * The signed limit (and, for a market order, the price its size is counted at) in NGN per USD.
+ * The signed limit (and, for a market order, the price its size is counted at) in cNGN per USDC.
  * A market order crosses the touch the trader is looking at, with the same slippage room as spot's.
  */
 function resolvePerpOrderPrice(

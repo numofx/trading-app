@@ -17,7 +17,7 @@ type PerpOrderType = (typeof ORDER_TYPES)[number];
 export type PerpOrderRequest = {
   side: PerpSide;
   orderType: PerpOrderType;
-  /** NGN per USD; the limit for a limit order, ignored for a market order (priced off the touch). */
+  /** cNGN per USDC; the limit for a limit order, ignored for a market order (priced off the touch). */
   limitPrice: string;
   /** USD notional. */
   size: string;
@@ -403,7 +403,7 @@ export function PerpOrderFormPanel({
   onConnect?: () => void;
   onDepositRequest?: () => void;
   onSubmit?: (request: PerpOrderRequest) => void;
-  /** The price a market order would fill near, NGN per USD: the touch, else the mark. */
+  /** The price a market order would fill near, cNGN per USDC: the touch, else the mark. */
   referencePrice?: number | null;
   state?: PerpState | null;
   takerFeeBps?: number | null;
