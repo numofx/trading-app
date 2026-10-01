@@ -323,11 +323,13 @@ type ButtonInputs = {
   isPreparingAccount: boolean;
   isSubmitting: boolean;
   shortfall: number | null;
+  sizeUsd: number | null;
 };
 
 /** What the one button says: it connects, deposits, or trades, depending on what is missing. */
 function submitLabel(inputs: ButtonInputs) {
-  const trade = `${inputs.isLong ? "Long" : "Short"} USDC-cNGN-PERP`;
+  const amount = inputs.sizeUsd === null ? "" : ` ${USD.format(inputs.sizeUsd)} USDC`;
+  const trade = `${inputs.isLong ? "Long" : "Short"}${amount} USDC-cNGN-PERP`;
   if (!inputs.isLive) {
     return trade;
   }
@@ -376,10 +378,12 @@ function buttonClassName(enabled: boolean, isLong: boolean) {
 
 /**
  * The perp order ticket. Without a live perp (`state` null) it renders the form but cannot submit.
- * With one, leverage is bounded by the SRM's ceiling, margin and size are linked through it
- * (size = margin × leverage), and the order is checked against the account's initial-margin surplus
- * before it is signed. Leverage only sizes the order: the SRM margins the whole account together,
- * so there is no per-position leverage to set on chain.
+ * With one, leverage is bounded by the SRM's ceiling, size and margin are linked through it
+ * (margin = size / leverage), and the order is checked against the account's initial-margin surplus
+ * before it is signed. Size is what trades: it is the first field and the number the button and the
+ * summary repeat. Margin is what that size costs at the chosen leverage, editable the other way
+ * round for traders who think in margin. Leverage only sizes the order: the SRM margins the whole
+ * account together, so there is no per-position leverage to set on chain.
  */
 export function PerpOrderFormPanel({
   availableMargin = null,
@@ -463,6 +467,7 @@ export function PerpOrderFormPanel({
     isPreparingAccount,
     isSubmitting,
     shortfall,
+    sizeUsd,
   };
   const buttonEnabled = isButtonEnabled(buttonInputs);
 
@@ -519,15 +524,8 @@ export function PerpOrderFormPanel({
             />
           ) : null}
           <PerpCardField
-            id="perp-margin"
-            label="Margin"
-            onChange={handleMarginChange}
-            unit={<TokenUnit icon="/tokens/usdc.svg" symbol="USDC" />}
-            value={margin}
-          />
-          <PerpCardField
             id="perp-size"
-            label="Estimated size"
+            label="Size — what you trade (USD notional)"
             onChange={handleSizeChange}
             unit={<TokenUnit icon="/tokens/usdc.svg" symbol="USDC" />}
             value={size}
@@ -537,11 +535,28 @@ export function PerpOrderFormPanel({
             leverage={effectiveLeverage}
             onSelect={handleLeverageChange}
           />
+          <PerpCardField
+            id="perp-margin"
+            label={`Margin — what it costs you (size ÷ ${effectiveLeverage}x)`}
+            onChange={handleMarginChange}
+            unit={<TokenUnit icon="/tokens/usdc.svg" symbol="USDC" />}
+            value={margin}
+          />
         </div>
       </div>
 
       <div className="shrink-0 space-y-2 border-panel-border border-t bg-panel-bg-muted px-3 pt-1.5 pb-2 md:sticky md:bottom-0 md:z-10">
         <div className="space-y-1 text-[11px]">
+          {sizeUsd === null ? null : (
+            <p className="pb-0.5 text-panel-text leading-snug">
+              {isLong ? "Long" : "Short"}{" "}
+              <span className="font-mono">{USD.format(sizeUsd)} USDC</span> of USDC-cNGN-PERP, using{" "}
+              <span className="font-mono">
+                {USD.format(parseAmount(margin) ?? sizeUsd / effectiveLeverage)} USDC
+              </span>{" "}
+              of margin at {effectiveLeverage}x.
+            </p>
+          )}
           <SummaryRow
             label="Est. liquidation price"
             title="For this margin alone; your whole perp account backs the position"

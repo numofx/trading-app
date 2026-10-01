@@ -29,6 +29,7 @@ import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import { PerpMarginDialog } from "@/ui/trading-terminal/PerpMarginDialog";
 import type { PerpOrderRequest } from "@/ui/trading-terminal/PerpOrderFormPanel";
 import { PerpOrderFormPanel } from "@/ui/trading-terminal/PerpOrderFormPanel";
+import { PerpWithdrawDialog } from "@/ui/trading-terminal/PerpWithdrawDialog";
 import type { SpotChartTab, SpotTimeframe } from "@/ui/trading-terminal/SpotChartPanel";
 import { SpotChartPanel } from "@/ui/trading-terminal/SpotChartPanel";
 import type { SpotBookTab } from "@/ui/trading-terminal/SpotOrderBookPanel";
@@ -82,8 +83,13 @@ function resolvePerpOrderPrice(
 
 type SigningWallet = NonNullable<ReturnType<typeof usePrimaryWallet>["primaryWallet"]>;
 
-/** Signs a perp order for the perp's own module and asset, then posts it. */
+/**
+ * Signs a perp order for the perp's own module and asset, then posts it. `engineAmountWhole` sizes
+ * the order in cNGN contracts directly, for closing a position exactly; otherwise the size is the
+ * USD notional counted at the sizing price.
+ */
 async function signAndPostPerpOrder({
+  engineAmountWhole,
   market,
   onAwaitingSignature,
   price,
@@ -92,6 +98,7 @@ async function signAndPostPerpOrder({
   subaccountId,
   wallet,
 }: {
+  engineAmountWhole?: bigint;
   market: PerpMarket;
   onAwaitingSignature: () => void;
   price: { uiPrice: string; uiSizingPrice?: string };
@@ -105,6 +112,7 @@ async function signAndPostPerpOrder({
   const provider = await wallet.getEthereumProvider();
   const walletClient = createWalletClient({ chain: appChain, transport: custom(provider) });
   const envelope = buildSpotOrderEnvelope({
+    engineAmountWhole,
     market: {
       assetAddress: market.stack.assetAddress,
       orderIdPrefix: "perp",
@@ -166,6 +174,119 @@ function buildEmptyState(
     return { body: "Positions you open will appear here.", title: "No positions" };
   }
   return undefined;
+}
+
+/**
+ * The market order that flattens a position: the opposite UI side, priced at the touch like any
+ * market order, sized in the engine's contracts. The USD size is only reported, never signed.
+ */
+function buildCloseRequest(
+  position: PerpPosition,
+  touch: { bestAsk: number | null; bestBid: number | null; price: number | null }
+):
+  | {
+      engineSize: bigint;
+      price: { uiPrice: string; uiSizingPrice?: string };
+      sizeUsd: string;
+      uiSide: "buy" | "sell";
+    }
+  | { error: string } {
+  if (position.engineSize === null) {
+    return {
+      error: "This position cannot be closed from here: the venue did not report its size.",
+    };
+  }
+  const uiSide = position.uiSide === "long" ? "sell" : "buy";
+  const resolved = resolvePerpOrderPrice(
+    {
+      limitPrice: "",
+      orderType: "Market",
+      side: position.uiSide === "long" ? "short" : "long",
+      size: "",
+    },
+    uiSide,
+    touch
+  );
+  if ("error" in resolved) {
+    return resolved;
+  }
+  const sizingPrice = Number(resolved.uiSizingPrice ?? resolved.uiPrice);
+  return {
+    engineSize: position.engineSize,
+    price: resolved,
+    sizeUsd: (Number(position.engineSize) / sizingPrice).toFixed(6),
+    uiSide,
+  };
+}
+
+const ROW_BUTTON_CLASSES =
+  "cursor-pointer rounded-lg bg-input-bg px-2 py-1 font-medium text-[10px] text-panel-text ring-1 ring-panel-border transition-colors hover:text-panel-text-active disabled:cursor-wait disabled:opacity-60";
+
+/**
+ * The button at the end of each row: Cancel on an open order, Close on a position, Withdraw on the
+ * margin row. Each is the one action the row is for.
+ */
+function buildRowAction(inputs: {
+  bottomTab: PerpBottomTab;
+  cancellingNonce: string | null;
+  closingIndex: number | null;
+  hasWallet: boolean;
+  isSubmitting: boolean;
+  market: PerpMarket | null;
+  onCancel: (nonce: string, ownerAddress: string) => void;
+  onClose: (position: PerpPosition, rowIndex: number) => void;
+  onWithdraw: () => void;
+  ownedOpenOrders: { nonce: string; ownerAddress: string }[];
+  positions: PerpPosition[];
+}) {
+  if (inputs.market === null || !inputs.hasWallet) {
+    return undefined;
+  }
+  const { bottomTab } = inputs;
+  if (bottomTab === "open-orders") {
+    return (rowIndex: number) => {
+      const order = inputs.ownedOpenOrders[rowIndex];
+      if (!order) {
+        return null;
+      }
+      const busy = inputs.cancellingNonce === order.nonce;
+      return (
+        <button
+          className={ROW_BUTTON_CLASSES}
+          disabled={busy}
+          onClick={() => inputs.onCancel(order.nonce, order.ownerAddress)}
+          type="button"
+        >
+          {busy ? "Cancelling…" : "Cancel"}
+        </button>
+      );
+    };
+  }
+  if (bottomTab === "positions") {
+    return (rowIndex: number) => {
+      const position = inputs.positions[rowIndex];
+      if (!position || position.engineSize === null) {
+        return null;
+      }
+      const busy = inputs.closingIndex === rowIndex;
+      return (
+        <button
+          className={ROW_BUTTON_CLASSES}
+          disabled={inputs.isSubmitting}
+          onClick={() => inputs.onClose(position, rowIndex)}
+          title="Market order for the exact position size, on the opposite side"
+          type="button"
+        >
+          {busy ? "Closing…" : "Close"}
+        </button>
+      );
+    };
+  }
+  return () => (
+    <button className={ROW_BUTTON_CLASSES} onClick={inputs.onWithdraw} type="button">
+      Withdraw
+    </button>
+  );
 }
 
 type SignedOrderResponse = { body: { error?: string } | null; ok: boolean; status: number };
@@ -241,9 +362,11 @@ export function PerpTradingTerminal({ market }: { market: PerpMarket | null }) {
   const [bookTab, setBookTab] = useState<SpotBookTab>("book");
   const [bottomTab, setBottomTab] = useState<PerpBottomTab>("positions");
   const [depositOpen, setDepositOpen] = useState(false);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastAction, setLastAction] = useState<string | null>(null);
   const [cancellingNonce, setCancellingNonce] = useState<string | null>(null);
+  const [closingIndex, setClosingIndex] = useState<number | null>(null);
 
   const stack = market?.stack ?? null;
   const account = useTradingSubaccount(
@@ -314,6 +437,66 @@ export function PerpTradingTerminal({ market }: { market: PerpMarket | null }) {
       setLastAction(error instanceof Error ? error.message : "Perp order submission failed");
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  /**
+   * Closes a position with a market order on the opposite side, sized in the engine's own contracts
+   * so the account lands on exactly zero. The venue has no reduce-only flag; the exact size is what
+   * keeps a close from becoming a flip, and a partial fill leaves a smaller position, never a new one.
+   */
+  async function handleClose(position: PerpPosition, rowIndex: number) {
+    if (market === null || primaryWallet === null || account.subaccountId === null) {
+      return;
+    }
+    const close = buildCloseRequest(position, { bestAsk, bestBid, price });
+    if ("error" in close) {
+      setLastAction(close.error);
+      return;
+    }
+    const event = {
+      market_id: "cngn-usdc-perp",
+      order_side: close.uiSide === "buy" ? "long" : "short",
+      order_type: "Close",
+      size_usdc_notional: close.sizeUsd,
+    };
+    setClosingIndex(rowIndex);
+    setIsSubmitting(true);
+    try {
+      const { body, ok, status } = await signAndPostPerpOrder({
+        engineAmountWhole: close.engineSize,
+        market,
+        price: close.price,
+        side: close.uiSide,
+        size: close.sizeUsd,
+        subaccountId: account.subaccountId,
+        wallet: primaryWallet,
+        onAwaitingSignature: () =>
+          setLastAction(
+            `Awaiting wallet signature to close ${position.uiSide} ${close.engineSize} cNGN`
+          ),
+      });
+      if (!ok) {
+        posthog.capture("order_rejected", {
+          ...event,
+          error_message: body?.error ?? null,
+          http_status: status,
+        });
+        setLastAction(body?.error ?? "Close failed");
+        return;
+      }
+      posthog.capture("order_submitted", event);
+      setLastAction("Close order accepted. The position updates once it fills.");
+      perpAccount.refresh();
+      router.refresh();
+    } catch (error) {
+      posthog.captureException(error, {
+        properties: { market_id: "cngn-usdc-perp", order_type: "Close" },
+      });
+      setLastAction(error instanceof Error ? error.message : "Close failed");
+    } finally {
+      setIsSubmitting(false);
+      setClosingIndex(null);
     }
   }
 
@@ -431,26 +614,19 @@ export function PerpTradingTerminal({ market }: { market: PerpMarket | null }) {
               footerLinks={FOOTER_LINKS}
               isSignedIn={isSignedIn}
               onTabSelect={(tab) => setBottomTab(tab as PerpBottomTab)}
-              rowAction={
-                bottomTab === "open-orders" && market !== null
-                  ? (rowIndex) => {
-                      const order = ownedOpenOrders[rowIndex];
-                      if (!order) {
-                        return null;
-                      }
-                      return (
-                        <button
-                          className="cursor-pointer rounded-lg bg-input-bg px-2 py-1 font-medium text-[10px] text-panel-text ring-1 ring-panel-border transition-colors hover:text-panel-text-active disabled:cursor-wait disabled:opacity-60"
-                          disabled={cancellingNonce === order.nonce}
-                          onClick={() => void handleCancel(order.nonce, order.ownerAddress)}
-                          type="button"
-                        >
-                          {cancellingNonce === order.nonce ? "Cancelling…" : "Cancel"}
-                        </button>
-                      );
-                    }
-                  : undefined
-              }
+              rowAction={buildRowAction({
+                bottomTab,
+                closingIndex,
+                cancellingNonce,
+                hasWallet: primaryWallet !== null,
+                isSubmitting,
+                market,
+                onCancel: (nonce, ownerAddress) => void handleCancel(nonce, ownerAddress),
+                onClose: (position, rowIndex) => void handleClose(position, rowIndex),
+                onWithdraw: () => setWithdrawOpen(true),
+                ownedOpenOrders,
+                positions: perpAccount.positions,
+              })}
               selectedTab={bottomTab}
               tabs={PERP_BOTTOM_TABS}
             />
@@ -458,6 +634,17 @@ export function PerpTradingTerminal({ market }: { market: PerpMarket | null }) {
         </div>
       </div>
 
+      {stack === null ? null : (
+        <PerpWithdrawDialog
+          account={perpAccount.account}
+          onOpenChange={setWithdrawOpen}
+          onWithdrawn={() => perpAccount.refresh()}
+          open={withdrawOpen}
+          stack={stack}
+          subaccountId={account.subaccountId}
+          wallet={primaryWallet}
+        />
+      )}
       {stack === null ? null : (
         <PerpMarginDialog
           onDeposited={(subaccountId) => {
