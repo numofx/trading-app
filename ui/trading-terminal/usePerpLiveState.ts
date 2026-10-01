@@ -68,6 +68,7 @@ const CLOSED_FALLBACK: PerpState = {
   markPrice: 0,
   maxLeverage: 1,
   openInterestUsd: 0,
+  paused: false,
   tradingEnabled: false,
   uiLongFundingRate1h: 0,
 };

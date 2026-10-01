@@ -21,8 +21,11 @@ export type PerpState = {
   /**
    * Whether the venue accepts perp orders: the trade module is allowed on Matching and the position
    * cap is above zero. The stack deploys closed, so this is false until the launch vault action.
+   * Also false while `paused` holds.
    */
   tradingEnabled: boolean;
+  /** The SRM guardian's pause: trades, deposits, withdrawals and liquidation bids all revert. */
+  paused: boolean;
 };
 
 /** Where perp orders are signed for and margin is deposited. Checksummed by the caller. */
