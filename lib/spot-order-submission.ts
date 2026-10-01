@@ -238,6 +238,7 @@ export function buildSpotOrderEnvelope({
   subaccountId,
   walletAddress,
   market,
+  engineAmountWhole: engineAmountOverride,
 }: {
   /** The signed limit, in cNGN per USDC. */
   uiPrice: string;
@@ -254,6 +255,12 @@ export function buildSpotOrderEnvelope({
   walletAddress: string;
   /** Omit for spot. */
   market?: OrderMarketOverride;
+  /**
+   * Sizes the order in whole cNGN directly, instead of from `uiSize` x the sizing price. For closing
+   * a perp position exactly: the engine holds the position in cNGN contracts, and a size derived
+   * from a USD figure lands a contract short or long of flat after rounding.
+   */
+  engineAmountWhole?: bigint;
 }) {
   if (!UNSIGNED_INTEGER_PATTERN.test(subaccountId)) {
     throw new Error("Trading subaccount ID must be an unsigned integer");
@@ -298,7 +305,7 @@ export function buildSpotOrderEnvelope({
   // one was given, so a limit order is sized exactly as before.
   const productNumerator = sizeRational.numerator * sizingRational.numerator;
   const productDenominator = sizeRational.denominator * sizingRational.denominator;
-  const engineAmountWhole = productNumerator / productDenominator;
+  const engineAmountWhole = engineAmountOverride ?? productNumerator / productDenominator;
 
   if (engineAmountWhole < 1n) {
     throw new Error("Order too small: USDC size × price must be at least 1 cNGN");

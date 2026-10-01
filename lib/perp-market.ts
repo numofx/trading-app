@@ -1,10 +1,12 @@
-import { getAddress, isAddress } from "viem";
+import { getAddress, isAddress, parseUnits } from "viem";
 import type {
   PerpAccountMargin,
   PerpPosition,
   PerpStack,
   PerpState,
 } from "@/lib/perp-market.types";
+import { getUsdcTokenAddress } from "@/lib/subaccount-deposit-config";
+import type { WithdrawableAsset } from "@/lib/withdrawable-assets";
 
 /** The `perp` object markets-service serves on `/v1/markets` for the perpetual. */
 export type PerpStatePresentation = {
@@ -21,6 +23,30 @@ export type PerpStatePresentation = {
   quote_asset_address?: string;
   margin_manager_address?: string;
 };
+
+const WHOLE_NUMBER_PATTERN = /^-?\d+$/;
+const LEDGER_DECIMAL_PATTERN = /^-?\d+(\.\d{1,18})?$/;
+
+/** A whole-number string as an unsigned bigint, or null. */
+function wholeMagnitude(value: string | undefined): bigint | null {
+  if (value === undefined || !WHOLE_NUMBER_PATTERN.test(value.trim())) {
+    return null;
+  }
+  const parsed = BigInt(value.trim());
+  return parsed < 0n ? -parsed : parsed;
+}
+
+/** A decimal string in ledger units (18 decimals), or null when it is not one. */
+function ledgerUnits(value: string | undefined): bigint | null {
+  if (value === undefined || !LEDGER_DECIMAL_PATTERN.test(value.trim())) {
+    return null;
+  }
+  try {
+    return parseUnits(value.trim(), 18);
+  } catch {
+    return null;
+  }
+}
 
 function finite(value: string | undefined): number | null {
   if (value === undefined || value.trim() === "") {
@@ -140,6 +166,8 @@ export function estimateLiquidationPrice({
 type PresentedPositionPayload = {
   ui_side?: string;
   ui_size?: string;
+  /** Signed whole cNGN contracts; negative is the venue's long. */
+  engine_position?: string;
   mark_price_ui?: string;
   unrealized_pnl?: string;
   initial_margin_surplus?: string;
@@ -165,6 +193,7 @@ export function parsePositionsResponse(body: unknown): {
   const positions: PerpPosition[] = [];
   for (const row of payload.positions ?? []) {
     const uiSize = positive(row.ui_size);
+    const engineSize = wholeMagnitude(row.engine_position);
     const markPrice = positive(row.mark_price_ui);
     const unrealizedPnl = finite(row.unrealized_pnl);
     const initialMarginSurplus = finite(row.initial_margin_surplus);
@@ -172,6 +201,7 @@ export function parsePositionsResponse(body: unknown): {
     if (
       (row.ui_side !== "long" && row.ui_side !== "short") ||
       uiSize === null ||
+      engineSize === 0n ||
       markPrice === null ||
       unrealizedPnl === null ||
       initialMarginSurplus === null ||
@@ -180,6 +210,7 @@ export function parsePositionsResponse(body: unknown): {
       continue;
     }
     positions.push({
+      engineSize,
       initialMarginSurplus,
       liquidationPrice: positive(row.liquidation_price_ui),
       maintenanceMarginSurplus,
@@ -192,13 +223,29 @@ export function parsePositionsResponse(body: unknown): {
 
   const first = payload.accounts?.[0];
   const cash = finite(first?.cash);
+  const cashUnits = ledgerUnits(first?.cash);
   const im = finite(first?.initial_margin_surplus);
   const mm = finite(first?.maintenance_margin_surplus);
   const account =
-    cash !== null && im !== null && mm !== null
-      ? { cash, initialMarginSurplus: im, maintenanceMarginSurplus: mm }
+    cash !== null && cashUnits !== null && im !== null && mm !== null
+      ? { cash, cashUnits, initialMarginSurplus: im, maintenanceMarginSurplus: mm }
       : null;
   return { account, positions };
+}
+
+/**
+ * The perp margin as something the withdraw flow can pay out: the escrow is the perp's CashAsset
+ * (it holds real USDC and its `withdraw` has the same shape as the spot escrows'), the token is
+ * USDC. Withdrawn by a signed WithdrawalModule action, like spot, since Matching holds the account.
+ */
+export function getPerpWithdrawableAsset(stack: PerpStack): WithdrawableAsset {
+  return {
+    escrow: stack.cashAddress,
+    id: "perp-cash",
+    label: "Perp margin",
+    symbol: "USDC",
+    token: getUsdcTokenAddress(),
+  };
 }
 
 const USD_CELL = new Intl.NumberFormat("en-US", {

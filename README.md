@@ -14,7 +14,12 @@ about it from `markets-service`, with no env of its own:
   Until it does, `/perp` renders its not-live state: empty panels and a ticket that cannot submit.
 - Orders use spot's translation (cNGN per USDC on screen, USDC per cNGN on chain, side flipped) but are
   signed for the perp's module and asset. A trader's perp margin is a separate account under the perp
-  SRM, opened by the first "Deposit margin"; it is not the spot account.
+  SRM, opened by the first "Deposit margin"; it is not the spot account. "Withdraw" on the Margin
+  tab signs a WithdrawalModule action for the perp's CashAsset, like a spot withdrawal, and the
+  venue pays USDC to the wallet; cash backing an open position is refused by the venue's
+  simulation. "Close" on a position row sends a market order on the opposite side sized in the
+  engine's own cNGN contracts (`engineAmountWhole`), so the account lands on exactly zero; the venue
+  has no reduce-only flag, the exact size is what keeps a close from becoming a flip.
 - `/v1/positions` (proxied at `/api/positions`) serves positions and margin, polled every 15s.
 
 The earlier dated-futures terminal was removed; the perp is a new market, not a restoration of it.

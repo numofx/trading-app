@@ -45,6 +45,12 @@ export type PerpPosition = {
   uiSide: "long" | "short";
   /** USD notional at the index. */
   uiSize: number;
+  /**
+   * The position as the engine holds it: whole cNGN contracts, unsigned. What a close must trade to
+   * reach exactly zero; the USD figure above moves with the index and cannot. Null from a
+   * markets-service that does not report `engine_position`, which hides Close.
+   */
+  engineSize: bigint | null;
   markPrice: number;
   unrealizedPnl: number;
   initialMarginSurplus: number;
@@ -55,6 +61,8 @@ export type PerpPosition = {
 /** The account's margin on the perp stack, whether or not it holds a position. */
 export type PerpAccountMargin = {
   cash: number;
+  /** The same cash as the ledger holds it, 18 decimals: what a withdrawal is checked against. */
+  cashUnits: bigint;
   initialMarginSurplus: number;
   maintenanceMarginSurplus: number;
 };
