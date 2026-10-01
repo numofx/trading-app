@@ -37,6 +37,7 @@ import { SpotOrderBookPanel } from "@/ui/trading-terminal/SpotOrderBookPanel";
 import { TerminalHeaderBar } from "@/ui/trading-terminal/TerminalHeaderBar";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
 import { useMarketOrderBook } from "@/ui/trading-terminal/useMarketOrderBook";
+import { usePerpLiveState } from "@/ui/trading-terminal/usePerpLiveState";
 import { usePerpPositions } from "@/ui/trading-terminal/usePerpPositions";
 import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
 import { usePrimaryWallet } from "@/ui/usePrimaryWallet";
@@ -347,7 +348,9 @@ function PerpDepositButton({ onClick }: { onClick: () => void }) {
  * streams, the account is the wallet's own under the perp SRM (separate from its spot account),
  * orders are signed for the perp's module and asset, and positions and margin are read from chain.
  */
-export function PerpTradingTerminal({ market }: { market: PerpMarket | null }) {
+export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMarket | null }) {
+  // The chain state the page rendered with, kept current: the ticket opens and closes with the venue.
+  const market = usePerpLiveState(renderedMarket);
   const router = useRouter();
   const { authenticated, ready } = usePrivy();
   const { login } = useLogin();
