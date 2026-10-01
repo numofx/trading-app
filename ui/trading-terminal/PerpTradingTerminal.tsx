@@ -7,7 +7,11 @@ import { useState } from "react";
 import { createWalletClient, custom } from "viem";
 import { buildOpenOrdersActivityView, getOwnedOpenOrders } from "@/lib/account-activity-views";
 import { getAppChain } from "@/lib/base-public-client";
-import { buildPerpMarginView, buildPerpPositionsView } from "@/lib/perp-market";
+import {
+  buildPerpMarginView,
+  buildPerpPositionsView,
+  describeOrderRejection,
+} from "@/lib/perp-market";
 import type { PerpAccountMargin, PerpMarket, PerpPosition } from "@/lib/perp-market.types";
 import {
   PERP_ACTIVITY_VIEWS,
@@ -426,7 +430,7 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
           error_message: body?.error ?? null,
           http_status: status,
         });
-        setLastAction(body?.error ?? "Perp order submission failed");
+        setLastAction(describeOrderRejection(body?.error, "Perp order submission failed"));
         return;
       }
       posthog.capture("order_submitted", event);
@@ -485,7 +489,7 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
           error_message: body?.error ?? null,
           http_status: status,
         });
-        setLastAction(body?.error ?? "Close failed");
+        setLastAction(describeOrderRejection(body?.error, "Close failed"));
         return;
       }
       posthog.capture("order_submitted", event);

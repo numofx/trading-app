@@ -3,7 +3,11 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
-import { estimateLiquidationPrice, getLeverageCeiling } from "@/lib/perp-market";
+import {
+  estimateLiquidationPrice,
+  getLeverageCeiling,
+  TRADING_PAUSED_MESSAGE,
+} from "@/lib/perp-market";
 import type { PerpState } from "@/lib/perp-market.types";
 import { PERP_LEVERAGE_PRESETS } from "@/lib/perp-terminal-config";
 import { SmartImage } from "@/ui/SmartImage";
@@ -321,6 +325,7 @@ type ButtonInputs = {
   isLive: boolean;
   isLong: boolean;
   isPreparingAccount: boolean;
+  isPaused: boolean;
   isSubmitting: boolean;
   shortfall: number | null;
   sizeUsd: number | null;
@@ -330,6 +335,9 @@ type ButtonInputs = {
 function submitLabel(inputs: ButtonInputs) {
   const amount = inputs.sizeUsd === null ? "" : ` ${USD.format(inputs.sizeUsd)} USDC`;
   const trade = `${inputs.isLong ? "Long" : "Short"}${amount} USDC-cNGN-PERP`;
+  if (inputs.isPaused) {
+    return "Trading paused";
+  }
   if (!inputs.isLive) {
     return trade;
   }
@@ -361,6 +369,9 @@ function isButtonEnabled(inputs: ButtonInputs) {
 }
 
 function notLiveMessage(state: PerpState | null) {
+  if (state?.paused) {
+    return TRADING_PAUSED_MESSAGE;
+  }
   if (state !== null && !state.tradingEnabled) {
     return "The market opens at launch. Prices are live; orders are not accepted yet.";
   }
@@ -465,6 +476,7 @@ export function PerpOrderFormPanel({
     isLive,
     isLong,
     isPreparingAccount,
+    isPaused: state?.paused === true,
     isSubmitting,
     shortfall,
     sizeUsd,

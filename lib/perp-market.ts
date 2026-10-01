@@ -19,6 +19,8 @@ export type PerpStatePresentation = {
   maintenance_margin_rate?: string;
   max_leverage?: string;
   trading_enabled?: boolean;
+  /** The SRM guardian's pause: every adjustment on the perp's accounts reverts while it holds. */
+  paused?: boolean;
   trade_module_address?: string;
   quote_asset_address?: string;
   margin_manager_address?: string;
@@ -93,6 +95,7 @@ export function parsePerpState(perp: PerpStatePresentation | undefined): PerpSta
     markPrice,
     maxLeverage,
     openInterestUsd: finite(perp.open_interest_usd) ?? 0,
+    paused: perp.paused === true,
     // Absent reads as closed: an older markets-service that does not report it cannot vouch for it.
     tradingEnabled: perp.trading_enabled === true,
     uiLongFundingRate1h,
@@ -115,6 +118,21 @@ export function parsePerpStack(
   }
   const [asset, module, cash, srm] = candidates.map((value) => getAddress(value));
   return { assetAddress: asset, cashAddress: cash, srmAddress: srm, tradeModuleAddress: module };
+}
+
+/** The venue's stable error token for an order refused while the guardian's pause holds. */
+export const TRADING_PAUSED_ERROR = "trading_paused";
+
+/** What the ticket shows while the perp is paused, in place of the venue's raw error. */
+export const TRADING_PAUSED_MESSAGE =
+  "Trading paused by the venue. Open positions stay as they are; orders resume when the pause lifts.";
+
+/** A venue rejection, as the ticket should show it: the pause gets its own wording, the rest passes through. */
+export function describeOrderRejection(error: string | null | undefined, fallback: string) {
+  if (error?.startsWith(TRADING_PAUSED_ERROR)) {
+    return TRADING_PAUSED_MESSAGE;
+  }
+  return error ?? fallback;
 }
 
 /** The most leverage the ticket offers: the SRM's ceiling, whole numbers only, never below 1. */
