@@ -103,7 +103,14 @@ export type PerpHedge = {
   lockedUsd: number;
   /** Long-USD notional held now (0 when flat or, abnormally, long naira). */
   hedgedUsd: number;
-  /** What the ticket may still open: locked less hedged, never negative. */
+  /** The same, in the engine's cNGN contracts: what the venue's 1:1 bound counts. */
+  hedgedCngn: number;
+  /**
+   * cNGN contracts the account may still go long USD with: collateral less hedged, never negative.
+   * The venue's bound is in contracts, so a ticket converts this at its own price, not the index.
+   */
+  roomCngn: number;
+  /** `roomCngn` at the index, for display. */
   roomUsd: number;
   /** Funding on the whole locked value at the current rate: positive means the hedge pays. */
   fundingPerDayUsd: number;

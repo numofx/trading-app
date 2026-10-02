@@ -413,17 +413,20 @@ export function buildPerpHedge(
   }
   const collateralCngn = cngn.reduce((sum, row) => sum + row.balance, 0);
   const lockedUsd = cngn.reduce((sum, row) => sum + row.valueUsd, 0);
-  const hedgedUsd = positions
-    .filter((position) => position.uiSide === "long")
-    .reduce((sum, position) => sum + position.uiSize, 0);
+  const longs = positions.filter((position) => position.uiSide === "long");
+  const hedgedUsd = longs.reduce((sum, position) => sum + position.uiSize, 0);
+  const hedgedCngn = longs.reduce((sum, position) => sum + Number(position.engineSize ?? 0n), 0);
+  const roomCngn = Math.max(0, collateralCngn - hedgedCngn);
   const fundingPerDayUsd = lockedUsd * state.uiLongFundingRate1h * HOURS_PER_DAY;
   return {
     collateralCngn,
     fundingPerDayUsd,
     fundingPerMonthUsd: fundingPerDayUsd * DAYS_PER_MONTH,
+    hedgedCngn,
     hedgedUsd,
     lockedUsd,
-    roomUsd: Math.max(0, lockedUsd - hedgedUsd),
+    roomCngn,
+    roomUsd: state.indexPrice > 0 ? roomCngn / state.indexPrice : 0,
   };
 }
 

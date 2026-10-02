@@ -327,12 +327,27 @@ function deriveTicket(inputs: TicketInputs) {
         })
       : null;
   const needsPrice = inputs.orderType === "Limit" && parseAmount(inputs.limitPrice) === null;
-  // Hedge mode: the venue refuses long USD past the cNGN posted, so the ticket stops there too.
+  // Hedge mode: the venue refuses long USD past the cNGN posted. Its bound is in cNGN contracts,
+  // which this order's own price sets (size x cNGN per USDC), so the room is converted at that
+  // price, not the index; a market order fills near the touch.
+  const roomUsdAtPrice =
+    inputs.hedge !== null && entryPrice !== null && entryPrice > 0
+      ? inputs.hedge.roomCngn / entryPrice
+      : (inputs.hedge?.roomUsd ?? null);
   const hedgeExcess =
-    inputs.hedge !== null && sizeUsd !== null && sizeUsd > inputs.hedge.roomUsd
-      ? sizeUsd - inputs.hedge.roomUsd
+    roomUsdAtPrice !== null && sizeUsd !== null && sizeUsd > roomUsdAtPrice
+      ? sizeUsd - roomUsdAtPrice
       : null;
-  return { feeUsd, hedgeExcess, liquidation, needsPrice, requiredMargin, shortfall, sizeUsd };
+  return {
+    feeUsd,
+    hedgeExcess,
+    liquidation,
+    needsPrice,
+    requiredMargin,
+    roomUsdAtPrice,
+    shortfall,
+    sizeUsd,
+  };
 }
 
 /** Everything the ticket needs before the button trades. */
@@ -511,19 +526,27 @@ export function PerpOrderFormPanel({
   const effectiveSide: PerpSide = hedge === null ? side : "long";
   const isLong = effectiveSide === "long";
 
-  const { feeUsd, hedgeExcess, liquidation, needsPrice, requiredMargin, shortfall, sizeUsd } =
-    deriveTicket({
-      availableMargin,
-      hedge,
-      limitPrice,
-      margin,
-      orderType,
-      referencePrice,
-      side: effectiveSide,
-      size,
-      state,
-      takerFeeBps,
-    });
+  const {
+    feeUsd,
+    hedgeExcess,
+    liquidation,
+    needsPrice,
+    requiredMargin,
+    roomUsdAtPrice,
+    shortfall,
+    sizeUsd,
+  } = deriveTicket({
+    availableMargin,
+    hedge,
+    limitPrice,
+    margin,
+    orderType,
+    referencePrice,
+    side: effectiveSide,
+    size,
+    state,
+    takerFeeBps,
+  });
 
   function handleMarginChange(value: string) {
     setMargin(value);
@@ -677,7 +700,8 @@ export function PerpOrderFormPanel({
         {hedgeExcess !== null && hedge !== null ? (
           <p className="text-[10px] text-sell leading-snug">
             Over the hedge by {USD.format(hedgeExcess)} USDC: your cNGN allows{" "}
-            {USD.format(hedge.roomUsd)} USDC more of long USD. Post more cNGN to go larger.
+            {USD.format(roomUsdAtPrice ?? hedge.roomUsd)} USDC more of long USD at this price. Post
+            more cNGN to go larger.
           </p>
         ) : null}
 
