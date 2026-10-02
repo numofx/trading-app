@@ -3,6 +3,7 @@ import type {
   PerpAccountMargin,
   PerpCollateralAsset,
   PerpCollateralBalance,
+  PerpHedge,
   PerpPosition,
   PerpStack,
   PerpState,
@@ -387,6 +388,42 @@ export function getPerpCollateralWithdrawableAsset(
     label: "Perp cNGN margin",
     symbol: "cNGN",
     token: getCngnTokenAddress(),
+  };
+}
+
+const HOURS_PER_DAY = 24;
+const DAYS_PER_MONTH = 30;
+
+/**
+ * Hedge mode for the ticket, or null for an account that posted no cNGN. The locked value is the
+ * collateral at the index (the venue's 1:1 bound is in cNGN, which is the same thing at the index);
+ * funding is quoted on all of it, as the venue's long pays it.
+ */
+export function buildPerpHedge(
+  account: PerpAccountMargin | null,
+  positions: PerpPosition[],
+  state: PerpState | null
+): PerpHedge | null {
+  if (account === null || state === null) {
+    return null;
+  }
+  const cngn = account.collateral.filter((row) => row.symbol === "cNGN");
+  if (cngn.length === 0) {
+    return null;
+  }
+  const collateralCngn = cngn.reduce((sum, row) => sum + row.balance, 0);
+  const lockedUsd = cngn.reduce((sum, row) => sum + row.valueUsd, 0);
+  const hedgedUsd = positions
+    .filter((position) => position.uiSide === "long")
+    .reduce((sum, position) => sum + position.uiSize, 0);
+  const fundingPerDayUsd = lockedUsd * state.uiLongFundingRate1h * HOURS_PER_DAY;
+  return {
+    collateralCngn,
+    fundingPerDayUsd,
+    fundingPerMonthUsd: fundingPerDayUsd * DAYS_PER_MONTH,
+    hedgedUsd,
+    lockedUsd,
+    roomUsd: Math.max(0, lockedUsd - hedgedUsd),
   };
 }
 

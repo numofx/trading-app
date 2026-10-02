@@ -90,6 +90,26 @@ export type PerpCollateralBalance = {
   marginValueUsd: number;
 };
 
+/**
+ * Hedge mode: what the ticket shows for an account margined in cNGN. Such an account is a synthetic
+ * dollar — the venue only lets it be long USD, and no more of it than the cNGN it posted — so the
+ * ticket shows the dollar value that collateral locks, how much of it the account has already
+ * hedged, and what the hedge costs in funding at the current rate.
+ */
+export type PerpHedge = {
+  /** The cNGN posted, whole units. */
+  collateralCngn: number;
+  /** Its value at the index: the most long-USD notional the account may hold. */
+  lockedUsd: number;
+  /** Long-USD notional held now (0 when flat or, abnormally, long naira). */
+  hedgedUsd: number;
+  /** What the ticket may still open: locked less hedged, never negative. */
+  roomUsd: number;
+  /** Funding on the whole locked value at the current rate: positive means the hedge pays. */
+  fundingPerDayUsd: number;
+  fundingPerMonthUsd: number;
+};
+
 /** The account's margin on the perp stack, whether or not it holds a position. */
 export type PerpAccountMargin = {
   cash: number;
