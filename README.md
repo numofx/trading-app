@@ -21,6 +21,14 @@ about it from `markets-service`, with no env of its own:
   engine's own cNGN contracts (`engineAmountWhole`), so the account lands on exactly zero; the venue
   has no reduce-only flag, the exact size is what keeps a close from becoming a flip.
 - `/v1/positions` (proxied at `/api/positions`) serves positions and margin, polled every 15s.
+- **cNGN as margin.** When the perp block lists `collateral_assets` (the perp stack's own cNGN
+  escrow, whitelisted on the perp SRM as a base asset), "Deposit margin" offers cNGN beside USDC,
+  depositing into that escrow through the same deposit machine; the Margin tab shows one row per
+  asset (cash, then each collateral asset at its index value and the share the SRM credits —
+  50% for cNGN), and each row's Withdraw signs a WithdrawalModule action for that row's escrow.
+  Without `collateral_assets` the terminal is cash-only, exactly as before. The haircut is what
+  liquidates a leveraged short when the naira strengthens, so the dialog tells a cNGN depositor to
+  post about as much cNGN as they short.
 
 The earlier dated-futures terminal was removed; the perp is a new market, not a restoration of it.
 

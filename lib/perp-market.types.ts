@@ -28,12 +28,29 @@ export type PerpState = {
   paused: boolean;
 };
 
+/**
+ * A base asset the perp SRM credits as margin besides cash: today at most cNGN, through the perp
+ * stack's own escrow. `marginFactor` is the share of its index value that counts as maintenance
+ * margin (`imScale` multiplies in again for initial margin); `cap` and `total` are the escrow's
+ * collateral cap and what is posted now, in whole units.
+ */
+export type PerpCollateralAsset = {
+  symbol: string;
+  escrow: `0x${string}`;
+  marginFactor: number;
+  imScale: number;
+  cap: number;
+  total: number;
+};
+
 /** Where perp orders are signed for and margin is deposited. Checksummed by the caller. */
 export type PerpStack = {
   assetAddress: `0x${string}`;
   tradeModuleAddress: `0x${string}`;
   cashAddress: `0x${string}`;
   srmAddress: `0x${string}`;
+  /** Empty while margin is cash only. */
+  collateralAssets: PerpCollateralAsset[];
 };
 
 /** A live perp market: spot's book/trades/candles shape, plus its chain state and stack. */
@@ -61,6 +78,18 @@ export type PerpPosition = {
   liquidationPrice: number | null;
 };
 
+/** One collateral asset the account holds, valued at the index, and what the SRM credits of it. */
+export type PerpCollateralBalance = {
+  symbol: string;
+  escrow: `0x${string}`;
+  /** Whole units of the asset. */
+  balance: number;
+  /** The same balance as the ledger holds it, 18 decimals: what a withdrawal is checked against. */
+  balanceUnits: bigint;
+  valueUsd: number;
+  marginValueUsd: number;
+};
+
 /** The account's margin on the perp stack, whether or not it holds a position. */
 export type PerpAccountMargin = {
   cash: number;
@@ -68,4 +97,6 @@ export type PerpAccountMargin = {
   cashUnits: bigint;
   initialMarginSurplus: number;
   maintenanceMarginSurplus: number;
+  /** Collateral besides cash; empty when none is held or none is accepted. */
+  collateral: PerpCollateralBalance[];
 };

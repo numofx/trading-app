@@ -4,19 +4,31 @@ import { Dialog } from "@base-ui/react/dialog";
 import type { ConnectedWallet } from "@privy-io/react-auth";
 import { X } from "lucide-react";
 import { useState } from "react";
-import type { PerpStack } from "@/lib/perp-market.types";
-import type { DepositBlockedReason } from "@/lib/subaccount-deposit.types";
-import { getSubaccountCreatorAddress, getUsdcTokenAddress } from "@/lib/subaccount-deposit-config";
+import type { PerpCollateralAsset, PerpStack } from "@/lib/perp-market.types";
+import type { DepositBlockedReason, DepositCurrency } from "@/lib/subaccount-deposit.types";
+import {
+  getCngnTokenAddress,
+  getSubaccountCreatorAddress,
+  getUsdcTokenAddress,
+} from "@/lib/subaccount-deposit-config";
 import { useSubaccountDeposit } from "@/ui/trading-terminal/useSubaccountDeposit";
 
 const PRIMARY_BUTTON_CLASSES =
   "h-11 w-full cursor-pointer rounded-sm bg-[#9BDBF8] font-semibold text-[#111111] text-[14px] transition-colors hover:bg-[#9BDBF8]/90 disabled:cursor-not-allowed disabled:opacity-60";
 
+const PERCENT = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0, style: "percent" });
+
+/** The cNGN the venue accepts as perp margin, when its SRM credits one. */
+function getCngnCollateral(stack: PerpStack): PerpCollateralAsset | null {
+  return stack.collateralAssets.find((asset) => asset.symbol === "cNGN") ?? null;
+}
+
 /**
- * Deposits USDC as perp margin. The perp runs on its own stack, so its margin is a separate account:
- * one under the perp SRM, funded in the perp's cash (a CashAsset over real USDC), not the spot
- * account's wrapped USDC. The first deposit opens that account; later ones top it up. Runs on the same
- * deposit state machine as spot, with the perp's addresses.
+ * Deposits perp margin: USDC into the perp's cash (a CashAsset over real USDC), or cNGN into the
+ * perp's own cNGN escrow when the venue credits it. The perp runs on its own stack, so its margin
+ * is a separate account under the perp SRM, not the spot account. The first deposit opens that
+ * account; later ones top it up. Runs on the same deposit state machine as spot, with the perp's
+ * addresses.
  */
 export function PerpMarginDialog({
   onDeposited,
@@ -35,11 +47,22 @@ export function PerpMarginDialog({
   wallet: ConnectedWallet | null;
 }) {
   const [amount, setAmount] = useState("");
+  const [currency, setCurrency] = useState<DepositCurrency>("USDC");
   const deposit = useSubaccountDeposit({ onDeposited });
   const state = deposit.flowState;
+  const cngn = getCngnCollateral(stack);
 
   function start() {
     if (wallet === null) {
+      return;
+    }
+    if (currency === "cNGN" && cngn !== null) {
+      void deposit.startDeposit(wallet, amount, subaccountId, "cNGN", {
+        baseAssetContract: cngn.escrow,
+        manager: stack.srmAddress,
+        subaccountCreator: getSubaccountCreatorAddress(),
+        token: getCngnTokenAddress(),
+      });
       return;
     }
     void deposit.startDeposit(wallet, amount, subaccountId, "USDC", {
@@ -54,6 +77,7 @@ export function PerpMarginDialog({
     if (!next) {
       deposit.reset();
       setAmount("");
+      setCurrency("USDC");
     }
     onOpenChange(next);
   }
@@ -82,12 +106,44 @@ export function PerpMarginDialog({
 
           {state === null ? (
             <>
+              {cngn === null ? null : (
+                <fieldset
+                  aria-label="Margin asset"
+                  className="grid grid-cols-2 gap-1 rounded-sm bg-input-bg p-1 ring-1 ring-panel-border"
+                >
+                  {(["USDC", "cNGN"] as const).map((option) => (
+                    <button
+                      aria-pressed={currency === option}
+                      className={
+                        currency === option
+                          ? "cursor-pointer rounded-sm bg-panel-bg py-1.5 font-semibold text-[12px] text-panel-text-active ring-1 ring-panel-border"
+                          : "cursor-pointer rounded-sm py-1.5 text-[12px] text-panel-text-muted hover:text-panel-text"
+                      }
+                      key={option}
+                      onClick={() => {
+                        deposit.reset();
+                        setCurrency(option);
+                      }}
+                      type="button"
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </fieldset>
+              )}
+              {currency === "cNGN" && cngn !== null ? (
+                <p className="text-[12px] text-panel-text-muted leading-snug">
+                  cNGN is valued at the index and {PERCENT.format(cngn.marginFactor)} of that counts
+                  as margin. If the naira strengthens, that haircut is what gets a leveraged short
+                  liquidated: post about as much cNGN as you short.
+                </p>
+              ) : null}
               <div className="rounded-sm bg-input-bg px-3 py-2 ring-1 ring-panel-border focus-within:ring-panel-text-muted">
                 <label
                   className="block text-[11px] text-panel-text-muted"
                   htmlFor="perp-margin-amount"
                 >
-                  Amount (USDC)
+                  Amount ({currency})
                 </label>
                 <input
                   className="w-full bg-transparent font-mono text-[16px] text-panel-text-active outline-none placeholder:text-panel-text-muted/60"
@@ -111,7 +167,7 @@ export function PerpMarginDialog({
               </button>
             </>
           ) : (
-            <DepositProgress deposit={deposit} />
+            <DepositProgress currency={currency} deposit={deposit} />
           )}
         </Dialog.Popup>
       </Dialog.Portal>
@@ -120,13 +176,19 @@ export function PerpMarginDialog({
 }
 
 const BLOCKED_COPY = {
-  "insufficient-balance": "Your wallet does not hold that much USDC.",
+  "insufficient-balance": "Your wallet does not hold that much of this asset.",
   "not-whitelisted": "Deposits to this account are not open.",
   "zero-amount": "Enter an amount above zero.",
 } satisfies Record<DepositBlockedReason, string>;
 
 /** One step at a time: each wallet signature maps to one click, as in the spot deposit dialog. */
-function DepositProgress({ deposit }: { deposit: ReturnType<typeof useSubaccountDeposit> }) {
+function DepositProgress({
+  currency,
+  deposit,
+}: {
+  currency: DepositCurrency;
+  deposit: ReturnType<typeof useSubaccountDeposit>;
+}) {
   const state = deposit.flowState;
   if (state === null) {
     return null;
@@ -145,7 +207,7 @@ function DepositProgress({ deposit }: { deposit: ReturnType<typeof useSubaccount
           onClick={() => void deposit.approve()}
           type="button"
         >
-          Approve USDC
+          Approve {currency}
         </button>
       );
     case "approving":
