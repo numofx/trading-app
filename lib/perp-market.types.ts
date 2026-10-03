@@ -41,6 +41,12 @@ export type PerpCollateralAsset = {
   imScale: number;
   cap: number;
   total: number;
+  /**
+   * The escrow's own switch, read on chain by the venue (`whitelistedManager(srm)`). The SRM may
+   * credit the asset before the escrow accepts deposits for it; a deposit offered in between would
+   * revert, so the terminal offers the asset only while this is true.
+   */
+  depositsOpen: boolean;
 };
 
 /** Where perp orders are signed for and margin is deposited. Checksummed by the caller. */

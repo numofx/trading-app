@@ -38,6 +38,7 @@ type PresentedCollateralAsset = {
   im_scale?: string;
   cap?: string;
   total?: string;
+  deposits_open?: boolean;
 };
 
 type PresentedCollateralBalance = {
@@ -175,6 +176,8 @@ function parseCollateralAssets(
     }
     assets.push({
       cap,
+      // Absent means closed: an older venue that does not say cannot be offering deposits.
+      depositsOpen: row.deposits_open === true,
       escrow: getAddress(row.asset_address),
       imScale,
       marginFactor,

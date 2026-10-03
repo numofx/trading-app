@@ -18,9 +18,15 @@ const PRIMARY_BUTTON_CLASSES =
 
 const PERCENT = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0, style: "percent" });
 
-/** The cNGN the venue accepts as perp margin, when its SRM credits one. */
+/**
+ * The cNGN the venue accepts as perp margin: credited by its SRM AND open for deposits on the
+ * escrow itself. Between the two (the vault configures first, opens later) a deposit would revert,
+ * so the dialog does not offer it.
+ */
 function getCngnCollateral(stack: PerpStack): PerpCollateralAsset | null {
-  return stack.collateralAssets.find((asset) => asset.symbol === "cNGN") ?? null;
+  return (
+    stack.collateralAssets.find((asset) => asset.symbol === "cNGN" && asset.depositsOpen) ?? null
+  );
 }
 
 /**
