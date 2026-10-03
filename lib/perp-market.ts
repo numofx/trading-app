@@ -1,11 +1,14 @@
 import { getAddress, isAddress, parseUnits } from "viem";
 import type {
   PerpAccountMargin,
+  PerpCollateralAsset,
+  PerpCollateralBalance,
+  PerpHedge,
   PerpPosition,
   PerpStack,
   PerpState,
 } from "@/lib/perp-market.types";
-import { getUsdcTokenAddress } from "@/lib/subaccount-deposit-config";
+import { getCngnTokenAddress, getUsdcTokenAddress } from "@/lib/subaccount-deposit-config";
 import type { WithdrawableAsset } from "@/lib/withdrawable-assets";
 
 /** The `perp` object markets-service serves on `/v1/markets` for the perpetual. */
@@ -24,6 +27,26 @@ export type PerpStatePresentation = {
   trade_module_address?: string;
   quote_asset_address?: string;
   margin_manager_address?: string;
+  /** Base assets the SRM credits as margin besides cash; absent or empty when margin is cash only. */
+  collateral_assets?: PresentedCollateralAsset[];
+};
+
+type PresentedCollateralAsset = {
+  symbol?: string;
+  asset_address?: string;
+  margin_factor?: string;
+  im_scale?: string;
+  cap?: string;
+  total?: string;
+  deposits_open?: boolean;
+};
+
+type PresentedCollateralBalance = {
+  symbol?: string;
+  asset_address?: string;
+  balance?: string;
+  value_usd?: string;
+  margin_value_usd?: string;
 };
 
 const WHOLE_NUMBER_PATTERN = /^-?\d+$/;
@@ -117,7 +140,85 @@ export function parsePerpStack(
     return null;
   }
   const [asset, module, cash, srm] = candidates.map((value) => getAddress(value));
-  return { assetAddress: asset, cashAddress: cash, srmAddress: srm, tradeModuleAddress: module };
+  return {
+    assetAddress: asset,
+    cashAddress: cash,
+    collateralAssets: parseCollateralAssets(perp?.collateral_assets),
+    srmAddress: srm,
+    tradeModuleAddress: module,
+  };
+}
+
+/**
+ * The collateral assets as the venue serves them, dropping any row the terminal could not deposit
+ * to or value: a missing haircut would show a deposit as full margin it does not get.
+ */
+function parseCollateralAssets(
+  rows: PresentedCollateralAsset[] | undefined
+): PerpCollateralAsset[] {
+  const assets: PerpCollateralAsset[] = [];
+  for (const row of rows ?? []) {
+    const marginFactor = finite(row.margin_factor);
+    const imScale = finite(row.im_scale);
+    const cap = finite(row.cap);
+    const total = finite(row.total);
+    if (
+      row.symbol === undefined ||
+      row.symbol === "" ||
+      row.asset_address === undefined ||
+      !isAddress(row.asset_address) ||
+      marginFactor === null ||
+      imScale === null ||
+      cap === null ||
+      total === null
+    ) {
+      continue;
+    }
+    assets.push({
+      cap,
+      // Absent means closed: an older venue that does not say cannot be offering deposits.
+      depositsOpen: row.deposits_open === true,
+      escrow: getAddress(row.asset_address),
+      imScale,
+      marginFactor,
+      symbol: row.symbol,
+      total,
+    });
+  }
+  return assets;
+}
+
+function parseCollateralBalances(
+  rows: PresentedCollateralBalance[] | undefined
+): PerpCollateralBalance[] {
+  const balances: PerpCollateralBalance[] = [];
+  for (const row of rows ?? []) {
+    const balance = finite(row.balance);
+    const balanceUnits = ledgerUnits(row.balance);
+    const valueUsd = finite(row.value_usd);
+    const marginValueUsd = finite(row.margin_value_usd);
+    if (
+      row.symbol === undefined ||
+      row.symbol === "" ||
+      row.asset_address === undefined ||
+      !isAddress(row.asset_address) ||
+      balance === null ||
+      balanceUnits === null ||
+      valueUsd === null ||
+      marginValueUsd === null
+    ) {
+      continue;
+    }
+    balances.push({
+      balance,
+      balanceUnits,
+      escrow: getAddress(row.asset_address),
+      marginValueUsd,
+      symbol: row.symbol,
+      valueUsd,
+    });
+  }
+  return balances;
 }
 
 /** The venue's stable error token for an order refused while the guardian's pause holds. */
@@ -197,6 +298,7 @@ type PresentedAccountPayload = {
   cash?: string;
   initial_margin_surplus?: string;
   maintenance_margin_surplus?: string;
+  collateral?: PresentedCollateralBalance[];
 };
 
 /** `/v1/positions` for one account, parsed. Unreadable rows are dropped rather than zero-filled. */
@@ -246,7 +348,13 @@ export function parsePositionsResponse(body: unknown): {
   const mm = finite(first?.maintenance_margin_surplus);
   const account =
     cash !== null && cashUnits !== null && im !== null && mm !== null
-      ? { cash, cashUnits, initialMarginSurplus: im, maintenanceMarginSurplus: mm }
+      ? {
+          cash,
+          cashUnits,
+          collateral: parseCollateralBalances(first?.collateral),
+          initialMarginSurplus: im,
+          maintenanceMarginSurplus: mm,
+        }
       : null;
   return { account, positions };
 }
@@ -263,6 +371,65 @@ export function getPerpWithdrawableAsset(stack: PerpStack): WithdrawableAsset {
     label: "Perp margin",
     symbol: "USDC",
     token: getUsdcTokenAddress(),
+  };
+}
+
+/**
+ * A collateral asset as something the withdraw flow can pay out: the escrow is the perp's own
+ * cNGN WrappedERC20Asset, the token the cNGN the wallet holds. Only cNGN is wrapped by the venue
+ * today; an unknown symbol gets no withdraw path rather than a guessed token.
+ */
+export function getPerpCollateralWithdrawableAsset(
+  asset: PerpCollateralAsset
+): WithdrawableAsset | null {
+  if (asset.symbol !== "cNGN") {
+    return null;
+  }
+  return {
+    escrow: asset.escrow,
+    id: "perp-cngn",
+    label: "Perp cNGN margin",
+    symbol: "cNGN",
+    token: getCngnTokenAddress(),
+  };
+}
+
+const HOURS_PER_DAY = 24;
+const DAYS_PER_MONTH = 30;
+
+/**
+ * Hedge mode for the ticket, or null for an account that posted no cNGN. The locked value is the
+ * collateral at the index (the venue's 1:1 bound is in cNGN, which is the same thing at the index);
+ * funding is quoted on all of it, as the venue's long pays it.
+ */
+export function buildPerpHedge(
+  account: PerpAccountMargin | null,
+  positions: PerpPosition[],
+  state: PerpState | null
+): PerpHedge | null {
+  if (account === null || state === null) {
+    return null;
+  }
+  const cngn = account.collateral.filter((row) => row.symbol === "cNGN");
+  if (cngn.length === 0) {
+    return null;
+  }
+  const collateralCngn = cngn.reduce((sum, row) => sum + row.balance, 0);
+  const lockedUsd = cngn.reduce((sum, row) => sum + row.valueUsd, 0);
+  const longs = positions.filter((position) => position.uiSide === "long");
+  const hedgedUsd = longs.reduce((sum, position) => sum + position.uiSize, 0);
+  const hedgedCngn = longs.reduce((sum, position) => sum + Number(position.engineSize ?? 0n), 0);
+  const roomCngn = Math.max(0, collateralCngn - hedgedCngn);
+  const fundingPerDayUsd = lockedUsd * state.uiLongFundingRate1h * HOURS_PER_DAY;
+  return {
+    collateralCngn,
+    fundingPerDayUsd,
+    fundingPerMonthUsd: fundingPerDayUsd * DAYS_PER_MONTH,
+    hedgedCngn,
+    hedgedUsd,
+    lockedUsd,
+    roomCngn,
+    roomUsd: state.indexPrice > 0 ? roomCngn / state.indexPrice : 0,
   };
 }
 
@@ -299,21 +466,42 @@ export function buildPerpPositionsView(positions: PerpPosition[], label: string)
   };
 }
 
-/** The Margin tab: one row of the account's cash and headroom, or none before it is read. */
+/**
+ * The Margin tab: one row per asset the account's margin is made of. Cash first, worth and
+ * credited at face value; then each collateral asset at its index value and the share of it the
+ * SRM credits. The account's headroom is one figure, shown on the cash row.
+ */
 export function buildPerpMarginView(account: PerpAccountMargin | null) {
   return {
-    columns: ["Cash", "Initial margin headroom", "Maintenance margin headroom"],
     rows:
       account === null
         ? []
         : [
             {
               cells: [
+                "USDC",
+                `${USD_CELL.format(account.cash)} USDC`,
                 `${USD_CELL.format(account.cash)} USDC`,
                 signedUsd(account.initialMarginSurplus),
                 signedUsd(account.maintenanceMarginSurplus),
               ],
             },
+            ...account.collateral.map((row) => ({
+              cells: [
+                row.symbol,
+                `${USD_CELL.format(row.balance)} ${row.symbol} (${USD_CELL.format(row.valueUsd)} USDC)`,
+                `${USD_CELL.format(row.marginValueUsd)} USDC`,
+                "",
+                "",
+              ],
+            })),
           ],
+    columns: [
+      "Asset",
+      "Balance",
+      "Counts as margin",
+      "Initial margin headroom",
+      "Maintenance margin headroom",
+    ],
   };
 }

@@ -5,50 +5,50 @@ import type { ConnectedWallet } from "@privy-io/react-auth";
 import { X } from "lucide-react";
 import { useState } from "react";
 import { formatUnits } from "viem";
-import { getPerpWithdrawableAsset } from "@/lib/perp-market";
-import type { PerpAccountMargin, PerpStack } from "@/lib/perp-market.types";
+import type { WithdrawableAsset } from "@/lib/withdrawable-assets";
 import { useSubaccountWithdraw } from "@/ui/trading-terminal/useSubaccountWithdraw";
 
 const PRIMARY_BUTTON_CLASSES =
   "h-11 w-full cursor-pointer rounded-sm bg-[#9BDBF8] font-semibold text-[#111111] text-[14px] transition-colors hover:bg-[#9BDBF8]/90 disabled:cursor-not-allowed disabled:opacity-60";
 
-const USDC_DECIMALS = 6;
 const LEDGER_DECIMALS = 18;
+/** Every token the perp pays out has at most this many decimals; the ledger's extra ones are dust. */
+const DISPLAY_DECIMALS = 6;
 
-/** The account's cash in USDC's own decimals, rounded down, as the amount input shows it. */
-function formatWithdrawable(account: PerpAccountMargin) {
-  const units = account.cashUnits / 10n ** BigInt(LEDGER_DECIMALS - USDC_DECIMALS);
-  return formatUnits(units, USDC_DECIMALS);
+/** A ledger balance in the token's own precision, rounded down, as the amount input shows it. */
+function formatWithdrawable(units: bigint) {
+  const dust = 10n ** BigInt(LEDGER_DECIMALS - DISPLAY_DECIMALS);
+  return formatUnits(units - (units % dust), LEDGER_DECIMALS);
 }
 
 /**
- * Withdraws USDC from the perp margin account. Matching holds the account, so the wallet signs a
- * WithdrawalModule action for the perp's CashAsset (no gas) and the venue's executor submits it; the
- * module pays the account's owner. Only the account's free cash can leave: a withdrawal that would
- * take the account under initial margin for an open position is refused by the venue's simulation,
- * with nothing sent.
+ * Withdraws one asset from the perp margin account: its USDC cash, or cNGN posted as collateral.
+ * Matching holds the account, so the wallet signs a WithdrawalModule action for that asset's escrow
+ * (no gas) and the venue's executor submits it; the escrow pays the account's owner. Only what the
+ * account can spare leaves: a withdrawal that would take it under initial margin for an open
+ * position is refused by the venue's simulation, with nothing sent.
  */
 export function PerpWithdrawDialog({
-  account,
+  asset,
+  balanceUnits,
   onOpenChange,
   onWithdrawn,
   open,
-  stack,
   subaccountId,
   wallet,
 }: {
-  account: PerpAccountMargin | null;
+  asset: WithdrawableAsset;
+  /** The account's balance of this asset in ledger units (18 decimals), or null before it is read. */
+  balanceUnits: bigint | null;
   onOpenChange: (open: boolean) => void;
   onWithdrawn: () => void;
   open: boolean;
-  stack: PerpStack;
   subaccountId: string | null;
   wallet: ConnectedWallet | null;
 }) {
   const [amount, setAmount] = useState("");
   const withdraw = useSubaccountWithdraw({ onWithdrawn: () => onWithdrawn() });
   const state = withdraw.flowState;
-  const asset = getPerpWithdrawableAsset(stack);
 
   function start() {
     if (wallet === null) {
@@ -57,7 +57,7 @@ export function PerpWithdrawDialog({
     void withdraw.startWithdraw({
       amountInput: amount,
       asset,
-      balance: account === null ? null : { decimals: LEDGER_DECIMALS, units: account.cashUnits },
+      balance: balanceUnits === null ? null : { decimals: LEDGER_DECIMALS, units: balanceUnits },
       recipient: wallet.address,
       subaccountId,
       wallet,
@@ -79,7 +79,7 @@ export function PerpWithdrawDialog({
         <Dialog.Popup className="-translate-1/2 fixed top-1/2 left-1/2 z-50 w-[min(92vw,400px)] space-y-4 bg-dialog-bg p-6 text-foreground shadow-[0_28px_90px_var(--panel-shadow)] ring-1 ring-panel-ring transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
           <div className="flex items-center gap-3">
             <Dialog.Title className="flex-1 font-semibold text-[15px] text-panel-text-active">
-              Withdraw perp margin
+              Withdraw perp margin ({asset.symbol})
             </Dialog.Title>
             <Dialog.Close
               aria-label="Close perp withdraw dialog"
@@ -90,8 +90,8 @@ export function PerpWithdrawDialog({
           </div>
 
           <p className="text-[12px] text-panel-text-muted leading-snug">
-            USDC is paid to your connected wallet. Cash backing an open position cannot leave; close
-            the position first.
+            {asset.symbol} is paid to your connected wallet. Margin backing an open position cannot
+            leave; close the position first.
             {subaccountId === null ? "" : ` Account #${subaccountId}.`}
           </p>
 
@@ -103,18 +103,18 @@ export function PerpWithdrawDialog({
                     className="block text-[11px] text-panel-text-muted"
                     htmlFor="perp-withdraw-amount"
                   >
-                    Amount (USDC)
+                    Amount ({asset.symbol})
                   </label>
-                  {account === null ? null : (
+                  {balanceUnits === null ? null : (
                     <button
                       className="cursor-pointer text-[11px] text-panel-text underline decoration-dotted underline-offset-4 hover:text-panel-text-active"
                       onClick={() => {
                         withdraw.clearInputError();
-                        setAmount(formatWithdrawable(account));
+                        setAmount(formatWithdrawable(balanceUnits));
                       }}
                       type="button"
                     >
-                      Max {formatWithdrawable(account)}
+                      Max {formatWithdrawable(balanceUnits)}
                     </button>
                   )}
                 </div>
@@ -143,7 +143,11 @@ export function PerpWithdrawDialog({
               </button>
             </>
           ) : (
-            <WithdrawProgress onRetry={() => withdraw.reset()} state={state} />
+            <WithdrawProgress
+              onRetry={() => withdraw.reset()}
+              state={state}
+              symbol={asset.symbol}
+            />
           )}
         </Dialog.Popup>
       </Dialog.Portal>
@@ -154,9 +158,11 @@ export function PerpWithdrawDialog({
 function WithdrawProgress({
   onRetry,
   state,
+  symbol,
 }: {
   onRetry: () => void;
   state: NonNullable<ReturnType<typeof useSubaccountWithdraw>["flowState"]>;
+  symbol: string;
 }) {
   switch (state.status) {
     case "checking":
@@ -180,7 +186,7 @@ function WithdrawProgress({
     case "success":
       return (
         <>
-          <p className="text-[12px] text-panel-text">Withdrawn. The USDC is in your wallet.</p>
+          <p className="text-[12px] text-panel-text">Withdrawn. The {symbol} is in your wallet.</p>
           <Dialog.Close className={PRIMARY_BUTTON_CLASSES}>Done</Dialog.Close>
         </>
       );

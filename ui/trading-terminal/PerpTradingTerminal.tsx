@@ -8,11 +8,19 @@ import { createWalletClient, custom } from "viem";
 import { buildOpenOrdersActivityView, getOwnedOpenOrders } from "@/lib/account-activity-views";
 import { getAppChain } from "@/lib/base-public-client";
 import {
+  buildPerpHedge,
   buildPerpMarginView,
   buildPerpPositionsView,
   describeOrderRejection,
+  getPerpCollateralWithdrawableAsset,
+  getPerpWithdrawableAsset,
 } from "@/lib/perp-market";
-import type { PerpAccountMargin, PerpMarket, PerpPosition } from "@/lib/perp-market.types";
+import type {
+  PerpAccountMargin,
+  PerpMarket,
+  PerpPosition,
+  PerpStack,
+} from "@/lib/perp-market.types";
 import {
   PERP_ACTIVITY_VIEWS,
   PERP_BOTTOM_TABS,
@@ -29,6 +37,7 @@ import { buildCancelEnvelope, buildSpotOrderEnvelope } from "@/lib/spot-order-su
 import { FOOTER_LINKS, SPOT_TIMEFRAME_OPTIONS } from "@/lib/spot-terminal-config";
 import { get24hStats, getVenueLastPrice } from "@/lib/ticker-stats";
 import type { ActivityView } from "@/lib/trading.types";
+import type { WithdrawableAsset } from "@/lib/withdrawable-assets";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import { PerpMarginDialog } from "@/ui/trading-terminal/PerpMarginDialog";
 import type { PerpOrderRequest } from "@/ui/trading-terminal/PerpOrderFormPanel";
@@ -240,7 +249,8 @@ function buildRowAction(inputs: {
   market: PerpMarket | null;
   onCancel: (nonce: string, ownerAddress: string) => void;
   onClose: (position: PerpPosition, rowIndex: number) => void;
-  onWithdraw: () => void;
+  /** The Margin tab's row index: 0 is cash, then each collateral asset in order. */
+  onWithdraw: (rowIndex: number) => void;
   ownedOpenOrders: { nonce: string; ownerAddress: string }[];
   positions: PerpPosition[];
 }) {
@@ -287,11 +297,39 @@ function buildRowAction(inputs: {
       );
     };
   }
-  return () => (
-    <button className={ROW_BUTTON_CLASSES} onClick={inputs.onWithdraw} type="button">
+  return (rowIndex: number) => (
+    <button
+      className={ROW_BUTTON_CLASSES}
+      onClick={() => inputs.onWithdraw(rowIndex)}
+      type="button"
+    >
       Withdraw
     </button>
   );
+}
+
+/**
+ * What a Margin-tab row withdraws: row 0 the perp's cash as USDC, row n the n-th collateral asset
+ * through its own escrow. Null for a collateral symbol the app cannot pay out (no known token).
+ */
+function withdrawTarget(
+  stack: PerpStack | null,
+  account: PerpAccountMargin | null,
+  rowIndex: number | null
+): { asset: WithdrawableAsset; balanceUnits: bigint | null } | null {
+  if (stack === null || rowIndex === null) {
+    return null;
+  }
+  if (rowIndex === 0) {
+    return { asset: getPerpWithdrawableAsset(stack), balanceUnits: account?.cashUnits ?? null };
+  }
+  const held = account?.collateral[rowIndex - 1];
+  if (held === undefined) {
+    return null;
+  }
+  const listed = stack.collateralAssets.find((candidate) => candidate.escrow === held.escrow);
+  const asset = listed === undefined ? null : getPerpCollateralWithdrawableAsset(listed);
+  return asset === null ? null : { asset, balanceUnits: held.balanceUnits };
 }
 
 type SignedOrderResponse = { body: { error?: string } | null; ok: boolean; status: number };
@@ -369,7 +407,8 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
   const [bookTab, setBookTab] = useState<SpotBookTab>("book");
   const [bottomTab, setBottomTab] = useState<PerpBottomTab>("positions");
   const [depositOpen, setDepositOpen] = useState(false);
-  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  /** The Margin-tab row being withdrawn from, or null while the dialog is closed. */
+  const [withdrawRow, setWithdrawRow] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastAction, setLastAction] = useState<string | null>(null);
   const [cancellingNonce, setCancellingNonce] = useState<string | null>(null);
@@ -381,6 +420,7 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
     stack ? { depositAsset: stack.cashAddress, manager: stack.srmAddress } : undefined
   );
   const perpAccount = usePerpPositions(account.subaccountId);
+  const withdrawing = withdrawTarget(stack, perpAccount.account, withdrawRow);
 
   const { asks, bestAsk, bestBid, bids, candles, lastPrice, price, stats, trades } =
     usePerpBook(market);
@@ -596,6 +636,11 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
             <PerpOrderFormPanel
               availableMargin={perpAccount.account?.initialMarginSurplus ?? null}
               hasWallet={primaryWallet !== null}
+              hedge={buildPerpHedge(
+                perpAccount.account,
+                perpAccount.positions,
+                market?.state ?? null
+              )}
               isPreparingAccount={account.isLoading || (isSignedIn && !walletsReady)}
               isSubmitting={isSubmitting}
               lastAction={lastAction}
@@ -630,7 +675,7 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
                 market,
                 onCancel: (nonce, ownerAddress) => void handleCancel(nonce, ownerAddress),
                 onClose: (position, rowIndex) => void handleClose(position, rowIndex),
-                onWithdraw: () => setWithdrawOpen(true),
+                onWithdraw: (rowIndex) => setWithdrawRow(rowIndex),
                 ownedOpenOrders,
                 positions: perpAccount.positions,
               })}
@@ -641,13 +686,13 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
         </div>
       </div>
 
-      {stack === null ? null : (
+      {withdrawing === null ? null : (
         <PerpWithdrawDialog
-          account={perpAccount.account}
-          onOpenChange={setWithdrawOpen}
+          asset={withdrawing.asset}
+          balanceUnits={withdrawing.balanceUnits}
+          onOpenChange={(next) => setWithdrawRow(next ? withdrawRow : null)}
           onWithdrawn={() => perpAccount.refresh()}
-          open={withdrawOpen}
-          stack={stack}
+          open={withdrawRow !== null}
           subaccountId={account.subaccountId}
           wallet={primaryWallet}
         />
