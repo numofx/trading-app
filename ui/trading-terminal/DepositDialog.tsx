@@ -772,10 +772,10 @@ function getWithdrawStepCopy(flowState: WithdrawFlowState, currency: string) {
       return `Checking your ${currency} balance and that the escrow can pay it out...`;
     case "signing":
       return flowState.method === "signature"
-        ? "Sign the withdrawal in your wallet. Signing costs no gas."
-        : "Confirm the withdrawal in your wallet.";
+        ? `Sign the withdrawal of ${flowState.amount} in your wallet. Signing costs no gas; check the amount here, the wallet shows only the encoded message.`
+        : `Confirm the withdrawal of ${flowState.amount} in your wallet.`;
     case "submitting":
-      return "The venue is checking your withdrawal and sending it...";
+      return `The venue is checking your withdrawal of ${flowState.amount} and sending it...`;
     case "confirming":
       return "Waiting for the withdrawal to confirm...";
     default:

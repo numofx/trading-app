@@ -3,7 +3,7 @@
 import type { ConnectedWallet } from "@privy-io/react-auth";
 import posthog from "posthog-js";
 import { useState } from "react";
-import { createWalletClient, custom, erc20Abi, getAddress } from "viem";
+import { createWalletClient, custom, erc20Abi, formatUnits, getAddress } from "viem";
 import { createBasePublicClient, getAppChain } from "@/lib/base-public-client";
 import { getMatchingAddress, getSubaccountsAddress } from "@/lib/subaccount-deposit-config";
 import type { ScaledBalance } from "@/lib/subaccount-withdraw";
@@ -48,9 +48,9 @@ export type WithdrawFlowState =
    * Waiting on the wallet. `signature` is a gasless signed withdrawal, for an account Matching holds;
    * `transaction` is an escrow call the wallet pays gas for, for an account the wallet holds itself.
    */
-  | { method: "signature" | "transaction"; status: "signing" }
+  | { amount: string; method: "signature" | "transaction"; status: "signing" }
   /** The signed withdrawal is with the venue, which verifies it, simulates it and submits it. */
-  | { status: "submitting" }
+  | { amount: string; status: "submitting" }
   | { status: "confirming"; txHash: `0x${string}` }
   | { status: "success"; txHash: `0x${string}` }
   /** Stopped with nothing sent: the amount, the account, a reverting simulation, or the venue refusing it. */
@@ -58,6 +58,12 @@ export type WithdrawFlowState =
   | { status: "failed"; error: string };
 
 type PublicClient = ReturnType<typeof createBasePublicClient>;
+
+/** The exact amount a withdrawal carries, from the units that will be signed, e.g. "1,000 cNGN". */
+function describeAmount(amountUnits: bigint, tokenDecimals: number, symbol: string) {
+  const value = Number(formatUnits(amountUnits, tokenDecimals));
+  return `${value.toLocaleString("en-US", { maximumFractionDigits: tokenDecimals })} ${symbol}`;
+}
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Withdrawal failed";
@@ -237,11 +243,13 @@ export function useSubaccountWithdraw({
     publicClient,
     recipient,
     subaccountId,
+    tokenDecimals,
     wallet,
   }: {
     accountId: bigint;
     amountUnits: bigint;
     asset: WithdrawableAsset;
+    tokenDecimals: number;
     owner: `0x${string}`;
     publicClient: PublicClient;
     recipient: string;
@@ -266,7 +274,11 @@ export function useSubaccountWithdraw({
       return;
     }
 
-    setFlowState({ method: "transaction", status: "signing" });
+    setFlowState({
+      amount: describeAmount(amountUnits, tokenDecimals, asset.symbol),
+      method: "transaction",
+      status: "signing",
+    });
     const walletClient = await createConnectedWalletClient(wallet);
     const txHash = await walletClient.writeContract(call);
 
@@ -335,11 +347,15 @@ export function useSubaccountWithdraw({
       }
 
       if (heldByMatching) {
-        setFlowState({ method: "signature", status: "signing" });
+        // The amount about to be signed, in the token's own units: what the wallet prompt cannot
+        // show (it displays encoded bytes) and what the trader must be able to check against the
+        // field before signing.
+        const signed = describeAmount(amount.amountUnits, tokenDecimals, asset.symbol);
+        setFlowState({ amount: signed, method: "signature", status: "signing" });
         const outcome = await signAndSubmitWithdrawal({
           amountUnits: amount.amountUnits,
           asset,
-          onSigned: () => setFlowState({ status: "submitting" }),
+          onSigned: () => setFlowState({ amount: signed, status: "submitting" }),
           subaccountId,
           wallet,
         });
@@ -355,6 +371,7 @@ export function useSubaccountWithdraw({
         publicClient,
         recipient,
         subaccountId,
+        tokenDecimals,
         wallet,
       });
     } catch (error) {
