@@ -1,6 +1,7 @@
 "use client";
 
 import { useLogin, usePrivy } from "@privy-io/react-auth";
+import { Duration } from "effect";
 import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
 import { useState } from "react";
@@ -34,7 +35,12 @@ import {
   getMarketableLimitPrice,
   getMarketSizingPrice,
 } from "@/lib/spot-market";
-import { buildCancelEnvelope, buildSpotOrderEnvelope } from "@/lib/spot-order-submission";
+import type { OrderIdempotencyKey } from "@/lib/spot-order-submission";
+import {
+  buildCancelEnvelope,
+  buildSpotOrderEnvelope,
+  createOrderIdempotencyKey,
+} from "@/lib/spot-order-submission";
 import { FOOTER_LINKS, SPOT_TIMEFRAME_OPTIONS } from "@/lib/spot-terminal-config";
 import { get24hStats, getVenueLastPrice } from "@/lib/ticker-stats";
 import type { ActivityView } from "@/lib/trading.types";
@@ -52,7 +58,7 @@ import { TerminalHeaderBar } from "@/ui/trading-terminal/TerminalHeaderBar";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
 import { useMarketOrderBook } from "@/ui/trading-terminal/useMarketOrderBook";
 import { usePerpLiveState } from "@/ui/trading-terminal/usePerpLiveState";
-import { usePerpPositions } from "@/ui/trading-terminal/usePerpPositions";
+import { readPerpPositions, usePerpPositions } from "@/ui/trading-terminal/usePerpPositions";
 import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
 import { usePrimaryWallet } from "@/ui/usePrimaryWallet";
 
@@ -101,22 +107,29 @@ type SigningWallet = NonNullable<ReturnType<typeof usePrimaryWallet>["primaryWal
 /**
  * Signs a perp order for the perp's own module and asset, then posts it. `engineAmountWhole` sizes
  * the order in cNGN contracts directly, for closing a position exactly; otherwise the size is the
- * USD notional counted at the sizing price.
+ * USD notional counted at the sizing price. `reduceOnly` asks the venue to clamp the order to the
+ * account's position. With an `idempotency` key the order is identified once by the caller, and a
+ * POST that fails in transit is re-sent as the same order: the venue answers a duplicate with 409,
+ * which here means the first attempt landed.
  */
 async function signAndPostPerpOrder({
   engineAmountWhole,
+  idempotency,
   market,
   onAwaitingSignature,
   price,
+  reduceOnly = false,
   side,
   size,
   subaccountId,
   wallet,
 }: {
   engineAmountWhole?: bigint;
+  idempotency?: OrderIdempotencyKey;
   market: PerpMarket;
   onAwaitingSignature: () => void;
   price: { uiPrice: string; uiSizingPrice?: string };
+  reduceOnly?: boolean;
   side: "buy" | "sell";
   size: string;
   subaccountId: string;
@@ -128,11 +141,13 @@ async function signAndPostPerpOrder({
   const walletClient = createWalletClient({ chain: appChain, transport: custom(provider) });
   const envelope = buildSpotOrderEnvelope({
     engineAmountWhole,
+    idempotency,
     market: {
       assetAddress: market.stack.assetAddress,
       orderIdPrefix: "perp",
       tradeModuleAddress: market.stack.tradeModuleAddress,
     },
+    reduceOnly,
     side,
     subaccountId,
     uiPrice: price.uiPrice,
@@ -145,7 +160,111 @@ async function signAndPostPerpOrder({
     account: wallet.address as `0x${string}`,
     ...envelope.typedData,
   });
-  return postSignedOrder(envelope.payload, signature);
+  try {
+    return await postSignedOrder(envelope.payload, signature);
+  } catch (error) {
+    if (idempotency === undefined) {
+      throw error;
+    }
+    // The request may have reached the venue before the connection dropped. Re-sending the same
+    // signed order is safe: the venue's unique (owner, nonce) index makes a duplicate a 409.
+    const retried = await postSignedOrder(envelope.payload, signature);
+    return retried.status === 409 ? { ...retried, ok: true } : retried;
+  }
+}
+
+/** An order's outcome as `/api/orders/{id}` reports it; null when it was still open at the deadline. */
+type OrderOutcome = { cancelReason: string; filledAmount: string; status: string } | null;
+
+const CLOSE_CONFIRM_TIMEOUT_MS = Duration.toMillis("60 seconds");
+const CLOSE_CONFIRM_POLL_MS = Duration.toMillis("1500 millis");
+
+/**
+ * Waits for the venue to settle an order's outcome: filled, cancelled or expired. A reduce-only
+ * close is either filled or cancelled by the venue within a few matcher ticks; the deadline covers
+ * a venue that is slow, not one that is wrong.
+ */
+async function awaitOrderOutcome(orderId: string): Promise<OrderOutcome> {
+  const deadline = Date.now() + CLOSE_CONFIRM_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}`, {
+      cache: "no-store",
+    });
+    if (response.ok) {
+      const body = (await response.json().catch(() => null)) as {
+        cancel_reason?: string;
+        filled_amount?: string;
+        status?: string;
+      } | null;
+      const status = body?.status ?? "";
+      if (status !== "" && status !== "active" && status !== "matching") {
+        return {
+          cancelReason: body?.cancel_reason ?? "",
+          filledAmount: body?.filled_amount ?? "0",
+          status,
+        };
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, CLOSE_CONFIRM_POLL_MS));
+  }
+  return null;
+}
+
+/** What to tell the trader once the venue has settled a Close. */
+function describeCloseOutcome(outcome: OrderOutcome): string {
+  if (outcome === null) {
+    return "Close accepted but not yet confirmed by the venue; the position updates once it settles.";
+  }
+  switch (outcome.status) {
+    case "filled":
+      return `Closed: ${outcome.filledAmount} cNGN filled.`;
+    case "cancelled":
+      if (outcome.cancelReason === "reduce_only_done") {
+        return `Closed: ${outcome.filledAmount} cNGN filled; the venue cancelled the rest because the position was already flat.`;
+      }
+      if (outcome.cancelReason === "reduce_only_no_position") {
+        return "Nothing to close: the venue found the position already flat and cancelled the order.";
+      }
+      return outcome.filledAmount === "0"
+        ? `Close cancelled${outcome.cancelReason ? ` (${outcome.cancelReason})` : ""}; the position is unchanged.`
+        : `Close partly filled (${outcome.filledAmount} cNGN) and then cancelled${outcome.cancelReason ? ` (${outcome.cancelReason})` : ""}.`;
+    case "expired":
+      return "Close expired unfilled; the position is unchanged.";
+    default:
+      return `Close ${outcome.status}.`;
+  }
+}
+
+/**
+ * The position to close, read from the venue now rather than taken from the row: the row was drawn
+ * from a poll up to 15 seconds old, and a fill since then (another close, a partial) is what turns
+ * an exact close into a flip. A position that has gone, or changed side, is reported, not closed.
+ */
+async function readFreshPosition(
+  subaccountId: string,
+  shown: PerpPosition
+): Promise<{ position: PerpPosition } | { error: string }> {
+  let fresh: Awaited<ReturnType<typeof readPerpPositions>>;
+  try {
+    fresh = await readPerpPositions(subaccountId);
+  } catch {
+    return { error: "Could not re-read the position from the venue; nothing was sent. Try again." };
+  }
+  const position = fresh.positions[0] ?? null;
+  if (position === null) {
+    return { error: "Nothing to close: the venue reports the position already flat." };
+  }
+  if (position.uiSide !== shown.uiSide) {
+    return {
+      error: `The position changed side since this row was drawn (now ${position.uiSide}); refreshed. Close again if you still want to.`,
+    };
+  }
+  if (position.engineSize === null) {
+    return {
+      error: "This position cannot be closed from here: the venue did not report its size.",
+    };
+  }
+  return { position };
 }
 
 function listedCollateralOf(stack: PerpStack | null): PerpCollateralAsset[] {
@@ -226,6 +345,7 @@ function buildCloseRequest(
     {
       limitPrice: "",
       orderType: "Market",
+      reduceOnly: true,
       side: position.uiSide === "long" ? "short" : "long",
       size: "",
     },
@@ -302,9 +422,11 @@ function buildRowAction(inputs: {
       return (
         <button
           className={ROW_BUTTON_CLASSES}
-          disabled={inputs.isSubmitting}
+          // Disabled until the venue confirms the previous close: a second click before then is
+          // what used to send a second full-size order.
+          disabled={inputs.isSubmitting || inputs.closingIndex !== null}
           onClick={() => inputs.onClose(position, rowIndex)}
-          title="Market order for the exact position size, on the opposite side"
+          title="Reduce-only market order for the position's exact size, on the opposite side; the venue clamps it so it can never flip the position"
           type="button"
         >
           {busy ? "Closing…" : "Close"}
@@ -482,6 +604,7 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
       const { body, ok, status } = await signAndPostPerpOrder({
         market,
         price: resolved,
+        reduceOnly: request.reduceOnly,
         side: uiSide,
         size: request.size,
         subaccountId: account.subaccountId,
@@ -499,7 +622,11 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
         return;
       }
       posthog.capture("order_submitted", event);
-      setLastAction("Order accepted. Positions update once it fills.");
+      setLastAction(
+        request.reduceOnly
+          ? "Reduce-only order accepted. The venue clamps it to your position; it fills or is cancelled once matched."
+          : "Order accepted. Positions update once it fills."
+      );
       perpAccount.refresh();
       router.refresh();
     } catch (error) {
@@ -513,39 +640,57 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
   }
 
   /**
-   * Closes a position with a market order on the opposite side, sized in the engine's own contracts
-   * so the account lands on exactly zero. The venue has no reduce-only flag; the exact size is what
-   * keeps a close from becoming a flip, and a partial fill leaves a smaller position, never a new one.
+   * Closes a position with a reduce-only market order on the opposite side, sized in the engine's
+   * own contracts from a fresh read of the venue (not the row, which a 15-second poll drew). The
+   * venue clamps a reduce-only order to the position its own ledger holds after every fill and
+   * cancels the remainder, so even a stale size can only shrink the position, never flip it. One
+   * idempotency key per click: a retried POST re-sends the same order, never a second one. The row
+   * stays busy until the venue reports the order's outcome, so two clicks cannot race.
    */
   async function handleClose(position: PerpPosition, rowIndex: number) {
-    if (market === null || primaryWallet === null || account.subaccountId === null) {
+    if (
+      market === null ||
+      primaryWallet === null ||
+      account.subaccountId === null ||
+      closingIndex !== null
+    ) {
       return;
     }
-    const close = buildCloseRequest(position, { bestAsk, bestBid, price });
-    if ("error" in close) {
-      setLastAction(close.error);
-      return;
-    }
-    const event = {
-      market_id: "cngn-usdc-perp",
-      order_side: close.uiSide === "buy" ? "long" : "short",
-      order_type: "Close",
-      size_usdc_notional: close.sizeUsd,
-    };
+    const subaccountId = account.subaccountId;
     setClosingIndex(rowIndex);
     setIsSubmitting(true);
     try {
+      const fresh = await readFreshPosition(subaccountId, position);
+      if ("error" in fresh) {
+        setLastAction(fresh.error);
+        perpAccount.refresh();
+        return;
+      }
+      const close = buildCloseRequest(fresh.position, { bestAsk, bestBid, price });
+      if ("error" in close) {
+        setLastAction(close.error);
+        return;
+      }
+      const idempotency = createOrderIdempotencyKey("perp");
+      const event = {
+        market_id: "cngn-usdc-perp",
+        order_side: close.uiSide === "buy" ? "long" : "short",
+        order_type: "Close",
+        size_usdc_notional: close.sizeUsd,
+      };
       const { body, ok, status } = await signAndPostPerpOrder({
         engineAmountWhole: close.engineSize,
+        idempotency,
         market,
         price: close.price,
+        reduceOnly: true,
         side: close.uiSide,
         size: close.sizeUsd,
-        subaccountId: account.subaccountId,
+        subaccountId,
         wallet: primaryWallet,
         onAwaitingSignature: () =>
           setLastAction(
-            `Awaiting wallet signature to close ${position.uiSide} ${close.engineSize} cNGN`
+            `Awaiting wallet signature to close ${fresh.position.uiSide} ${close.engineSize} cNGN (reduce-only)`
           ),
       });
       if (!ok) {
@@ -558,7 +703,11 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
         return;
       }
       posthog.capture("order_submitted", event);
-      setLastAction("Close order accepted. The position updates once it fills.");
+      // The ticket is free again; the Close button stays disabled until the venue has an outcome.
+      setIsSubmitting(false);
+      setLastAction("Close accepted. Waiting for the venue to confirm the fill…");
+      const outcome = await awaitOrderOutcome(idempotency.orderId);
+      setLastAction(describeCloseOutcome(outcome));
       perpAccount.refresh();
       router.refresh();
     } catch (error) {
@@ -666,6 +815,7 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
                 perpAccount.positions,
                 market?.state ?? null
               )}
+              hasPosition={perpAccount.positions.length > 0}
               hasWallet={primaryWallet !== null}
               isPreparingAccount={account.isLoading || (isSignedIn && !walletsReady)}
               isSubmitting={isSubmitting}

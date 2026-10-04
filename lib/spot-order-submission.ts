@@ -230,6 +230,31 @@ export type OrderMarketOverride = {
   orderIdPrefix: string;
 };
 
+/**
+ * The identity one signed order carries: its nonce (the venue's cancel key, unique per owner) and its
+ * order_id. Minted once per user action so that a retry of the same action re-sends the same order
+ * rather than a second one -- the venue's unique (owner_address, nonce) index turns the duplicate
+ * into a 409, never a double fill.
+ */
+export type OrderIdempotencyKey = { nonce: bigint; orderId: string };
+
+export function createOrderIdempotencyKey(orderIdPrefix: string): OrderIdempotencyKey {
+  return { nonce: createOrderNonce(), orderId: `${orderIdPrefix}-${crypto.randomUUID()}` };
+}
+
+/** The caller's key when it minted one, else a fresh identity for this envelope alone. */
+function resolveOrderIdentity(
+  idempotency: OrderIdempotencyKey | undefined,
+  orderIdPrefix: string | undefined
+): OrderIdempotencyKey {
+  return idempotency ?? createOrderIdempotencyKey(orderIdPrefix ?? "spot");
+}
+
+/** Sent only when asked for, so an older venue is not handed a field it would ignore silently. */
+function reduceOnlyField(reduceOnly: boolean): { reduce_only: true } | Record<never, never> {
+  return reduceOnly ? { reduce_only: true } : {};
+}
+
 export function buildSpotOrderEnvelope({
   uiPrice,
   uiSize,
@@ -239,7 +264,17 @@ export function buildSpotOrderEnvelope({
   walletAddress,
   market,
   engineAmountWhole: engineAmountOverride,
+  idempotency,
+  reduceOnly = false,
 }: {
+  /** Minted by the caller once per click; omitted, the envelope mints its own. */
+  idempotency?: OrderIdempotencyKey;
+  /**
+   * Asks the venue to clamp the order to the account's perp position and never let it open or flip
+   * one: the venue refuses it when the account is flat or already on the order's side, fills at most
+   * the position its own ledger shows, and cancels the remainder. Perp only.
+   */
+  reduceOnly?: boolean;
   /** The signed limit, in cNGN per USDC. */
   uiPrice: string;
   uiSize: string;
@@ -339,7 +374,7 @@ export function buildSpotOrderEnvelope({
   const spotAsset = market ? getAddress(market.assetAddress) : getSpotAssetAddress();
   const chainId = getMatchingChainId();
 
-  const nonce = createOrderNonce();
+  const { nonce, orderId } = resolveOrderIdentity(idempotency, market?.orderIdPrefix);
   const expiry = BigInt(Math.floor(Date.now() / 1000) + SPOT_ORDER_LIFETIME_SECONDS);
   const recipientId = BigInt(subaccountId);
 
@@ -391,8 +426,9 @@ export function buildSpotOrderEnvelope({
       filled_amount: "0",
       limit_price: formatFixedPointUnits(enginePriceWei, ENGINE_DECIMALS),
       nonce: nonce.toString(),
-      order_id: `${market?.orderIdPrefix ?? "spot"}-${crypto.randomUUID()}`,
+      order_id: orderId,
       owner_address: ownerAddress,
+      ...reduceOnlyField(reduceOnly),
       recipient_id: subaccountId,
       side: engineSide,
       signer_address: ownerAddress,

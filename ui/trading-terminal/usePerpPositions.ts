@@ -16,6 +16,23 @@ type PerpPositionsState = {
 const IDLE: PerpPositionsState = { account: null, positions: [], status: "idle" };
 
 /**
+ * One fresh read of the account's positions and margin, bypassing every cache. The 15-second poll
+ * below is what a row on screen was drawn from; a Close sizes itself from this instead, so a fill
+ * the poll has not shown yet is already counted.
+ */
+export async function readPerpPositions(
+  subaccountId: string
+): Promise<Pick<PerpPositionsState, "account" | "positions">> {
+  const response = await fetch(`/api/positions?subaccount_id=${subaccountId}`, {
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new Error(`positions returned ${response.status}`);
+  }
+  return parsePositionsResponse(await response.json());
+}
+
+/**
  * The perp account's positions and margin from `/v1/positions`, re-read every 15 seconds: margin
  * moves with every mark, so a snapshot from page load would show a liquidation price that no longer
  * holds. `refresh` re-reads at once, after a fill or a deposit.
@@ -30,16 +47,11 @@ export function usePerpPositions(subaccountId: string | null) {
       return;
     }
 
+    const account = subaccountId;
     let cancelled = false;
     async function load() {
       try {
-        const response = await fetch(`/api/positions?subaccount_id=${subaccountId}`, {
-          cache: "no-store",
-        });
-        if (!response.ok) {
-          throw new Error(`positions returned ${response.status}`);
-        }
-        const parsed = parsePositionsResponse(await response.json());
+        const parsed = await readPerpPositions(account);
         if (!cancelled) {
           setState({ ...parsed, status: "ready" });
         }

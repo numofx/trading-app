@@ -1,3 +1,4 @@
+import { getAddress, isAddress } from "viem";
 import { toUiCandles } from "@/lib/market-candles";
 import type { BookResponse, CandleInterval } from "@/lib/markets-service";
 import {
@@ -30,6 +31,30 @@ function presentCandles(candles: Awaited<ReturnType<typeof getMarketCandles>>): 
   }
 }
 
+/**
+ * The stack `/v1/markets` serves spot on, for the ticket to sign against. Both addresses or nothing:
+ * a module without its asset (or the reverse) would sign an order the venue refuses as a mismatch.
+ */
+function presentOrderStack(
+  assetAddress: string | undefined,
+  tradeModuleAddress: string | undefined
+): LiveSpotRuntime["orderStack"] {
+  if (
+    !(
+      assetAddress &&
+      tradeModuleAddress &&
+      isAddress(assetAddress) &&
+      isAddress(tradeModuleAddress)
+    )
+  ) {
+    return null;
+  }
+  return {
+    assetAddress: getAddress(assetAddress),
+    tradeModuleAddress: getAddress(tradeModuleAddress),
+  };
+}
+
 export default async function Home() {
   let liveSpot: LiveSpotRuntime | null = null;
 
@@ -52,7 +77,13 @@ export default async function Home() {
       const { stats24h, trades }: Pick<LiveSpotRuntime, "stats24h" | "trades"> =
         tradesResult.status === "fulfilled" ? tradesResult.value : { stats24h: null, trades: [] };
 
-      liveSpot = { book, candles, stats24h, trades };
+      liveSpot = {
+        book,
+        candles,
+        orderStack: presentOrderStack(spotMarket.asset_address, spotMarket.trade_module_address),
+        stats24h,
+        trades,
+      };
     }
   } catch {
     liveSpot = null;

@@ -358,6 +358,8 @@ export type LiveSpotRuntime = {
    */
   stats24h?: { orderEntrySpec: string | null; stats: TradeStats24h } | null;
   trades: PresentedTrade[];
+  /** The market's asset and TradeModule as `/v1/markets` serves them; see SpotMarket.orderStack. */
+  orderStack?: SpotMarket["orderStack"];
 };
 
 /** A market the venue serves no data for. Rendered as empty panels, never as sample depth. */
@@ -368,6 +370,7 @@ const EMPTY_SPOT_MARKET: SpotMarket = {
   orderBookAsks: [],
   orderBookBids: [],
   orderEntrySpec: null,
+  orderStack: null,
   stats24h: null,
   takerFeeBps: null,
   trades: [],
@@ -592,6 +595,7 @@ export function buildSpotMarket(liveSpot: LiveSpotRuntime | null): SpotMarket {
     orderBookBids,
     // Taken from the venue rather than assumed: it is what tells the stream to invert engine values.
     orderEntrySpec: liveSpot.book?.market_presentation?.order_entry_spec ?? null,
+    orderStack: liveSpot.orderStack ?? null,
     stats24h: presentStats24h(liveSpot.stats24h),
     takerFeeBps: liveSpot.book?.market_presentation?.taker_fee_bps ?? null,
     trades,

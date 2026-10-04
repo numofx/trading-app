@@ -10,6 +10,7 @@ import { getAppChain } from "@/lib/base-public-client";
 import type { OrderOutcome } from "@/lib/order-settlement";
 import { pollOrderOutcome } from "@/lib/order-settlement";
 import { getMarketableLimitPrice, getMarketSizingPrice } from "@/lib/spot-market";
+import type { OrderMarketOverride } from "@/lib/spot-order-submission";
 import {
   buildCancelEnvelope,
   buildSpotOrderEnvelope,
@@ -269,7 +270,8 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
   const legacy = buildLegacySpotView(
     legacyStack,
     legacyAccount.subaccountId,
-    legacyBalance?.rows ?? null
+    legacyBalance?.rows ?? null,
+    spotMarket.mark
   );
   // A wallet with no trading account holds zero, not an unknown amount, so the ticket's shortfall
   // check can stop an order that would otherwise be signed against an empty account.
@@ -363,6 +365,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
       const walletClient = createWalletClient({ chain: appChain, transport: custom(provider) });
 
       const envelope = buildSpotOrderEnvelope({
+        market: servedOrderMarket(spotMarket),
         side,
         subaccountId: resolvedTradingSubaccountId,
         uiPrice: executionPrice,
@@ -585,10 +588,44 @@ function legacyWithdrawableAssets(stack: {
  * is no such stack, no such account, or nothing left in it: the row exists to get balances out,
  * not to advertise an empty account.
  */
+/**
+ * The venue's own asset and module for spot, for the ticket to sign against, so a cutover on the
+ * backend cannot leave the ticket signing for a stack the venue no longer settles. Undefined when the
+ * venue did not report them, and the configured defaults apply.
+ */
+function servedOrderMarket(spotMarket: SpotMarket): OrderMarketOverride | undefined {
+  return spotMarket.orderStack === null
+    ? undefined
+    : { ...spotMarket.orderStack, orderIdPrefix: "spot" };
+}
+
+/** One cent in the ledger's 18-decimal USDC units. */
+const LEGACY_DUST_USDC_UNITS = 10n ** 16n;
+/** cNGN per USDC to value cNGN dust at when the market shows no price: about a cent at ₦1,300. */
+const LEGACY_DUST_FALLBACK_CNGN_PER_USDC = 1300;
+
+/**
+ * The cNGN worth one cent, in 18-decimal ledger units, at the market's price. What is left after a
+ * withdrawal rounds to less than this and is not worth a row.
+ */
+function legacyDustCngnUnits(markCngnPerUsdc: number | null): bigint {
+  const rate =
+    markCngnPerUsdc !== null && markCngnPerUsdc > 0
+      ? markCngnPerUsdc
+      : LEGACY_DUST_FALLBACK_CNGN_PER_USDC;
+  return BigInt(Math.round(rate * 100)) * 10n ** 14n;
+}
+
+/**
+ * The wallet's old spot account as withdraw-only rows, one per asset still worth showing. An asset
+ * under one cent is left out: a fully withdrawn account leaves dust (interest, rounding) that would
+ * otherwise keep a "withdraw only" row on screen forever for a balance nothing can usefully move.
+ */
 function buildLegacySpotView(
   stack: { usdcEscrow: `0x${string}`; cngnEscrow: `0x${string}` } | null,
   accountId: string | null,
-  rows: { asset: string; balance: bigint }[] | null
+  rows: { asset: string; balance: bigint }[] | null,
+  markCngnPerUsdc: number | null
 ): {
   accountId: string;
   cngnLabel: string | null;
@@ -603,14 +640,16 @@ function buildLegacySpotView(
     rows.find((row) => row.asset.toLowerCase() === escrow.toLowerCase())?.balance ?? 0n;
   const usdcUnits = held(stack.usdcEscrow);
   const cngnUnits = held(stack.cngnEscrow);
-  if (usdcUnits <= 0n && cngnUnits <= 0n) {
+  const showUsdc = usdcUnits >= LEGACY_DUST_USDC_UNITS;
+  const showCngn = cngnUnits >= legacyDustCngnUnits(markCngnPerUsdc);
+  if (!(showUsdc || showCngn)) {
     return null;
   }
   return {
     accountId,
-    cngnLabel: formatSubaccountCngnLabel(cngnUnits),
+    cngnLabel: showCngn ? formatSubaccountCngnLabel(cngnUnits) : null,
     cngnUnits,
-    usdcLabel: formatSubaccountUsdcLabel(usdcUnits),
+    usdcLabel: showUsdc ? formatSubaccountUsdcLabel(usdcUnits) : null,
     usdcUnits,
   };
 }
