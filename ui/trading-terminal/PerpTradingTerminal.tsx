@@ -8,7 +8,7 @@ import { createWalletClient, custom } from "viem";
 import { buildOpenOrdersActivityView, getOwnedOpenOrders } from "@/lib/account-activity-views";
 import { getAppChain } from "@/lib/base-public-client";
 import {
-  buildPerpHedge,
+  buildPerpCngnExposure,
   buildPerpMarginView,
   buildPerpPositionsView,
   describeOrderRejection,
@@ -635,12 +635,12 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
           <div className="order-first flex min-h-[420px] flex-col gap-3 md:order-0 md:col-start-2 md:row-span-3 md:row-start-1 md:min-h-0 md:gap-2 md:overflow-y-auto lg:col-start-3 lg:row-span-2 lg:row-start-1">
             <PerpOrderFormPanel
               availableMargin={perpAccount.account?.initialMarginSurplus ?? null}
-              hasWallet={primaryWallet !== null}
-              hedge={buildPerpHedge(
+              cngn={buildPerpCngnExposure(
                 perpAccount.account,
                 perpAccount.positions,
                 market?.state ?? null
               )}
+              hasWallet={primaryWallet !== null}
               isPreparingAccount={account.isLoading || (isSignedIn && !walletsReady)}
               isSubmitting={isSubmitting}
               lastAction={lastAction}

@@ -28,7 +28,12 @@ about it from `markets-service`, with no env of its own:
   50% for cNGN), and each row's Withdraw signs a WithdrawalModule action for that row's escrow.
   Without `collateral_assets` the terminal is cash-only, exactly as before. The haircut is what
   liquidates a leveraged short when the naira strengthens, so the dialog tells a cNGN depositor to
-  post about as much cNGN as they short.
+  post about as much cNGN as they short. cNGN and USDC both count as margin under the SRM's own
+  check (cNGN at its factor), in either direction and at the normal maximum leverage: the venue no
+  longer limits a cNGN-holding account to long USD or to the cNGN posted. The ticket's **Hedge**
+  block is information only (how much of the long USD the cNGN offsets, what is left exposed to
+  the naira), and a short (long naira) on such an account carries a warning that it doubles the
+  naira exposure.
 
 The earlier dated-futures terminal was removed; the perp is a new market, not a restoration of it.
 

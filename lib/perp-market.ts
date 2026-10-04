@@ -1,9 +1,9 @@
 import { getAddress, isAddress, parseUnits } from "viem";
 import type {
   PerpAccountMargin,
+  PerpCngnExposure,
   PerpCollateralAsset,
   PerpCollateralBalance,
-  PerpHedge,
   PerpPosition,
   PerpStack,
   PerpState,
@@ -398,15 +398,15 @@ const HOURS_PER_DAY = 24;
 const DAYS_PER_MONTH = 30;
 
 /**
- * Hedge mode for the ticket, or null for an account that posted no cNGN. The locked value is the
- * collateral at the index (the venue's 1:1 bound is in cNGN, which is the same thing at the index);
- * funding is quoted on all of it, as the venue's long pays it.
+ * The ticket's Hedge block, or null for an account that posted no cNGN. Information only: how
+ * much of the account's long USD the cNGN offsets at the index, what is left exposed to the naira
+ * either way, and the funding the offset part pays or receives at the current rate.
  */
-export function buildPerpHedge(
+export function buildPerpCngnExposure(
   account: PerpAccountMargin | null,
   positions: PerpPosition[],
   state: PerpState | null
-): PerpHedge | null {
+): PerpCngnExposure | null {
   if (account === null || state === null) {
     return null;
   }
@@ -415,21 +415,24 @@ export function buildPerpHedge(
     return null;
   }
   const collateralCngn = cngn.reduce((sum, row) => sum + row.balance, 0);
-  const lockedUsd = cngn.reduce((sum, row) => sum + row.valueUsd, 0);
-  const longs = positions.filter((position) => position.uiSide === "long");
-  const hedgedUsd = longs.reduce((sum, position) => sum + position.uiSize, 0);
-  const hedgedCngn = longs.reduce((sum, position) => sum + Number(position.engineSize ?? 0n), 0);
-  const roomCngn = Math.max(0, collateralCngn - hedgedCngn);
-  const fundingPerDayUsd = lockedUsd * state.uiLongFundingRate1h * HOURS_PER_DAY;
+  const collateralUsd = cngn.reduce((sum, row) => sum + row.valueUsd, 0);
+  const longUsd = positions
+    .filter((position) => position.uiSide === "long")
+    .reduce((sum, position) => sum + position.uiSize, 0);
+  const longNairaUsd = positions
+    .filter((position) => position.uiSide === "short")
+    .reduce((sum, position) => sum + position.uiSize, 0);
+  const offsetUsd = Math.min(collateralUsd, longUsd);
+  const fundingPerDayUsd = offsetUsd * state.uiLongFundingRate1h * HOURS_PER_DAY;
   return {
     collateralCngn,
+    collateralUsd,
     fundingPerDayUsd,
     fundingPerMonthUsd: fundingPerDayUsd * DAYS_PER_MONTH,
-    hedgedCngn,
-    hedgedUsd,
-    lockedUsd,
-    roomCngn,
-    roomUsd: state.indexPrice > 0 ? roomCngn / state.indexPrice : 0,
+    longNairaUsd,
+    longUsd,
+    nairaExposureUsd: collateralUsd + longNairaUsd - longUsd,
+    offsetUsd,
   };
 }
 
