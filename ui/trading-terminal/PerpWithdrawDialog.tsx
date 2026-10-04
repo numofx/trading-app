@@ -170,13 +170,16 @@ function WithdrawProgress({
     case "signing":
       return (
         <p className="text-[12px] text-panel-text-muted">
-          Sign the withdrawal in your wallet. It costs no gas; the venue submits it.
+          Sign the withdrawal of{" "}
+          <span className="font-semibold text-panel-text-active">{state.amount}</span> in your
+          wallet. It costs no gas; the venue submits it. Check the amount here: the wallet shows
+          only the encoded message.
         </p>
       );
     case "submitting":
       return (
         <p className="text-[12px] text-panel-text-muted">
-          The venue is checking and submitting your withdrawal…
+          The venue is checking and submitting your withdrawal of {state.amount}…
         </p>
       );
     case "confirming":
