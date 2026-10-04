@@ -17,6 +17,7 @@ import {
 } from "@/lib/perp-market";
 import type {
   PerpAccountMargin,
+  PerpCollateralAsset,
   PerpMarket,
   PerpPosition,
   PerpStack,
@@ -147,9 +148,19 @@ async function signAndPostPerpOrder({
   return postSignedOrder(envelope.payload, signature);
 }
 
+function listedCollateralOf(stack: PerpStack | null): PerpCollateralAsset[] {
+  return stack === null ? [] : stack.collateralAssets;
+}
+
+function heldCollateralCount(account: PerpAccountMargin | null): number {
+  return account === null ? 0 : account.collateral.length;
+}
+
 type ActivityInputs = {
   account: PerpAccountMargin | null;
   bottomTab: PerpBottomTab;
+  /** The collateral assets the venue accepts, listed at zero on the Margin tab when not held. */
+  listedCollateral: PerpCollateralAsset[];
   market: PerpMarket | null;
   positions: PerpPosition[];
   walletAddress: string | null;
@@ -163,7 +174,7 @@ function buildActivityView(inputs: ActivityInputs): ActivityView {
     return buildPerpPositionsView(inputs.positions, PERP_MARKET_LABEL);
   }
   if (inputs.bottomTab === "margin") {
-    return buildPerpMarginView(inputs.account);
+    return buildPerpMarginView(inputs.account, inputs.listedCollateral);
   }
   return perpOpenOrdersView(
     buildOpenOrdersActivityView(inputs.market.openOrders, inputs.walletAddress)
@@ -249,8 +260,12 @@ function buildRowAction(inputs: {
   market: PerpMarket | null;
   onCancel: (nonce: string, ownerAddress: string) => void;
   onClose: (position: PerpPosition, rowIndex: number) => void;
-  /** The Margin tab's row index: 0 is cash, then each collateral asset in order. */
+  /** The Margin tab's row index: 0 is cash, then each collateral asset held, in order. */
   onWithdraw: (rowIndex: number) => void;
+  /** A Margin-tab row for a collateral asset the account does not hold yet. */
+  onDeposit: () => void;
+  /** How many collateral assets the account holds: rows past them are listed at zero. */
+  heldCollateral: number;
   ownedOpenOrders: { nonce: string; ownerAddress: string }[];
   positions: PerpPosition[];
 }) {
@@ -297,15 +312,25 @@ function buildRowAction(inputs: {
       );
     };
   }
-  return (rowIndex: number) => (
-    <button
-      className={ROW_BUTTON_CLASSES}
-      onClick={() => inputs.onWithdraw(rowIndex)}
-      type="button"
-    >
-      Withdraw
-    </button>
-  );
+  return (rowIndex: number) =>
+    rowIndex > inputs.heldCollateral ? (
+      <button
+        className={ROW_BUTTON_CLASSES}
+        onClick={inputs.onDeposit}
+        title="Deposit this asset as margin"
+        type="button"
+      >
+        Deposit
+      </button>
+    ) : (
+      <button
+        className={ROW_BUTTON_CLASSES}
+        onClick={() => inputs.onWithdraw(rowIndex)}
+        type="button"
+      >
+        Withdraw
+      </button>
+    );
 }
 
 /**
@@ -634,6 +659,7 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
 
           <div className="order-first flex min-h-[420px] flex-col gap-3 md:order-0 md:col-start-2 md:row-span-3 md:row-start-1 md:min-h-0 md:gap-2 md:overflow-y-auto lg:col-start-3 lg:row-span-2 lg:row-start-1">
             <PerpOrderFormPanel
+              account={perpAccount.account}
               availableMargin={perpAccount.account?.initialMarginSurplus ?? null}
               cngn={buildPerpCngnExposure(
                 perpAccount.account,
@@ -658,6 +684,7 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
               activityView={buildActivityView({
                 account: perpAccount.account,
                 bottomTab,
+                listedCollateral: listedCollateralOf(stack),
                 market,
                 positions: perpAccount.positions,
                 walletAddress: primaryWallet?.address ?? null,
@@ -673,8 +700,10 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
                 hasWallet: primaryWallet !== null,
                 isSubmitting,
                 market,
+                heldCollateral: heldCollateralCount(perpAccount.account),
                 onCancel: (nonce, ownerAddress) => void handleCancel(nonce, ownerAddress),
                 onClose: (position, rowIndex) => void handleClose(position, rowIndex),
+                onDeposit: () => setDepositOpen(true),
                 onWithdraw: (rowIndex) => setWithdrawRow(rowIndex),
                 ownedOpenOrders,
                 positions: perpAccount.positions,

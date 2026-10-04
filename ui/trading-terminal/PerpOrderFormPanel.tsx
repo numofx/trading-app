@@ -4,11 +4,12 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import {
+  describePerpMarginSources,
   estimateLiquidationPrice,
   getLeverageCeiling,
   TRADING_PAUSED_MESSAGE,
 } from "@/lib/perp-market";
-import type { PerpCngnExposure, PerpState } from "@/lib/perp-market.types";
+import type { PerpAccountMargin, PerpCngnExposure, PerpState } from "@/lib/perp-market.types";
 import { PERP_LEVERAGE_PRESETS } from "@/lib/perp-terminal-config";
 import { SmartImage } from "@/ui/SmartImage";
 
@@ -113,6 +114,180 @@ function TokenUnit({ icon, symbol }: { icon: string; symbol: string }) {
       <SmartImage<string> alt={symbol} className="size-5 animate-none rounded-full" src={icon} />
       {symbol}
     </span>
+  );
+}
+
+type SizeUnit = "USDC" | "cNGN";
+
+function sizeLabel(unit: SizeUnit, conversion: number | null) {
+  if (unit === "USDC") {
+    return "Size — what you trade (USD notional)";
+  }
+  const at = conversion === null ? "" : `, at ₦${PRICE.format(conversion)}`;
+  return `Size — what you trade (cNGN notional${at})`;
+}
+
+/**
+ * The ticket's size and margin fields, kept in step: size and margin through the leverage, and the
+ * size's cNGN rendering through the ticket's price. USD notional is the figure underneath; the
+ * cNGN unit is a view of it that the trader can also type into.
+ */
+function usePerpSizeFields(leverage: number, conversion: number | null) {
+  const [margin, setMargin] = useState("");
+  const [size, setSize] = useState("");
+  const [sizeCngn, setSizeCngn] = useState("");
+  const [sizeUnit, setSizeUnit] = useState<SizeUnit>("USDC");
+
+  function toCngn(usd: number | null) {
+    return usd === null || conversion === null ? "" : formatDerived(usd * conversion);
+  }
+
+  function setUsd(usd: number | null) {
+    setSize(usd === null ? "" : formatDerived(usd));
+    setMargin(usd === null ? "" : formatDerived(usd / leverage));
+  }
+
+  function onSizeInput(value: string) {
+    if (sizeUnit === "USDC") {
+      setSize(value);
+      const parsed = parseAmount(value);
+      setMargin(parsed === null ? "" : formatDerived(parsed / leverage));
+      setSizeCngn(toCngn(parsed));
+      return;
+    }
+    setSizeCngn(value);
+    const parsed = parseAmount(value);
+    setUsd(parsed === null || conversion === null || conversion <= 0 ? null : parsed / conversion);
+  }
+
+  function onMargin(value: string) {
+    setMargin(value);
+    const parsed = parseAmount(value);
+    const usd = parsed === null ? null : parsed * leverage;
+    setSize(usd === null ? "" : formatDerived(usd));
+    setSizeCngn(toCngn(usd));
+  }
+
+  function onUnit(unit: SizeUnit) {
+    setSizeUnit(unit);
+    setSizeCngn(toCngn(parseAmount(size)));
+  }
+
+  function onLeverage(next: number) {
+    const parsed = parseAmount(margin);
+    if (parsed !== null) {
+      const usd = parsed * next;
+      setSize(formatDerived(usd));
+      setSizeCngn(toCngn(usd));
+    }
+  }
+
+  return {
+    margin,
+    onLeverage,
+    onMargin,
+    onSizeInput,
+    onUnit,
+    /** What the Size field shows: the USD notional, or its cNGN rendering. */
+    shown: sizeUnit === "USDC" ? size : sizeCngn,
+    size,
+    sizeUnit,
+  };
+}
+
+/** The account's initial-margin headroom, and what it is made of, under a cross-margin tooltip. */
+function AvailableToTrade({
+  availableMargin,
+  sources,
+}: {
+  availableMargin: number | null;
+  sources: string | null;
+}) {
+  return (
+    <div className="space-y-0.5 text-[11px]">
+      <div className="flex items-center justify-between gap-2">
+        <span
+          className="cursor-help text-panel-text-muted underline decoration-dotted underline-offset-4"
+          title="Cross-margin: everything in your perp account backs every position. USDC counts in full, cNGN at its index value times its margin factor. Profit and loss settle in USDC."
+        >
+          Available to trade
+        </span>
+        <span className="font-mono text-panel-text">
+          {availableMargin === null ? "—" : USD.format(Math.max(0, availableMargin))} USDC
+        </span>
+      </div>
+      {sources === null ? null : (
+        <p className="text-[10px] text-panel-text-muted leading-snug">{sources}</p>
+      )}
+    </div>
+  );
+}
+
+/** Long naira on an account that holds cNGN adds naira exposure on top of the collateral's. */
+function NairaDoublingNote({
+  cngn,
+  isLong,
+  sizeUsd,
+}: {
+  cngn: PerpCngnExposure | null;
+  isLong: boolean;
+  sizeUsd: number | null;
+}) {
+  if (cngn === null || isLong || sizeUsd === null || sizeUsd <= 0) {
+    return null;
+  }
+  return (
+    <p className="text-[10px] text-sell leading-snug">
+      This doubles your naira exposure: your {USD.format(cngn.collateralCngn)} cNGN is already long
+      the naira, and a short here is long the naira again. It still has to clear the margin check,
+      with cNGN counted at half its value.
+    </p>
+  );
+}
+
+/** The Size field's unit: USD notional, or the same size in cNGN at the ticket's own price. */
+function SizeUnitToggle({
+  cngnAvailable,
+  onSelect,
+  unit,
+}: {
+  cngnAvailable: boolean;
+  onSelect: (unit: SizeUnit) => void;
+  unit: SizeUnit;
+}) {
+  return (
+    <fieldset
+      aria-label="Size unit"
+      className="flex shrink-0 items-center gap-0.5 rounded-sm bg-panel-bg p-0.5 ring-1 ring-panel-border"
+    >
+      {(["USDC", "cNGN"] as const).map((option) => (
+        <button
+          aria-pressed={unit === option}
+          className={cn(
+            "flex cursor-pointer items-center gap-1 rounded-sm px-1.5 py-0.5 font-semibold text-[12px] transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+            unit === option
+              ? "bg-input-bg text-panel-text-active ring-1 ring-panel-border"
+              : "text-panel-text-muted hover:text-panel-text"
+          )}
+          disabled={option === "cNGN" && !cngnAvailable}
+          key={option}
+          onClick={() => onSelect(option)}
+          title={
+            option === "cNGN" && !cngnAvailable
+              ? "Needs a price: type a limit price, or wait for the market"
+              : undefined
+          }
+          type="button"
+        >
+          <SmartImage<string>
+            alt={option}
+            className="size-4 animate-none rounded-full"
+            src={option === "USDC" ? "/tokens/usdc.svg" : "/tokens/cngn.svg"}
+          />
+          {option}
+        </button>
+      ))}
+    </fieldset>
   );
 }
 
@@ -460,6 +635,7 @@ function buttonClassName(enabled: boolean, isLong: boolean) {
  * account together, so there is no per-position leverage to set on chain.
  */
 export function PerpOrderFormPanel({
+  account = null,
   availableMargin = null,
   cngn = null,
   hasWallet = false,
@@ -473,6 +649,8 @@ export function PerpOrderFormPanel({
   state = null,
   takerFeeBps = null,
 }: {
+  /** The perp account's margin, by asset: what "Available to trade" is made of. */
+  account?: PerpAccountMargin | null;
   /** The perp account's initial-margin surplus, USD; null before an account exists or is read. */
   availableMargin?: number | null;
   /** What the account's cNGN offsets, for an account holding any; informational. */
@@ -492,13 +670,23 @@ export function PerpOrderFormPanel({
   const [side, setSide] = useState<PerpSide>("long");
   const [orderType, setOrderType] = useState<PerpOrderType>("Market");
   const [limitPrice, setLimitPrice] = useState("");
-  const [margin, setMargin] = useState("");
-  const [size, setSize] = useState("");
   const [leverage, setLeverage] = useState(1);
 
   const isLive = state?.tradingEnabled === true && onSubmit !== undefined;
+  const marginSources = describePerpMarginSources(account);
   const ceiling = getLeverageCeiling(state);
   const effectiveLeverage = Math.min(leverage, ceiling);
+  // cNGN per USDC for the Size field's cNGN unit: the limit price when one is typed, else the
+  // price a market order fills near. The field keeps USD notional underneath either way.
+  const sizeConversion =
+    orderType === "Limit" ? (parseAmount(limitPrice) ?? referencePrice) : referencePrice;
+  const fields = usePerpSizeFields(effectiveLeverage, sizeConversion);
+  const { margin, size, sizeUnit } = fields;
+
+  function handleLeverageChange(next: number) {
+    setLeverage(next);
+    fields.onLeverage(next);
+  }
   const isLong = side === "long";
 
   const { feeUsd, liquidation, needsPrice, requiredMargin, shortfall, sizeUsd } = deriveTicket({
@@ -513,28 +701,6 @@ export function PerpOrderFormPanel({
     takerFeeBps,
   });
 
-  function handleMarginChange(value: string) {
-    setMargin(value);
-    const parsed = parseAmount(value);
-    setSize(parsed === null ? "" : formatDerived(parsed * effectiveLeverage));
-  }
-
-  function handleSizeChange(value: string) {
-    setSize(value);
-    const parsed = parseAmount(value);
-    setMargin(parsed === null ? "" : formatDerived(parsed / effectiveLeverage));
-  }
-
-  function handleLeverageChange(next: number) {
-    setLeverage(next);
-    const parsed = parseAmount(margin);
-    if (parsed !== null) {
-      setSize(formatDerived(parsed * next));
-    }
-  }
-
-  // Long naira on an account that holds cNGN adds naira exposure on top of the collateral's.
-  const doublesNairaExposure = cngn !== null && !isLong && sizeUsd !== null && sizeUsd > 0;
   const canSubmit = isTicketComplete({
     hasWallet,
     isLive,
@@ -588,17 +754,7 @@ export function PerpOrderFormPanel({
 
         <PerpOrderTypeTabs onSelect={setOrderType} selected={orderType} />
 
-        <div className="flex items-center justify-between gap-2 text-[11px]">
-          <span
-            className="cursor-help text-panel-text-muted underline decoration-dotted underline-offset-4"
-            title="Initial-margin headroom in your perp account: what can back new positions"
-          >
-            Available to trade
-          </span>
-          <span className="font-mono text-panel-text">
-            {availableMargin === null ? "—" : USD.format(Math.max(0, availableMargin))} USDC
-          </span>
-        </div>
+        <AvailableToTrade availableMargin={availableMargin} sources={marginSources} />
 
         <div className="divide-y divide-panel-border rounded-sm bg-input-bg ring-1 ring-panel-border">
           {orderType === "Limit" ? (
@@ -612,10 +768,16 @@ export function PerpOrderFormPanel({
           ) : null}
           <PerpCardField
             id="perp-size"
-            label="Size — what you trade (USD notional)"
-            onChange={handleSizeChange}
-            unit={<TokenUnit icon="/tokens/usdc.svg" symbol="USDC" />}
-            value={size}
+            label={sizeLabel(sizeUnit, sizeConversion)}
+            onChange={fields.onSizeInput}
+            unit={
+              <SizeUnitToggle
+                cngnAvailable={sizeConversion !== null && sizeConversion > 0}
+                onSelect={fields.onUnit}
+                unit={sizeUnit}
+              />
+            }
+            value={fields.shown}
           />
           <LeverageSelector
             ceiling={ceiling}
@@ -625,7 +787,7 @@ export function PerpOrderFormPanel({
           <PerpCardField
             id="perp-margin"
             label={`Margin — what it costs you (size ÷ ${effectiveLeverage}x)`}
-            onChange={handleMarginChange}
+            onChange={fields.onMargin}
             unit={<TokenUnit icon="/tokens/usdc.svg" symbol="USDC" />}
             value={margin}
           />
@@ -659,13 +821,7 @@ export function PerpOrderFormPanel({
             {USD.format(availableMargin ?? 0)}.
           </p>
         ) : null}
-        {doublesNairaExposure && cngn !== null ? (
-          <p className="text-[10px] text-sell leading-snug">
-            This doubles your naira exposure: your {USD.format(cngn.collateralCngn)} cNGN is already
-            long the naira, and a short here is long the naira again. It still has to clear the
-            margin check, with cNGN counted at half its value.
-          </p>
-        ) : null}
+        <NairaDoublingNote cngn={cngn} isLong={isLong} sizeUsd={sizeUsd} />
 
         <button
           className={cn(
