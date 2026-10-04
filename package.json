@@ -45,7 +45,7 @@
     "ultracite": "^7.2.2"
   },
   "scripts": {
-    "build": "next build",
+    "build": "node scripts/check-market-stack.mjs && next build",
     "dev": "next dev",
     "prepare": "husky",
     "start": "next start",

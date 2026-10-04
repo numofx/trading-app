@@ -1,5 +1,6 @@
 "use client";
 
+import { Check } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
@@ -26,6 +27,8 @@ export type PerpOrderRequest = {
   limitPrice: string;
   /** USD notional. */
   size: string;
+  /** Only shrink the open position: the venue clamps the fill to it and never opens or flips one. */
+  reduceOnly: boolean;
 };
 
 const USD = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 });
@@ -78,6 +81,59 @@ function PerpSideTabs({ onSelect, side }: { onSelect: (side: PerpSide) => void; 
 }
 
 /** A segmented control in a bordered well, the selected type filled. */
+/**
+ * The reduce-only switch. Without a position there is nothing to reduce and the venue would refuse
+ * the order, so the switch is shown disabled and says why rather than letting a trader arm it.
+ */
+function ReduceOnlyToggle({
+  checked,
+  hasPosition,
+  onChange,
+}: {
+  checked: boolean;
+  hasPosition: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  const armed = checked && hasPosition;
+  return (
+    <label
+      className={cn(
+        "flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-[11px] ring-1 ring-panel-border transition-colors",
+        hasPosition ? "cursor-pointer hover:bg-input-hover" : "cursor-not-allowed opacity-60"
+      )}
+      htmlFor="perp-reduce-only"
+      title={
+        hasPosition
+          ? "The venue clamps this order to your open position; it can never open or flip one"
+          : "Needs an open position to reduce"
+      }
+    >
+      <span className="text-panel-text-muted">
+        Reduce only
+        <span className="ml-1 text-panel-text-muted/70">
+          {hasPosition ? "— never opens or flips the position" : "— no open position"}
+        </span>
+      </span>
+      <span
+        className={cn(
+          "relative flex size-3.5 shrink-0 items-center justify-center rounded-[3px] ring-1 ring-panel-border",
+          armed ? "bg-panel-text-active text-panel-bg" : "bg-input-bg"
+        )}
+      >
+        <input
+          checked={armed}
+          className="absolute inset-0 size-full cursor-[inherit] appearance-none opacity-0"
+          disabled={!hasPosition}
+          id="perp-reduce-only"
+          onChange={(event) => onChange(event.target.checked)}
+          type="checkbox"
+        />
+        {armed ? <Check aria-hidden className="size-3" strokeWidth={3} /> : null}
+      </span>
+    </label>
+  );
+}
+
 function PerpOrderTypeTabs({
   onSelect,
   selected,
@@ -638,6 +694,7 @@ export function PerpOrderFormPanel({
   account = null,
   availableMargin = null,
   cngn = null,
+  hasPosition = false,
   hasWallet = false,
   isPreparingAccount = false,
   isSubmitting = false,
@@ -649,6 +706,8 @@ export function PerpOrderFormPanel({
   state = null,
   takerFeeBps = null,
 }: {
+  /** Whether the account holds a perp position: what a reduce-only order needs. */
+  hasPosition?: boolean;
   /** The perp account's margin, by asset: what "Available to trade" is made of. */
   account?: PerpAccountMargin | null;
   /** The perp account's initial-margin surplus, USD; null before an account exists or is read. */
@@ -671,6 +730,7 @@ export function PerpOrderFormPanel({
   const [orderType, setOrderType] = useState<PerpOrderType>("Market");
   const [limitPrice, setLimitPrice] = useState("");
   const [leverage, setLeverage] = useState(1);
+  const [reduceOnly, setReduceOnly] = useState(false);
 
   const isLive = state?.tradingEnabled === true && onSubmit !== undefined;
   const marginSources = describePerpMarginSources(account);
@@ -736,7 +796,7 @@ export function PerpOrderFormPanel({
       return;
     }
     if (canSubmit) {
-      onSubmit({ limitPrice, orderType, side, size });
+      onSubmit({ limitPrice, orderType, reduceOnly: reduceOnly && hasPosition, side, size });
     }
   }
 
@@ -792,6 +852,8 @@ export function PerpOrderFormPanel({
             value={margin}
           />
         </div>
+
+        <ReduceOnlyToggle checked={reduceOnly} hasPosition={hasPosition} onChange={setReduceOnly} />
       </div>
 
       <div className="shrink-0 space-y-2 border-panel-border border-t bg-panel-bg-muted px-3 pt-1.5 pb-2 md:sticky md:bottom-0 md:z-10">

@@ -5,6 +5,11 @@ import type { PerpStatePresentation } from "@/lib/perp-market";
 
 export type MarketPresentation = {
   asset_address?: string;
+  /** The Matching module the venue settles this market's orders through; a signed order must name it. */
+  trade_module_address?: string;
+  /** The cash the module quotes in, and the manager its accounts live under (unified markets). */
+  quote_asset_address?: string;
+  margin_manager_address?: string;
   /** USDCcNGN-PERP's chain state; absent for spot, and for the perp when the chain was unreadable. */
   perp?: PerpStatePresentation;
   base_asset_symbol?: string;

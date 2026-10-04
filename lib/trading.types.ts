@@ -92,6 +92,12 @@ export type SpotMarket = {
    */
   takerFeeBps: number | null;
   /**
+   * The asset and TradeModule the venue serves this market on, from `/v1/markets`: what a signed
+   * order must name, so the ticket follows the venue's own stack rather than an env override that
+   * can lag a cutover. Null when the venue did not report both, and the configured defaults apply.
+   */
+  orderStack: { assetAddress: `0x${string}`; tradeModuleAddress: `0x${string}` } | null;
+  /**
    * Every order resting on the book, with the identity needed to cancel one. The terminal filters
    * these to the connected wallet — the venue's private `orders` stream carries the same set, but
    * needs a signed auth frame for data the public book already exposes.

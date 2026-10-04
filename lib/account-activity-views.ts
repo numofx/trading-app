@@ -43,20 +43,25 @@ export function buildAssetsActivityView({
     rows: [
       { cells: ["USDC", accountUsdcLabel ?? UNKNOWN_BALANCE, walletUsdcLabel ?? UNKNOWN_BALANCE] },
       { cells: ["cNGN", accountCngnLabel ?? UNKNOWN_BALANCE, walletCngnLabel ?? UNKNOWN_BALANCE] },
-      ...(legacy === null
+      // A null legacy label is an asset not worth a row (under a cent), not an unknown balance.
+      ...(legacy === null || legacy.usdcLabel === null
         ? []
         : [
             {
               cells: [
                 `USDC · old spot account #${legacy.accountId} (withdraw only)`,
-                legacy.usdcLabel ?? UNKNOWN_BALANCE,
+                legacy.usdcLabel,
                 "",
               ],
             },
+          ]),
+      ...(legacy === null || legacy.cngnLabel === null
+        ? []
+        : [
             {
               cells: [
                 `cNGN · old spot account #${legacy.accountId} (withdraw only)`,
-                legacy.cngnLabel ?? UNKNOWN_BALANCE,
+                legacy.cngnLabel,
                 "",
               ],
             },

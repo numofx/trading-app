@@ -27,6 +27,7 @@ const FIXTURE_MARKET: SpotMarket = {
   candles: [],
   mark: FIXTURE_PRICE,
   orderEntrySpec: "usdc_cngn_spot_v1",
+  orderStack: null,
   stats24h: null,
   takerFeeBps: 25,
   trades: [{ price: FIXTURE_PRICE, side: "buy", size: 3, time: "12:00:00" }],
