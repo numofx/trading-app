@@ -97,28 +97,25 @@ export type PerpCollateralBalance = {
 };
 
 /**
- * Hedge mode: what the ticket shows for an account margined in cNGN. Such an account is a synthetic
- * dollar — the venue only lets it be long USD, and no more of it than the cNGN it posted — so the
- * ticket shows the dollar value that collateral locks, how much of it the account has already
- * hedged, and what the hedge costs in funding at the current rate.
+ * What an account's cNGN does for its position, for the ticket's Hedge block (information only:
+ * the venue no longer limits a cNGN-holding account's direction or size; the SRM's margin check
+ * does, crediting cNGN at its haircut). cNGN held is long the naira; long USD on the perp (the
+ * on-chain short of the cNGN perp) offsets it, long naira on the perp adds to it.
  */
-export type PerpHedge = {
+export type PerpCngnExposure = {
   /** The cNGN posted, whole units. */
   collateralCngn: number;
-  /** Its value at the index: the most long-USD notional the account may hold. */
-  lockedUsd: number;
-  /** Long-USD notional held now (0 when flat or, abnormally, long naira). */
-  hedgedUsd: number;
-  /** The same, in the engine's cNGN contracts: what the venue's 1:1 bound counts. */
-  hedgedCngn: number;
-  /**
-   * cNGN contracts the account may still go long USD with: collateral less hedged, never negative.
-   * The venue's bound is in contracts, so a ticket converts this at its own price, not the index.
-   */
-  roomCngn: number;
-  /** `roomCngn` at the index, for display. */
-  roomUsd: number;
-  /** Funding on the whole locked value at the current rate: positive means the hedge pays. */
+  /** Its value at the index. */
+  collateralUsd: number;
+  /** Long-USD notional held now (UI long), USD. */
+  longUsd: number;
+  /** Long-naira notional held now (UI short), USD. */
+  longNairaUsd: number;
+  /** The part of the long USD the cNGN offsets: the smaller of the two. */
+  offsetUsd: number;
+  /** Net naira exposure, USD, signed: positive is long the naira (collateral plus any long naira, less long USD). */
+  nairaExposureUsd: number;
+  /** Funding on the offset part at the current rate: positive means the account pays. */
   fundingPerDayUsd: number;
   fundingPerMonthUsd: number;
 };

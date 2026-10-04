@@ -8,7 +8,7 @@ import {
   getLeverageCeiling,
   TRADING_PAUSED_MESSAGE,
 } from "@/lib/perp-market";
-import type { PerpHedge, PerpState } from "@/lib/perp-market.types";
+import type { PerpCngnExposure, PerpState } from "@/lib/perp-market.types";
 import { PERP_LEVERAGE_PRESETS } from "@/lib/perp-terminal-config";
 import { SmartImage } from "@/ui/SmartImage";
 
@@ -43,16 +43,7 @@ function formatDerived(value: number) {
   return String(Number(value.toFixed(2)));
 }
 
-function PerpSideTabs({
-  onSelect,
-  shortDisabledReason = null,
-  side,
-}: {
-  onSelect: (side: PerpSide) => void;
-  /** When set, Short cannot be chosen and says why (hedge mode). */
-  shortDisabledReason?: string | null;
-  side: PerpSide;
-}) {
+function PerpSideTabs({ onSelect, side }: { onSelect: (side: PerpSide) => void; side: PerpSide }) {
   const isLong = side === "long";
 
   return (
@@ -76,9 +67,7 @@ function PerpSideTabs({
             ? "text-panel-text-muted hover:bg-input-hover"
             : "bg-ask-bg text-sell ring-1 ring-sell/40"
         )}
-        disabled={shortDisabledReason !== null}
         onClick={() => onSelect("short")}
-        title={shortDisabledReason ?? undefined}
         type="button"
       >
         Short
@@ -285,7 +274,6 @@ function describeFunding(state: PerpState | null, side: PerpSide) {
 
 type TicketInputs = {
   availableMargin: number | null;
-  hedge: PerpHedge | null;
   limitPrice: string;
   margin: string;
   orderType: PerpOrderType;
@@ -327,24 +315,11 @@ function deriveTicket(inputs: TicketInputs) {
         })
       : null;
   const needsPrice = inputs.orderType === "Limit" && parseAmount(inputs.limitPrice) === null;
-  // Hedge mode: the venue refuses long USD past the cNGN posted. Its bound is in cNGN contracts,
-  // which this order's own price sets (size x cNGN per USDC), so the room is converted at that
-  // price, not the index; a market order fills near the touch.
-  const roomUsdAtPrice =
-    inputs.hedge !== null && entryPrice !== null && entryPrice > 0
-      ? inputs.hedge.roomCngn / entryPrice
-      : (inputs.hedge?.roomUsd ?? null);
-  const hedgeExcess =
-    roomUsdAtPrice !== null && sizeUsd !== null && sizeUsd > roomUsdAtPrice
-      ? sizeUsd - roomUsdAtPrice
-      : null;
   return {
     feeUsd,
-    hedgeExcess,
     liquidation,
     needsPrice,
     requiredMargin,
-    roomUsdAtPrice,
     shortfall,
     sizeUsd,
   };
@@ -353,7 +328,6 @@ function deriveTicket(inputs: TicketInputs) {
 /** Everything the ticket needs before the button trades. */
 function isTicketComplete(inputs: {
   hasWallet: boolean;
-  hedgeExcess: number | null;
   isLive: boolean;
   isPreparingAccount: boolean;
   isSubmitting: boolean;
@@ -366,39 +340,42 @@ function isTicketComplete(inputs: {
     !inputs.isSubmitting &&
     !inputs.isPreparingAccount &&
     inputs.sizeUsd !== null &&
-    !inputs.needsPrice &&
-    inputs.hedgeExcess === null
+    !inputs.needsPrice
   );
 }
 
-function hedgeShortReason(hedge: PerpHedge | null) {
-  return hedge === null
-    ? null
-    : "An account margined in cNGN can only be long USD. Use Close on a position to reduce it.";
-}
-
-/** The Hedge block: what the cNGN locks, what it costs, and what it does not cover. */
-function HedgeSummary({ hedge }: { hedge: PerpHedge }) {
-  const pays = hedge.fundingPerDayUsd >= 0;
+/**
+ * The Hedge block, information only: how much of the account's position its cNGN offsets, and
+ * what is left exposed to the naira either way. The venue no longer limits direction or size for
+ * an account holding cNGN; the SRM's own margin check does, with cNGN credited at its haircut.
+ */
+function HedgeSummary({ cngn }: { cngn: PerpCngnExposure }) {
+  const pays = cngn.fundingPerDayUsd >= 0;
+  const exposure = Math.abs(cngn.nairaExposureUsd);
+  const direction = cngn.nairaExposureUsd >= 0 ? "long the naira" : "short the naira";
   return (
     <div className="space-y-1 rounded-sm bg-input-bg px-3 py-2 text-[11px] ring-1 ring-panel-border">
       <div className="flex items-center justify-between gap-2">
         <span className="font-semibold text-panel-text-active">Hedge</span>
         <span className="font-mono text-panel-text">
-          {USD.format(hedge.hedgedUsd)} of {USD.format(hedge.lockedUsd)} USDC
+          {USD.format(cngn.offsetUsd)} of {USD.format(cngn.collateralUsd)} USDC
         </span>
       </div>
       <p className="text-panel-text-muted leading-snug">
-        Your {USD.format(hedge.collateralCngn)} cNGN locks {USD.format(hedge.lockedUsd)} USDC of
-        long USD at the index. This account can only be long USD, up to that.
+        Your {USD.format(cngn.collateralCngn)} cNGN ({USD.format(cngn.collateralUsd)} USDC at the
+        index) offsets {USD.format(cngn.offsetUsd)} USDC of your long USD; {USD.format(exposure)}{" "}
+        USDC is exposed to the naira ({direction}).
       </p>
-      <SummaryRow
-        label={`Est. funding (${pays ? "you pay" : "you receive"})`}
-        title="On the whole locked value, at the current hourly rate; funding moves with the market"
-        value={`${USD.format(Math.abs(hedge.fundingPerDayUsd))}/day · ${USD.format(Math.abs(hedge.fundingPerMonthUsd))}/month`}
-      />
+      {cngn.offsetUsd > 0 ? (
+        <SummaryRow
+          label={`Est. funding (${pays ? "you pay" : "you receive"})`}
+          title="On the offset part of the position, at the current hourly rate; funding moves with the market"
+          value={`${USD.format(Math.abs(cngn.fundingPerDayUsd))}/day · ${USD.format(Math.abs(cngn.fundingPerMonthUsd))}/month`}
+        />
+      ) : null}
       <p className="text-panel-text-muted leading-snug">
-        The hedge covers the naira rate, not a cNGN depeg: cNGN is valued at the index.
+        cNGN is valued at the index and half of that counts as margin; the offset covers the naira
+        rate, not a cNGN depeg.
       </p>
     </div>
   );
@@ -484,8 +461,8 @@ function buttonClassName(enabled: boolean, isLong: boolean) {
  */
 export function PerpOrderFormPanel({
   availableMargin = null,
+  cngn = null,
   hasWallet = false,
-  hedge = null,
   isPreparingAccount = false,
   isSubmitting = false,
   lastAction = null,
@@ -498,9 +475,9 @@ export function PerpOrderFormPanel({
 }: {
   /** The perp account's initial-margin surplus, USD; null before an account exists or is read. */
   availableMargin?: number | null;
+  /** What the account's cNGN offsets, for an account holding any; informational. */
+  cngn?: PerpCngnExposure | null;
   hasWallet?: boolean;
-  /** Hedge mode, for an account margined in cNGN: long USD only, bounded by the collateral. */
-  hedge?: PerpHedge | null;
   isPreparingAccount?: boolean;
   isSubmitting?: boolean;
   lastAction?: string | null;
@@ -522,27 +499,15 @@ export function PerpOrderFormPanel({
   const isLive = state?.tradingEnabled === true && onSubmit !== undefined;
   const ceiling = getLeverageCeiling(state);
   const effectiveLeverage = Math.min(leverage, ceiling);
-  // A cNGN-margined account is long USD only: the venue refuses the other side.
-  const effectiveSide: PerpSide = hedge === null ? side : "long";
-  const isLong = effectiveSide === "long";
+  const isLong = side === "long";
 
-  const {
-    feeUsd,
-    hedgeExcess,
-    liquidation,
-    needsPrice,
-    requiredMargin,
-    roomUsdAtPrice,
-    shortfall,
-    sizeUsd,
-  } = deriveTicket({
+  const { feeUsd, liquidation, needsPrice, requiredMargin, shortfall, sizeUsd } = deriveTicket({
     availableMargin,
-    hedge,
     limitPrice,
     margin,
     orderType,
     referencePrice,
-    side: effectiveSide,
+    side,
     size,
     state,
     takerFeeBps,
@@ -568,9 +533,10 @@ export function PerpOrderFormPanel({
     }
   }
 
+  // Long naira on an account that holds cNGN adds naira exposure on top of the collateral's.
+  const doublesNairaExposure = cngn !== null && !isLong && sizeUsd !== null && sizeUsd > 0;
   const canSubmit = isTicketComplete({
     hasWallet,
-    hedgeExcess,
     isLive,
     isPreparingAccount,
     isSubmitting,
@@ -604,7 +570,7 @@ export function PerpOrderFormPanel({
       return;
     }
     if (canSubmit) {
-      onSubmit({ limitPrice, orderType, side: effectiveSide, size });
+      onSubmit({ limitPrice, orderType, side, size });
     }
   }
 
@@ -617,12 +583,8 @@ export function PerpOrderFormPanel({
       </div>
 
       <div className="space-y-2.5 px-3 py-2 md:min-h-0 md:flex-1">
-        <PerpSideTabs
-          onSelect={setSide}
-          shortDisabledReason={hedgeShortReason(hedge)}
-          side={effectiveSide}
-        />
-        {hedge === null ? null : <HedgeSummary hedge={hedge} />}
+        <PerpSideTabs onSelect={setSide} side={side} />
+        {cngn === null ? null : <HedgeSummary cngn={cngn} />}
 
         <PerpOrderTypeTabs onSelect={setOrderType} selected={orderType} />
 
@@ -697,11 +659,11 @@ export function PerpOrderFormPanel({
             {USD.format(availableMargin ?? 0)}.
           </p>
         ) : null}
-        {hedgeExcess !== null && hedge !== null ? (
+        {doublesNairaExposure && cngn !== null ? (
           <p className="text-[10px] text-sell leading-snug">
-            Over the hedge by {USD.format(hedgeExcess)} USDC: your cNGN allows{" "}
-            {USD.format(roomUsdAtPrice ?? hedge.roomUsd)} USDC more of long USD at this price. Post
-            more cNGN to go larger.
+            This doubles your naira exposure: your {USD.format(cngn.collateralCngn)} cNGN is already
+            long the naira, and a short here is long the naira again. It still has to clear the
+            margin check, with cNGN counted at half its value.
           </p>
         ) : null}
 
