@@ -16,9 +16,15 @@ import {
   SPOT_ORDER_LIFETIME_LABEL,
 } from "@/lib/spot-order-submission";
 import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
-import { getFirstDepositableCurrency } from "@/lib/subaccount-deposit-config";
+import {
+  getCngnTokenAddress,
+  getFirstDepositableCurrency,
+  getLegacySpotStack,
+  getUsdcTokenAddress,
+} from "@/lib/subaccount-deposit-config";
 import { getAccountLegs } from "@/lib/subaccount-ledger";
 import type { SpotMarket } from "@/lib/trading.types";
+import type { WithdrawableAsset } from "@/lib/withdrawable-assets";
 import { buildDepositAccount, DepositDialog } from "@/ui/trading-terminal/DepositDialog";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import { SpotTradingTerminal } from "@/ui/trading-terminal/SpotTradingTerminal";
@@ -248,6 +254,23 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
   );
   const { balance: subaccountBalance, refresh: refreshSubaccountBalance } =
     useSubaccountBalance(tradingSubaccountId);
+  // The spot stack retired by the unified cutover: the wallet's account there is withdraw-only.
+  const legacyStack = getLegacySpotStack();
+  const legacyAccount = useTradingSubaccount(
+    legacyStack === null ? null : (primaryWallet?.address ?? null),
+    legacyStack === null
+      ? undefined
+      : { depositAsset: legacyStack.usdcEscrow, manager: legacyStack.manager }
+  );
+  const { balance: legacyBalance, refresh: refreshLegacyBalance } = useSubaccountBalance(
+    legacyAccount.subaccountId
+  );
+  const [legacyWithdrawOpen, setLegacyWithdrawOpen] = useState(false);
+  const legacy = buildLegacySpotView(
+    legacyStack,
+    legacyAccount.subaccountId,
+    legacyBalance?.rows ?? null
+  );
   // A wallet with no trading account holds zero, not an unknown amount, so the ticket's shortfall
   // check can stop an order that would otherwise be signed against an empty account.
   const accountLegs = getAccountLegs({
@@ -496,6 +519,27 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
         isSignedIn={isSignedIn}
         isSubmitting={isSubmittingOrder}
         lastAction={lastAction}
+        legacy={legacy}
+        legacyControl={
+          legacy === null || legacyStack === null ? null : (
+            <DepositDialog
+              account={buildDepositAccount(primaryWallet, legacy.accountId)}
+              accountRows={legacyBalance?.rows ?? null}
+              onDeposited={() => undefined}
+              onOpenChange={setLegacyWithdrawOpen}
+              onWithdrawn={(blockNumber) => {
+                refreshLegacyBalance(blockNumber);
+                refreshUsdcBalance();
+                refreshCngnBalance();
+              }}
+              open={legacyWithdrawOpen}
+              triggerClassName="cursor-pointer rounded-lg bg-input-bg px-2 py-1 font-medium text-[10px] text-panel-text ring-1 ring-panel-border transition-colors hover:text-panel-text-active"
+              triggerId="legacy-spot-withdraw-trigger"
+              withdrawableAssets={legacyWithdrawableAssets(legacyStack)}
+              withdrawOnly
+            />
+          )
+        }
         onCancelOrder={handleCancelSpot}
         onDepositRequest={(currency) => {
           if (currency !== undefined) {
@@ -511,4 +555,62 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
       />
     </main>
   );
+}
+
+/** The retired spot stack's escrows as withdrawable assets, paying out the same tokens as today. */
+function legacyWithdrawableAssets(stack: {
+  usdcEscrow: `0x${string}`;
+  cngnEscrow: `0x${string}`;
+}): WithdrawableAsset[] {
+  return [
+    {
+      escrow: stack.usdcEscrow,
+      id: "legacy-usdc",
+      label: "USDC (old spot account)",
+      symbol: "USDC",
+      token: getUsdcTokenAddress(),
+    },
+    {
+      escrow: stack.cngnEscrow,
+      id: "legacy-cngn",
+      label: "cNGN (old spot account)",
+      symbol: "cNGN",
+      token: getCngnTokenAddress(),
+    },
+  ];
+}
+
+/**
+ * What the Assets tab shows for the wallet's account on the retired spot stack, or null when there
+ * is no such stack, no such account, or nothing left in it: the row exists to get balances out,
+ * not to advertise an empty account.
+ */
+function buildLegacySpotView(
+  stack: { usdcEscrow: `0x${string}`; cngnEscrow: `0x${string}` } | null,
+  accountId: string | null,
+  rows: { asset: string; balance: bigint }[] | null
+): {
+  accountId: string;
+  cngnLabel: string | null;
+  usdcLabel: string | null;
+  cngnUnits: bigint;
+  usdcUnits: bigint;
+} | null {
+  if (stack === null || accountId === null || rows === null) {
+    return null;
+  }
+  const held = (escrow: string) =>
+    rows.find((row) => row.asset.toLowerCase() === escrow.toLowerCase())?.balance ?? 0n;
+  const usdcUnits = held(stack.usdcEscrow);
+  const cngnUnits = held(stack.cngnEscrow);
+  if (usdcUnits <= 0n && cngnUnits <= 0n) {
+    return null;
+  }
+  return {
+    accountId,
+    cngnLabel: formatSubaccountCngnLabel(cngnUnits),
+    cngnUnits,
+    usdcLabel: formatSubaccountUsdcLabel(usdcUnits),
+    usdcUnits,
+  };
 }

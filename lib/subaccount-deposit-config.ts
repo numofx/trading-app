@@ -157,6 +157,30 @@ export function getSubaccountCreatorAddress() {
   );
 }
 
+/**
+ * The spot stack retired by the unified-account cutover: its manager and the two escrows a wallet
+ * may still hold balances in. Set all three `NEXT_PUBLIC_LEGACY_SPOT_*` envs on the deployment
+ * that moves spot onto the perp stack, so the terminal keeps finding a wallet's old spot account
+ * and offers to withdraw from it; unset, there is no legacy stack and nothing is shown.
+ */
+export function getLegacySpotStack(): {
+  manager: `0x${string}`;
+  usdcEscrow: `0x${string}`;
+  cngnEscrow: `0x${string}`;
+} | null {
+  const manager = process.env.NEXT_PUBLIC_LEGACY_SPOT_MANAGER_ADDRESS?.trim();
+  const usdcEscrow = process.env.NEXT_PUBLIC_LEGACY_SPOT_USDC_ESCROW_ADDRESS?.trim();
+  const cngnEscrow = process.env.NEXT_PUBLIC_LEGACY_SPOT_CNGN_ESCROW_ADDRESS?.trim();
+  if (!(manager && usdcEscrow && cngnEscrow)) {
+    return null;
+  }
+  return {
+    cngnEscrow: getAddress(cngnEscrow),
+    manager: getAddress(manager),
+    usdcEscrow: getAddress(usdcEscrow),
+  };
+}
+
 export function getUsdcCngnManagerAddress() {
   return getAddress(
     process.env.NEXT_PUBLIC_USDCCNGN_MANAGER_ADDRESS?.trim() || getMatchingStack().manager

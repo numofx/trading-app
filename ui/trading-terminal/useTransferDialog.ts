@@ -78,8 +78,14 @@ export function useTransferDialog({
   onWithdrawn,
   open,
   walletBalances,
+  withdrawableAssets: withdrawableAssetsOverride,
+  withdrawOnly = false,
 }: {
   account: DepositAccount | null;
+  /** The escrows a withdrawal may draw on; defaults to the configured stack's. */
+  withdrawableAssets?: WithdrawableAsset[];
+  /** Opens on Withdraw and never offers Deposit: a retired stack's account, withdraw-only. */
+  withdrawOnly?: boolean;
   accountRows?: { asset: string; balance: bigint }[] | null;
   controlledCurrency?: DepositCurrency;
   fundingWallets?: ConnectedWallet[];
@@ -92,9 +98,9 @@ export function useTransferDialog({
   walletBalances?: DepositWalletBalances;
 }) {
   const depositableCurrencies = getDepositableCurrencies();
-  const withdrawableAssets = getWithdrawableAssets();
+  const withdrawableAssets = withdrawableAssetsOverride ?? getWithdrawableAssets();
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
-  const [mode, setMode] = useState<TransferMode>("deposit");
+  const [mode, setMode] = useState<TransferMode>(withdrawOnly ? "withdraw" : "deposit");
   const [screen, setScreen] = useState<DepositScreen>("form");
   const [withdrawAssetId, setWithdrawAssetId] = useState(withdrawableAssets[0].id);
   const [amount, setAmount] = useState("");
