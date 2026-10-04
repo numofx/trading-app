@@ -33,7 +33,11 @@ about it from `markets-service`, with no env of its own:
   longer limits a cNGN-holding account to long USD or to the cNGN posted. The ticket's **Hedge**
   block is information only (how much of the long USD the cNGN offsets, what is left exposed to
   the naira), and a short (long naira) on such an account carries a warning that it doubles the
-  naira exposure.
+  naira exposure. Margin is shown by source: the ticket's "Available to trade" lists the cash, each
+  collateral asset with its value and margin credit, and what positions already use (tooltip:
+  cross-margin, P&L in USDC); the Margin tab has a row per asset with balance, value and margin
+  credit, listing an accepted asset at zero with a Deposit action until it is held; and the Size
+  field takes cNGN as well as USDC, converted at the ticket's own price.
 
 The earlier dated-futures terminal was removed; the perp is a new market, not a restoration of it.
 

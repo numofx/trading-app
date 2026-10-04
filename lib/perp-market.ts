@@ -469,12 +469,25 @@ export function buildPerpPositionsView(positions: PerpPosition[], label: string)
   };
 }
 
+const PERCENT_CELL = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0, style: "percent" });
+
 /**
- * The Margin tab: one row per asset the account's margin is made of. Cash first, worth and
- * credited at face value; then each collateral asset at its index value and the share of it the
- * SRM credits. The account's headroom is one figure, shown on the cash row.
+ * The Margin tab: one row per asset the account's margin is made of, with the balance, its value
+ * in USDC and what the SRM credits as margin. Cash first, worth and credited at face value; then
+ * each collateral asset held, at its index value and its margin factor; then, at zero, every
+ * collateral asset the venue accepts that the account does not hold, so a depositor sees where it
+ * would go. The row order is what `withdrawTarget` and the row actions index by: cash, the held
+ * collateral in order, then the unheld ones. The headroom is one figure for the whole account
+ * (cross-margin), shown on the cash row.
  */
-export function buildPerpMarginView(account: PerpAccountMargin | null) {
+export function buildPerpMarginView(
+  account: PerpAccountMargin | null,
+  listed: PerpCollateralAsset[] = []
+) {
+  const held = account?.collateral ?? [];
+  const unheld = listed.filter(
+    (asset) => !held.some((row) => row.escrow.toLowerCase() === asset.escrow.toLowerCase())
+  );
   return {
     rows:
       account === null
@@ -485,15 +498,29 @@ export function buildPerpMarginView(account: PerpAccountMargin | null) {
                 "USDC",
                 `${USD_CELL.format(account.cash)} USDC`,
                 `${USD_CELL.format(account.cash)} USDC`,
+                `${USD_CELL.format(account.cash)} USDC (100%)`,
                 signedUsd(account.initialMarginSurplus),
                 signedUsd(account.maintenanceMarginSurplus),
               ],
             },
-            ...account.collateral.map((row) => ({
+            ...held.map((row) => ({
               cells: [
                 row.symbol,
-                `${USD_CELL.format(row.balance)} ${row.symbol} (${USD_CELL.format(row.valueUsd)} USDC)`,
-                `${USD_CELL.format(row.marginValueUsd)} USDC`,
+                `${USD_CELL.format(row.balance)} ${row.symbol}`,
+                `${USD_CELL.format(row.valueUsd)} USDC`,
+                `${USD_CELL.format(row.marginValueUsd)} USDC (${PERCENT_CELL.format(
+                  row.valueUsd > 0 ? row.marginValueUsd / row.valueUsd : 0
+                )})`,
+                "",
+                "",
+              ],
+            })),
+            ...unheld.map((asset) => ({
+              cells: [
+                asset.symbol,
+                `0.00 ${asset.symbol}`,
+                "0.00 USDC",
+                `0.00 USDC (${PERCENT_CELL.format(asset.marginFactor)})`,
                 "",
                 "",
               ],
@@ -502,9 +529,32 @@ export function buildPerpMarginView(account: PerpAccountMargin | null) {
     columns: [
       "Asset",
       "Balance",
+      "Value",
       "Counts as margin",
       "Initial margin headroom",
       "Maintenance margin headroom",
     ],
   };
+}
+
+/**
+ * What "Available to trade" is made of, for the ticket: the cash, each collateral asset with its
+ * value and margin credit, and what the account's positions already use. Null without an account.
+ * Cross-margin: all of it backs every position, and profit and loss settle in USDC.
+ */
+export function describePerpMarginSources(account: PerpAccountMargin | null): string | null {
+  if (account === null) {
+    return null;
+  }
+  const parts = [`${USD_CELL.format(account.cash)} USDC cash`];
+  for (const row of account.collateral) {
+    parts.push(
+      `${USD_CELL.format(row.balance)} ${row.symbol} (worth ${USD_CELL.format(row.valueUsd)} USDC, counts as ${USD_CELL.format(row.marginValueUsd)} USDC)`
+    );
+  }
+  const credited =
+    account.cash + account.collateral.reduce((sum, row) => sum + row.marginValueUsd, 0);
+  const inUse = credited - account.initialMarginSurplus;
+  const used = inUse > 0.005 ? ` − ${USD_CELL.format(inUse)} USDC backing your positions` : "";
+  return `${parts.join(" + ")}${used}`;
 }
