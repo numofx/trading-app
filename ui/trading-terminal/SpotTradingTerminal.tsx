@@ -189,6 +189,8 @@ export function SpotTradingTerminal({
   accountUsdc = null,
   walletAddress = null,
   depositControl,
+  legacy = null,
+  legacyControl = null,
   onDepositRequest,
   onSubmitOrder,
   onCancelOrder,
@@ -216,6 +218,10 @@ export function SpotTradingTerminal({
   walletAddress?: string | null;
   /** The deposit dialog trigger, hosted in the header bar. */
   depositControl?: ReactNode;
+  /** The wallet's account on the retired spot stack, shown withdraw-only on the Assets tab. */
+  legacy?: { accountId: string; cngnLabel: string | null; usdcLabel: string | null } | null;
+  /** The withdraw trigger for that account, rendered on its rows. */
+  legacyControl?: ReactNode;
   /**
    * Opens the deposit dialog; the ticket CTA calls it while there is no funded account, or when the
    * order on screen is short of one leg. The currency is the asset that is short, so the dialog
@@ -385,6 +391,7 @@ export function SpotTradingTerminal({
       return buildAssetsActivityView({
         accountCngnLabel,
         accountUsdcLabel,
+        legacy,
         walletCngnLabel: cngnBalanceLabel,
         walletUsdcLabel: usdcBalanceLabel,
       });
@@ -574,26 +581,15 @@ export function SpotTradingTerminal({
               footerLinks={FOOTER_LINKS}
               isSignedIn={isSignedIn}
               onTabSelect={setBottomTab}
-              rowAction={
-                bottomTab === "open-orders"
-                  ? (rowIndex) => {
-                      const order = ownedOpenOrders[rowIndex];
-                      if (!order) {
-                        return null;
-                      }
-                      return (
-                        <button
-                          className="cursor-pointer rounded-lg bg-input-bg px-2 py-1 font-medium text-[10px] text-panel-text ring-1 ring-panel-border transition-colors hover:text-panel-text-active disabled:cursor-wait disabled:opacity-60"
-                          disabled={cancellingNonce === order.nonce}
-                          onClick={() => handleCancelOrder(order.nonce, order.ownerAddress)}
-                          type="button"
-                        >
-                          {cancellingNonce === order.nonce ? "Cancelling…" : "Cancel"}
-                        </button>
-                      );
-                    }
-                  : getTradeHistoryRowAction(bottomTab, tradeHistory.state)
-              }
+              rowAction={buildSpotRowAction({
+                bottomTab,
+                cancellingNonce,
+                handleCancelOrder,
+                legacy,
+                legacyControl,
+                ownedOpenOrders,
+                tradeHistoryState: tradeHistory.state,
+              })}
               selectedTab={bottomTab}
               tabs={SPOT_BOTTOM_TABS}
             />
@@ -605,4 +601,42 @@ export function SpotTradingTerminal({
       </div>
     </>
   );
+}
+
+/**
+ * The control at the end of a row: Cancel on an open order, the withdraw trigger on the retired
+ * spot account's rows (the first of its two), the trade-history action otherwise.
+ */
+function buildSpotRowAction(inputs: {
+  bottomTab: string;
+  cancellingNonce: string | null;
+  handleCancelOrder: (nonce: string, ownerAddress: string) => void;
+  legacy: { accountId: string } | null;
+  legacyControl: ReactNode;
+  ownedOpenOrders: { nonce: string; ownerAddress: string }[];
+  tradeHistoryState: Parameters<typeof getTradeHistoryRowAction>[1];
+}) {
+  if (inputs.bottomTab === "assets" && inputs.legacy !== null) {
+    return (rowIndex: number) => (rowIndex === 2 ? inputs.legacyControl : null);
+  }
+  if (inputs.bottomTab === "open-orders") {
+    return (rowIndex: number) => {
+      const order = inputs.ownedOpenOrders[rowIndex];
+      if (!order) {
+        return null;
+      }
+      const busy = inputs.cancellingNonce === order.nonce;
+      return (
+        <button
+          className="cursor-pointer rounded-lg bg-input-bg px-2 py-1 font-medium text-[10px] text-panel-text ring-1 ring-panel-border transition-colors hover:text-panel-text-active disabled:cursor-wait disabled:opacity-60"
+          disabled={busy}
+          onClick={() => inputs.handleCancelOrder(order.nonce, order.ownerAddress)}
+          type="button"
+        >
+          {busy ? "Cancelling…" : "Cancel"}
+        </button>
+      );
+    };
+  }
+  return getTradeHistoryRowAction(inputs.bottomTab, inputs.tradeHistoryState);
 }

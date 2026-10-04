@@ -20,9 +20,15 @@ const UNKNOWN_BALANCE = "—";
 export function buildAssetsActivityView({
   accountCngnLabel,
   accountUsdcLabel,
+  legacy = null,
   walletCngnLabel,
   walletUsdcLabel,
 }: {
+  /**
+   * A wallet's account on the spot stack retired by the unified cutover, withdraw-only: two rows
+   * after the live ones, naming the account so the balances are not mistaken for the live ones.
+   */
+  legacy?: { accountId: string; cngnLabel: string | null; usdcLabel: string | null } | null;
   /** Subaccount cNGN balance, or null when it hasn't loaded or the asset is unknown for this chain. */
   accountCngnLabel: string | null;
   /** Subaccount USDC cash balance, or null when it hasn't loaded. */
@@ -37,6 +43,24 @@ export function buildAssetsActivityView({
     rows: [
       { cells: ["USDC", accountUsdcLabel ?? UNKNOWN_BALANCE, walletUsdcLabel ?? UNKNOWN_BALANCE] },
       { cells: ["cNGN", accountCngnLabel ?? UNKNOWN_BALANCE, walletCngnLabel ?? UNKNOWN_BALANCE] },
+      ...(legacy === null
+        ? []
+        : [
+            {
+              cells: [
+                `USDC · old spot account #${legacy.accountId} (withdraw only)`,
+                legacy.usdcLabel ?? UNKNOWN_BALANCE,
+                "",
+              ],
+            },
+            {
+              cells: [
+                `cNGN · old spot account #${legacy.accountId} (withdraw only)`,
+                legacy.cngnLabel ?? UNKNOWN_BALANCE,
+                "",
+              ],
+            },
+          ]),
     ],
   };
 }

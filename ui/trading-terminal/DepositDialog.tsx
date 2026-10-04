@@ -1288,9 +1288,15 @@ export function DepositDialog({
   onSelectFundingWallet,
   triggerId,
   walletBalances,
+  withdrawableAssets,
+  withdrawOnly = false,
 }: {
   /** The funding wallet and its trading account, or null when no wallet is connected. */
   account: DepositAccount | null;
+  /** The escrows a withdrawal may draw on; defaults to the configured stack's. */
+  withdrawableAssets?: WithdrawableAsset[];
+  /** A retired stack's account: the dialog opens on Withdraw and never offers Deposit. */
+  withdrawOnly?: boolean;
   /**
    * Controlled asset selection; omit to let the dialog own it. Pass with `onCurrencyChange` when
    * something outside the dialog decides which asset to fund — the order ticket's shortfall CTA
@@ -1344,6 +1350,8 @@ export function DepositDialog({
     onWithdrawn,
     open,
     walletBalances,
+    withdrawableAssets,
+    withdrawOnly,
   });
 
   return (
@@ -1359,7 +1367,7 @@ export function DepositDialog({
         }
         id={triggerId}
       >
-        Deposit
+        {withdrawOnly ? "Withdraw" : "Deposit"}
       </Dialog.Trigger>
       <Dialog.Portal>
         {/*
@@ -1392,13 +1400,14 @@ export function DepositDialog({
             <Dialog.Title className="sr-only">
               {dialog.isDepositMode ? "Deposit" : "Withdraw"}
             </Dialog.Title>
-            {dialog.depositFlowState === null ? (
-              <ModeTabs mode={dialog.mode} onSelect={dialog.handleSelectMode} />
-            ) : (
+            {withdrawOnly || dialog.depositFlowState !== null ? (
               <span className={cn(ACTIVE_MODE_PILL_CLASSES, "inline-flex items-center")}>
-                Deposit
+                {withdrawOnly ? "Withdraw from the old spot account" : "Deposit"}
               </span>
+            ) : (
+              <ModeTabs mode={dialog.mode} onSelect={dialog.handleSelectMode} />
             )}
+
             <Dialog.Close
               aria-label="Close deposit dialog"
               className="-mt-0.5 -mr-1 flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-panel-text-muted transition-colors hover:bg-input-hover hover:text-panel-text"
