@@ -159,7 +159,7 @@ function NairaDoublingNote({
     return null;
   }
   return (
-    <p className="text-[10px] text-sell leading-snug">
+    <p className="text-[10px] text-panel-text-muted leading-snug">
       This doubles your naira exposure: your {USD.format(cngn.collateralCngn)} cNGN is already long
       the naira, and a short here is long the naira again. It still has to clear the margin check,
       with cNGN counted at half its value.
@@ -538,7 +538,7 @@ export function PerpOrderFormPanel({
           </div>
 
           {shortfall !== null && hasWallet ? (
-            <p className="text-[10px] text-sell leading-snug">
+            <p className="text-[10px] text-panel-text-muted leading-snug" data-note="shortfall">
               Needs {USD.format(requiredMargin ?? 0)} USDC of margin; the account has{" "}
               {USD.format(availableMargin ?? 0)}.
             </p>

@@ -614,7 +614,7 @@ function OwnCrossingNote({ note }: { note: string | null }) {
     return null;
   }
 
-  return <p className="text-[10px] text-sell leading-snug">{note}</p>;
+  return <p className="text-[10px] text-panel-text-muted leading-snug">{note}</p>;
 }
 
 /**
@@ -925,7 +925,7 @@ export function SpotOrderFormPanel({
           <OwnCrossingNote note={ownCrossingNote} />
 
           {shortfall === null || !hasWallet ? null : (
-            <p className="text-[10px] text-sell leading-snug">
+            <p className="text-[10px] text-panel-text-muted leading-snug" data-note="shortfall">
               Needs {formatBalance(shortfall.needed, shortfall.currency)}; account holds{" "}
               {formatBalance(shortfall.held, shortfall.currency)}.
             </p>

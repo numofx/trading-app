@@ -179,7 +179,7 @@ const CONNECTED_PROBE = `(async () => {
   await sleep(400);
   const shortRect = cta().getBoundingClientRect();
   const shortfallLabel = cta().textContent.trim();
-  const shortfallNoted = [...document.querySelectorAll("p.text-sell")].some((el) => el.getClientRects().length > 0);
+  const shortfallNoted = [...document.querySelectorAll('p[data-note="shortfall"]')].some((el) => el.getClientRects().length > 0);
   const ctaVisibleWithShortfall = shortRect.top >= 0 && shortRect.bottom <= innerHeight;
 
   visibleById("fixture-deposit").click();
@@ -194,7 +194,7 @@ const CONNECTED_PROBE = `(async () => {
     amountAfterDeposit: amountField().value,
     ctaAfterDeposit: cta().textContent.trim(),
     ctaDisabledAfterDeposit: cta().disabled,
-    shortfallNotedAfterDeposit: [...document.querySelectorAll("p.text-sell")].some((el) => el.getClientRects().length > 0),
+    shortfallNotedAfterDeposit: [...document.querySelectorAll('p[data-note="shortfall"]')].some((el) => el.getClientRects().length > 0),
   });
 })()`;
 
