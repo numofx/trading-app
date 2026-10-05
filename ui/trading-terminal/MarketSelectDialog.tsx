@@ -2,7 +2,7 @@
 
 import { Dialog } from "@base-ui/react/dialog";
 import { Duration } from "effect";
-import { ArrowDownRight, ArrowUpRight, Check, ChevronDown, Search, X } from "lucide-react";
+import { Check, ChevronDown, Search, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatNaira } from "@/lib/market-formatting";
@@ -31,18 +31,25 @@ const TABS = [
 ] as const satisfies readonly { kind: TerminalMarketKind; label: string }[];
 
 /**
- * Column templates per tab. The perp-only figures and the volume stand down below `md`, where a
- * phone's width holds the market, its price and the change and no more.
+ * Column templates per tab, ending in a fixed column for the selected-market check. The perp-only
+ * figures and the volume stand down below `md`, where a phone's width holds the market, its price
+ * and the change and no more.
  */
 const GRID_CLASS = {
-  perp: "grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,0.9fr)] md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]",
-  spot: "grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,0.9fr)] md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)]",
+  perp: "grid-cols-[minmax(0,2.8fr)_minmax(0,1.05fr)_minmax(0,1.15fr)_1rem] md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_1rem]",
+  spot: "grid-cols-[minmax(0,2.8fr)_minmax(0,1.05fr)_minmax(0,1.15fr)_1rem] md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_1rem]",
 } satisfies Record<TerminalMarketKind, string>;
 
-const CELL_CLASS = "min-w-0 truncate text-right font-mono text-[12px] tabular-nums";
+/** The one radius the dialog, its controls and its selected row share. */
+const RADIUS = "rounded-lg";
+
+const CELL_CLASS = "min-w-0 truncate text-right text-[13px] text-panel-text tabular-nums";
 const HIDDEN_ON_PHONE = "hidden md:block";
 
-/** The paired token marks and symbol, shared by the header pill and the selector's rows. */
+/**
+ * The paired token marks and symbol, shared by the header pill and the selector's rows. `compact`
+ * is the row form: smaller marks beside a symbol one step larger than the pill's.
+ */
 export function MarketIdentity({ compact, symbol }: { compact?: boolean; symbol: string }) {
   return (
     <>
@@ -64,7 +71,12 @@ export function MarketIdentity({ compact, symbol }: { compact?: boolean; symbol:
           src="/tokens/cngn.svg"
         />
       </span>
-      <span className="truncate font-semibold text-[13px] text-panel-text-active leading-none">
+      <span
+        className={cn(
+          "truncate font-semibold text-panel-text-active leading-none",
+          compact ? "text-[14px]" : "text-[13px]"
+        )}
+      >
         {symbol}
       </span>
     </>
@@ -76,42 +88,43 @@ function ChangeCell({ value }: { value: number | null }) {
     return <span className={cn(CELL_CLASS, "text-panel-text-muted")}>—</span>;
   }
   const negative = value < 0;
-  const Arrow = negative ? ArrowDownRight : ArrowUpRight;
   return (
     <span
       className={cn(
         CELL_CLASS,
-        "inline-flex items-center justify-end gap-0.5",
+        "inline-flex items-center justify-end gap-1",
         negative ? "text-ask-text" : "text-bid-text"
       )}
     >
-      <Arrow aria-hidden className="size-3.5 shrink-0" />
       {negative ? "-" : "+"}
       {Math.abs(value).toFixed(2)}%
+      <span aria-hidden className="text-[8px] leading-none">
+        {negative ? "▼" : "▲"}
+      </span>
     </span>
   );
 }
 
 function ColumnHeaders({ kind }: { kind: TerminalMarketKind }) {
-  const headerClass =
-    "truncate text-right text-[10px] text-panel-text-muted uppercase tracking-wide";
+  const headerClass = "truncate text-right text-[12px] text-panel-text-muted";
   return (
     <div
       className={cn(
-        "grid items-center gap-3 border-panel-border border-b px-3 pb-2",
+        "grid items-center gap-2 border-panel-border border-b pb-2 md:gap-3",
         GRID_CLASS[kind]
       )}
     >
       <span className={cn(headerClass, "text-left")}>Market</span>
       <span className={headerClass}>Price</span>
-      <span className={headerClass}>24h Change</span>
-      <span className={cn(headerClass, HIDDEN_ON_PHONE)}>24h Volume</span>
+      <span className={headerClass}>24h change</span>
+      <span className={cn(headerClass, HIDDEN_ON_PHONE)}>24h volume</span>
       {kind === "perp" ? (
         <>
-          <span className={cn(headerClass, HIDDEN_ON_PHONE)}>Open Interest</span>
-          <span className={cn(headerClass, HIDDEN_ON_PHONE)}>1h Funding</span>
+          <span className={cn(headerClass, HIDDEN_ON_PHONE)}>Open interest</span>
+          <span className={cn(headerClass, HIDDEN_ON_PHONE)}>1h funding</span>
         </>
       ) : null}
+      <span aria-hidden />
     </div>
   );
 }
@@ -133,7 +146,8 @@ function MarketRow({
     <SmartLink
       aria-current={selected ? "page" : undefined}
       className={cn(
-        "grid cursor-pointer items-center gap-3 px-3 py-2.5 text-panel-text-active transition-colors hover:bg-input-hover focus-visible:bg-input-hover focus-visible:outline-none",
+        "-mx-3 grid cursor-pointer items-center gap-2 px-3 py-2.5 text-panel-text-active transition-colors hover:bg-input-hover focus-visible:bg-input-hover focus-visible:outline-none md:gap-3",
+        RADIUS,
         GRID_CLASS[entry.kind],
         selected && "bg-input-bg"
       )}
@@ -142,25 +156,27 @@ function MarketRow({
     >
       <span className="flex min-w-0 items-center gap-2">
         <MarketIdentity compact symbol={entry.symbol} />
-        {selected ? (
-          <Check aria-label="Selected market" className="size-3.5 shrink-0 text-panel-text-muted" />
-        ) : null}
       </span>
-      <span className={CELL_CLASS}>{formatNaira(row.price)}</span>
+      <span className={cn(CELL_CLASS, "text-panel-text-active")}>{formatNaira(row.price)}</span>
       <ChangeCell value={row.changePercent24h} />
-      <span className={cn(CELL_CLASS, HIDDEN_ON_PHONE, "text-panel-text")}>
+      <span className={cn(CELL_CLASS, HIDDEN_ON_PHONE)}>
         {formatOverviewVolume(row.volume24hUsd)}
       </span>
       {entry.kind === "perp" ? (
         <>
-          <span className={cn(CELL_CLASS, HIDDEN_ON_PHONE, "text-panel-text")}>
+          <span className={cn(CELL_CLASS, HIDDEN_ON_PHONE)}>
             {formatOpenInterest(row.openInterestUsd)}
           </span>
-          <span className={cn(CELL_CLASS, HIDDEN_ON_PHONE, "text-panel-text")}>
+          <span className={cn(CELL_CLASS, HIDDEN_ON_PHONE)}>
             {formatFundingRate(row.fundingRate1h)}
           </span>
         </>
       ) : null}
+      <span className="flex justify-end">
+        {selected ? (
+          <Check aria-label="Selected market" className="size-4 shrink-0 text-panel-text-muted" />
+        ) : null}
+      </span>
     </SmartLink>
   );
 }
@@ -281,28 +297,36 @@ export function MarketSelectDialog({
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/60 transition-opacity data-ending-style:opacity-0 data-starting-style:opacity-0" />
         <Dialog.Popup
-          className="md:-translate-1/2 fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] flex-col bg-dialog-bg text-foreground outline-none ring-1 ring-panel-ring transition-all data-ending-style:opacity-0 data-starting-style:opacity-0 max-md:data-ending-style:translate-y-4 max-md:data-starting-style:translate-y-4 md:inset-x-auto md:top-1/2 md:bottom-auto md:left-1/2 md:max-h-[min(80dvh,620px)] md:w-[min(92vw,760px)] md:data-ending-style:scale-95 md:data-starting-style:scale-95"
+          className="md:-translate-1/2 fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] flex-col rounded-t-lg bg-dialog-bg text-foreground outline-none ring-1 ring-panel-ring transition-all data-ending-style:opacity-0 data-starting-style:opacity-0 max-md:data-ending-style:translate-y-4 max-md:data-starting-style:translate-y-4 md:inset-x-auto md:top-1/2 md:bottom-auto md:left-1/2 md:max-h-[min(80dvh,620px)] md:w-[min(92vw,760px)] md:rounded-lg md:data-ending-style:scale-95 md:data-starting-style:scale-95"
           initialFocus={searchRef}
         >
-          <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-3">
-            <Dialog.Title className="font-semibold text-[15px] text-panel-text-active">
+          <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-4">
+            <Dialog.Title className="font-semibold text-[18px] text-panel-text-active">
               Select a market
             </Dialog.Title>
             <Dialog.Close
               aria-label="Close"
-              className="flex size-8 cursor-pointer items-center justify-center text-panel-text-muted transition-colors hover:bg-input-hover hover:text-panel-text-active"
+              className={cn(
+                "flex size-8 cursor-pointer items-center justify-center text-panel-text-muted transition-colors hover:bg-input-hover hover:text-panel-text-active",
+                RADIUS
+              )}
             >
               <X className="size-4" />
             </Dialog.Close>
           </div>
 
-          <div className="space-y-3 px-5 pb-3">
-            <label className="flex h-10 items-center gap-2 border border-input-border bg-input-bg px-3 transition-colors focus-within:border-panel-text-muted">
+          <div className="space-y-3 px-5 pb-4">
+            <label
+              className={cn(
+                "flex h-10 items-center gap-2 border border-input-border bg-input-bg px-3 transition-colors focus-within:border-panel-text-muted",
+                RADIUS
+              )}
+            >
               <Search aria-hidden className="size-4 shrink-0 text-panel-text-muted" />
               <input
                 aria-label="Search markets"
                 autoComplete="off"
-                className="min-w-0 flex-1 bg-transparent text-[13px] text-panel-text-active outline-none placeholder:text-panel-text-muted"
+                className="min-w-0 flex-1 bg-transparent text-[14px] text-panel-text-active outline-none placeholder:text-panel-text-muted"
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search markets"
                 ref={searchRef}
@@ -312,14 +336,19 @@ export function MarketSelectDialog({
               />
             </label>
 
-            <div aria-label="Market type" className="flex gap-1 bg-input-bg p-0.5" role="tablist">
+            <div
+              aria-label="Market type"
+              className={cn("grid grid-cols-2 gap-1 bg-input-bg p-1", RADIUS)}
+              role="tablist"
+            >
               {TABS.map((tab) => (
                 <button
                   aria-selected={tab.kind === kind}
                   className={cn(
-                    "h-8 cursor-pointer px-4 font-semibold text-[12px] transition-colors",
+                    "h-9 cursor-pointer font-medium text-[14px] transition-colors",
+                    RADIUS,
                     tab.kind === kind
-                      ? "bg-panel-bg-darker text-panel-text-active ring-1 ring-panel-border"
+                      ? "bg-panel-bg-darker text-panel-text-active shadow-sm"
                       : "text-panel-text-muted hover:text-panel-text"
                   )}
                   key={tab.kind}
@@ -333,12 +362,10 @@ export function MarketSelectDialog({
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
             <ColumnHeaders kind={kind} />
             {entries.length === 0 ? (
-              <p className="px-3 py-8 text-center text-[12px] text-panel-text-muted">
-                No markets found
-              </p>
+              <p className="py-8 text-center text-[13px] text-panel-text-muted">No markets found</p>
             ) : (
               <div className="pt-1">
                 {entries.map((entry) => (
