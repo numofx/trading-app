@@ -99,7 +99,10 @@ export function TerminalHeaderBar({
   market?: TerminalMarket;
   /**
    * Figures to show instead of the spot set (price, volume, high, low): the perp's mark, index,
-   * change, volume, open interest and funding. The first three show from `lg`, the rest from `xl`.
+   * change, volume, open interest and funding. Six figures and a second header action cost more
+   * width than spot's four, so the first three show from `xl` and the rest from `2xl`; below that
+   * the actions keep the row and the figures stand down, rather than the wallet button wrapping
+   * under the rest.
    */
   metrics?: HeaderMetricItem[];
   /** Fired by the connected wallet menu's Portfolio item. */
@@ -195,10 +198,10 @@ export function TerminalHeaderBar({
           </HeaderMetric>
         </div>
       ) : (
-        <div className="hidden min-w-0 items-center gap-6 overflow-hidden lg:flex">
+        <div className="hidden min-w-0 items-center gap-6 overflow-hidden xl:flex">
           {metrics.map((metric, index) => (
             <HeaderMetric
-              className={index >= 3 ? "hidden xl:flex" : undefined}
+              className={index >= 3 ? "hidden 2xl:flex" : undefined}
               key={metric.label}
               label={metric.label}
               tooltip={metric.tooltip}
@@ -217,11 +220,12 @@ export function TerminalHeaderBar({
       )}
 
       {/*
-       * Wraps inside itself rather than overflowing: the wallet button carries an address whose
-       * width is not knowable in advance, and this is the cluster the header can least afford to
-       * have paint over its neighbours.
+       * Below `lg` the cluster may wrap inside itself, as the header around it does on a phone.
+       * From `lg` it stays on one line and never shrinks: the wallet button carries an address whose width is
+       * not knowable in advance, and a cluster that wrapped inside itself dropped that button under
+       * the others. The metrics beside it are what give way, since they clip rather than paint over.
        */}
-      <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
+      <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-2 lg:shrink-0 lg:flex-nowrap">
         {depositControl}
         <button
           aria-label="Toggle theme"
