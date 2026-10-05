@@ -1,6 +1,7 @@
 "use client";
 
-import { Check } from "lucide-react";
+import { Menu } from "@base-ui/react/menu";
+import { Check, ChevronDown } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
@@ -173,7 +174,14 @@ function TokenUnit({ icon, symbol }: { icon: string; symbol: string }) {
   );
 }
 
-type SizeUnit = "USDC" | "cNGN";
+const SIZE_UNITS = ["USDC", "cNGN"] as const;
+
+type SizeUnit = (typeof SIZE_UNITS)[number];
+
+const SIZE_UNIT_ICONS = {
+  cNGN: "/tokens/cngn.svg",
+  USDC: "/tokens/usdc.svg",
+} satisfies Record<SizeUnit, string>;
 
 function sizeLabel(unit: SizeUnit, conversion: number | null) {
   if (unit === "USDC") {
@@ -302,7 +310,7 @@ function NairaDoublingNote({
 }
 
 /** The Size field's unit: USD notional, or the same size in cNGN at the ticket's own price. */
-function SizeUnitToggle({
+function SizeUnitSelect({
   cngnAvailable,
   onSelect,
   unit,
@@ -312,38 +320,53 @@ function SizeUnitToggle({
   unit: SizeUnit;
 }) {
   return (
-    <fieldset
-      aria-label="Size unit"
-      className="flex shrink-0 items-center gap-0.5 rounded-sm bg-panel-bg p-0.5 ring-1 ring-panel-border"
-    >
-      {(["USDC", "cNGN"] as const).map((option) => (
-        <button
-          aria-pressed={unit === option}
-          className={cn(
-            "flex cursor-pointer items-center gap-1 rounded-sm px-1.5 py-0.5 font-semibold text-[12px] transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-            unit === option
-              ? "bg-input-bg text-panel-text-active ring-1 ring-panel-border"
-              : "text-panel-text-muted hover:text-panel-text"
-          )}
-          disabled={option === "cNGN" && !cngnAvailable}
-          key={option}
-          onClick={() => onSelect(option)}
-          title={
-            option === "cNGN" && !cngnAvailable
-              ? "Needs a price: type a limit price, or wait for the market"
-              : undefined
-          }
-          type="button"
-        >
-          <SmartImage<string>
-            alt={option}
-            className="size-4 animate-none rounded-full"
-            src={option === "USDC" ? "/tokens/usdc.svg" : "/tokens/cngn.svg"}
-          />
-          {option}
-        </button>
-      ))}
-    </fieldset>
+    <Menu.Root>
+      <Menu.Trigger
+        aria-label="Size unit"
+        className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-sm bg-panel-bg py-1 pr-1.5 pl-2 font-semibold text-[13px] text-panel-text-active ring-1 ring-panel-border transition-colors hover:bg-input-hover"
+      >
+        <SmartImage<string>
+          alt={unit}
+          className="size-5 animate-none rounded-full"
+          src={SIZE_UNIT_ICONS[unit]}
+        />
+        {unit}
+        <ChevronDown aria-hidden className="size-3.5 shrink-0 text-panel-text-muted" />
+      </Menu.Trigger>
+
+      <Menu.Portal>
+        <Menu.Positioner align="end" sideOffset={6}>
+          <Menu.Popup className="z-50 min-w-(--anchor-width) overflow-hidden rounded-sm border border-panel-border bg-panel-bg-darker p-1 shadow-[0_20px_60px_var(--panel-shadow)] outline-none transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
+            {SIZE_UNITS.map((option) => {
+              const disabled = option === "cNGN" && !cngnAvailable;
+              return (
+                <Menu.Item
+                  className={cn(
+                    "flex cursor-pointer items-center gap-1.5 rounded-sm px-2 py-1.5 font-semibold text-[12px] outline-none transition-colors data-disabled:cursor-not-allowed data-highlighted:bg-input-hover data-disabled:opacity-50",
+                    option === unit ? "text-panel-text-active" : "text-panel-text-muted"
+                  )}
+                  disabled={disabled}
+                  key={option}
+                  onClick={() => onSelect(option)}
+                  title={
+                    disabled
+                      ? "Needs a price: type a limit price, or wait for the market"
+                      : undefined
+                  }
+                >
+                  <SmartImage<string>
+                    alt={option}
+                    className="size-4 animate-none rounded-full"
+                    src={SIZE_UNIT_ICONS[option]}
+                  />
+                  {option}
+                </Menu.Item>
+              );
+            })}
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
   );
 }
 
@@ -575,43 +598,6 @@ function isTicketComplete(inputs: {
   );
 }
 
-/**
- * The Hedge block, information only: how much of the account's position its cNGN offsets, and
- * what is left exposed to the naira either way. The venue no longer limits direction or size for
- * an account holding cNGN; the SRM's own margin check does, with cNGN credited at its haircut.
- */
-function HedgeSummary({ cngn }: { cngn: PerpCngnExposure }) {
-  const pays = cngn.fundingPerDayUsd >= 0;
-  const exposure = Math.abs(cngn.nairaExposureUsd);
-  const direction = cngn.nairaExposureUsd >= 0 ? "long the naira" : "short the naira";
-  return (
-    <div className="space-y-1 rounded-sm bg-input-bg px-3 py-2 text-[11px] ring-1 ring-panel-border">
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-semibold text-panel-text-active">Hedge</span>
-        <span className="font-mono text-panel-text">
-          {USD.format(cngn.offsetUsd)} of {USD.format(cngn.collateralUsd)} USDC
-        </span>
-      </div>
-      <p className="text-panel-text-muted leading-snug">
-        Your {USD.format(cngn.collateralCngn)} cNGN ({USD.format(cngn.collateralUsd)} USDC at the
-        index) offsets {USD.format(cngn.offsetUsd)} USDC of your long USD; {USD.format(exposure)}{" "}
-        USDC is exposed to the naira ({direction}).
-      </p>
-      {cngn.offsetUsd > 0 ? (
-        <SummaryRow
-          label={`Est. funding (${pays ? "you pay" : "you receive"})`}
-          title="On the offset part of the position, at the current hourly rate; funding moves with the market"
-          value={`${USD.format(Math.abs(cngn.fundingPerDayUsd))}/day · ${USD.format(Math.abs(cngn.fundingPerMonthUsd))}/month`}
-        />
-      ) : null}
-      <p className="text-panel-text-muted leading-snug">
-        cNGN is valued at the index and half of that counts as margin; the offset covers the naira
-        rate, not a cNGN depeg.
-      </p>
-    </div>
-  );
-}
-
 type ButtonInputs = {
   availableMargin: number | null;
   canSubmit: boolean;
@@ -810,7 +796,6 @@ export function PerpOrderFormPanel({
 
       <div className="space-y-2.5 px-3 py-2 md:min-h-0 md:flex-1">
         <PerpSideTabs onSelect={setSide} side={side} />
-        {cngn === null ? null : <HedgeSummary cngn={cngn} />}
 
         <PerpOrderTypeTabs onSelect={setOrderType} selected={orderType} />
 
@@ -831,7 +816,7 @@ export function PerpOrderFormPanel({
             label={sizeLabel(sizeUnit, sizeConversion)}
             onChange={fields.onSizeInput}
             unit={
-              <SizeUnitToggle
+              <SizeUnitSelect
                 cngnAvailable={sizeConversion !== null && sizeConversion > 0}
                 onSelect={fields.onUnit}
                 unit={sizeUnit}

@@ -398,9 +398,10 @@ const HOURS_PER_DAY = 24;
 const DAYS_PER_MONTH = 30;
 
 /**
- * The ticket's Hedge block, or null for an account that posted no cNGN. Information only: how
- * much of the account's long USD the cNGN offsets at the index, what is left exposed to the naira
- * either way, and the funding the offset part pays or receives at the current rate.
+ * What an account's cNGN does for its position, or null for an account that posted no cNGN.
+ * Information only (the ticket's naira-doubling warning reads it): how much of the account's long
+ * USD the cNGN offsets at the index, what is left exposed to the naira either way, and the funding
+ * the offset part pays or receives at the current rate.
  */
 export function buildPerpCngnExposure(
   account: PerpAccountMargin | null,

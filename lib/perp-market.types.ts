@@ -97,7 +97,7 @@ export type PerpCollateralBalance = {
 };
 
 /**
- * What an account's cNGN does for its position, for the ticket's Hedge block (information only:
+ * What an account's cNGN does for its position, for the ticket's naira-doubling warning (information only:
  * the venue no longer limits a cNGN-holding account's direction or size; the SRM's margin check
  * does, crediting cNGN at its haircut). cNGN held is long the naira; long USD on the perp (the
  * on-chain short of the cNGN perp) offsets it, long naira on the perp adds to it.
