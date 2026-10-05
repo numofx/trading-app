@@ -68,9 +68,9 @@ export function AmountSlider({
           <button
             aria-pressed={preset.value === value}
             className={cn(
-              "h-5 cursor-pointer rounded-md bg-input-bg text-[11px] tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+              "h-5 cursor-pointer bg-input-bg text-[11px] tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-40",
               preset.value === value
-                ? "text-panel-text-active ring-1 ring-panel-border"
+                ? "bg-panel-bg-darker text-panel-text-active"
                 : "text-panel-text-muted hover:text-panel-text"
             )}
             disabled={disabled}

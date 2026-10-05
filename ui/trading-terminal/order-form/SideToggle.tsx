@@ -24,17 +24,17 @@ export function SideToggle<T extends string>({
   selected: T;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-1 rounded-lg bg-input-bg p-0.5">
+    <div className="grid grid-cols-2 gap-1 bg-input-bg p-0.5">
       {options.map((option) => {
         const active = option.value === selected;
         return (
           <button
             aria-pressed={active}
             className={cn(
-              "h-8 cursor-pointer rounded-md font-semibold text-[12px] transition-colors",
+              "h-8 cursor-pointer font-semibold text-[12px] transition-colors",
               !active && "text-panel-text-muted hover:bg-input-hover",
-              active && option.tone === "buy" && "bg-bid-bg text-buy ring-1 ring-buy/40",
-              active && option.tone === "sell" && "bg-ask-bg text-sell ring-1 ring-sell/40"
+              active && option.tone === "buy" && "bg-bid-bg text-buy",
+              active && option.tone === "sell" && "bg-ask-bg text-sell"
             )}
             key={option.value}
             onClick={() => onSelect(option.value)}
