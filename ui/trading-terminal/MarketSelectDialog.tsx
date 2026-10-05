@@ -43,15 +43,7 @@ const CELL_CLASS = "min-w-0 truncate text-right font-mono text-[12px] tabular-nu
 const HIDDEN_ON_PHONE = "hidden md:block";
 
 /** The paired token marks and symbol, shared by the header pill and the selector's rows. */
-export function MarketIdentity({
-  compact,
-  subtitle,
-  symbol,
-}: {
-  compact?: boolean;
-  subtitle?: string | null;
-  symbol: string;
-}) {
+export function MarketIdentity({ compact, symbol }: { compact?: boolean; symbol: string }) {
   return (
     <>
       <span className="flex shrink-0 items-center -space-x-1.5">
@@ -72,15 +64,8 @@ export function MarketIdentity({
           src="/tokens/cngn.svg"
         />
       </span>
-      <span className="flex min-w-0 flex-col gap-0.5">
-        <span className="truncate font-semibold text-[13px] text-panel-text-active leading-none">
-          {symbol}
-        </span>
-        {subtitle ? (
-          <span className="truncate text-[10px] text-panel-text-muted leading-none">
-            {subtitle}
-          </span>
-        ) : null}
+      <span className="truncate font-semibold text-[13px] text-panel-text-active leading-none">
+        {symbol}
       </span>
     </>
   );
@@ -142,7 +127,6 @@ function MarketRow({
   row: MarketOverviewRow;
   selected: boolean;
 }) {
-  const subtitle = entry.kind === "perp" ? "Perp" : "Spot";
   return (
     // Rows are links, not state: spot and perp are separate routes, so switching never carries
     // one terminal's ticket or book into the other, and each has its own URL.
@@ -157,7 +141,7 @@ function MarketRow({
       onClick={onSelect}
     >
       <span className="flex min-w-0 items-center gap-2">
-        <MarketIdentity compact subtitle={subtitle} symbol={entry.symbol} />
+        <MarketIdentity compact symbol={entry.symbol} />
         {selected ? (
           <Check aria-label="Selected market" className="size-3.5 shrink-0 text-panel-text-muted" />
         ) : null}
