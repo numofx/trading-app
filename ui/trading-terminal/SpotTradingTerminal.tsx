@@ -6,6 +6,13 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { buildOpenOrdersActivityView, getOwnedOpenOrders } from "@/lib/account-activity-views";
 import { formatBalance } from "@/lib/account-balance-display";
 import {
+  applyTradesToCandles,
+  applyTradesToStats,
+  CANDLE_INTERVAL_MS,
+  latestTradeMs,
+  tradesSince,
+} from "@/lib/live-market";
+import {
   getAnchorPrice,
   getBestPrices,
   getCommittedBalances,
@@ -48,6 +55,7 @@ export function SpotTradingTerminal({
   legacyControl = null,
   onDepositRequest,
   onWithdrawRequest,
+  onFormEdit,
   onSubmitOrder,
   onCancelOrder,
   onSignOrderHistory,
@@ -78,6 +86,8 @@ export function SpotTradingTerminal({
   onDepositRequest?: (currency?: DepositCurrency) => void;
   /** Opens the deposit dialog on Withdraw, for the asset the Account row names. */
   onWithdrawRequest?: (currency: DepositCurrency) => void;
+  /** Any edit to the order ticket; the host clears the order status line on it. */
+  onFormEdit?: () => void;
   onSubmitOrder: (args: {
     side: "buy" | "sell";
     price: string;
@@ -112,7 +122,6 @@ export function SpotTradingTerminal({
   const [indicatorsEnabled, setIndicatorsEnabled] = useState(false);
   const [bookTab, setBookTab] = useState<SpotBookTab>("book");
   const [bottomTab, setBottomTab] = useState<string>("open-orders");
-  const [liveCandles, setLiveCandles] = useState<Candle[]>(candles);
   const [cancellingNonce, setCancellingNonce] = useState<string | null>(null);
   // Starts at 0 — "clock not known yet" — so the first client render ages nothing out and matches
   // what the server rendered. An effect supplies the real time straight after mount.
@@ -133,10 +142,6 @@ export function SpotTradingTerminal({
     signMessage: onSignOrderHistory,
     walletAddress,
   });
-
-  useEffect(() => {
-    setLiveCandles(candles);
-  }, [candles]);
 
   // Scoped to this trader's own orders: theirs are what `Available` and Open Orders depend on, and
   // a visitor with none should not be re-rendering the page on the market maker's quote cycle.
@@ -196,9 +201,16 @@ export function SpotTradingTerminal({
   // the venue has no resting orders both are empty and the panel says so.
   const bookBids = spotBook.isLive ? spotBook.bids : spotMarket.orderBookBids;
   const bookAsks = spotBook.isLive ? spotBook.asks : spotMarket.orderBookAsks;
-  const bookTrades =
-    spotBook.isLive && spotBook.trades.length > 0 ? spotBook.trades : spotMarket.trades;
+  // Trades are taken from the stream whenever it has any, whatever the book's status: a fill the
+  // trades channel delivered is the venue's own even while the book snapshot is still on its way.
+  const bookTrades = spotBook.trades.length > 0 ? spotBook.trades : spotMarket.trades;
 
+  // Fills the stream has seen since the server rendered: folded into the chart's candles and the
+  // 24h figures here, on every render, so a trade on the market shows without a reload. The
+  // minute's server re-read then corrects what folding cannot, like fills leaving the window.
+  const streamedFills = tradesSince(bookTrades, latestTradeMs(spotMarket.trades));
+  const liveCandles = applyTradesToCandles(candles, streamedFills, CANDLE_INTERVAL_MS["1d"], "1d");
+  const liveStats = applyTradesToStats(spotMarket.stats24h, streamedFills);
   const lastPrice = getVenueLastPrice(bookTrades, liveCandles, spotMarket.mark);
   // The touch the trader is actually looking at. It drives the ticket's prefill and cost estimate
   // and rides along on submission, so an order can never be priced off a book that is no longer
@@ -215,7 +227,7 @@ export function SpotTradingTerminal({
     onSubmitOrder({ ...args, book: { bestAsk, bestBid } });
   }
   // Measured to the price the header actually shows, so the arrow describes the figure beside it.
-  const { changePercent, high, low, volumeLabel } = get24hStats(spotMarket.stats24h, anchorPrice);
+  const { changePercent, high, low, volumeLabel } = get24hStats(liveStats, anchorPrice);
   // Assets is the one bottom tab with a real data source today, so it's built from live balances
   // instead of the placeholder-free static views.
   // Orders leave the book when they expire and nothing announces it, so a snapshot taken while one
@@ -371,6 +383,7 @@ export function SpotTradingTerminal({
               isSubmitting={isSubmitting}
               lastAction={lastAction}
               onDepositRequest={onDepositRequest}
+              onEdit={onFormEdit}
               onSubmitOrder={handleSubmitOrder}
               ownOpenOrders={ownedOpenOrders}
               takerFeeBps={spotMarket.takerFeeBps}

@@ -211,8 +211,10 @@ export function presentStreamTrade(
         timeZone: "UTC",
       }).format(new Date(trade.created_at))
     : "";
+  const atMs = trade.created_at ? Date.parse(trade.created_at) : Number.NaN;
 
   return {
+    ...(Number.isFinite(atMs) ? { atMs } : {}),
     price: quote.price,
     side: toUiSide(trade.aggressor_side, presenter),
     // Keyed on `type`, not the spec: this is display precision, not the inversion. Any spot market

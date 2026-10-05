@@ -696,6 +696,7 @@ export function SpotOrderFormPanel({
   bestBid,
   bids,
   onDepositRequest,
+  onEdit,
   onSubmitOrder,
   ownOpenOrders = [],
   takerFeeBps,
@@ -738,6 +739,8 @@ export function SpotOrderFormPanel({
    * instead of going dead when the account is short of the asset this order spends.
    */
   onDepositRequest?: (currency?: PayCurrency) => void;
+  /** Any change to the ticket: the host clears the order status line on it. */
+  onEdit?: () => void;
   onSubmitOrder: (args: {
     side: "buy" | "sell";
     price: string;
@@ -769,6 +772,13 @@ export function SpotOrderFormPanel({
   // the trader, so its size is the one number the ticket should not be restating for them.
   const [amountUnit, setAmountUnit] = useState<PayCurrency>("USDC");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  /** Wraps a field setter so every edit also tells the host. */
+  function edited<T>(set: (value: T) => void) {
+    return (value: T) => {
+      onEdit?.();
+      set(value);
+    };
+  }
 
   const isBuy = side === "buy";
   const needsLimitPrice = orderType !== "Market";
@@ -961,9 +971,13 @@ export function SpotOrderFormPanel({
         </>
       }
     >
-      <SideToggle onSelect={setSide} options={SIDES} selected={side} />
+      <SideToggle onSelect={edited(setSide)} options={SIDES} selected={side} />
 
-      <OrderTypeTabs onSelect={setOrderType} orderTypes={ORDER_TYPES} selected={orderType} />
+      <OrderTypeTabs
+        onSelect={edited(setOrderType)}
+        orderTypes={ORDER_TYPES}
+        selected={orderType}
+      />
 
       {/*
        * The balance an order draws on is the trading account's, not the connected wallet's, so
@@ -993,7 +1007,7 @@ export function SpotOrderFormPanel({
           }
           id="spot-limit-price"
           label="Limit price"
-          onChange={setLimitPrice}
+          onChange={edited(setLimitPrice)}
           tooltip="cNGN per USDC. Seeded from the mid, which cannot cross on either side."
           value={limitPrice}
         />
@@ -1009,8 +1023,11 @@ export function SpotOrderFormPanel({
       <AmountField
         amount={amount}
         isMarket={isMarket}
-        onChange={setAmount}
-        onUnitToggle={handleUnitToggle}
+        onChange={edited(setAmount)}
+        onUnitToggle={() => {
+          onEdit?.();
+          handleUnitToggle();
+        }}
         unit={activeUnit}
       />
 
@@ -1025,7 +1042,7 @@ export function SpotOrderFormPanel({
         label="Order size as a percentage of available balance"
         max={100}
         min={0}
-        onChange={handleSizePercent}
+        onChange={edited(handleSizePercent)}
         presets={SIZE_PRESETS}
         step={25}
         value={sizePercent}

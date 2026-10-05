@@ -31,6 +31,8 @@ import { buildDepositAccount, DepositDialog } from "@/ui/trading-terminal/Deposi
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import { SpotTradingTerminal } from "@/ui/trading-terminal/SpotTradingTerminal";
 import { useCngnBalance } from "@/ui/trading-terminal/useCngnBalance";
+import { useOrderStatus } from "@/ui/trading-terminal/useOrderStatus";
+import { useServerRefresh } from "@/ui/trading-terminal/useServerRefresh";
 import {
   formatSubaccountCngnLabel,
   formatSubaccountUsdcLabel,
@@ -186,6 +188,11 @@ function buildSpotOrderEvent(
   };
 }
 
+/** What a fill changes on spot: the trading account's ledger, by asset. */
+function balanceSignature(rows: { asset: string; balance: bigint }[] | null) {
+  return rows === null ? "" : rows.map((row) => `${row.asset}:${row.balance}`).join("|");
+}
+
 /** The header's Deposit and Withdraw buttons share one look. */
 const HEADER_ACTION_CLASSES =
   "flex h-10 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-4 font-semibold text-[14px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active disabled:cursor-not-allowed disabled:opacity-60";
@@ -193,7 +200,6 @@ const HEADER_ACTION_CLASSES =
 export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarket }) {
   // `null` until something actually happens — an idle placeholder would occupy
   // footer space in the order ticket without telling the trader anything.
-  const [lastAction, setLastAction] = useState<string | null>(null);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const router = useRouter();
 
@@ -259,8 +265,10 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
   const { balance: cngnBalance, refresh: refreshCngnBalance } = useCngnBalance(
     primaryWallet?.address ?? null
   );
+  useServerRefresh();
   const { balance: subaccountBalance, refresh: refreshSubaccountBalance } =
     useSubaccountBalance(tradingSubaccountId);
+  const orderStatus = useOrderStatus(balanceSignature(subaccountBalance?.rows ?? null));
   // The spot stack retired by the unified cutover: the wallet's account there is withdraw-only.
   const legacyStack = getLegacySpotStack();
   const legacyAccount = useTradingSubaccount(
@@ -337,17 +345,17 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
     book: SubmittedBook;
   }) {
     if (!walletsReady) {
-      setLastAction("Wallet is still loading");
+      orderStatus.announce("Wallet is still loading");
       return;
     }
     if (!primaryWallet?.address) {
-      setLastAction("Connect a wallet before submitting an order");
+      orderStatus.announce("Connect a wallet before submitting an order");
       return;
     }
     const resolvedPrice = resolveSpotExecutionPrice(orderType, side, book, price);
 
     if ("error" in resolvedPrice) {
-      setLastAction(resolvedPrice.error);
+      orderStatus.announce(resolvedPrice.error);
       return;
     }
 
@@ -355,7 +363,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
 
     try {
       setIsSubmittingOrder(true);
-      setLastAction(
+      orderStatus.announce(
         tradingSubaccountId
           ? `Submitting spot order on trading account #${tradingSubaccountId}`
           : "Preparing trading account..."
@@ -377,7 +385,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
         uiSizingPrice: resolvedPrice.sizingPrice,
         walletAddress: primaryWallet.address,
       });
-      setLastAction(
+      orderStatus.announce(
         `Awaiting wallet signature for trading account #${resolvedTradingSubaccountId}`
       );
       const signature = await walletClient.signTypedData({
@@ -392,14 +400,14 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
           error_message: body?.error ?? null,
           http_status: status,
         });
-        setLastAction(body?.error ?? "Spot order submission failed");
+        orderStatus.settle(body?.error ?? "Spot order submission failed");
         return;
       }
       posthog.capture("order_submitted", {
         ...buildSpotOrderEvent(side, orderType, size, executionPrice),
         order_id: body?.order?.order_id ?? null,
       });
-      setLastAction("Order accepted. Checking whether it filled…");
+      orderStatus.announce("Order accepted. Checking whether it filled…", { awaitFill: true });
       // Poll until the venue has recorded the order, so the refresh below fetches a book that lists
       // it. A resting order reaches `active_orders` a few seconds after acceptance, and the book
       // reads that same store — refreshing before it lands left Open Orders empty until a later
@@ -408,7 +416,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
         intervalMs: ORDER_SETTLE_POLL_INTERVAL_MS,
         timeoutMs: ORDER_SETTLE_TIMEOUT_MS,
       });
-      setLastAction(describeOrderOutcome(outcome, size, executionPrice));
+      orderStatus.settle(describeOrderOutcome(outcome, size, executionPrice));
       // Read balances after the outcome, not before it: refreshing on acceptance alone showed the
       // pre-fill account and left the strip disagreeing with the trade that had just happened.
       refreshUsdcBalance();
@@ -423,7 +431,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
       posthog.captureException(error, {
         properties: { market_id: "cngn-usdc-spot", order_side: side, order_type: orderType },
       });
-      setLastAction(errorMessage);
+      orderStatus.settle(errorMessage);
       return;
     } finally {
       setIsSubmittingOrder(false);
@@ -539,7 +547,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
         isPreparingAccount={isPreparingAccount}
         isSignedIn={isSignedIn}
         isSubmitting={isSubmittingOrder}
-        lastAction={lastAction}
+        lastAction={orderStatus.status}
         legacy={legacy}
         legacyControl={
           legacy === null || legacyStack === null ? null : (
@@ -569,6 +577,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
           setDepositMode("deposit");
           setDepositOpen(true);
         }}
+        onFormEdit={orderStatus.clear}
         onSignOrderHistory={handleSignOrderHistory}
         onSubmitOrder={handleSubmitSpot}
         onWithdrawRequest={(currency) => {

@@ -24,6 +24,8 @@ export type TradePrint = {
   side: "buy" | "sell";
   size: number;
   time: string;
+  /** When the venue recorded the fill, epoch ms; absent when the source carried no timestamp. */
+  atMs?: number;
 };
 
 export type ActivityTab = {

@@ -390,6 +390,7 @@ export function PerpOrderFormPanel({
   lastAction = null,
   onConnect,
   onDepositRequest,
+  onEdit,
   onSubmit,
   referencePrice = null,
   state = null,
@@ -407,6 +408,8 @@ export function PerpOrderFormPanel({
   lastAction?: string | null;
   onConnect?: () => void;
   onDepositRequest?: () => void;
+  /** Any change to the ticket: the host clears the order status line on it. */
+  onEdit?: () => void;
   onSubmit?: (request: PerpOrderRequest) => void;
   /** The price a market order would fill near, cNGN per USDC: the touch, else the mark. */
   referencePrice?: number | null;
@@ -418,6 +421,13 @@ export function PerpOrderFormPanel({
   const [limitPrice, setLimitPrice] = useState("");
   const [leverage, setLeverage] = useState(1);
   const [reduceOnly, setReduceOnly] = useState(false);
+  /** Wraps a field setter so every edit also tells the host. */
+  function edited<T>(set: (value: T) => void) {
+    return (value: T) => {
+      onEdit?.();
+      set(value);
+    };
+  }
 
   const isLive = state?.tradingEnabled === true && onSubmit !== undefined;
   const marginSources = describePerpMarginSources(account);
@@ -534,9 +544,13 @@ export function PerpOrderFormPanel({
         </>
       }
     >
-      <SideToggle onSelect={setSide} options={SIDES} selected={side} />
+      <SideToggle onSelect={edited(setSide)} options={SIDES} selected={side} />
 
-      <OrderTypeTabs onSelect={setOrderType} orderTypes={ORDER_TYPES} selected={orderType} />
+      <OrderTypeTabs
+        onSelect={edited(setOrderType)}
+        orderTypes={ORDER_TYPES}
+        selected={orderType}
+      />
 
       {/* The account's initial-margin headroom; what it is made of sits in the tooltip. */}
       <AvailableRow
@@ -557,7 +571,7 @@ export function PerpOrderFormPanel({
           adornment={<TokenUnit symbol="cNGN" />}
           id="perp-limit-price"
           label="Limit price"
-          onChange={setLimitPrice}
+          onChange={edited(setLimitPrice)}
           tooltip="cNGN per USDC"
           value={limitPrice}
         />
@@ -571,14 +585,14 @@ export function PerpOrderFormPanel({
                 : { cNGN: "Needs a price: type a limit price, or wait for the market" }
             }
             label="Size unit"
-            onSelect={(unit) => fields.onUnit(unit as SizeUnit)}
+            onSelect={edited((unit) => fields.onUnit(unit as SizeUnit))}
             options={SIZE_UNITS}
             selected={sizeUnit}
           />
         }
         id="perp-size"
         label="Size"
-        onChange={fields.onSizeInput}
+        onChange={edited(fields.onSizeInput)}
         placeholder="0.0"
         tooltip={sizeTooltip(sizeUnit, sizeConversion)}
         value={fields.shown}
@@ -586,13 +600,13 @@ export function PerpOrderFormPanel({
       <LeverageSelector
         ceiling={ceiling}
         leverage={effectiveLeverage}
-        onSelect={handleLeverageChange}
+        onSelect={edited(handleLeverageChange)}
       />
       <FormField
         adornment={<TokenUnit symbol="USDC" />}
         id="perp-margin"
         label="Margin"
-        onChange={fields.onMargin}
+        onChange={edited(fields.onMargin)}
         placeholder="0.0"
         tooltip={`What it costs you: size ÷ ${effectiveLeverage}x. Editable the other way round, for traders who think in margin.`}
         value={margin}
@@ -608,7 +622,7 @@ export function PerpOrderFormPanel({
         id="perp-reduce-only"
         label="Reduce only"
         note={hasPosition ? "never opens or flips the position" : "no open position"}
-        onChange={setReduceOnly}
+        onChange={edited(setReduceOnly)}
         tooltip={
           hasPosition
             ? "The venue clamps this order to your open position; it can never open or flip one"

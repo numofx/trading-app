@@ -13,6 +13,13 @@ import { buildOpenOrdersActivityView, getOwnedOpenOrders } from "@/lib/account-a
 import { formatBalance } from "@/lib/account-balance-display";
 import { getAppChain } from "@/lib/base-public-client";
 import {
+  applyTradesToCandles,
+  applyTradesToStats,
+  CANDLE_INTERVAL_MS,
+  latestTradeMs,
+  tradesSince,
+} from "@/lib/live-market";
+import {
   buildPerpHeaderMetrics,
   buildPerpPositionsView,
   describeOrderRejection,
@@ -63,8 +70,10 @@ import { SpotOrderBookPanel } from "@/ui/trading-terminal/SpotOrderBookPanel";
 import { TerminalHeaderBar } from "@/ui/trading-terminal/TerminalHeaderBar";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
 import { useMarketOrderBook } from "@/ui/trading-terminal/useMarketOrderBook";
+import { useOrderStatus } from "@/ui/trading-terminal/useOrderStatus";
 import { usePerpLiveState } from "@/ui/trading-terminal/usePerpLiveState";
 import { readPerpPositions, usePerpPositions } from "@/ui/trading-terminal/usePerpPositions";
+import { useServerRefresh } from "@/ui/trading-terminal/useServerRefresh";
 import { useSignedHistoryTabs } from "@/ui/trading-terminal/useSignedHistoryTabs";
 import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
 import { usePrimaryWallet } from "@/ui/usePrimaryWallet";
@@ -556,14 +565,23 @@ function usePerpBook(market: PerpMarket | null) {
   });
   const bids = book.isLive ? book.bids : (market?.orderBookBids ?? []);
   const asks = book.isLive ? book.asks : (market?.orderBookAsks ?? []);
-  const trades = book.isLive && book.trades.length > 0 ? book.trades : (market?.trades ?? []);
-  const candles = market?.candles ?? [];
+  // Streamed trades count whatever the book's status: see SpotTradingTerminal.
+  const trades = book.trades.length > 0 ? book.trades : (market?.trades ?? []);
+  // Fills the stream has seen since the server rendered, folded into the candles and 24h figures
+  // on every render; the minute's server re-read corrects what folding cannot.
+  const streamedFills = tradesSince(trades, latestTradeMs(market?.trades ?? []));
+  const candles = applyTradesToCandles(
+    market?.candles ?? [],
+    streamedFills,
+    CANDLE_INTERVAL_MS["1d"],
+    "1d"
+  );
   const lastPrice = market ? getVenueLastPrice(trades, candles, market.mark) : null;
   const { bestAsk, bestBid } = getBestPrices(asks, bids);
   const price = market
     ? (getAnchorPrice(bestAsk, bestBid, lastPrice) ?? market.state.markPrice)
     : null;
-  const stats = get24hStats(market?.stats24h ?? null, price);
+  const stats = get24hStats(applyTradesToStats(market?.stats24h ?? null, streamedFills), price);
   return { asks, bestAsk, bestBid, bids, candles, lastPrice, price, stats, trades };
 }
 
@@ -652,6 +670,11 @@ function HeaderWithdrawMenu({
   );
 }
 
+/** What a fill changes on the perp: the account's positions, by side and engine size. */
+function positionsSignature(positions: PerpPosition[]) {
+  return positions.map((p) => `${p.uiSide}:${p.engineSize ?? p.uiSize}`).join("|");
+}
+
 /** The header's figures for the perp on screen, or dashes while it is not live. */
 function perpHeaderMetrics(market: PerpMarket | null, price: number | null, volumeLabel: string) {
   return buildPerpHeaderMetrics({
@@ -700,7 +723,6 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
   /** The Margin-tab row being withdrawn from, or null while the dialog is closed. */
   const [withdrawRow, setWithdrawRow] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [lastAction, setLastAction] = useState<string | null>(null);
   const [cancellingNonce, setCancellingNonce] = useState<string | null>(null);
   const [closingIndex, setClosingIndex] = useState<number | null>(null);
 
@@ -725,6 +747,8 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
     stack ? { depositAsset: stack.cashAddress, manager: stack.srmAddress } : undefined
   );
   const perpAccount = usePerpPositions(account.subaccountId);
+  useServerRefresh();
+  const orderStatus = useOrderStatus(positionsSignature(perpAccount.positions));
   const withdrawing = withdrawTarget(stack, perpAccount.account, withdrawRow);
 
   const { asks, bestAsk, bestBid, bids, candles, lastPrice, price, stats, trades } =
@@ -747,7 +771,7 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
     const uiSide = request.side === "long" ? "buy" : "sell";
     const resolved = resolvePerpOrderPrice(request, uiSide, { bestAsk, bestBid, price });
     if ("error" in resolved) {
-      setLastAction(resolved.error);
+      orderStatus.announce(resolved.error);
       return;
     }
 
@@ -768,7 +792,9 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
         subaccountId: account.subaccountId,
         wallet: primaryWallet,
         onAwaitingSignature: () =>
-          setLastAction(`Awaiting wallet signature for perp account #${account.subaccountId}`),
+          orderStatus.announce(
+            `Awaiting wallet signature for perp account #${account.subaccountId}`
+          ),
       });
       if (!ok) {
         posthog.capture("order_rejected", {
@@ -776,14 +802,15 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
           error_message: body?.error ?? null,
           http_status: status,
         });
-        setLastAction(describeOrderRejection(body?.error, "Perp order submission failed"));
+        orderStatus.settle(describeOrderRejection(body?.error, "Perp order submission failed"));
         return;
       }
       posthog.capture("order_submitted", event);
-      setLastAction(
+      orderStatus.announce(
         request.reduceOnly
           ? "Reduce-only order accepted. The venue clamps it to your position; it fills or is cancelled once matched."
-          : "Order accepted. Positions update once it fills."
+          : "Order accepted. Positions update once it fills.",
+        { awaitFill: true }
       );
       perpAccount.refresh();
       router.refresh();
@@ -791,7 +818,7 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
       posthog.captureException(error, {
         properties: { market_id: "cngn-usdc-perp", order_side: request.side },
       });
-      setLastAction(error instanceof Error ? error.message : "Perp order submission failed");
+      orderStatus.settle(error instanceof Error ? error.message : "Perp order submission failed");
     } finally {
       setIsSubmitting(false);
     }
@@ -820,13 +847,13 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
     try {
       const fresh = await readFreshPosition(subaccountId, position);
       if ("error" in fresh) {
-        setLastAction(fresh.error);
+        orderStatus.announce(fresh.error);
         perpAccount.refresh();
         return;
       }
       const close = buildCloseRequest(fresh.position, { bestAsk, bestBid, price });
       if ("error" in close) {
-        setLastAction(close.error);
+        orderStatus.announce(close.error);
         return;
       }
       const idempotency = createOrderIdempotencyKey("perp");
@@ -847,7 +874,7 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
         subaccountId,
         wallet: primaryWallet,
         onAwaitingSignature: () =>
-          setLastAction(
+          orderStatus.announce(
             `Awaiting wallet signature to close ${fresh.position.uiSide} ${close.engineSize} cNGN (reduce-only)`
           ),
       });
@@ -857,22 +884,22 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
           error_message: body?.error ?? null,
           http_status: status,
         });
-        setLastAction(describeOrderRejection(body?.error, "Close failed"));
+        orderStatus.settle(describeOrderRejection(body?.error, "Close failed"));
         return;
       }
       posthog.capture("order_submitted", event);
       // The ticket is free again; the Close button stays disabled until the venue has an outcome.
       setIsSubmitting(false);
-      setLastAction("Close accepted. Waiting for the venue to confirm the fill…");
+      orderStatus.announce("Close accepted. Waiting for the venue to confirm the fill…");
       const outcome = await awaitOrderOutcome(idempotency.orderId);
-      setLastAction(describeCloseOutcome(outcome));
+      orderStatus.settle(describeCloseOutcome(outcome));
       perpAccount.refresh();
       router.refresh();
     } catch (error) {
       posthog.captureException(error, {
         properties: { market_id: "cngn-usdc-perp", order_type: "Close" },
       });
-      setLastAction(error instanceof Error ? error.message : "Close failed");
+      orderStatus.settle(error instanceof Error ? error.message : "Close failed");
     } finally {
       setIsSubmitting(false);
       setClosingIndex(null);
@@ -903,10 +930,10 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
         headers: { "content-type": "application/json" },
         method: "POST",
       });
-      setLastAction(response.ok ? "Order cancelled." : `Cancel failed (${response.status})`);
+      orderStatus.settle(response.ok ? "Order cancelled." : `Cancel failed (${response.status})`);
       router.refresh();
     } catch (error) {
-      setLastAction(error instanceof Error ? error.message : "Cancel failed");
+      orderStatus.settle(error instanceof Error ? error.message : "Cancel failed");
     } finally {
       setCancellingNonce(null);
     }
@@ -984,9 +1011,10 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
               hasWallet={primaryWallet !== null}
               isPreparingAccount={account.isLoading || (isSignedIn && !walletsReady)}
               isSubmitting={isSubmitting}
-              lastAction={lastAction}
+              lastAction={orderStatus.status}
               onConnect={login}
               onDepositRequest={() => setDepositOpen(true)}
+              onEdit={orderStatus.clear}
               onSubmit={market === null ? undefined : handleSubmit}
               referencePrice={price}
               state={market?.state ?? null}

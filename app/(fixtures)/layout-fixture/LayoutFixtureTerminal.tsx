@@ -22,6 +22,12 @@ const OWN_BUY_PRICE = 1390;
 const OWN_SELL_PRICE = 1410;
 const FIXTURE_WALLET = "0x1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d";
 
+const FIXTURE_BUTTON_CLASSES =
+  "flex h-10 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-4 font-semibold text-[14px] text-panel-text ring-1 ring-panel-border";
+
+/** The fill "Inject trade" streams in, in UI terms: 5 USDC at ₦1,402, a buy of USDC. */
+const INJECTED_TRADE = { price: 1402, size: 5 };
+
 /** What one fixture deposit adds. Large enough to clear any shortfall the check types in. */
 const DEPOSIT_AMOUNT = { cngn: 500_000, usdc: 500 };
 
@@ -37,7 +43,6 @@ const FIXTURE_MARKET: SpotMarket = {
   orderStack: null,
   stats24h: null,
   takerFeeBps: 25,
-  trades: [{ price: FIXTURE_PRICE, side: "buy", size: 3, time: "12:00:00" }],
   // One order per leg, so both header balances carry a claim and both disclosures are on screen.
   openOrders: [
     {
@@ -69,6 +74,10 @@ const FIXTURE_MARKET: SpotMarket = {
     { price: 1399, size: 14, total: 14 },
     { price: 1397, size: 25, total: 39 },
   ],
+  // Timestamped an hour back, so a fill injected now reads as newer than what the server knew.
+  trades: [
+    { atMs: Date.now() - 3_600_000, price: FIXTURE_PRICE, side: "buy", size: 3, time: "12:00:00" },
+  ],
 };
 
 /**
@@ -95,14 +104,41 @@ export function LayoutFixtureTerminal() {
         accountUsdc={accountUsdc}
         candles={[]}
         depositControl={
-          <button
-            className="flex h-10 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-4 font-semibold text-[14px] text-panel-text ring-1 ring-panel-border"
-            id="fixture-deposit"
-            onClick={() => setDeposits((count) => count + 1)}
-            type="button"
-          >
-            Deposit
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              className={FIXTURE_BUTTON_CLASSES}
+              id="fixture-deposit"
+              onClick={() => setDeposits((count) => count + 1)}
+              type="button"
+            >
+              Deposit
+            </button>
+            {/*
+             * Pushes a fill by another account through the stream path, in the engine's units
+             * (USDC per cNGN, cNGN amount) exactly as markets-service would frame it, to check that
+             * the chart's candle and the 24h volume follow a trade without a reload.
+             */}
+            <button
+              className={FIXTURE_BUTTON_CLASSES}
+              id="fixture-inject-trade"
+              onClick={() =>
+                window.__numoInjectFrame?.({
+                  channel: "trades",
+                  type: "update",
+                  data: {
+                    aggressor_side: "sell",
+                    created_at: new Date().toISOString(),
+                    price: String(1 / INJECTED_TRADE.price),
+                    size: String(INJECTED_TRADE.size * INJECTED_TRADE.price),
+                    trade_id: Date.now(),
+                  },
+                })
+              }
+              type="button"
+            >
+              Inject trade
+            </button>
+          </div>
         }
         hasWallet
         isSignedIn

@@ -33,6 +33,13 @@ type MarketOrderBookView = {
   status: MarketStreamStatus;
 };
 
+declare global {
+  interface Window {
+    /** Dev only: feeds a stream frame to the mounted order-book hook. */
+    __numoInjectFrame?: (frame: MarketStreamFrame) => void;
+  }
+}
+
 const EMPTY_VIEW: MarketOrderBookView = { asks: [], bids: [], status: "connecting", trades: [] };
 
 /**
@@ -209,9 +216,17 @@ export function useMarketOrderBook({
 
     setView({ ...EMPTY_VIEW, status: "connecting" });
     connect();
+    // Dev only: lets a fixture push a frame through the same path the socket does, so what a
+    // streamed fill changes on screen can be checked without waiting for the venue to trade.
+    if (process.env.NODE_ENV !== "production") {
+      window.__numoInjectFrame = handleFrame;
+    }
 
     return () => {
       disposed = true;
+      if (window.__numoInjectFrame === handleFrame) {
+        window.__numoInjectFrame = undefined;
+      }
       if (reconnectTimer !== null) {
         window.clearTimeout(reconnectTimer);
       }

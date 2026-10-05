@@ -501,6 +501,7 @@ function deriveMarkFromBook(asks: { price: number }[], bids: { price: number }[]
 function presentTrades(trades: PresentedTrade[]) {
   return trades
     .map((trade) => ({
+      atMs: Date.parse(trade.created_at),
       price: Number(trade.spot_contract?.ui_intent.price ?? trade.price),
       side: trade.spot_contract?.ui_intent.side ?? trade.aggressor_side,
       // Spot sizes are USDC notional and can be fractional (e.g. a 0.073 USDC smoke trade),
