@@ -99,10 +99,9 @@ export function TerminalHeaderBar({
   market?: TerminalMarket;
   /**
    * Figures to show instead of the spot set (price, volume, high, low): the perp's mark, index,
-   * change, volume, open interest and funding. Six figures and a second header action cost more
-   * width than spot's four, so the first three show from `xl` and the rest from `2xl`; below that
-   * the actions keep the row and the figures stand down, rather than the wallet button wrapping
-   * under the rest.
+   * change, volume, open interest and funding. From `lg` as many show as the width holds, in
+   * order, whole; the actions keep the row and the figures stand down, rather than the wallet
+   * button wrapping under the rest.
    */
   metrics?: HeaderMetricItem[];
   /** Fired by the connected wallet menu's Portfolio item. */
@@ -198,10 +197,15 @@ export function TerminalHeaderBar({
           </HeaderMetric>
         </div>
       ) : (
-        <div className="hidden min-w-0 items-center gap-6 overflow-hidden xl:flex">
-          {metrics.map((metric, index) => (
+        /*
+         * As many figures as the width holds, whole: the row wraps, and the wrap is clipped to one
+         * row's height with a gap tall enough that nothing of a second row shows. Breakpoints
+         * could not say how many fit, since the wallet button's width is not knowable in advance.
+         */
+        <div className="hidden max-h-10 min-w-0 flex-wrap content-start gap-x-6 gap-y-10 overflow-hidden lg:flex">
+          {metrics.map((metric) => (
             <HeaderMetric
-              className={index >= 3 ? "hidden 2xl:flex" : undefined}
+              className="shrink-0"
               key={metric.label}
               label={metric.label}
               tooltip={metric.tooltip}
