@@ -7,6 +7,7 @@ import { cn } from "@/lib/cn";
 import { formatMarketPrice, formatNaira } from "@/lib/market-formatting";
 import type { LadderRow, LadderUnit } from "@/lib/order-book-display";
 import {
+  buildEmptyRungs,
   buildLadderRows,
   formatLadderAmount,
   getMaxLadderTotal,
@@ -113,6 +114,20 @@ function BookLevelRow({
 }
 
 /**
+ * A price bucket with nothing resting in it, continuing the ladder past the last real level. Muted,
+ * no bar, no size: it is the grid, not depth.
+ */
+function BookEmptyRungRow({ digits, price }: { digits: number; price: number }) {
+  return (
+    <div className="grid grid-cols-3 px-3 py-[3px] text-[11px] text-panel-text-muted/50 tabular-nums">
+      <span>{formatMarketPrice(price, digits)}</span>
+      <span className="text-right">—</span>
+      <span className="text-right">—</span>
+    </div>
+  );
+}
+
+/**
  * Shown when the venue has nothing resting or nothing traded. The panel renders only real venue
  * data, so an empty market is empty on screen rather than filled with sample depth.
  */
@@ -142,6 +157,10 @@ function BookLadder({
 }) {
   const askRows = buildLadderRows({ levels: asks, side: "ask", tick, unit });
   const bidRows = buildLadderRows({ levels: bids, side: "bid", tick, unit });
+  // A thin book (the perp maker rests three levels a side) keeps a full-height grid: empty buckets
+  // one tick apart continue each side past its last level, without claiming any depth.
+  const askRungs = buildEmptyRungs({ rows: askRows, side: "ask", tick });
+  const bidRungs = buildEmptyRungs({ rows: bidRows, side: "bid", tick });
   // The spread quotes the true touch, not the grouped one: a coarse tick moves a bucket's label
   // away from the price that is actually resting, and the spread must stay the tradeable number.
   const { bestAsk, bestBid } = getBestPrices(asks, bids);
@@ -178,15 +197,20 @@ function BookLadder({
         {askRows.length === 0 ? (
           <BookEmptyState message="No resting asks" />
         ) : (
-          askRows.map((row) => (
-            <BookLevelRow
-              digits={digits}
-              key={row.price}
-              maxTotal={maxTotal}
-              row={row}
-              side="ask"
-            />
-          ))
+          <>
+            {askRows.map((row) => (
+              <BookLevelRow
+                digits={digits}
+                key={row.price}
+                maxTotal={maxTotal}
+                row={row}
+                side="ask"
+              />
+            ))}
+            {askRungs.map((price) => (
+              <BookEmptyRungRow digits={digits} key={`empty-${price}`} price={price} />
+            ))}
+          </>
         )}
       </div>
 
@@ -228,15 +252,20 @@ function BookLadder({
         {bidRows.length === 0 ? (
           <BookEmptyState message="No resting bids" />
         ) : (
-          bidRows.map((row) => (
-            <BookLevelRow
-              digits={digits}
-              key={row.price}
-              maxTotal={maxTotal}
-              row={row}
-              side="bid"
-            />
-          ))
+          <>
+            {bidRows.map((row) => (
+              <BookLevelRow
+                digits={digits}
+                key={row.price}
+                maxTotal={maxTotal}
+                row={row}
+                side="bid"
+              />
+            ))}
+            {bidRungs.map((price) => (
+              <BookEmptyRungRow digits={digits} key={`empty-${price}`} price={price} />
+            ))}
+          </>
         )}
       </div>
     </div>
