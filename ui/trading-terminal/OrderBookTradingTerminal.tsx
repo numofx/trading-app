@@ -186,6 +186,10 @@ function buildSpotOrderEvent(
   };
 }
 
+/** The header's Deposit and Withdraw buttons share one look. */
+const HEADER_ACTION_CLASSES =
+  "flex h-10 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-4 font-semibold text-[14px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active disabled:cursor-not-allowed disabled:opacity-60";
+
 export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarket }) {
   // `null` until something actually happens — an idle placeholder would occupy
   // footer space in the order ticket without telling the trader anything.
@@ -497,24 +501,39 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
         accountUsdc={toLedgerAmount(accountLegs.cashUnits)}
         candles={spotMarket.candles}
         depositControl={
-          <DepositDialog
-            account={depositAccount}
-            accountRows={subaccountBalance?.rows ?? null}
-            currency={depositCurrency}
-            fundingWallets={isSignedIn ? wallets : []}
-            mode={depositMode}
-            onConnectWallet={handleConnectWallet}
-            onCurrencyChange={setDepositCurrency}
-            onDeposited={handleDeposited}
-            onModeChange={setDepositMode}
-            onOpenChange={setDepositOpen}
-            onSelectFundingWallet={(wallet) => selectWallet(wallet.address)}
-            onWithdrawn={refreshBalancesAfter}
-            open={depositOpen}
-            triggerClassName="flex h-10 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-4 font-semibold text-[14px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active disabled:cursor-not-allowed disabled:opacity-60"
-            triggerId="header-deposit-trigger"
-            walletBalances={{ cNGN: cngnBalance, USDC: usdcBalance }}
-          />
+          // Deposit opens the dialog on its own trigger; Withdraw is a second door into the same
+          // dialog, opened on its Withdraw side.
+          <div className="flex items-center gap-2">
+            <DepositDialog
+              account={depositAccount}
+              accountRows={subaccountBalance?.rows ?? null}
+              currency={depositCurrency}
+              fundingWallets={isSignedIn ? wallets : []}
+              mode={depositMode}
+              onConnectWallet={handleConnectWallet}
+              onCurrencyChange={setDepositCurrency}
+              onDeposited={handleDeposited}
+              onModeChange={setDepositMode}
+              onOpenChange={setDepositOpen}
+              onSelectFundingWallet={(wallet) => selectWallet(wallet.address)}
+              onWithdrawn={refreshBalancesAfter}
+              open={depositOpen}
+              triggerClassName={HEADER_ACTION_CLASSES}
+              triggerId="header-deposit-trigger"
+              walletBalances={{ cNGN: cngnBalance, USDC: usdcBalance }}
+            />
+            <button
+              className={HEADER_ACTION_CLASSES}
+              id="header-withdraw-trigger"
+              onClick={() => {
+                setDepositMode("withdraw");
+                setDepositOpen(true);
+              }}
+              type="button"
+            >
+              Withdraw
+            </button>
+          </div>
         }
         hasWallet={hasWallet}
         isPreparingAccount={isPreparingAccount}

@@ -561,14 +561,15 @@ function usePerpBook(market: PerpMarket | null) {
   return { asks, bestAsk, bestBid, bids, candles, lastPrice, price, stats, trades };
 }
 
-function PerpDepositButton({ onClick }: { onClick: () => void }) {
+/** The header's Deposit margin and Withdraw buttons, one look. */
+function HeaderActionButton({ children, onClick }: { children: string; onClick: () => void }) {
   return (
     <button
       className="flex h-10 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-4 font-semibold text-[14px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active"
       onClick={onClick}
       type="button"
     >
-      Deposit margin
+      {children}
     </button>
   );
 }
@@ -822,9 +823,19 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
         changePercent24h={stats.changePercent}
         depositControl={
           market === null ? undefined : (
-            <PerpDepositButton
-              onClick={() => (primaryWallet === null ? login() : setDepositOpen(true))}
-            />
+            <div className="flex items-center gap-2">
+              <HeaderActionButton
+                onClick={() => (primaryWallet === null ? login() : setDepositOpen(true))}
+              >
+                Deposit margin
+              </HeaderActionButton>
+              {/* Withdraws cash; the Account rows withdraw each asset. Connects first without a wallet. */}
+              <HeaderActionButton
+                onClick={() => (primaryWallet === null ? login() : setWithdrawRow(0))}
+              >
+                Withdraw
+              </HeaderActionButton>
+            </div>
           )
         }
         high24h={stats.high}
