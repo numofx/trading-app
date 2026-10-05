@@ -56,10 +56,15 @@ export function PerpLayoutFixture() {
         />
         <AccountSummary
           rows={[
-            { balance: formatBalance(FIXTURE_ACCOUNT.cash, "USDC"), symbol: "USDC" },
+            {
+              balance: formatBalance(FIXTURE_ACCOUNT.cash, "USDC"),
+              symbol: "USDC",
+              onWithdraw: () => undefined,
+            },
             {
               balance: formatBalance(FIXTURE_ACCOUNT.collateral[0]?.balance ?? null, "cNGN"),
               symbol: "cNGN",
+              onWithdraw: () => undefined,
             },
           ]}
         />

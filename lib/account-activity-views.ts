@@ -10,66 +10,6 @@ import type { ActivityView, SpotOpenOrder } from "@/lib/trading.types";
 /** Rendered when a balance is genuinely unknown — never substitute a zero or a placeholder figure. */
 const UNKNOWN_BALANCE = "—";
 
-/**
- * Builds the Assets view from real balances rather than sample data.
- *
- * The two balances are distinct and both matter to a trader: the trading account leg is what the
- * SubAccounts ledger holds (deposited and traded funds, the balance orders draw on), and the wallet
- * leg is what is still in the connected wallet and therefore available to deposit.
- */
-export function buildAssetsActivityView({
-  accountCngnLabel,
-  accountUsdcLabel,
-  legacy = null,
-  walletCngnLabel,
-  walletUsdcLabel,
-}: {
-  /**
-   * A wallet's account on the spot stack retired by the unified cutover, withdraw-only: two rows
-   * after the live ones, naming the account so the balances are not mistaken for the live ones.
-   */
-  legacy?: { accountId: string; cngnLabel: string | null; usdcLabel: string | null } | null;
-  /** Subaccount cNGN balance, or null when it hasn't loaded or the asset is unknown for this chain. */
-  accountCngnLabel: string | null;
-  /** Subaccount USDC cash balance, or null when it hasn't loaded. */
-  accountUsdcLabel: string | null;
-  /** Connected wallet's cNGN balance, or null when no wallet is connected or the token is unconfigured. */
-  walletCngnLabel: string | null;
-  /** Connected wallet's USDC balance, or null when no wallet is connected. */
-  walletUsdcLabel: string | null;
-}): ActivityView {
-  return {
-    columns: ["Asset", "Trading Account", "Wallet"],
-    rows: [
-      { cells: ["USDC", accountUsdcLabel ?? UNKNOWN_BALANCE, walletUsdcLabel ?? UNKNOWN_BALANCE] },
-      { cells: ["cNGN", accountCngnLabel ?? UNKNOWN_BALANCE, walletCngnLabel ?? UNKNOWN_BALANCE] },
-      // A null legacy label is an asset not worth a row (under a cent), not an unknown balance.
-      ...(legacy === null || legacy.usdcLabel === null
-        ? []
-        : [
-            {
-              cells: [
-                `USDC · old spot account #${legacy.accountId} (withdraw only)`,
-                legacy.usdcLabel,
-                "",
-              ],
-            },
-          ]),
-      ...(legacy === null || legacy.cngnLabel === null
-        ? []
-        : [
-            {
-              cells: [
-                `cNGN · old spot account #${legacy.accountId} (withdraw only)`,
-                legacy.cngnLabel,
-                "",
-              ],
-            },
-          ]),
-    ],
-  };
-}
-
 /** Columns for the Open Orders tab. The trailing column holds each row's cancel control. */
 export const OPEN_ORDERS_COLUMNS = ["Side", "Price", "Size", "Filled", ""] as const;
 

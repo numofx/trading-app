@@ -70,8 +70,10 @@ export function useTransferDialog({
   account,
   accountRows,
   controlledCurrency,
+  controlledMode,
   fundingWallets,
   onCurrencyChange,
+  onModeChange,
   onDeposited,
   onOpenChange,
   onSelectFundingWallet,
@@ -88,8 +90,11 @@ export function useTransferDialog({
   withdrawOnly?: boolean;
   accountRows?: { asset: string; balance: bigint }[] | null;
   controlledCurrency?: DepositCurrency;
+  /** Which side the dialog is on, when the opener decides (a withdraw control opens it on Withdraw). */
+  controlledMode?: TransferMode;
   fundingWallets?: ConnectedWallet[];
   onCurrencyChange?: (currency: DepositCurrency) => void;
+  onModeChange?: (mode: TransferMode) => void;
   onDeposited: (subaccountId: string, blockNumber: bigint | null) => void;
   onOpenChange?: (open: boolean) => void;
   onSelectFundingWallet?: (wallet: ConnectedWallet) => void;
@@ -100,7 +105,14 @@ export function useTransferDialog({
   const depositableCurrencies = getDepositableCurrencies();
   const withdrawableAssets = withdrawableAssetsOverride ?? getWithdrawableAssets();
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
-  const [mode, setMode] = useState<TransferMode>(withdrawOnly ? "withdraw" : "deposit");
+  const [uncontrolledMode, setUncontrolledMode] = useState<TransferMode>(
+    withdrawOnly ? "withdraw" : "deposit"
+  );
+  const mode = controlledMode ?? uncontrolledMode;
+  function setMode(next: TransferMode) {
+    setUncontrolledMode(next);
+    onModeChange?.(next);
+  }
   const [screen, setScreen] = useState<DepositScreen>("form");
   const [withdrawAssetId, setWithdrawAssetId] = useState(withdrawableAssets[0].id);
   const [amount, setAmount] = useState("");

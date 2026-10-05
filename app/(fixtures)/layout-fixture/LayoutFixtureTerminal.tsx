@@ -71,10 +71,6 @@ const FIXTURE_MARKET: SpotMarket = {
   ],
 };
 
-function tickerLabel(value: number, symbol: string) {
-  return `${value.toLocaleString("en-US", { maximumFractionDigits: 2 })} ${symbol}`;
-}
-
 /**
  * The terminal in a connected, funded state, which the app itself can only reach with a real wallet
  * and a real subaccount.
@@ -96,14 +92,11 @@ export function LayoutFixtureTerminal() {
     <main className="flex min-h-screen flex-col bg-terminal-bg text-foreground md:h-dvh md:overflow-hidden">
       <SpotTradingTerminal
         accountCngn={accountCngn}
-        accountCngnLabel={tickerLabel(accountCngn, "cNGN")}
         accountUsdc={accountUsdc}
-        accountUsdcLabel={tickerLabel(accountUsdc, "USDC")}
         candles={[]}
-        cngnBalanceLabel="0 cNGN"
         depositControl={
           <button
-            className="flex h-10 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-4 font-semibold text-[12px] text-panel-text ring-1 ring-panel-border"
+            className="flex h-10 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-4 font-semibold text-[14px] text-panel-text ring-1 ring-panel-border"
             id="fixture-deposit"
             onClick={() => setDeposits((count) => count + 1)}
             type="button"
@@ -116,7 +109,6 @@ export function LayoutFixtureTerminal() {
         onCancelOrder={() => Promise.resolve({ ok: true })}
         onSubmitOrder={() => undefined}
         spotMarket={FIXTURE_MARKET}
-        usdcBalanceLabel="0 USDC"
         walletAddress={FIXTURE_WALLET}
       />
     </main>

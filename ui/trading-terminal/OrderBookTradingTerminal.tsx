@@ -26,10 +26,11 @@ import {
 import { getAccountLegs } from "@/lib/subaccount-ledger";
 import type { SpotMarket } from "@/lib/trading.types";
 import type { WithdrawableAsset } from "@/lib/withdrawable-assets";
+import type { TransferMode } from "@/ui/trading-terminal/DepositDialog";
 import { buildDepositAccount, DepositDialog } from "@/ui/trading-terminal/DepositDialog";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import { SpotTradingTerminal } from "@/ui/trading-terminal/SpotTradingTerminal";
-import { formatCngnBalanceLabel, useCngnBalance } from "@/ui/trading-terminal/useCngnBalance";
+import { useCngnBalance } from "@/ui/trading-terminal/useCngnBalance";
 import {
   formatSubaccountCngnLabel,
   formatSubaccountUsdcLabel,
@@ -37,7 +38,7 @@ import {
   useSubaccountBalance,
 } from "@/ui/trading-terminal/useSubaccountBalance";
 import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
-import { formatUsdcBalanceLabel, useUsdcBalance } from "@/ui/trading-terminal/useUsdcBalance";
+import { useUsdcBalance } from "@/ui/trading-terminal/useUsdcBalance";
 import { usePrimaryWallet } from "@/ui/usePrimaryWallet";
 
 type SpotExecutionPrice = { error: string } | { price: string; sizingPrice?: string };
@@ -199,6 +200,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
   const { primaryWallet: pinnedWallet, selectWallet, wallets, walletsReady } = usePrimaryWallet();
   // The header hosts the one deposit dialog; the order ticket opens it through this state.
   const [depositOpen, setDepositOpen] = useState(false);
+  const [depositMode, setDepositMode] = useState<TransferMode>("deposit");
   // Which asset it opens on. Held here rather than inside the dialog because the ticket names the
   // currency when it sends the trader over — a "Deposit cNGN" button must not land on the USDC form.
   const [depositCurrency, setDepositCurrency] = useState<DepositCurrency>(
@@ -280,8 +282,6 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
     isAccountResolved: isTradingSubaccountResolved,
     subaccountId: tradingSubaccountId,
   });
-  const accountUsdcLabel = formatSubaccountUsdcLabel(accountLegs.cashUnits);
-  const accountCngnLabel = formatSubaccountCngnLabel(accountLegs.cngnUnits);
 
   /**
    * Re-reads every balance a transfer moves, at or past the transfer's block. Reading latest instead
@@ -494,25 +494,24 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
 
       <SpotTradingTerminal
         accountCngn={toLedgerAmount(accountLegs.cngnUnits)}
-        accountCngnLabel={accountCngnLabel}
         accountUsdc={toLedgerAmount(accountLegs.cashUnits)}
-        accountUsdcLabel={accountUsdcLabel}
         candles={spotMarket.candles}
-        cngnBalanceLabel={formatCngnBalanceLabel(cngnBalance)}
         depositControl={
           <DepositDialog
             account={depositAccount}
             accountRows={subaccountBalance?.rows ?? null}
             currency={depositCurrency}
             fundingWallets={isSignedIn ? wallets : []}
+            mode={depositMode}
             onConnectWallet={handleConnectWallet}
             onCurrencyChange={setDepositCurrency}
             onDeposited={handleDeposited}
+            onModeChange={setDepositMode}
             onOpenChange={setDepositOpen}
             onSelectFundingWallet={(wallet) => selectWallet(wallet.address)}
             onWithdrawn={refreshBalancesAfter}
             open={depositOpen}
-            triggerClassName="flex h-10 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-4 font-semibold text-[12px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active disabled:cursor-not-allowed disabled:opacity-60"
+            triggerClassName="flex h-10 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-4 font-semibold text-[14px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active disabled:cursor-not-allowed disabled:opacity-60"
             triggerId="header-deposit-trigger"
             walletBalances={{ cNGN: cngnBalance, USDC: usdcBalance }}
           />
@@ -548,12 +547,17 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
           if (currency !== undefined) {
             setDepositCurrency(currency);
           }
+          setDepositMode("deposit");
           setDepositOpen(true);
         }}
         onSignOrderHistory={handleSignOrderHistory}
         onSubmitOrder={handleSubmitSpot}
+        onWithdrawRequest={(currency) => {
+          setDepositCurrency(currency);
+          setDepositMode("withdraw");
+          setDepositOpen(true);
+        }}
         spotMarket={spotMarket}
-        usdcBalanceLabel={formatUsdcBalanceLabel(usdcBalance)}
         walletAddress={primaryWallet?.address ?? null}
       />
     </main>

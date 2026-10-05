@@ -1277,9 +1277,11 @@ export function DepositDialog({
   account,
   accountRows,
   currency: controlledCurrency,
+  mode: controlledMode,
   fundingWallets,
   onConnectWallet,
   onCurrencyChange,
+  onModeChange,
   onDeposited,
   onWithdrawn,
   onOpenChange,
@@ -1303,10 +1305,13 @@ export function DepositDialog({
    * names the leg the account is short of, and the form has to open on that one.
    */
   currency?: DepositCurrency;
+  /** Deposit or Withdraw, when the opener decides; the dialog's own switch reports changes back. */
+  mode?: TransferMode;
   /** Starts wallet login from the dialog's no-wallet step. */
   onConnectWallet?: () => void;
   /** Fires for both the asset picker and the "deposit the other asset" step. */
   onCurrencyChange?: (currency: DepositCurrency) => void;
+  onModeChange?: (mode: TransferMode) => void;
   /** Fires after a confirmed deposit, with its receipt's block (null if unknown). */
   onDeposited: (subaccountId: string, blockNumber: bigint | null) => void;
   /** Fires after a confirmed withdrawal with its receipt's block, so balances upstream can be re-read. */
@@ -1342,8 +1347,10 @@ export function DepositDialog({
     account,
     accountRows,
     controlledCurrency,
+    controlledMode,
     fundingWallets,
     onCurrencyChange,
+    onModeChange,
     onDeposited,
     onOpenChange,
     onSelectFundingWallet,

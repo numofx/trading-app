@@ -4,11 +4,10 @@ import type { ActivityTab, ActivityView } from "@/lib/trading.types";
 import { SmartLink } from "@/ui/SmartLink";
 
 /** Tabs that describe the viewer's own account, so their rows must never render for a signed-out visitor. */
-const ACCOUNT_SCOPED_TABS = new Set(["assets", "open-orders", "order-history", "trade-history"]);
+const ACCOUNT_SCOPED_TABS = new Set(["open-orders", "order-history", "trade-history"]);
 
-const EMPTY_STATE_COPY = {
-  assets: { body: "Deposit USDC to fund your trading account.", title: "No assets" },
-} as const;
+/** Per-tab copy for an empty panel; tabs without an entry use the generic "No activity yet". */
+const EMPTY_STATE_COPY: Partial<Record<string, EmptyState>> = {};
 
 type EmptyState = {
   /** A control under the copy, e.g. Order History's signature prompt. */

@@ -13,7 +13,6 @@ import { formatBalance } from "@/lib/account-balance-display";
 import { getAppChain } from "@/lib/base-public-client";
 import {
   buildPerpCngnExposure,
-  buildPerpMarginView,
   buildPerpPositionsView,
   describeOrderRejection,
   getPerpCollateralWithdrawableAsset,
@@ -277,17 +276,11 @@ function listedCollateralOf(stack: PerpStack | null): PerpCollateralAsset[] {
   return stack === null ? [] : stack.collateralAssets;
 }
 
-function heldCollateralCount(account: PerpAccountMargin | null): number {
-  return account === null ? 0 : account.collateral.length;
-}
-
 type ActivityInputs = {
   account: PerpAccountMargin | null;
   bottomTab: PerpBottomTab;
   /** The open signed history tab's rows once loaded; null on any other tab or state. */
   signedHistoryView: ActivityView | null;
-  /** The collateral assets the venue accepts, listed at zero on the Margin tab when not held. */
-  listedCollateral: PerpCollateralAsset[];
   market: PerpMarket | null;
   positions: PerpPosition[];
   walletAddress: string | null;
@@ -299,9 +292,6 @@ function buildActivityView(inputs: ActivityInputs): ActivityView {
   }
   if (inputs.bottomTab === "positions") {
     return buildPerpPositionsView(inputs.positions, PERP_MARKET_LABEL);
-  }
-  if (inputs.bottomTab === "margin") {
-    return buildPerpMarginView(inputs.account, inputs.listedCollateral);
   }
   if (inputs.bottomTab === "order-history" || inputs.bottomTab === "trade-history") {
     return inputs.signedHistoryView ?? PERP_ACTIVITY_VIEWS[inputs.bottomTab];
@@ -340,17 +330,26 @@ function buildHistorySigner(primaryWallet: ConnectedWallet | null, walletsReady:
 function buildAccountRows(
   account: PerpAccountMargin | null,
   stack: PerpStack | null,
-  onDeposit: () => void
+  onDeposit: () => void,
+  /** Opens the withdraw dialog on a row of the account's ledger: 0 is cash, then each collateral asset held. */
+  onWithdraw: (rowIndex: number) => void
 ): AccountSummaryRow[] {
   const cngnListed = listedCollateralOf(stack).some((asset) => asset.symbol === "cNGN");
-  const cngnHeld = account?.collateral.find((row) => row.symbol === "cNGN")?.balance;
+  const cngnIndex = account?.collateral.findIndex((row) => row.symbol === "cNGN") ?? -1;
+  const cngnHeld = cngnIndex === -1 ? undefined : account?.collateral[cngnIndex]?.balance;
   const rows: AccountSummaryRow[] = [
-    { balance: formatBalance(account?.cash ?? null, "USDC"), onDeposit, symbol: "USDC" },
+    {
+      balance: formatBalance(account?.cash ?? null, "USDC"),
+      onDeposit,
+      onWithdraw: account === null ? undefined : () => onWithdraw(0),
+      symbol: "USDC",
+    },
   ];
   if (cngnListed) {
     rows.push({
       balance: formatBalance(account === null ? null : (cngnHeld ?? 0), "cNGN"),
       onDeposit,
+      onWithdraw: cngnIndex === -1 ? undefined : () => onWithdraw(cngnIndex + 1),
       symbol: "cNGN",
     });
   }
@@ -434,8 +433,8 @@ const ROW_BUTTON_CLASSES =
   "cursor-pointer rounded-lg bg-input-bg px-2 py-1 font-medium text-[10px] text-panel-text ring-1 ring-panel-border transition-colors hover:text-panel-text-active disabled:cursor-wait disabled:opacity-60";
 
 /**
- * The button at the end of each row: Cancel on an open order, Close on a position, Withdraw on the
- * margin row. Each is the one action the row is for.
+ * The button at the end of each row: Cancel on an open order, Close on a position, the fill's
+ * transaction on a trade. Each is the one action the row is for.
  */
 function buildRowAction(inputs: {
   bottomTab: PerpBottomTab;
@@ -446,12 +445,6 @@ function buildRowAction(inputs: {
   market: PerpMarket | null;
   onCancel: (nonce: string, ownerAddress: string) => void;
   onClose: (position: PerpPosition, rowIndex: number) => void;
-  /** The Margin tab's row index: 0 is cash, then each collateral asset held, in order. */
-  onWithdraw: (rowIndex: number) => void;
-  /** A Margin-tab row for a collateral asset the account does not hold yet. */
-  onDeposit: () => void;
-  /** How many collateral assets the account holds: rows past them are listed at zero. */
-  heldCollateral: number;
   ownedOpenOrders: { nonce: string; ownerAddress: string }[];
   positions: PerpPosition[];
   /** The Trade History row control (the fill's transaction), undefined on every other tab. */
@@ -505,25 +498,7 @@ function buildRowAction(inputs: {
       );
     };
   }
-  return (rowIndex: number) =>
-    rowIndex > inputs.heldCollateral ? (
-      <button
-        className={ROW_BUTTON_CLASSES}
-        onClick={inputs.onDeposit}
-        title="Deposit this asset as margin"
-        type="button"
-      >
-        Deposit
-      </button>
-    ) : (
-      <button
-        className={ROW_BUTTON_CLASSES}
-        onClick={() => inputs.onWithdraw(rowIndex)}
-        type="button"
-      >
-        Withdraw
-      </button>
-    );
+  return undefined;
 }
 
 /**
@@ -590,7 +565,7 @@ function usePerpBook(market: PerpMarket | null) {
 function PerpDepositButton({ onClick }: { onClick: () => void }) {
   return (
     <button
-      className="flex h-10 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-4 font-semibold text-[12px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active"
+      className="flex h-10 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-4 font-semibold text-[14px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active"
       onClick={onClick}
       type="button"
     >
@@ -914,7 +889,9 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
               takerFeeBps={market?.takerFeeBps ?? null}
             />
             {/* The perp account's holdings under the ticket, as spot's column ends. */}
-            <AccountSummary rows={buildAccountRows(perpAccount.account, stack, openDeposit)} />
+            <AccountSummary
+              rows={buildAccountRows(perpAccount.account, stack, openDeposit, setWithdrawRow)}
+            />
           </div>
 
           <div className="min-h-[200px] md:col-start-1 md:row-start-3 md:min-h-0 lg:col-span-2 lg:col-start-1 lg:row-start-2">
@@ -922,7 +899,6 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
               activityView={buildActivityView({
                 account: perpAccount.account,
                 bottomTab,
-                listedCollateral: listedCollateralOf(stack),
                 signedHistoryView: signedHistory.view,
                 market,
                 positions: perpAccount.positions,
@@ -944,11 +920,8 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
                 hasWallet: primaryWallet !== null,
                 isSubmitting,
                 market,
-                heldCollateral: heldCollateralCount(perpAccount.account),
                 onCancel: (nonce, ownerAddress) => void handleCancel(nonce, ownerAddress),
                 onClose: (position, rowIndex) => void handleClose(position, rowIndex),
-                onDeposit: () => setDepositOpen(true),
-                onWithdraw: (rowIndex) => setWithdrawRow(rowIndex),
                 ownedOpenOrders,
                 positions: perpAccount.positions,
                 tradeHistoryRowAction: signedHistory.rowAction,

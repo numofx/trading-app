@@ -3,11 +3,7 @@
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
-import {
-  buildAssetsActivityView,
-  buildOpenOrdersActivityView,
-  getOwnedOpenOrders,
-} from "@/lib/account-activity-views";
+import { buildOpenOrdersActivityView, getOwnedOpenOrders } from "@/lib/account-activity-views";
 import { formatBalance } from "@/lib/account-balance-display";
 import {
   getAnchorPrice,
@@ -26,6 +22,7 @@ import {
 import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
 import { get24hStats, getVenueLastPrice } from "@/lib/ticker-stats";
 import type { Candle, SpotMarket } from "@/lib/trading.types";
+import type { AccountSummaryRow } from "@/ui/trading-terminal/order-form/AccountSummary";
 import { AccountSummary } from "@/ui/trading-terminal/order-form/AccountSummary";
 import type { SpotChartTab, SpotTimeframe } from "@/ui/trading-terminal/SpotChartPanel";
 import { SpotChartPanel } from "@/ui/trading-terminal/SpotChartPanel";
@@ -43,10 +40,6 @@ const SPOT_MARKET_SYMBOL = "USDCcNGN-SPOT";
 export function SpotTradingTerminal({
   candles,
   spotMarket,
-  usdcBalanceLabel,
-  cngnBalanceLabel = null,
-  accountUsdcLabel = null,
-  accountCngnLabel = null,
   accountCngn = null,
   accountUsdc = null,
   walletAddress = null,
@@ -54,6 +47,7 @@ export function SpotTradingTerminal({
   legacy = null,
   legacyControl = null,
   onDepositRequest,
+  onWithdrawRequest,
   onSubmitOrder,
   onCancelOrder,
   onSignOrderHistory,
@@ -65,14 +59,6 @@ export function SpotTradingTerminal({
 }: {
   candles: Candle[];
   spotMarket: SpotMarket;
-  /** Wallet USDC balance — what's available to deposit. */
-  usdcBalanceLabel: string | null;
-  /** Wallet cNGN balance, or null when the cNGN token address isn't configured for this chain. */
-  cngnBalanceLabel?: string | null;
-  /** Subaccount USDC cash balance — what's held in the trading account. */
-  accountUsdcLabel?: string | null;
-  /** Subaccount cNGN balance. */
-  accountCngnLabel?: string | null;
   /** Subaccount balances as numbers — the ticket sizes a percentage of what the account can spend. */
   accountCngn?: number | null;
   accountUsdc?: number | null;
@@ -90,6 +76,8 @@ export function SpotTradingTerminal({
    * opens on the one the trader was asked to deposit rather than always on USDC.
    */
   onDepositRequest?: (currency?: DepositCurrency) => void;
+  /** Opens the deposit dialog on Withdraw, for the asset the Account row names. */
+  onWithdrawRequest?: (currency: DepositCurrency) => void;
   onSubmitOrder: (args: {
     side: "buy" | "sell";
     price: string;
@@ -136,6 +124,7 @@ export function SpotTradingTerminal({
   // the venue and come back still listing the order.
   const [cancelledNonces, setCancelledNonces] = useState<ReadonlySet<string>>(() => new Set());
   const activityPanelRef = useRef<HTMLDivElement>(null);
+  const ticketColumnRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const signedHistory = useSignedHistoryTabs({
     bottomTab,
@@ -246,15 +235,6 @@ export function SpotTradingTerminal({
   const spendableUsdc = accountUsdc === null ? null : Math.max(0, accountUsdc - committed.usdc);
 
   function buildActivityView() {
-    if (bottomTab === "assets") {
-      return buildAssetsActivityView({
-        accountCngnLabel,
-        accountUsdcLabel,
-        legacy,
-        walletCngnLabel: cngnBalanceLabel,
-        walletUsdcLabel: usdcBalanceLabel,
-      });
-    }
     if (bottomTab === "open-orders") {
       return buildOpenOrdersActivityView(workingOrders, walletAddress);
     }
@@ -268,12 +248,11 @@ export function SpotTradingTerminal({
 
   /**
    * The wallet menu's Portfolio item. There is no separate portfolio route — the account's holdings
-   * live in the activity panel's Assets tab, so this selects that tab and brings the panel into
-   * view, which matters on the short viewports most of this app's traffic uses.
+   * live in the Account panel under the ticket, so this brings that column into view, which
+   * matters on the short viewports most of this app's traffic uses.
    */
   function showPortfolio() {
-    setBottomTab("assets");
-    activityPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    ticketColumnRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
   /**
@@ -375,7 +354,10 @@ export function SpotTradingTerminal({
            * account are readable at once while an order is being written; the header carries the
            * same two figures for the widths where this column is not on screen at all.
            */}
-          <div className="order-first flex min-h-[420px] flex-col gap-3 md:order-0 md:col-start-2 md:row-span-3 md:row-start-1 md:min-h-0 md:gap-2 md:overflow-y-auto lg:col-start-3 lg:row-span-2 lg:row-start-1">
+          <div
+            className="order-first flex min-h-[420px] flex-col gap-3 md:order-0 md:col-start-2 md:row-span-3 md:row-start-1 md:min-h-0 md:gap-2 md:overflow-y-auto lg:col-start-3 lg:row-span-2 lg:row-start-1"
+            ref={ticketColumnRef}
+          >
             <SpotOrderFormPanel
               anchorPrice={anchorPrice}
               asks={bookAsks}
@@ -393,20 +375,17 @@ export function SpotTradingTerminal({
               ownOpenOrders={ownedOpenOrders}
               takerFeeBps={spotMarket.takerFeeBps}
             />
-            {/* Both legs of the account, in the order the ticket spends them. */}
+            {/* Both legs of the account, in the order the ticket spends them, then any retired account's. */}
             <AccountSummary
-              rows={[
-                {
-                  balance: formatBalance(accountUsdc, "USDC"),
-                  symbol: "USDC",
-                  onDeposit: () => onDepositRequest?.("USDC"),
-                },
-                {
-                  balance: formatBalance(accountCngn, "cNGN"),
-                  symbol: "cNGN",
-                  onDeposit: () => onDepositRequest?.("cNGN"),
-                },
-              ]}
+              rows={buildAccountRows({
+                accountCngn,
+                accountUsdc,
+                hasWallet,
+                legacy,
+                legacyControl,
+                onDepositRequest,
+                onWithdrawRequest,
+              })}
             />
           </div>
 
@@ -424,8 +403,6 @@ export function SpotTradingTerminal({
                 bottomTab,
                 cancellingNonce,
                 handleCancelOrder,
-                legacy,
-                legacyControl,
                 ownedOpenOrders,
                 tradeHistoryRowAction: signedHistory.rowAction,
               })}
@@ -443,21 +420,58 @@ export function SpotTradingTerminal({
 }
 
 /**
- * The control at the end of a row: Cancel on an open order, the withdraw trigger on the retired
- * spot account's rows (the first of its two), the trade-history action otherwise.
+ * The Account panel's rows: both legs of the live account, with deposit and (once a wallet is
+ * connected) withdraw, then the retired spot account's holdings, which can only be withdrawn and
+ * share one withdraw dialog hung on the first of them.
+ */
+function buildAccountRows(inputs: {
+  accountCngn: number | null;
+  accountUsdc: number | null;
+  hasWallet: boolean;
+  legacy: { accountId: string; cngnLabel: string | null; usdcLabel: string | null } | null;
+  legacyControl: ReactNode;
+  onDepositRequest?: (currency?: DepositCurrency) => void;
+  onWithdrawRequest?: (currency: DepositCurrency) => void;
+}): AccountSummaryRow[] {
+  const live = (symbol: DepositCurrency, balance: number | null): AccountSummaryRow => ({
+    balance: formatBalance(balance, symbol),
+    onWithdraw: inputs.hasWallet ? () => inputs.onWithdrawRequest?.(symbol) : undefined,
+    onDeposit: () => inputs.onDepositRequest?.(symbol),
+    symbol,
+  });
+  const rows = [live("USDC", inputs.accountUsdc), live("cNGN", inputs.accountCngn)];
+  if (inputs.legacy === null) {
+    return rows;
+  }
+  const note = `Old spot account #${inputs.legacy.accountId} · withdraw only`;
+  const legacyRows = (
+    [
+      ["USDC", inputs.legacy.usdcLabel],
+      ["cNGN", inputs.legacy.cngnLabel],
+    ] as const
+  )
+    .filter((entry): entry is readonly [DepositCurrency, string] => entry[1] !== null)
+    .map(([symbol, balance], index) => ({
+      // One dialog withdraws from both escrows, so the trigger sits on the first row only.
+      action: index === 0 ? inputs.legacyControl : <span />,
+      balance,
+      id: `legacy-${symbol}`,
+      note,
+      symbol,
+    }));
+  return [...rows, ...legacyRows];
+}
+
+/**
+ * The control at the end of a row: Cancel on an open order, the trade-history action otherwise.
  */
 function buildSpotRowAction(inputs: {
   bottomTab: string;
   cancellingNonce: string | null;
   handleCancelOrder: (nonce: string, ownerAddress: string) => void;
-  legacy: { accountId: string } | null;
-  legacyControl: ReactNode;
   ownedOpenOrders: { nonce: string; ownerAddress: string }[];
   tradeHistoryRowAction: ((rowIndex: number) => ReactNode) | undefined;
 }) {
-  if (inputs.bottomTab === "assets" && inputs.legacy !== null) {
-    return (rowIndex: number) => (rowIndex === 2 ? inputs.legacyControl : null);
-  }
   if (inputs.bottomTab === "open-orders") {
     return (rowIndex: number) => {
       const order = inputs.ownedOpenOrders[rowIndex];

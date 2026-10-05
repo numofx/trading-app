@@ -12,7 +12,6 @@ export const PERP_BOTTOM_TABS = [
   { id: "open-orders", label: "Open Orders" },
   { id: "order-history", label: "Order History" },
   { id: "trade-history", label: "Trade History" },
-  { id: "margin", label: "Margin" },
 ] satisfies ActivityTab[];
 
 /**
@@ -24,10 +23,6 @@ export const PERP_ACTIVITY_VIEWS = {
   // market, so the perp's tabs share spot's columns and show the rows labelled with the perp.
   "order-history": SPOT_ACTIVITY_VIEWS["order-history"],
   "trade-history": SPOT_ACTIVITY_VIEWS["trade-history"],
-  margin: {
-    columns: ["Cash", "Initial margin headroom", "Maintenance margin headroom"],
-    rows: [],
-  },
   "open-orders": {
     columns: ["Side", "Price", "Size", "Filled"],
     rows: [],

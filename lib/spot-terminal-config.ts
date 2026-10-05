@@ -19,7 +19,6 @@ export const SPOT_BOTTOM_TABS = [
   { id: "open-orders", label: "Open Orders" },
   { id: "order-history", label: "Order History" },
   { id: "trade-history", label: "Trade History" },
-  { id: "assets", label: "Assets" },
 ] satisfies ActivityTab[];
 
 /**
