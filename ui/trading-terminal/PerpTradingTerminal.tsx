@@ -4,7 +4,6 @@ import { Menu } from "@base-ui/react/menu";
 import type { ConnectedWallet } from "@privy-io/react-auth";
 import { useLogin, usePrivy } from "@privy-io/react-auth";
 import { Duration } from "effect";
-import { ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
 import type { ReactNode } from "react";
@@ -13,7 +12,6 @@ import { createWalletClient, custom } from "viem";
 import { buildOpenOrdersActivityView, getOwnedOpenOrders } from "@/lib/account-activity-views";
 import { formatBalance } from "@/lib/account-balance-display";
 import { getAppChain } from "@/lib/base-public-client";
-import { cn } from "@/lib/cn";
 import {
   buildPerpHeaderMetrics,
   buildPerpPositionsView,
@@ -623,10 +621,8 @@ function HeaderWithdrawMenu({
   const options = WITHDRAW_OPTIONS.filter((option) => option.symbol === "USDC" || cngnListed);
   return (
     <Menu.Root>
-      <Menu.Trigger className={cn(HEADER_ACTION_CLASSES, "gap-1.5 pr-3")}>
-        Withdraw
-        <ChevronDown aria-hidden className="size-4 text-panel-text-muted" />
-      </Menu.Trigger>
+      {/* Reads exactly like spot's Withdraw button; the asset choice is in the menu it opens. */}
+      <Menu.Trigger className={HEADER_ACTION_CLASSES}>Withdraw</Menu.Trigger>
       <Menu.Portal>
         <Menu.Positioner align="end" sideOffset={6}>
           <Menu.Popup className="z-50 min-w-(--anchor-width) overflow-hidden rounded-lg border border-panel-border bg-panel-bg-darker p-1 shadow-[0_20px_60px_var(--panel-shadow)] outline-none transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
@@ -928,7 +924,7 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
               <HeaderActionButton
                 onClick={() => (primaryWallet === null ? login() : setDepositOpen(true))}
               >
-                Deposit margin
+                Deposit
               </HeaderActionButton>
               <HeaderWithdrawMenu
                 account={perpAccount.account}
