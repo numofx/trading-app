@@ -194,9 +194,17 @@ html.light body {
     #ffffff;
 }
 
-button,
-input {
-  font: inherit;
+/*
+ * Inside the base layer on purpose. Unlayered, this rule outranked every Tailwind utility, so no
+ * button or input in the app could set its own size or weight: `text-[11px] font-semibold` on a
+ * control rendered as the parent's 16px regular. Preflight already resets both to inherit; this
+ * only restates it where utilities can still override it.
+ */
+@layer base {
+  button,
+  input {
+    font: inherit;
+  }
 }
 
 /* --- Premium Web3 Privy Modal Custom Overrides --- */
