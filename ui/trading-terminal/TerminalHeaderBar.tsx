@@ -1,22 +1,16 @@
 "use client";
 
-import { Popover } from "@base-ui/react/popover";
-import { Check, ChevronDown, Moon, Sun } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatNaira } from "@/lib/market-formatting";
+import type { TerminalMarketId } from "@/lib/market-overview.types";
 import { PrivyWalletButton } from "@/ui/PrivyWalletButton";
 import { SmartImage } from "@/ui/SmartImage";
-import { SmartLink } from "@/ui/SmartLink";
+import { MarketSelectDialog } from "@/ui/trading-terminal/MarketSelectDialog";
 
-/** The markets the selector offers; each is its own route, so the terminals never share state. */
-const TERMINAL_MARKETS = [
-  { href: "/", id: "spot", symbol: "USDC-cNGN" },
-  { href: "/perp", id: "perp", symbol: "USDC-cNGN-PERP" },
-] as const;
-
-export type TerminalMarket = (typeof TERMINAL_MARKETS)[number]["id"];
+export type TerminalMarket = TerminalMarketId;
 
 /** Change is only coloured when there is one — an empty window shows a neutral dash. */
 function getChangeClassName(value: number | null) {
@@ -59,35 +53,6 @@ function HeaderMetric({
   );
 }
 
-/** The paired token marks and symbol, shared by the pill and its dropdown rows. */
-function MarketIdentity({ compact, symbol = "USDC-cNGN" }: { compact?: boolean; symbol?: string }) {
-  return (
-    <>
-      <span className="flex shrink-0 items-center -space-x-1.5">
-        <SmartImage<string>
-          alt="USDC"
-          className={cn(
-            "animate-none rounded-full bg-input-bg p-0.5 ring-1 ring-panel-border",
-            compact ? "size-5" : "size-6"
-          )}
-          src="/tokens/usdc.svg"
-        />
-        <SmartImage<string>
-          alt="cNGN"
-          className={cn(
-            "animate-none rounded-full bg-input-bg p-0.5 ring-1 ring-panel-border",
-            compact ? "size-5" : "size-6"
-          )}
-          src="/tokens/cngn.svg"
-        />
-      </span>
-      <span className="font-semibold text-[13px] text-panel-text-active leading-none">
-        {symbol}
-      </span>
-    </>
-  );
-}
-
 /**
  * The terminal's single header bar: branding, the market selector, its live metrics and the
  * account actions, on one full-bleed row.
@@ -125,10 +90,7 @@ export function TerminalHeaderBar({
   price: number | null;
   volume24hLabel: string;
 }) {
-  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
-  const selectedSymbol =
-    TERMINAL_MARKETS.find((entry) => entry.id === market)?.symbol ?? TERMINAL_MARKETS[0].symbol;
 
   useEffect(() => {
     const isLight = document.documentElement.classList.contains("light");
@@ -164,48 +126,7 @@ export function TerminalHeaderBar({
       {/* The only rule in the bar: everything right of it belongs to the market, not the app. */}
       <div className="w-px shrink-0 self-stretch bg-panel-border" />
 
-      <Popover.Root onOpenChange={setDropdownOpen} open={dropdownOpen}>
-        {/* Stable id: auto-generated useId values can shift when async state (e.g. Privy init) races hydration. */}
-        <Popover.Trigger
-          className="flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-full bg-input-bg px-2.5 outline-none ring-1 ring-panel-border transition-colors hover:bg-input-hover focus-visible:ring-2 focus-visible:ring-panel-text-muted"
-          id="spot-ticker-market-trigger"
-        >
-          <MarketIdentity symbol={selectedSymbol} />
-          <ChevronDown
-            className={cn(
-              "size-4 text-panel-text-muted transition-transform duration-200",
-              dropdownOpen && "rotate-180"
-            )}
-          />
-        </Popover.Trigger>
-
-        <Popover.Portal>
-          <Popover.Positioner align="start" sideOffset={6}>
-            <Popover.Popup className="z-50 min-w-(--anchor-width) overflow-hidden rounded-sm border border-panel-border bg-menu-surface p-1 shadow-[0_10px_28px_var(--panel-shadow)] outline-none transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
-              {/*
-               * Rows are links, not state: spot and perp are separate routes, so switching never
-               * carries one terminal's ticket or book into the other, and each has its own URL.
-               */}
-              {TERMINAL_MARKETS.map((entry) => (
-                <SmartLink
-                  className="flex w-full cursor-pointer items-center gap-2 rounded-sm p-2 text-left text-panel-text-active transition-colors hover:bg-input-hover"
-                  href={entry.href}
-                  key={entry.id}
-                  onClick={() => setDropdownOpen(false)}
-                >
-                  <MarketIdentity compact symbol={entry.symbol} />
-                  {entry.id === market ? (
-                    <Check
-                      aria-label="Selected market"
-                      className="ml-auto size-4 shrink-0 text-panel-text-muted"
-                    />
-                  ) : null}
-                </SmartLink>
-              ))}
-            </Popover.Popup>
-          </Popover.Positioner>
-        </Popover.Portal>
-      </Popover.Root>
+      <MarketSelectDialog changePercent24h={changePercent24h} market={market} price={price} />
 
       {/*
        * Spacing separates the metrics, not rules — the one divider above marks the app/market
