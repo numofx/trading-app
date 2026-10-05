@@ -332,6 +332,7 @@ function deriveOrderEconomics({
   const maxOrderSize = getMaxOrderSize({
     availableCngn,
     availableUsdc,
+    feeRate: Number(SPOT_TAKER_FEE_RATE),
     isBuy,
     price: signedPrice ?? anchorPrice,
   });

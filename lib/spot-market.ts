@@ -53,16 +53,24 @@ export function getAnchorPrice(
 export function getMaxOrderSize({
   availableCngn,
   availableUsdc,
+  feeRate = 0,
   isBuy,
   price,
 }: {
   availableCngn: number | null;
   availableUsdc: number | null;
+  /**
+   * The fee ceiling the order is signed with, as a fraction of its USDC notional. A sell pays its
+   * fee in the USDC it is also spending, so the ceiling leaves that much of the balance unspent:
+   * a 100% sell sized to the whole balance would have nothing left for the fee. A buy pays its
+   * fee out of the USDC it receives, so its ceiling is unaffected.
+   */
+  feeRate?: number;
   isBuy: boolean;
   price: number | null;
 }) {
   if (!isBuy) {
-    return availableUsdc;
+    return availableUsdc === null ? null : availableUsdc / (1 + Math.max(0, feeRate));
   }
 
   if (availableCngn === null || price === null || !Number.isFinite(price) || price <= 0) {
