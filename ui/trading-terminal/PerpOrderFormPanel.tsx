@@ -8,7 +8,7 @@ import {
   getLeverageCeiling,
   TRADING_PAUSED_MESSAGE,
 } from "@/lib/perp-market";
-import type { PerpAccountMargin, PerpCngnExposure, PerpState } from "@/lib/perp-market.types";
+import type { PerpAccountMargin, PerpState } from "@/lib/perp-market.types";
 import { PERP_LEVERAGE_PRESETS } from "@/lib/perp-terminal-config";
 import { SPOT_ORDER_LIFETIME_LABEL } from "@/lib/spot-order-submission";
 import { OrderTypeTabs } from "@/ui/trading-terminal/OrderTypeTabs";
@@ -143,28 +143,6 @@ function usePerpSizeFields(leverage: number, conversion: number | null) {
     size,
     sizeUnit,
   };
-}
-
-/** Long naira on an account that holds cNGN adds naira exposure on top of the collateral's. */
-function NairaDoublingNote({
-  cngn,
-  isLong,
-  sizeUsd,
-}: {
-  cngn: PerpCngnExposure | null;
-  isLong: boolean;
-  sizeUsd: number | null;
-}) {
-  if (cngn === null || isLong || sizeUsd === null || sizeUsd <= 0) {
-    return null;
-  }
-  return (
-    <p className="text-[10px] text-panel-text-muted leading-snug">
-      This doubles your naira exposure: your {USD.format(cngn.collateralCngn)} cNGN is already long
-      the naira, and a short here is long the naira again. It still has to clear the margin check,
-      with cNGN counted at half its value.
-    </p>
-  );
 }
 
 /**
@@ -405,7 +383,6 @@ function buttonTone(inputs: ButtonInputs): "buy" | "sell" | "neutral" {
 export function PerpOrderFormPanel({
   account = null,
   availableMargin = null,
-  cngn = null,
   hasPosition = false,
   hasWallet = false,
   isPreparingAccount = false,
@@ -424,8 +401,6 @@ export function PerpOrderFormPanel({
   account?: PerpAccountMargin | null;
   /** The perp account's initial-margin surplus, USD; null before an account exists or is read. */
   availableMargin?: number | null;
-  /** What the account's cNGN offsets, for an account holding any; informational. */
-  cngn?: PerpCngnExposure | null;
   hasWallet?: boolean;
   isPreparingAccount?: boolean;
   isSubmitting?: boolean;
@@ -543,7 +518,6 @@ export function PerpOrderFormPanel({
               {USD.format(availableMargin ?? 0)}.
             </p>
           ) : null}
-          <NairaDoublingNote cngn={cngn} isLong={isLong} sizeUsd={sizeUsd} />
 
           <SubmitButton
             disabled={!buttonEnabled}

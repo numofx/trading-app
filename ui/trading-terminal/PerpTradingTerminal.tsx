@@ -12,7 +12,6 @@ import { buildOpenOrdersActivityView, getOwnedOpenOrders } from "@/lib/account-a
 import { formatBalance } from "@/lib/account-balance-display";
 import { getAppChain } from "@/lib/base-public-client";
 import {
-  buildPerpCngnExposure,
   buildPerpPositionsView,
   describeOrderRejection,
   getPerpCollateralWithdrawableAsset,
@@ -871,11 +870,6 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
             <PerpOrderFormPanel
               account={perpAccount.account}
               availableMargin={perpAccount.account?.initialMarginSurplus ?? null}
-              cngn={buildPerpCngnExposure(
-                perpAccount.account,
-                perpAccount.positions,
-                market?.state ?? null
-              )}
               hasPosition={perpAccount.positions.length > 0}
               hasWallet={primaryWallet !== null}
               isPreparingAccount={account.isLoading || (isSignedIn && !walletsReady)}
