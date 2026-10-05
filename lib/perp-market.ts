@@ -591,8 +591,9 @@ function toneOf(value: number | null): PerpHeaderMetric["tone"] {
  * The perp header's figures, in the order a perp trader reads them: mark and index from the chain,
  * the day's move against the live price, volume, open interest and the hourly funding rate. Every
  * figure is the venue's own; a missing one is a dash. There is no market cap: a stablecoin FX
- * perp has no supply to value. The funding countdown waits on the venue reporting the next
- * funding time, which the market listing does not carry.
+ * perp has no supply to value. There is no funding countdown either: the PerpAsset contract
+ * accrues funding continuously (`aggregatedFunding += rate × elapsed / 1 hour` on every touch),
+ * so there is no settlement moment to count down to, and a timer would be fiction.
  */
 export function buildPerpHeaderMetrics({
   firstPrice,
@@ -642,7 +643,8 @@ export function buildPerpHeaderMetrics({
     {
       label: "1h Funding",
       tone: toneOf(funding),
-      tooltip: "Hourly, as the long side sees it: positive means longs pay shorts",
+      tooltip:
+        "Hourly, as the long side sees it: positive means longs pay shorts. It accrues every second at this rate; there is no funding settlement to count down to.",
       value: funding === null ? "—" : signedPercent(funding * 100, 4),
     },
   ];
