@@ -150,7 +150,7 @@ function MarketRow({
     <SmartLink
       aria-current={selected ? "page" : undefined}
       className={cn(
-        "grid cursor-pointer items-center gap-3 rounded-sm px-3 py-2.5 text-panel-text-active transition-colors hover:bg-input-hover focus-visible:bg-input-hover focus-visible:outline-none",
+        "grid cursor-pointer items-center gap-3 px-3 py-2.5 text-panel-text-active transition-colors hover:bg-input-hover focus-visible:bg-input-hover focus-visible:outline-none",
         GRID_CLASS[entry.kind],
         selected && "bg-input-bg"
       )}
@@ -298,7 +298,7 @@ export function MarketSelectDialog({
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/60 transition-opacity data-ending-style:opacity-0 data-starting-style:opacity-0" />
         <Dialog.Popup
-          className="md:-translate-1/2 fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] flex-col rounded-t-[20px] bg-dialog-bg text-foreground shadow-[0_28px_90px_var(--panel-shadow)] outline-none ring-1 ring-panel-ring transition-all data-ending-style:opacity-0 data-starting-style:opacity-0 max-md:data-ending-style:translate-y-4 max-md:data-starting-style:translate-y-4 md:inset-x-auto md:top-1/2 md:bottom-auto md:left-1/2 md:max-h-[min(80dvh,620px)] md:w-[min(92vw,760px)] md:rounded-[20px] md:data-ending-style:scale-95 md:data-starting-style:scale-95"
+          className="md:-translate-1/2 fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] flex-col bg-dialog-bg text-foreground outline-none ring-1 ring-panel-ring transition-all data-ending-style:opacity-0 data-starting-style:opacity-0 max-md:data-ending-style:translate-y-4 max-md:data-starting-style:translate-y-4 md:inset-x-auto md:top-1/2 md:bottom-auto md:left-1/2 md:max-h-[min(80dvh,620px)] md:w-[min(92vw,760px)] md:data-ending-style:scale-95 md:data-starting-style:scale-95"
           initialFocus={searchRef}
         >
           <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-3">
@@ -307,14 +307,14 @@ export function MarketSelectDialog({
             </Dialog.Title>
             <Dialog.Close
               aria-label="Close"
-              className="flex size-8 cursor-pointer items-center justify-center rounded-full text-panel-text-muted transition-colors hover:bg-input-hover hover:text-panel-text-active"
+              className="flex size-8 cursor-pointer items-center justify-center text-panel-text-muted transition-colors hover:bg-input-hover hover:text-panel-text-active"
             >
               <X className="size-4" />
             </Dialog.Close>
           </div>
 
           <div className="space-y-3 px-5 pb-3">
-            <label className="flex h-10 items-center gap-2 rounded-sm border border-input-border bg-input-bg px-3 transition-colors focus-within:border-panel-text-muted">
+            <label className="flex h-10 items-center gap-2 border border-input-border bg-input-bg px-3 transition-colors focus-within:border-panel-text-muted">
               <Search aria-hidden className="size-4 shrink-0 text-panel-text-muted" />
               <input
                 aria-label="Search markets"
@@ -329,16 +329,12 @@ export function MarketSelectDialog({
               />
             </label>
 
-            <div
-              aria-label="Market type"
-              className="flex gap-1 rounded-sm bg-input-bg p-0.5"
-              role="tablist"
-            >
+            <div aria-label="Market type" className="flex gap-1 bg-input-bg p-0.5" role="tablist">
               {TABS.map((tab) => (
                 <button
                   aria-selected={tab.kind === kind}
                   className={cn(
-                    "h-8 cursor-pointer rounded-sm px-4 font-semibold text-[12px] transition-colors",
+                    "h-8 cursor-pointer px-4 font-semibold text-[12px] transition-colors",
                     tab.kind === kind
                       ? "bg-panel-bg-darker text-panel-text-active ring-1 ring-panel-border"
                       : "text-panel-text-muted hover:text-panel-text"
