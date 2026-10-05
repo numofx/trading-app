@@ -1,8 +1,10 @@
 "use client";
 
+import { Menu } from "@base-ui/react/menu";
 import type { ConnectedWallet } from "@privy-io/react-auth";
 import { useLogin, usePrivy } from "@privy-io/react-auth";
 import { Duration } from "effect";
+import { ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
 import type { ReactNode } from "react";
@@ -11,6 +13,7 @@ import { createWalletClient, custom } from "viem";
 import { buildOpenOrdersActivityView, getOwnedOpenOrders } from "@/lib/account-activity-views";
 import { formatBalance } from "@/lib/account-balance-display";
 import { getAppChain } from "@/lib/base-public-client";
+import { cn } from "@/lib/cn";
 import {
   buildPerpPositionsView,
   describeOrderRejection,
@@ -46,6 +49,7 @@ import { FOOTER_LINKS, SPOT_TIMEFRAME_OPTIONS } from "@/lib/spot-terminal-config
 import { get24hStats, getVenueLastPrice } from "@/lib/ticker-stats";
 import type { ActivityView } from "@/lib/trading.types";
 import type { WithdrawableAsset } from "@/lib/withdrawable-assets";
+import { SmartImage } from "@/ui/SmartImage";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import type { AccountSummaryRow } from "@/ui/trading-terminal/order-form/AccountSummary";
 import { AccountSummary } from "@/ui/trading-terminal/order-form/AccountSummary";
@@ -334,13 +338,16 @@ function buildAccountRows(
   onWithdraw: (rowIndex: number) => void
 ): AccountSummaryRow[] {
   const cngnListed = listedCollateralOf(stack).some((asset) => asset.symbol === "cNGN");
-  const cngnIndex = account?.collateral.findIndex((row) => row.symbol === "cNGN") ?? -1;
-  const cngnHeld = cngnIndex === -1 ? undefined : account?.collateral[cngnIndex]?.balance;
+  const cngnHeld = account?.collateral.find((row) => row.symbol === "cNGN")?.balance;
+  const withdrawAction = (symbol: "USDC" | "cNGN") => {
+    const row = withdrawRowFor(account, symbol);
+    return row === null ? undefined : () => onWithdraw(row);
+  };
   const rows: AccountSummaryRow[] = [
     {
       balance: formatBalance(account?.cash ?? null, "USDC"),
       onDeposit,
-      onWithdraw: account === null ? undefined : () => onWithdraw(0),
+      onWithdraw: withdrawAction("USDC"),
       symbol: "USDC",
     },
   ];
@@ -348,7 +355,7 @@ function buildAccountRows(
     rows.push({
       balance: formatBalance(account === null ? null : (cngnHeld ?? 0), "cNGN"),
       onDeposit,
-      onWithdraw: cngnIndex === -1 ? undefined : () => onWithdraw(cngnIndex + 1),
+      onWithdraw: withdrawAction("cNGN"),
       symbol: "cNGN",
     });
   }
@@ -561,14 +568,97 @@ function usePerpBook(market: PerpMarket | null) {
   return { asks, bestAsk, bestBid, bids, candles, lastPrice, price, stats, trades };
 }
 
-/** The header's Deposit margin and Withdraw buttons, one look. */
+/**
+ * The ledger row the withdraw dialog opens on for an asset: 0 is cash, then each collateral asset
+ * the account holds, in order; null for collateral it does not hold, which has nothing to withdraw.
+ */
+function withdrawRowFor(account: PerpAccountMargin | null, symbol: "USDC" | "cNGN") {
+  if (account === null) {
+    return null;
+  }
+  if (symbol === "USDC") {
+    return 0;
+  }
+  const index = account.collateral.findIndex((row) => row.symbol === symbol);
+  return index === -1 ? null : index + 1;
+}
+
+const HEADER_ACTION_CLASSES =
+  "flex h-10 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-4 font-semibold text-[14px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active";
+
+/** Why an asset cannot be withdrawn right now, for the menu item's tooltip. */
+function withdrawDisabledReason(account: PerpAccountMargin | null, symbol: string) {
+  return account === null
+    ? "Deposit margin to open your perp account"
+    : `No ${symbol} posted as margin`;
+}
+
+const WITHDRAW_OPTIONS = [
+  { icon: "/tokens/usdc.svg", symbol: "USDC" },
+  { icon: "/tokens/cngn.svg", symbol: "cNGN" },
+] as const;
+
+/**
+ * The header's Withdraw: a menu over the assets the account can pay out, cash and each collateral
+ * asset, so cNGN posted as margin is reachable from the header as well as from its Account row.
+ * Without a wallet the button connects one instead.
+ */
+function HeaderWithdrawMenu({
+  account,
+  cngnListed,
+  hasWallet,
+  onConnect,
+  onWithdraw,
+}: {
+  account: PerpAccountMargin | null;
+  cngnListed: boolean;
+  hasWallet: boolean;
+  onConnect: () => void;
+  onWithdraw: (rowIndex: number) => void;
+}) {
+  if (!hasWallet) {
+    return <HeaderActionButton onClick={onConnect}>Withdraw</HeaderActionButton>;
+  }
+  const options = WITHDRAW_OPTIONS.filter((option) => option.symbol === "USDC" || cngnListed);
+  return (
+    <Menu.Root>
+      <Menu.Trigger className={cn(HEADER_ACTION_CLASSES, "gap-1.5 pr-3")}>
+        Withdraw
+        <ChevronDown aria-hidden className="size-4 text-panel-text-muted" />
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Positioner align="end" sideOffset={6}>
+          <Menu.Popup className="z-50 min-w-(--anchor-width) overflow-hidden rounded-lg border border-panel-border bg-panel-bg-darker p-1 shadow-[0_20px_60px_var(--panel-shadow)] outline-none transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
+            {options.map((option) => {
+              const row = withdrawRowFor(account, option.symbol);
+              return (
+                <Menu.Item
+                  className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 font-medium text-[13px] text-panel-text-active outline-none transition-colors data-disabled:cursor-not-allowed data-highlighted:bg-input-hover data-disabled:opacity-50"
+                  disabled={row === null}
+                  key={option.symbol}
+                  onClick={() => row !== null && onWithdraw(row)}
+                  title={row === null ? withdrawDisabledReason(account, option.symbol) : undefined}
+                >
+                  <SmartImage<string>
+                    alt={option.symbol}
+                    className="size-4 animate-none rounded-full"
+                    src={option.icon}
+                  />
+                  {option.symbol}
+                </Menu.Item>
+              );
+            })}
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
+  );
+}
+
+/** The header's Deposit margin button; Withdraw beside it is a menu over the account's assets. */
 function HeaderActionButton({ children, onClick }: { children: string; onClick: () => void }) {
   return (
-    <button
-      className="flex h-10 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-4 font-semibold text-[14px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active"
-      onClick={onClick}
-      type="button"
-    >
+    <button className={HEADER_ACTION_CLASSES} onClick={onClick} type="button">
       {children}
     </button>
   );
@@ -829,12 +919,13 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
               >
                 Deposit margin
               </HeaderActionButton>
-              {/* Withdraws cash; the Account rows withdraw each asset. Connects first without a wallet. */}
-              <HeaderActionButton
-                onClick={() => (primaryWallet === null ? login() : setWithdrawRow(0))}
-              >
-                Withdraw
-              </HeaderActionButton>
+              <HeaderWithdrawMenu
+                account={perpAccount.account}
+                cngnListed={listedCollateralOf(stack).some((asset) => asset.symbol === "cNGN")}
+                hasWallet={primaryWallet !== null}
+                onConnect={login}
+                onWithdraw={setWithdrawRow}
+              />
             </div>
           )
         }
