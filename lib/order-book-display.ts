@@ -114,6 +114,43 @@ export function buildLadderRows({
  * The widest bar on a side. The last row carries the full cumulative depth, so it is the max by
  * construction; `1` keeps an empty side from dividing by zero.
  */
+/** The ladder shows at least this many rungs a side, the rest of them empty price buckets. */
+export const MIN_LADDER_RUNGS = 12;
+
+/**
+ * The empty buckets that continue a side's ladder past its last resting level, one tick apart, so a
+ * thin book still reads as a price grid rather than three rows above a blank. They carry no size:
+ * the amount and total columns stay empty, and nothing here is depth. Returns none when the side has
+ * no level at all (the empty state says so instead) or already reaches the minimum.
+ */
+export function buildEmptyRungs({
+  rows,
+  side,
+  tick,
+  minimum = MIN_LADDER_RUNGS,
+}: {
+  rows: LadderRow[];
+  side: "ask" | "bid";
+  tick: number;
+  minimum?: number;
+}): number[] {
+  const last = rows.at(-1);
+  if (last === undefined || rows.length >= minimum) {
+    return [];
+  }
+  const digits = Math.max(0, -Math.round(Math.log10(tick)));
+  const direction = side === "ask" ? 1 : -1;
+  const rungs: number[] = [];
+  for (let step = 1; rows.length + rungs.length < minimum; step += 1) {
+    const price = Number((last.price + direction * tick * step).toFixed(digits));
+    if (price <= 0) {
+      break;
+    }
+    rungs.push(price);
+  }
+  return rungs;
+}
+
 export function getMaxLadderTotal(rows: LadderRow[]) {
   return Math.max(...rows.map((row) => row.total), 1);
 }
