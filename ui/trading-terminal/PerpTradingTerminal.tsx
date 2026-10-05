@@ -7,7 +7,7 @@ import { Duration } from "effect";
 import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createWalletClient, custom } from "viem";
 import { buildOpenOrdersActivityView, getOwnedOpenOrders } from "@/lib/account-activity-views";
 import { formatBalance } from "@/lib/account-balance-display";
@@ -652,6 +652,52 @@ function HeaderWithdrawMenu({
   );
 }
 
+/**
+ * What the positions poll would change when an order fills: side and engine size of each position.
+ * Comparing this before and after an accepted order is how the page notices the fill, since a
+ * market order settles on chain seconds after the venue accepts it.
+ */
+function positionsSignature(positions: PerpPosition[]) {
+  return positions.map((p) => `${p.uiSide}:${p.engineSize ?? p.uiSize}`).join("|");
+}
+
+/** How long after acceptance to re-read the server figures anyway, for a fill the poll missed or a partial one. */
+const FILL_FALLBACK_REFRESH_MS = Duration.toMillis("20 seconds");
+
+/**
+ * Whether an awaited order has filled, re-reading the server figures once when it does.
+ *
+ * The venue accepts an order seconds before it settles, and the refresh fired at acceptance
+ * re-read the server figures (24h volume, change, candles) before the fill existed. The positions
+ * poll is what sees the fill: when it reports a change against the positions as they stood at
+ * acceptance, re-read once more. A fallback re-read covers a fill the poll could not tell apart,
+ * such as a partial one that left the size unchanged.
+ */
+function useFillRefresh(
+  awaitedFill: { signature: string } | null,
+  positions: PerpPosition[],
+  router: ReturnType<typeof useRouter>
+) {
+  const filled = awaitedFill !== null && positionsSignature(positions) !== awaitedFill.signature;
+  const refreshedForFill = useRef(false);
+  useEffect(() => {
+    if (!filled || refreshedForFill.current) {
+      return;
+    }
+    refreshedForFill.current = true;
+    router.refresh();
+  }, [filled, router]);
+  useEffect(() => {
+    if (awaitedFill === null) {
+      return;
+    }
+    refreshedForFill.current = false;
+    const timer = window.setTimeout(() => router.refresh(), FILL_FALLBACK_REFRESH_MS);
+    return () => window.clearTimeout(timer);
+  }, [awaitedFill, router]);
+  return filled;
+}
+
 /** The header's figures for the perp on screen, or dashes while it is not live. */
 function perpHeaderMetrics(market: PerpMarket | null, price: number | null, volumeLabel: string) {
   return buildPerpHeaderMetrics({
@@ -701,6 +747,8 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
   const [withdrawRow, setWithdrawRow] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastAction, setLastAction] = useState<string | null>(null);
+  /** The positions as they stood when the venue accepted an order; null when none is awaited. */
+  const [awaitedFill, setAwaitedFill] = useState<{ signature: string } | null>(null);
   const [cancellingNonce, setCancellingNonce] = useState<string | null>(null);
   const [closingIndex, setClosingIndex] = useState<number | null>(null);
 
@@ -729,6 +777,9 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
 
   const { asks, bestAsk, bestBid, bids, candles, lastPrice, price, stats, trades } =
     usePerpBook(market);
+
+  const filled = useFillRefresh(awaitedFill, perpAccount.positions, router);
+  const statusText = filled ? "Filled. Positions and figures are up to date." : lastAction;
 
   const ownedOpenOrders = getOwnedOpenOrders(
     market?.openOrders ?? [],
@@ -785,6 +836,7 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
           ? "Reduce-only order accepted. The venue clamps it to your position; it fills or is cancelled once matched."
           : "Order accepted. Positions update once it fills."
       );
+      setAwaitedFill({ signature: positionsSignature(perpAccount.positions) });
       perpAccount.refresh();
       router.refresh();
     } catch (error) {
@@ -984,7 +1036,7 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
               hasWallet={primaryWallet !== null}
               isPreparingAccount={account.isLoading || (isSignedIn && !walletsReady)}
               isSubmitting={isSubmitting}
-              lastAction={lastAction}
+              lastAction={statusText}
               onConnect={login}
               onDepositRequest={() => setDepositOpen(true)}
               onSubmit={market === null ? undefined : handleSubmit}
