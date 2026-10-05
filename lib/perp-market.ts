@@ -398,6 +398,8 @@ export function getPerpCollateralWithdrawableAsset(
 }
 
 const HOURS_PER_DAY = 24;
+/** For the simple annualised funding figure: the hourly rate times the hours in a year. */
+const HOURS_PER_YEAR = HOURS_PER_DAY * 365;
 const DAYS_PER_MONTH = 30;
 
 /**
@@ -644,8 +646,11 @@ export function buildPerpHeaderMetrics({
       label: "1h Funding",
       tone: toneOf(funding),
       tooltip:
-        "Hourly, as the long side sees it: positive means longs pay shorts. It accrues every second at this rate; there is no funding settlement to count down to.",
-      value: funding === null ? "—" : signedPercent(funding * 100, 4),
+        "Hourly, as the long side sees it: positive means longs pay shorts, then the same rate annualised (hourly × 24 × 365, not compounded). It accrues every second; there is no funding settlement to count down to.",
+      value:
+        funding === null
+          ? "—"
+          : `${signedPercent(funding * 100, 4)} · ${signedPercent(funding * HOURS_PER_YEAR * 100, 1)} APR`,
     },
   ];
 }
