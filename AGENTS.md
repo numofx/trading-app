@@ -30,8 +30,8 @@ After generating code, run these commands **in order**.
 
 ```bash
 # Fewer than 10 files: use specific paths and/or globs
-na biome lint app/page.tsx lib/**/*
-na eslint app/page.tsx
+na biome lint "app/(terminal)/page.tsx" lib/**/*
+na eslint "app/(terminal)/page.tsx"
 
 # 10+ files: run default command
 na biome lint

@@ -1,4 +1,3 @@
-import { notFound } from "next/navigation";
 import { LayoutFixtureTerminal } from "./LayoutFixtureTerminal";
 
 /**
@@ -9,12 +8,8 @@ import { LayoutFixtureTerminal } from "./LayoutFixtureTerminal";
  * trader on a phone had no coverage at all. This route supplies that state without a wallet.
  *
  * Not a preview of the market: every figure on it is a fixture, which is exactly why it must never
- * be reachable in production. It 404s there.
+ * be reachable in production. The route group's layout 404s it there.
  */
 export default function LayoutFixturePage() {
-  if (process.env.NODE_ENV === "production") {
-    notFound();
-  }
-
   return <LayoutFixtureTerminal />;
 }

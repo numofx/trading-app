@@ -56,11 +56,21 @@ const VIEWPORTS = [
   { connected: true, ctaVisible: true, height: 896, path: "/layout-fixture", width: 414 },
 ];
 
+/**
+ * The rendered element with an id. React can leave a streamed Suspense segment behind as a
+ * \`<div hidden id="S:0">\` holding a second, unrendered copy of the page, and \`getElementById\`
+ * returned that copy on \`/layout-fixture\`: zero-sized, "covered by the header", and never updated
+ * by the deposit the connected probe clicks.
+ */
+const VISIBLE_BY_ID = `const visibleById = (id) =>
+    [...document.querySelectorAll("#" + CSS.escape(id))].find((el) => el.getClientRects().length > 0) ?? null;`;
+
 const PROBE = `(() => {
+  ${VISIBLE_BY_ID}
   // Matched by id, not label: the CTA reads "Deposit" signed out, "Loading account…" while the
   // subaccount resolves and "Buy USDC" once funded. Matching on text silently found nothing from
   // 25b40bf (which relabelled the signed-out CTA) until the id landed.
-  const cta = document.getElementById("spot-submit-cta");
+  const cta = visibleById("spot-submit-cta");
   if (!cta) return JSON.stringify({ error: "no submit CTA found" });
   const rect = cta.getBoundingClientRect();
 
@@ -140,9 +150,10 @@ const PROBE = `(() => {
  * stands in for `handleDeposited`, which likewise only refreshes the balances the terminal renders.
  */
 const CONNECTED_PROBE = `(async () => {
+  ${VISIBLE_BY_ID}
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-  const cta = () => document.getElementById("spot-submit-cta");
-  const amountField = () => document.getElementById("spot-amount");
+  const cta = () => visibleById("spot-submit-cta");
+  const amountField = () => visibleById("spot-amount");
   const setValue = (el, value) => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, value);
     el.dispatchEvent(new Event("input", { bubbles: true }));
@@ -168,10 +179,10 @@ const CONNECTED_PROBE = `(async () => {
   await sleep(400);
   const shortRect = cta().getBoundingClientRect();
   const shortfallLabel = cta().textContent.trim();
-  const shortfallNoted = document.querySelector("p.text-sell") !== null;
+  const shortfallNoted = [...document.querySelectorAll("p.text-sell")].some((el) => el.getClientRects().length > 0);
   const ctaVisibleWithShortfall = shortRect.top >= 0 && shortRect.bottom <= innerHeight;
 
-  document.getElementById("fixture-deposit").click();
+  visibleById("fixture-deposit").click();
   await sleep(600);
 
   return JSON.stringify({
@@ -183,7 +194,7 @@ const CONNECTED_PROBE = `(async () => {
     amountAfterDeposit: amountField().value,
     ctaAfterDeposit: cta().textContent.trim(),
     ctaDisabledAfterDeposit: cta().disabled,
-    shortfallNotedAfterDeposit: document.querySelector("p.text-sell") !== null,
+    shortfallNotedAfterDeposit: [...document.querySelectorAll("p.text-sell")].some((el) => el.getClientRects().length > 0),
   });
 })()`;
 
