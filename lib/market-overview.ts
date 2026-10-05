@@ -28,7 +28,6 @@ export function emptyOverviewRow(id: TerminalMarketId): MarketOverviewRow {
     changePercent24h: null,
     fundingRate1h: null,
     id,
-    maxLeverage: null,
     openInterestUsd: null,
     price: null,
     volume24hUsd: null,
@@ -48,7 +47,6 @@ export function buildOverviewRow(
     markPrice: number;
     openInterestUsd: number;
     uiLongFundingRate1h: number;
-    maxLeverage: number;
   } | null
 ): MarketOverviewRow {
   const lastPrice = getVenueLastPrice(market.trades, market.candles, market.mark);
@@ -59,7 +57,6 @@ export function buildOverviewRow(
     changePercent24h: changePercent,
     fundingRate1h: perp?.uiLongFundingRate1h ?? null,
     id,
-    maxLeverage: perp?.maxLeverage ?? null,
     openInterestUsd: perp?.openInterestUsd ?? null,
     price,
     volume24hUsd: market.stats24h?.quoteVolume ?? null,
@@ -107,11 +104,4 @@ export function formatFundingRate(value: number | null) {
     return "0%/h";
   }
   return `${value > 0 ? "+" : "-"}${pct}%/h`;
-}
-
-export function formatMaxLeverage(value: number | null) {
-  if (value === null || !Number.isFinite(value) || value <= 0) {
-    return null;
-  }
-  return `Up to ${Number.isInteger(value) ? value : value.toFixed(1)}x`;
 }

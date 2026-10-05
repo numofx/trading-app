@@ -26,7 +26,6 @@ export type MarketOverviewRow = {
   openInterestUsd: number | null;
   /** Hourly funding as the venue's long sees it: positive means longs pay. */
   fundingRate1h: number | null;
-  maxLeverage: number | null;
 };
 
 export type MarketOverviewResponse = {

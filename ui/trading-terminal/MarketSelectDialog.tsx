@@ -10,7 +10,6 @@ import {
   emptyOverviewRow,
   filterTerminalMarkets,
   formatFundingRate,
-  formatMaxLeverage,
   formatOpenInterest,
   formatOverviewVolume,
   getTerminalMarket,
@@ -143,7 +142,7 @@ function MarketRow({
   row: MarketOverviewRow;
   selected: boolean;
 }) {
-  const subtitle = entry.kind === "perp" ? formatMaxLeverage(row.maxLeverage) : "Spot";
+  const subtitle = entry.kind === "perp" ? "Perp" : "Spot";
   return (
     // Rows are links, not state: spot and perp are separate routes, so switching never carries
     // one terminal's ticket or book into the other, and each has its own URL.
