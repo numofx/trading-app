@@ -37,25 +37,28 @@ function HeaderMetric({
   children,
   className,
   label,
+  labelSuffix,
   tooltip,
 }: {
   children: ReactNode;
   /** Lets a metric yield its place at narrower widths; merged over the display class. */
   className?: string;
   label: string;
+  /** A muted figure after the label, outside its underline. */
+  labelSuffix?: string;
   /** A hint on the label, dotted-underlined like the ticket's. */
   tooltip?: string;
 }) {
   return (
     <div className={cn("flex flex-col gap-1", className)}>
-      <span
-        className={cn(
-          "whitespace-nowrap text-[10px] text-panel-text-muted",
-          tooltip && "cursor-help underline decoration-dotted underline-offset-4"
-        )}
-        title={tooltip}
-      >
-        {label}
+      <span className="flex items-baseline gap-1.5 whitespace-nowrap text-[10px] text-panel-text-muted">
+        <span
+          className={cn(tooltip && "cursor-help underline decoration-dotted underline-offset-4")}
+          title={tooltip}
+        >
+          {label}
+        </span>
+        {labelSuffix ? <span>{labelSuffix}</span> : null}
       </span>
       <span className="flex items-baseline gap-1.5 whitespace-nowrap font-medium text-[13px] text-panel-text-active">
         {children}
@@ -74,6 +77,8 @@ function HeaderMetric({
  */
 export type HeaderMetricItem = {
   label: string;
+  /** A muted figure after the label. */
+  labelSuffix?: string;
   tooltip?: string;
   value: string;
   tone: "up" | "down" | null;
@@ -202,12 +207,13 @@ export function TerminalHeaderBar({
          * row's height with a gap tall enough that nothing of a second row shows. Breakpoints
          * could not say how many fit, since the wallet button's width is not knowable in advance.
          */
-        <div className="hidden max-h-10 min-w-0 flex-wrap content-start gap-x-6 gap-y-10 overflow-hidden lg:flex">
+        <div className="hidden max-h-10 min-w-0 flex-wrap content-start gap-x-4 gap-y-10 overflow-hidden lg:flex">
           {metrics.map((metric) => (
             <HeaderMetric
               className="shrink-0"
               key={metric.label}
               label={metric.label}
+              labelSuffix={metric.labelSuffix}
               tooltip={metric.tooltip}
             >
               <span

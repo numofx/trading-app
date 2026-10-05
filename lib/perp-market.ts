@@ -644,13 +644,14 @@ export function buildPerpHeaderMetrics({
     },
     {
       label: "1h Funding",
+      // Annualised beside the label rather than in the value: the value row is what sets the
+      // metric's width, and six metrics have to share the row with the account buttons.
+      labelSuffix:
+        funding === null ? undefined : `${signedPercent(funding * HOURS_PER_YEAR * 100, 1)} APR`,
       tone: toneOf(funding),
       tooltip:
-        "Hourly, as the long side sees it: positive means longs pay shorts, then the same rate annualised (hourly × 24 × 365, not compounded). It accrues every second; there is no funding settlement to count down to.",
-      value:
-        funding === null
-          ? "—"
-          : `${signedPercent(funding * 100, 4)} · ${signedPercent(funding * HOURS_PER_YEAR * 100, 1)} APR`,
+        "Hourly, as the long side sees it: positive means longs pay shorts. Beside it, the same rate annualised (hourly × 24 × 365, not compounded). It accrues every second; there is no funding settlement to count down to.",
+      value: funding === null ? "—" : signedPercent(funding * 100, 4),
     },
   ];
 }
