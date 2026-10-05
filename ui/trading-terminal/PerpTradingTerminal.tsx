@@ -15,6 +15,7 @@ import { formatBalance } from "@/lib/account-balance-display";
 import { getAppChain } from "@/lib/base-public-client";
 import { cn } from "@/lib/cn";
 import {
+  buildPerpHeaderMetrics,
   buildPerpPositionsView,
   describeOrderRejection,
   getPerpCollateralWithdrawableAsset,
@@ -655,6 +656,16 @@ function HeaderWithdrawMenu({
   );
 }
 
+/** The header's figures for the perp on screen, or dashes while it is not live. */
+function perpHeaderMetrics(market: PerpMarket | null, price: number | null, volumeLabel: string) {
+  return buildPerpHeaderMetrics({
+    firstPrice: market?.stats24h?.firstPrice ?? null,
+    price,
+    state: market?.state ?? null,
+    volumeLabel,
+  });
+}
+
 /** The header's Deposit margin button; Withdraw beside it is a menu over the account's assets. */
 function HeaderActionButton({ children, onClick }: { children: string; onClick: () => void }) {
   return (
@@ -932,6 +943,7 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
         high24h={stats.high}
         low24h={stats.low}
         market="perp"
+        metrics={perpHeaderMetrics(market, price, stats.volumeLabel)}
         onPortfolioSelect={() => setBottomTab("positions")}
         price={price}
         volume24hLabel={stats.volumeLabel}

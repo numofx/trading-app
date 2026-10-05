@@ -1,14 +1,17 @@
 import { getAddress, isAddress, parseUnits } from "viem";
+import { formatNaira } from "@/lib/market-formatting";
 import type {
   PerpAccountMargin,
   PerpCngnExposure,
   PerpCollateralAsset,
   PerpCollateralBalance,
+  PerpHeaderMetric,
   PerpPosition,
   PerpStack,
   PerpState,
 } from "@/lib/perp-market.types";
 import { getCngnTokenAddress, getUsdcTokenAddress } from "@/lib/subaccount-deposit-config";
+import { formatCompactVolume } from "@/lib/ticker-stats";
 import type { WithdrawableAsset } from "@/lib/withdrawable-assets";
 
 /** The `perp` object markets-service serves on `/v1/markets` for the perpetual. */
@@ -558,4 +561,89 @@ export function describePerpMarginSources(account: PerpAccountMargin | null): st
   const inUse = credited - account.initialMarginSurplus;
   const used = inUse > 0.005 ? ` − ${USD_CELL.format(inUse)} USDC backing your positions` : "";
   return `${parts.join(" + ")}${used}`;
+}
+
+function signedNaira(value: number) {
+  return `${value < 0 ? "-" : "+"}${formatNaira(Math.abs(value))}`;
+}
+
+function signedPercent(value: number, digits: number) {
+  return `${value < 0 ? "-" : "+"}${Math.abs(value).toFixed(digits)}%`;
+}
+
+/** Open interest in USDC, compact; a venue with none open reads zero, not a dash. */
+function formatOpenInterest(state: PerpState | null) {
+  if (state === null) {
+    return "—";
+  }
+  const compact = formatCompactVolume(state.openInterestUsd);
+  return compact === "—" ? "0 USDC" : compact;
+}
+
+function toneOf(value: number | null): PerpHeaderMetric["tone"] {
+  if (value === null || value === 0 || !Number.isFinite(value)) {
+    return null;
+  }
+  return value > 0 ? "up" : "down";
+}
+
+/**
+ * The perp header's figures, in the order a perp trader reads them: mark and index from the chain,
+ * the day's move against the live price, volume, open interest and the hourly funding rate. Every
+ * figure is the venue's own; a missing one is a dash. There is no market cap: a stablecoin FX
+ * perp has no supply to value. The funding countdown waits on the venue reporting the next
+ * funding time, which the market listing does not carry.
+ */
+export function buildPerpHeaderMetrics({
+  firstPrice,
+  price,
+  state,
+  volumeLabel,
+}: {
+  /** The 24h window's first trade, which the change is measured from. */
+  firstPrice: number | null;
+  /** The live price the change is measured to: the book's mid, else the mark. */
+  price: number | null;
+  state: PerpState | null;
+  volumeLabel: string;
+}): PerpHeaderMetric[] {
+  const change = firstPrice !== null && price !== null ? price - firstPrice : null;
+  const changePercent =
+    change !== null && firstPrice !== null && firstPrice > 0 ? (change / firstPrice) * 100 : null;
+  const funding = state?.uiLongFundingRate1h ?? null;
+  return [
+    {
+      label: "Mark",
+      tone: null,
+      tooltip: "The price positions are valued and liquidated at, from the venue's chain state",
+      value: formatNaira(state?.markPrice ?? null),
+    },
+    {
+      label: "Index",
+      tone: null,
+      tooltip: "The external NGN/USD reference the mark tracks; funding pushes the two together",
+      value: formatNaira(state?.indexPrice ?? null),
+    },
+    {
+      label: "24h Change",
+      tone: toneOf(change),
+      value:
+        change === null || changePercent === null
+          ? "—"
+          : `${signedNaira(change)} (${signedPercent(changePercent, 2)})`,
+    },
+    { label: "24h Volume", tone: null, value: volumeLabel },
+    {
+      label: "Open Interest",
+      tone: null,
+      tooltip: "The USD notional of every open position, long and short",
+      value: formatOpenInterest(state),
+    },
+    {
+      label: "1h Funding",
+      tone: toneOf(funding),
+      tooltip: "Hourly, as the long side sees it: positive means longs pay shorts",
+      value: funding === null ? "—" : signedPercent(funding * 100, 4),
+    },
+  ];
 }

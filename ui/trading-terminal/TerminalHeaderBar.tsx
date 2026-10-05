@@ -37,15 +37,26 @@ function HeaderMetric({
   children,
   className,
   label,
+  tooltip,
 }: {
   children: ReactNode;
   /** Lets a metric yield its place at narrower widths; merged over the display class. */
   className?: string;
   label: string;
+  /** A hint on the label, dotted-underlined like the ticket's. */
+  tooltip?: string;
 }) {
   return (
     <div className={cn("flex flex-col gap-1", className)}>
-      <span className="whitespace-nowrap text-[10px] text-panel-text-muted">{label}</span>
+      <span
+        className={cn(
+          "whitespace-nowrap text-[10px] text-panel-text-muted",
+          tooltip && "cursor-help underline decoration-dotted underline-offset-4"
+        )}
+        title={tooltip}
+      >
+        {label}
+      </span>
       <span className="flex items-baseline gap-1.5 whitespace-nowrap font-medium text-[13px] text-panel-text-active">
         {children}
       </span>
@@ -61,12 +72,20 @@ function HeaderMetric({
  * roughly 130px of vertical space and two card borders to say what one row says. Being full-bleed,
  * it is rendered outside the padded panel column rather than as its first child.
  */
+export type HeaderMetricItem = {
+  label: string;
+  tooltip?: string;
+  value: string;
+  tone: "up" | "down" | null;
+};
+
 export function TerminalHeaderBar({
   changePercent24h,
   depositControl,
   high24h,
   low24h,
   market = "spot",
+  metrics,
   onPortfolioSelect,
   price,
   volume24hLabel,
@@ -78,6 +97,11 @@ export function TerminalHeaderBar({
   low24h: number | null;
   /** Which terminal is showing; the selector's pill and check follow it. */
   market?: TerminalMarket;
+  /**
+   * Figures to show instead of the spot set (price, volume, high, low): the perp's mark, index,
+   * change, volume, open interest and funding. The first three show from `lg`, the rest from `xl`.
+   */
+  metrics?: HeaderMetricItem[];
   /** Fired by the connected wallet menu's Portfolio item. */
   onPortfolioSelect?: () => void;
   /**
@@ -139,36 +163,58 @@ export function TerminalHeaderBar({
        * balance cluster to its right, the values would otherwise paint straight over it rather
        * than clip.
        */}
-      <div className="hidden min-w-0 items-center gap-6 overflow-hidden lg:flex">
-        <HeaderMetric label="Price">
-          {formatNaira(price)}
-          <span className={cn("text-[11px]", getChangeClassName(changePercent24h))}>
-            {formatChangePercent(changePercent24h)}
-          </span>
-        </HeaderMetric>
-        {/*
-         * Volume stands down below `xl` for the same reason the extremes stand down below `2xl`:
-         * measured at 1024px, Price, volume and a claim-noted balance pair overrun the row by
-         * ~40px, and the metrics box is the one that gives — clipping "24H volume ₦1" mid-figure.
-         * Price is the figure worth keeping at every width the metrics show at all.
-         */}
-        <HeaderMetric className="hidden xl:flex" label="24H volume">
-          {volume24hLabel}
-        </HeaderMetric>
-        {/*
-         * The extremes stood down below `2xl` to pay for the account balance pair that used to sit
-         * beside the deposit control — roughly 150px, more once a claim note was on it. That pair
-         * now lives in the balance summary under the order ticket, so they come back up alongside
-         * the volume metric. Gated on width alone, never on the wallet: tying header structure to
-         * `hasWallet` rearranged the row at the moment of connecting, which reads as a glitch.
-         */}
-        <HeaderMetric className="hidden xl:flex" label="24H high">
-          {formatNaira(high24h)}
-        </HeaderMetric>
-        <HeaderMetric className="hidden xl:flex" label="24H low">
-          {formatNaira(low24h)}
-        </HeaderMetric>
-      </div>
+      {metrics === undefined ? (
+        <div className="hidden min-w-0 items-center gap-6 overflow-hidden lg:flex">
+          <HeaderMetric label="Price">
+            {formatNaira(price)}
+            <span className={cn("text-[11px]", getChangeClassName(changePercent24h))}>
+              {formatChangePercent(changePercent24h)}
+            </span>
+          </HeaderMetric>
+          {/*
+           * Volume stands down below `xl` for the same reason the extremes stand down below `2xl`:
+           * measured at 1024px, Price, volume and a claim-noted balance pair overrun the row by
+           * ~40px, and the metrics box is the one that gives — clipping "24H volume ₦1" mid-figure.
+           * Price is the figure worth keeping at every width the metrics show at all.
+           */}
+          <HeaderMetric className="hidden xl:flex" label="24H volume">
+            {volume24hLabel}
+          </HeaderMetric>
+          {/*
+           * The extremes stood down below `2xl` to pay for the account balance pair that used to sit
+           * beside the deposit control — roughly 150px, more once a claim note was on it. That pair
+           * now lives in the balance summary under the order ticket, so they come back up alongside
+           * the volume metric. Gated on width alone, never on the wallet: tying header structure to
+           * `hasWallet` rearranged the row at the moment of connecting, which reads as a glitch.
+           */}
+          <HeaderMetric className="hidden xl:flex" label="24H high">
+            {formatNaira(high24h)}
+          </HeaderMetric>
+          <HeaderMetric className="hidden xl:flex" label="24H low">
+            {formatNaira(low24h)}
+          </HeaderMetric>
+        </div>
+      ) : (
+        <div className="hidden min-w-0 items-center gap-6 overflow-hidden lg:flex">
+          {metrics.map((metric, index) => (
+            <HeaderMetric
+              className={index >= 3 ? "hidden xl:flex" : undefined}
+              key={metric.label}
+              label={metric.label}
+              tooltip={metric.tooltip}
+            >
+              <span
+                className={cn(
+                  metric.tone === "up" && "text-bid-text",
+                  metric.tone === "down" && "text-ask-text"
+                )}
+              >
+                {metric.value}
+              </span>
+            </HeaderMetric>
+          ))}
+        </div>
+      )}
 
       {/*
        * Wraps inside itself rather than overflowing: the wallet button carries an address whose

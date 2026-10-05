@@ -120,6 +120,15 @@ export type PerpCngnExposure = {
   fundingPerMonthUsd: number;
 };
 
+/** One figure in the perp terminal's header: a label, an optional hint, the value and its colour. */
+export type PerpHeaderMetric = {
+  label: string;
+  tooltip?: string;
+  value: string;
+  /** Coloured like a rise or a fall; null for a neutral figure. */
+  tone: "up" | "down" | null;
+};
+
 /** The account's margin on the perp stack, whether or not it holds a position. */
 export type PerpAccountMargin = {
   cash: number;
