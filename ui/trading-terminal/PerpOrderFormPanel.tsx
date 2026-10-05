@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatNaira } from "@/lib/market-formatting";
 import {
   describePerpMarginSources,
   estimateLiquidationPrice,
@@ -46,6 +47,8 @@ export type PerpOrderRequest = {
 };
 
 const USD = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 });
+/** The button's size: up to two decimals, no trailing zeros ("10", "10.5", "10.25"). */
+const SIZE = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
 const PRICE = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
   minimumFractionDigits: 2,
@@ -199,7 +202,7 @@ function LeverageSelector({
   }
 
   return (
-    <div className="rounded-lg bg-input-bg px-3 py-2 ring-1 ring-panel-border">
+    <div>
       <AmountSlider
         disabled={ceiling <= 1}
         header={
@@ -210,9 +213,9 @@ function LeverageSelector({
             >
               Leverage
             </FieldLabel>
-            <span className="flex items-baseline font-semibold text-[15px] text-panel-text-active tabular-nums">
+            <span className="flex items-baseline text-[13px] text-panel-text-active tabular-nums">
               <input
-                className="w-8 bg-transparent text-right outline-none"
+                className="w-8 bg-transparent text-right text-[16px] outline-none md:text-[13px]"
                 id="perp-leverage-value"
                 inputMode="numeric"
                 onBlur={() => setDraft(null)}
@@ -336,8 +339,9 @@ type ButtonInputs = {
 
 /** What the one button says: it connects, deposits, or trades, depending on what is missing. */
 function submitLabel(inputs: ButtonInputs) {
-  const amount = inputs.sizeUsd === null ? "" : ` ${USD.format(inputs.sizeUsd)} USDC`;
-  const trade = `${inputs.isLong ? "Long" : "Short"}${amount} USDC-cNGN-PERP`;
+  // Amount and unit, as brief as spot's "Buy USDC": the market is named in the header already.
+  const amount = inputs.sizeUsd === null ? "" : ` ${SIZE.format(inputs.sizeUsd)}`;
+  const trade = `${inputs.isLong ? "Long" : "Short"}${amount} USDC`;
   if (inputs.isPaused) {
     return "Trading paused";
   }
@@ -518,7 +522,7 @@ export function PerpOrderFormPanel({
             <SummaryRow
               label="Est. liq. price"
               tooltip="For this margin alone; your whole perp account backs the position"
-              value={liquidation === null ? "—" : PRICE.format(liquidation)}
+              value={formatNaira(liquidation)}
             />
             <SummaryRow
               label="Funding"

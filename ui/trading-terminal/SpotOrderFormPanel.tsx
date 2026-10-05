@@ -757,7 +757,7 @@ export function SpotOrderFormPanel({
   lastAction?: string | null;
 }) {
   const [side, setSide] = useState<"buy" | "sell">("buy");
-  const [orderType, setOrderType] = useState<SpotOrderType>("Limit");
+  const [orderType, setOrderType] = useState<SpotOrderType>("Market");
   // Seeded from the mid, not the last trade: a prefill past the touch turns the trader's chosen
   // "Limit" into a taker on submit — an immediate fill at the 5 bps tier instead of resting free.
   const [limitPrice, setLimitPrice] = useState(

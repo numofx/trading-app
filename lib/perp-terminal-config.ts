@@ -1,3 +1,4 @@
+import { ACTIVITY_VIEWS as SPOT_ACTIVITY_VIEWS } from "@/lib/spot-terminal-config";
 import type { ActivityTab, ActivityView } from "@/lib/trading.types";
 
 /** The venue's symbol for the perp, as the market selector and document title name it. */
@@ -9,6 +10,8 @@ export const PERP_MARKET_SYMBOL = "USDCcNGN-PERP";
 export const PERP_BOTTOM_TABS = [
   { id: "positions", label: "Positions" },
   { id: "open-orders", label: "Open Orders" },
+  { id: "order-history", label: "Order History" },
+  { id: "trade-history", label: "Trade History" },
   { id: "margin", label: "Margin" },
 ] satisfies ActivityTab[];
 
@@ -17,6 +20,10 @@ export const PERP_BOTTOM_TABS = [
  * market and keeps no entry price on chain, so the column could only be invented.
  */
 export const PERP_ACTIVITY_VIEWS = {
+  // The venue keeps one order and fill history per owner across every market, labelled by
+  // market, so the perp's tabs share spot's columns and show the rows labelled with the perp.
+  "order-history": SPOT_ACTIVITY_VIEWS["order-history"],
+  "trade-history": SPOT_ACTIVITY_VIEWS["trade-history"],
   margin: {
     columns: ["Cash", "Initial margin headroom", "Maintenance margin headroom"],
     rows: [],

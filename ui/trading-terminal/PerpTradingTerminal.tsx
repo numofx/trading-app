@@ -1,9 +1,11 @@
 "use client";
 
+import type { ConnectedWallet } from "@privy-io/react-auth";
 import { useLogin, usePrivy } from "@privy-io/react-auth";
 import { Duration } from "effect";
 import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
+import type { ReactNode } from "react";
 import { useState } from "react";
 import { createWalletClient, custom } from "viem";
 import { buildOpenOrdersActivityView, getOwnedOpenOrders } from "@/lib/account-activity-views";
@@ -47,6 +49,7 @@ import { get24hStats, getVenueLastPrice } from "@/lib/ticker-stats";
 import type { ActivityView } from "@/lib/trading.types";
 import type { WithdrawableAsset } from "@/lib/withdrawable-assets";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
+import type { AccountSummaryRow } from "@/ui/trading-terminal/order-form/AccountSummary";
 import { AccountSummary } from "@/ui/trading-terminal/order-form/AccountSummary";
 import { PerpMarginDialog } from "@/ui/trading-terminal/PerpMarginDialog";
 import type { PerpOrderRequest } from "@/ui/trading-terminal/PerpOrderFormPanel";
@@ -61,6 +64,7 @@ import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel
 import { useMarketOrderBook } from "@/ui/trading-terminal/useMarketOrderBook";
 import { usePerpLiveState } from "@/ui/trading-terminal/usePerpLiveState";
 import { readPerpPositions, usePerpPositions } from "@/ui/trading-terminal/usePerpPositions";
+import { useSignedHistoryTabs } from "@/ui/trading-terminal/useSignedHistoryTabs";
 import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
 import { usePrimaryWallet } from "@/ui/usePrimaryWallet";
 
@@ -280,6 +284,8 @@ function heldCollateralCount(account: PerpAccountMargin | null): number {
 type ActivityInputs = {
   account: PerpAccountMargin | null;
   bottomTab: PerpBottomTab;
+  /** The open signed history tab's rows once loaded; null on any other tab or state. */
+  signedHistoryView: ActivityView | null;
   /** The collateral assets the venue accepts, listed at zero on the Margin tab when not held. */
   listedCollateral: PerpCollateralAsset[];
   market: PerpMarket | null;
@@ -297,21 +303,79 @@ function buildActivityView(inputs: ActivityInputs): ActivityView {
   if (inputs.bottomTab === "margin") {
     return buildPerpMarginView(inputs.account, inputs.listedCollateral);
   }
+  if (inputs.bottomTab === "order-history" || inputs.bottomTab === "trade-history") {
+    return inputs.signedHistoryView ?? PERP_ACTIVITY_VIEWS[inputs.bottomTab];
+  }
   return perpOpenOrdersView(
     buildOpenOrdersActivityView(inputs.market.openOrders, inputs.walletAddress)
   );
 }
 
+/**
+ * Signs the order-history login with personal_sign, or nothing without a wallet. Unlike an order
+ * or a cancel it authorizes nothing on chain, so there is no chain to switch to; the wallet shows
+ * the plain-text message.
+ */
+function buildHistorySigner(primaryWallet: ConnectedWallet | null, walletsReady: boolean) {
+  if (primaryWallet === null) {
+    return undefined;
+  }
+  return async (message: string) => {
+    if (!walletsReady) {
+      throw new Error("Connect a wallet to view your order history");
+    }
+    const provider = await primaryWallet.getEthereumProvider();
+    const walletClient = createWalletClient({ chain: getAppChain(), transport: custom(provider) });
+    return walletClient.signMessage({
+      account: primaryWallet.address as `0x${string}`,
+      message,
+    });
+  };
+}
+
+/**
+ * The Account panel's rows: cash, then cNGN when the SRM accepts it, at zero until it is held and
+ * an em dash until the account is read. The plus opens the margin deposit, which chooses the asset.
+ */
+function buildAccountRows(
+  account: PerpAccountMargin | null,
+  stack: PerpStack | null,
+  onDeposit: () => void
+): AccountSummaryRow[] {
+  const cngnListed = listedCollateralOf(stack).some((asset) => asset.symbol === "cNGN");
+  const cngnHeld = account?.collateral.find((row) => row.symbol === "cNGN")?.balance;
+  const rows: AccountSummaryRow[] = [
+    { balance: formatBalance(account?.cash ?? null, "USDC"), onDeposit, symbol: "USDC" },
+  ];
+  if (cngnListed) {
+    rows.push({
+      balance: formatBalance(account === null ? null : (cngnHeld ?? 0), "cNGN"),
+      onDeposit,
+      symbol: "cNGN",
+    });
+  }
+  return rows;
+}
+
 function buildEmptyState(
   market: PerpMarket | null,
   subaccountId: string | null,
-  bottomTab: PerpBottomTab
+  bottomTab: PerpBottomTab,
+  /** The open signed history tab's prompt, which wins over the account-level copy. */
+  signedHistoryEmptyState: { action?: ReactNode; body: string; title: string } | undefined
 ) {
+  if (signedHistoryEmptyState !== undefined) {
+    return signedHistoryEmptyState;
+  }
   if (market === null) {
     return {
       body: "Perp trading isn't live yet.",
       title: bottomTab === "positions" ? "No positions" : "Nothing yet",
     };
+  }
+  // History is the wallet's, not the perp account's: its tabs prompt for the signed login instead.
+  if (bottomTab === "order-history" || bottomTab === "trade-history") {
+    return undefined;
   }
   if (subaccountId === null) {
     return { body: "Deposit margin to open your perp account.", title: "No perp account" };
@@ -390,11 +454,16 @@ function buildRowAction(inputs: {
   heldCollateral: number;
   ownedOpenOrders: { nonce: string; ownerAddress: string }[];
   positions: PerpPosition[];
+  /** The Trade History row control (the fill's transaction), undefined on every other tab. */
+  tradeHistoryRowAction: ((rowIndex: number) => ReactNode) | undefined;
 }) {
   if (inputs.market === null || !inputs.hasWallet) {
     return undefined;
   }
   const { bottomTab } = inputs;
+  if (bottomTab === "trade-history") {
+    return inputs.tradeHistoryRowAction;
+  }
   if (bottomTab === "open-orders") {
     return (rowIndex: number) => {
       const order = inputs.ownedOpenOrders[rowIndex];
@@ -564,6 +633,13 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
   const [closingIndex, setClosingIndex] = useState<number | null>(null);
 
   const stack = market?.stack ?? null;
+  const signedHistory = useSignedHistoryTabs({
+    bottomTab,
+    isSignedIn,
+    market: PERP_MARKET_SYMBOL,
+    signMessage: buildHistorySigner(primaryWallet, walletsReady),
+    walletAddress: primaryWallet?.address ?? null,
+  });
   /** The header's deposit control and the account rows share one path: connect first, then deposit. */
   function openDeposit() {
     if (primaryWallet === null) {
@@ -837,33 +913,8 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
               state={market?.state ?? null}
               takerFeeBps={market?.takerFeeBps ?? null}
             />
-            {/*
-             * The perp account's holdings under the ticket, as spot's column ends: cash, then each
-             * collateral asset the SRM accepts, at zero until it is held. The plus opens the margin
-             * deposit, which chooses the asset itself.
-             */}
-            <AccountSummary
-              rows={[
-                {
-                  balance: formatBalance(perpAccount.account?.cash ?? null, "USDC"),
-                  onDeposit: openDeposit,
-                  symbol: "USDC",
-                },
-                ...listedCollateralOf(stack)
-                  .filter((asset) => asset.symbol === "cNGN")
-                  .map((asset) => ({
-                    balance: formatBalance(
-                      perpAccount.account === null
-                        ? null
-                        : (perpAccount.account.collateral.find((row) => row.symbol === asset.symbol)
-                            ?.balance ?? 0),
-                      "cNGN"
-                    ),
-                    onDeposit: openDeposit,
-                    symbol: "cNGN" as const,
-                  })),
-              ]}
-            />
+            {/* The perp account's holdings under the ticket, as spot's column ends. */}
+            <AccountSummary rows={buildAccountRows(perpAccount.account, stack, openDeposit)} />
           </div>
 
           <div className="min-h-[200px] md:col-start-1 md:row-start-3 md:min-h-0 lg:col-span-2 lg:col-start-1 lg:row-start-2">
@@ -872,11 +923,17 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
                 account: perpAccount.account,
                 bottomTab,
                 listedCollateral: listedCollateralOf(stack),
+                signedHistoryView: signedHistory.view,
                 market,
                 positions: perpAccount.positions,
                 walletAddress: primaryWallet?.address ?? null,
               })}
-              emptyState={buildEmptyState(market, account.subaccountId, bottomTab)}
+              emptyState={buildEmptyState(
+                market,
+                account.subaccountId,
+                bottomTab,
+                signedHistory.emptyState
+              )}
               footerLinks={FOOTER_LINKS}
               isSignedIn={isSignedIn}
               onTabSelect={(tab) => setBottomTab(tab as PerpBottomTab)}
@@ -894,6 +951,7 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
                 onWithdraw: (rowIndex) => setWithdrawRow(rowIndex),
                 ownedOpenOrders,
                 positions: perpAccount.positions,
+                tradeHistoryRowAction: signedHistory.rowAction,
               })}
               selectedTab={bottomTab}
               tabs={PERP_BOTTOM_TABS}

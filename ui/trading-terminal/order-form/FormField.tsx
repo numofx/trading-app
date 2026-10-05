@@ -35,7 +35,7 @@ export function FormField({
         {adornment}
       </div>
       <input
-        className="w-full bg-transparent font-semibold text-[15px] text-panel-text-active tabular-nums outline-none placeholder:text-panel-text-muted"
+        className="w-full bg-transparent font-semibold text-[16px] text-panel-text-active tabular-nums outline-none placeholder:text-panel-text-muted md:text-[15px]"
         id={id}
         inputMode="decimal"
         onChange={(event) => onChange(event.target.value.replace(/[^\d.,]/g, ""))}

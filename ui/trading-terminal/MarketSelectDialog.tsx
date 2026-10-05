@@ -326,7 +326,7 @@ export function MarketSelectDialog({
               <input
                 aria-label="Search markets"
                 autoComplete="off"
-                className="min-w-0 flex-1 bg-transparent text-[14px] text-panel-text-active outline-none placeholder:text-panel-text-muted"
+                className="min-w-0 flex-1 bg-transparent text-[16px] text-panel-text-active outline-none placeholder:text-panel-text-muted md:text-[14px]"
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search markets"
                 ref={searchRef}

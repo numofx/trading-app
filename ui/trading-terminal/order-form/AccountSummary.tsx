@@ -36,7 +36,7 @@ export function AccountSummary({ rows }: { rows: readonly AccountSummaryRow[] })
     <section className="flex shrink-0 flex-col overflow-clip bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300">
       {/* Dropped in the stacked layout for the reason the ticket drops its own: below `md` this
           column is the whole screen, and the label is only telling panels apart from siblings. */}
-      <div className="hidden shrink-0 items-center border-panel-border border-b px-3 py-1.5 font-medium text-[11px] md:flex">
+      <div className="hidden shrink-0 items-center border-panel-border border-b px-3 py-1.5 font-medium text-[12px] md:flex">
         <span className="rounded-md bg-input-bg px-2 py-0.5 text-panel-text-active">Account</span>
       </div>
 

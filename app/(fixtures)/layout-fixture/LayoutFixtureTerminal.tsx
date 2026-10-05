@@ -14,12 +14,12 @@ const OPENING_BALANCES = { cngn: 41_470.685_234, usdc: 31.028_472_772_594_67 };
 const CLAIMED = { cngn: 12_224, usdc: 8.927_931 };
 const FIXTURE_PRICE = 1400;
 /**
- * The trader's own orders rest at the touches, one tick off the mid the ticket seeds its limit
- * from. At the mid itself the seeded limit crossed the own resting sell, and the ticket's own-
- * crossing guard disabled the CTA before the check could type an amount into it.
+ * The trader's own orders rest outside the band a market order is signed through (the touch
+ * plus the slippage allowance). Resting at the mid, or at the touch, they crossed the ticket's
+ * own order and its own-crossing guard disabled the CTA before the check could type an amount.
  */
-const OWN_BUY_PRICE = 1399;
-const OWN_SELL_PRICE = 1401;
+const OWN_BUY_PRICE = 1390;
+const OWN_SELL_PRICE = 1410;
 const FIXTURE_WALLET = "0x1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d";
 
 /** What one fixture deposit adds. Large enough to clear any shortfall the check types in. */

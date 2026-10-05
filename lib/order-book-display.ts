@@ -26,6 +26,22 @@ export type LadderRow = {
   total: number;
 };
 
+const PLAIN_AMOUNT = new Intl.NumberFormat("en-US", { maximumFractionDigits: 3 });
+const COMPACT_AMOUNT = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 1,
+  notation: "compact",
+});
+
+/**
+ * One rule for every size and total the ladder and the trade tape print, on both markets: full
+ * precision (up to three decimals) below ten thousand, abbreviated above ("10.2K", "1.4M"). The
+ * cut used to sit at a thousand, which turned the perp's 999.999 into "1K" one tick later and
+ * made its ladder read as a different instrument from spot's.
+ */
+export function formatLadderAmount(value: number) {
+  return Math.abs(value) >= 10_000 ? COMPACT_AMOUNT.format(value) : PLAIN_AMOUNT.format(value);
+}
+
 /** Prices are money, not floats — bucketing at 0.1 must not produce 1375.3000000000002. */
 function roundPrice(value: number) {
   return Math.round(value * 1e8) / 1e8;

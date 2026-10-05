@@ -1,20 +1,14 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import {
   buildAssetsActivityView,
   buildOpenOrdersActivityView,
-  buildOrderHistoryActivityView,
-  buildTradeHistoryActivityView,
-  getFillTransactionUrl,
   getOwnedOpenOrders,
 } from "@/lib/account-activity-views";
 import { formatBalance } from "@/lib/account-balance-display";
-import { getAppChain } from "@/lib/base-public-client";
-import type { AccountFill, OrderHistoryOrder, SignedHistoryState } from "@/lib/order-history.types";
 import {
   getAnchorPrice,
   getBestPrices,
@@ -31,7 +25,7 @@ import {
 } from "@/lib/spot-terminal-config";
 import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
 import { get24hStats, getVenueLastPrice } from "@/lib/ticker-stats";
-import type { ActivityView, Candle, SpotMarket } from "@/lib/trading.types";
+import type { Candle, SpotMarket } from "@/lib/trading.types";
 import { AccountSummary } from "@/ui/trading-terminal/order-form/AccountSummary";
 import type { SpotChartTab, SpotTimeframe } from "@/ui/trading-terminal/SpotChartPanel";
 import { SpotChartPanel } from "@/ui/trading-terminal/SpotChartPanel";
@@ -40,144 +34,11 @@ import { SpotOrderBookPanel } from "@/ui/trading-terminal/SpotOrderBookPanel";
 import { SpotOrderFormPanel } from "@/ui/trading-terminal/SpotOrderFormPanel";
 import { TerminalHeaderBar } from "@/ui/trading-terminal/TerminalHeaderBar";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
-import { useOrderHistory, useTradeHistory } from "@/ui/trading-terminal/useAccountHistory";
 import { useMarketOrderBook } from "@/ui/trading-terminal/useMarketOrderBook";
+import { useSignedHistoryTabs } from "@/ui/trading-terminal/useSignedHistoryTabs";
 
 /** The venue's symbol for this market; markets-service resolves the stream subscription from it. */
 const SPOT_MARKET_SYMBOL = "USDCcNGN-SPOT";
-
-/** The empty-state copy that differs between the two signed history tabs. */
-const SIGNED_HISTORY_COPY = {
-  "order-history": {
-    emptyBody: "Orders you place will appear here.",
-    emptyTitle: "No orders yet",
-    loadingBody: "Fetching your orders.",
-    noun: "order history",
-  },
-  "trade-history": {
-    emptyBody: "Each fill on your orders will appear here.",
-    emptyTitle: "No trades yet",
-    loadingBody: "Fetching your trades.",
-    noun: "trade history",
-  },
-} as const;
-
-type SignedHistoryTab = keyof typeof SIGNED_HISTORY_COPY;
-
-function isSignedHistoryTab(tab: string): tab is SignedHistoryTab {
-  return Object.hasOwn(SIGNED_HISTORY_COPY, tab);
-}
-
-/**
- * What a signed history tab says while it has no rows, and which control it offers. Lives outside
- * the component so the state-by-state branching stays off its complexity budget.
- */
-function getSignedHistoryEmptyState(
-  tab: SignedHistoryTab,
-  state: SignedHistoryState<unknown>
-): { action: "retry" | "sign" | null; body: string; title: string } | null {
-  const copy = SIGNED_HISTORY_COPY[tab];
-  switch (state.status) {
-    case "needs-signature":
-      return {
-        action: "sign",
-        body: "Your order and trade history are private. Sign a message with your wallet to view them — it costs no gas and lasts 12 hours.",
-        title: `Sign to view ${copy.noun}`,
-      };
-    case "signing":
-      return {
-        action: null,
-        body: "Approve the signature request in your wallet.",
-        title: "Waiting for your wallet",
-      };
-    case "loading":
-      return { action: null, body: copy.loadingBody, title: `Loading ${copy.noun}` };
-    case "error":
-      return { action: "retry", body: state.error, title: `Couldn't load ${copy.noun}` };
-    case "ready":
-      return { action: null, body: copy.emptyBody, title: copy.emptyTitle };
-    default:
-      return null;
-  }
-}
-
-/** What the terminal needs from a signed history hook to prompt for, retry and render it. */
-type SignedHistoryHandle = {
-  authorize: () => Promise<void>;
-  reload: () => void;
-  state: SignedHistoryState<unknown>;
-};
-
-/**
- * The open signed history tab's empty state, with the hook its sign and retry controls act on; null
- * on any other tab, or once that tab has nothing to say.
- */
-function getSignedHistoryPrompt(
-  tab: string,
-  histories: Record<SignedHistoryTab, SignedHistoryHandle>
-) {
-  if (!isSignedHistoryTab(tab)) {
-    return null;
-  }
-  const history = histories[tab];
-  const emptyState = getSignedHistoryEmptyState(tab, history.state);
-  return emptyState === null ? null : { ...emptyState, history };
-}
-
-/**
- * The rows a signed history tab shows once its history has loaded; null for any other tab or state,
- * which fall through to the panel's headers and empty state. Outside the component for the same
- * complexity budget as the empty state above.
- */
-function getSignedHistoryView(
-  tab: string,
-  orderHistory: SignedHistoryState<OrderHistoryOrder>,
-  tradeHistory: SignedHistoryState<AccountFill>
-): ActivityView | null {
-  if (tab === "order-history" && orderHistory.status === "ready") {
-    return buildOrderHistoryActivityView(orderHistory.rows);
-  }
-  if (tab === "trade-history" && tradeHistory.status === "ready") {
-    return buildTradeHistoryActivityView(tradeHistory.rows);
-  }
-  return null;
-}
-
-/**
- * The Trade History row control: a link to the fill's settling transaction on Basescan, when the venue
- * recorded one. Undefined on any other tab, so no trailing cell is added there. Outside the component
- * for the same complexity budget as the helpers above.
- */
-function getTradeHistoryRowAction(
-  tab: string,
-  tradeHistory: SignedHistoryState<AccountFill>
-): ((rowIndex: number) => ReactNode) | undefined {
-  if (tab !== "trade-history" || tradeHistory.status !== "ready") {
-    return undefined;
-  }
-  const explorerUrl = getAppChain().blockExplorers?.default.url;
-  const fills = tradeHistory.rows;
-
-  return function renderTransactionLink(rowIndex: number) {
-    const fill = fills[rowIndex];
-    const href = fill === undefined ? null : getFillTransactionUrl(fill, explorerUrl);
-    if (href === null) {
-      return null;
-    }
-    return (
-      <a
-        aria-label="View transaction on Basescan"
-        className="inline-flex text-panel-text-muted transition-colors hover:text-panel-text-active"
-        href={href}
-        rel="noopener noreferrer"
-        target="_blank"
-        title="View on Basescan"
-      >
-        <ExternalLink aria-hidden="true" className="size-3.5" />
-      </a>
-    );
-  };
-}
 
 export function SpotTradingTerminal({
   candles,
@@ -276,13 +137,10 @@ export function SpotTradingTerminal({
   const [cancelledNonces, setCancelledNonces] = useState<ReadonlySet<string>>(() => new Set());
   const activityPanelRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const orderHistory = useOrderHistory({
-    enabled: isSignedIn && bottomTab === "order-history",
-    signMessage: onSignOrderHistory,
-    walletAddress,
-  });
-  const tradeHistory = useTradeHistory({
-    enabled: isSignedIn && bottomTab === "trade-history",
+  const signedHistory = useSignedHistoryTabs({
+    bottomTab,
+    isSignedIn,
+    market: SPOT_MARKET_SYMBOL,
     signMessage: onSignOrderHistory,
     walletAddress,
   });
@@ -401,17 +259,12 @@ export function SpotTradingTerminal({
       return buildOpenOrdersActivityView(workingOrders, walletAddress);
     }
     return (
-      getSignedHistoryView(bottomTab, orderHistory.state, tradeHistory.state) ??
+      signedHistory.view ??
       ACTIVITY_VIEWS[bottomTab as keyof typeof ACTIVITY_VIEWS] ?? { columns: [], rows: [] }
     );
   }
 
   const activityView = buildActivityView();
-  // Both signed tabs share one login, so a signature from either prompt unlocks the other.
-  const signedHistoryEmptyState = getSignedHistoryPrompt(bottomTab, {
-    "order-history": orderHistory,
-    "trade-history": tradeHistory,
-  });
 
   /**
    * The wallet menu's Portfolio item. There is no separate portfolio route — the account's holdings
@@ -563,32 +416,7 @@ export function SpotTradingTerminal({
           >
             <TradingActivityPanel
               activityView={activityView}
-              emptyState={
-                signedHistoryEmptyState === null
-                  ? undefined
-                  : {
-                      action:
-                        signedHistoryEmptyState.action === null ? undefined : (
-                          <button
-                            className="cursor-pointer rounded-sm bg-input-bg px-3 py-1.5 font-medium text-[11px] text-panel-text-active ring-1 ring-panel-border transition-colors hover:bg-input-hover disabled:cursor-not-allowed disabled:opacity-60"
-                            disabled={
-                              signedHistoryEmptyState.action === "sign" &&
-                              onSignOrderHistory === undefined
-                            }
-                            onClick={
-                              signedHistoryEmptyState.action === "sign"
-                                ? signedHistoryEmptyState.history.authorize
-                                : signedHistoryEmptyState.history.reload
-                            }
-                            type="button"
-                          >
-                            {signedHistoryEmptyState.action === "sign" ? "Sign to view" : "Retry"}
-                          </button>
-                        ),
-                      body: signedHistoryEmptyState.body,
-                      title: signedHistoryEmptyState.title,
-                    }
-              }
+              emptyState={signedHistory.emptyState}
               footerLinks={FOOTER_LINKS}
               isSignedIn={isSignedIn}
               onTabSelect={setBottomTab}
@@ -599,7 +427,7 @@ export function SpotTradingTerminal({
                 legacy,
                 legacyControl,
                 ownedOpenOrders,
-                tradeHistoryState: tradeHistory.state,
+                tradeHistoryRowAction: signedHistory.rowAction,
               })}
               selectedTab={bottomTab}
               tabs={SPOT_BOTTOM_TABS}
@@ -625,7 +453,7 @@ function buildSpotRowAction(inputs: {
   legacy: { accountId: string } | null;
   legacyControl: ReactNode;
   ownedOpenOrders: { nonce: string; ownerAddress: string }[];
-  tradeHistoryState: Parameters<typeof getTradeHistoryRowAction>[1];
+  tradeHistoryRowAction: ((rowIndex: number) => ReactNode) | undefined;
 }) {
   if (inputs.bottomTab === "assets" && inputs.legacy !== null) {
     return (rowIndex: number) => (rowIndex === 2 ? inputs.legacyControl : null);
@@ -649,5 +477,5 @@ function buildSpotRowAction(inputs: {
       );
     };
   }
-  return getTradeHistoryRowAction(inputs.bottomTab, inputs.tradeHistoryState);
+  return inputs.tradeHistoryRowAction;
 }

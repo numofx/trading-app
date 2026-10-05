@@ -8,6 +8,7 @@ import { formatMarketPrice, formatNaira } from "@/lib/market-formatting";
 import type { LadderRow, LadderUnit } from "@/lib/order-book-display";
 import {
   buildLadderRows,
+  formatLadderAmount,
   getMaxLadderTotal,
   getSpreadBps,
   PRICE_GROUPS,
@@ -19,21 +20,6 @@ export type SpotBookTab = "book" | "trades";
 
 /** What each ladder unit is called on screen. Base is the USDC notional an order is entered in. */
 const UNIT_LABEL = { base: "USDC", quote: "cNGN" } satisfies Record<LadderUnit, string>;
-
-const COMPACT_AMOUNT = new Intl.NumberFormat("en-US", {
-  maximumFractionDigits: 3,
-  notation: "compact",
-});
-const PLAIN_AMOUNT = new Intl.NumberFormat("en-US", { maximumFractionDigits: 3 });
-
-/**
- * Spot sizes are USDC notional: whole units render clean, and a real sub-unit fill keeps its
- * decimals instead of being displayed as "0". Restated in cNGN they run into the millions, so
- * anything past a thousand goes compact rather than pushing the price column off its edge.
- */
-function formatAmount(value: number) {
-  return Math.abs(value) >= 1000 ? COMPACT_AMOUNT.format(value) : PLAIN_AMOUNT.format(value);
-}
 
 /** Prices carry exactly the precision the ladder is grouped at: a 0.1 tick has no second decimal. */
 function getPriceDigits(tick: number) {
@@ -116,8 +102,12 @@ function BookLevelRow({
       >
         {formatMarketPrice(row.price, digits)}
       </span>
-      <span className="relative z-10 text-right text-panel-text">{formatAmount(row.amount)}</span>
-      <span className="relative z-10 text-right text-panel-text">{formatAmount(row.total)}</span>
+      <span className="relative z-10 text-right text-panel-text">
+        {formatLadderAmount(row.amount)}
+      </span>
+      <span className="relative z-10 text-right text-panel-text">
+        {formatLadderAmount(row.total)}
+      </span>
     </div>
   );
 }
@@ -271,7 +261,7 @@ function TradeTape({ trades }: { trades: TradePrint[] }) {
           >
             {formatMarketPrice(trade.price, 2)}
           </span>
-          <span className="text-right text-panel-text">{formatAmount(trade.size)}</span>
+          <span className="text-right text-panel-text">{formatLadderAmount(trade.size)}</span>
           <span className="text-right text-panel-text-muted">{trade.time}</span>
         </div>
       ))}

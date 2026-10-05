@@ -82,12 +82,14 @@ export function TradingActivityPanel({
          * Scrolls sideways rather than wrapping: in the narrow two-column layout five tabs wrapped
          * to a second row, and the ~40px it cost came straight out of the rows below it.
          */}
-        <div className="flex min-w-0 gap-1 overflow-x-auto">
+        <div className="flex min-w-0 gap-1.5 overflow-x-auto font-medium text-[12px]">
           {tabs.map((tab) => (
             <button
               className={cn(
-                "shrink-0 whitespace-nowrap rounded-sm px-3 py-1.5 font-medium text-[10px] text-panel-text-muted transition-colors hover:bg-input-hover hover:text-panel-text-active",
-                selectedTab === tab.id && "bg-input-bg text-panel-text-active"
+                "shrink-0 cursor-pointer whitespace-nowrap rounded-sm px-2 py-1 transition-colors",
+                selectedTab === tab.id
+                  ? "bg-input-bg text-panel-text-active"
+                  : "text-panel-text-muted hover:text-panel-text"
               )}
               key={tab.id}
               onClick={() => onTabSelect(tab.id)}
@@ -103,7 +105,7 @@ export function TradingActivityPanel({
         {/* Header and rows share this wrapper so they scroll sideways together and stay aligned. */}
         <div className="flex min-w-max flex-col">
           <div
-            className="grid gap-2 text-[8px] text-panel-text-muted uppercase tracking-[0.16em]"
+            className="grid gap-2 text-[12px] text-panel-text-muted"
             style={{ gridTemplateColumns }}
           >
             {activityView.columns.map((column) => (
