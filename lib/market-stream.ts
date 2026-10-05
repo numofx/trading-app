@@ -215,6 +215,7 @@ export function presentStreamTrade(
 
   return {
     ...(Number.isFinite(atMs) ? { atMs } : {}),
+    id: trade.trade_id,
     price: quote.price,
     side: toUiSide(trade.aggressor_side, presenter),
     // Keyed on `type`, not the spec: this is display precision, not the inversion. Any spot market

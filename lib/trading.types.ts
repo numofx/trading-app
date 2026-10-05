@@ -26,6 +26,8 @@ export type TradePrint = {
   time: string;
   /** When the venue recorded the fill, epoch ms; absent when the source carried no timestamp. */
   atMs?: number;
+  /** The venue's trade id, assigned in execution order: what tells a streamed fill from one the server already had. */
+  id?: number;
 };
 
 export type ActivityTab = {

@@ -1,6 +1,8 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
+import type { CandleInterval } from "@/lib/markets-service";
 import type { SpotMarket } from "@/lib/trading.types";
 import { SpotTradingTerminal } from "@/ui/trading-terminal/SpotTradingTerminal";
 
@@ -76,7 +78,14 @@ const FIXTURE_MARKET: SpotMarket = {
   ],
   // Timestamped an hour back, so a fill injected now reads as newer than what the server knew.
   trades: [
-    { atMs: Date.now() - 3_600_000, price: FIXTURE_PRICE, side: "buy", size: 3, time: "12:00:00" },
+    {
+      atMs: Date.now() - 3_600_000,
+      id: 1,
+      price: FIXTURE_PRICE,
+      side: "buy",
+      size: 3,
+      time: "12:00:00",
+    },
   ],
 };
 
@@ -92,8 +101,27 @@ const FIXTURE_MARKET: SpotMarket = {
  *
  * Dev-only: the route that renders this 404s in production.
  */
+const CANDLE_INTERVALS = [
+  "1m",
+  "5m",
+  "15m",
+  "1h",
+  "4h",
+  "1d",
+] as const satisfies readonly CandleInterval[];
+
+function isCandleInterval(value: string | null): value is CandleInterval {
+  return CANDLE_INTERVALS.some((interval) => interval === value);
+}
+
 export function LayoutFixtureTerminal() {
   const [deposits, setDeposits] = useState(0);
+  // `?interval=1m` folds injected fills at that interval, to check candles extend within a bucket
+  // and a new one opens at the boundary; the app itself serves daily candles.
+  const requestedInterval = useSearchParams().get("interval");
+  const candleInterval: CandleInterval = isCandleInterval(requestedInterval)
+    ? requestedInterval
+    : "1d";
   const accountCngn = OPENING_BALANCES.cngn + deposits * DEPOSIT_AMOUNT.cngn;
   const accountUsdc = OPENING_BALANCES.usdc + deposits * DEPOSIT_AMOUNT.usdc;
 
@@ -102,6 +130,7 @@ export function LayoutFixtureTerminal() {
       <SpotTradingTerminal
         accountCngn={accountCngn}
         accountUsdc={accountUsdc}
+        candleInterval={candleInterval}
         candles={[]}
         depositControl={
           <div className="flex items-center gap-2">

@@ -9,9 +9,10 @@ import {
   applyTradesToCandles,
   applyTradesToStats,
   CANDLE_INTERVAL_MS,
-  latestTradeMs,
+  latestTradeId,
   tradesSince,
 } from "@/lib/live-market";
+import type { CandleInterval } from "@/lib/markets-service";
 import {
   getAnchorPrice,
   getBestPrices,
@@ -46,6 +47,7 @@ const SPOT_MARKET_SYMBOL = "USDCcNGN-SPOT";
 
 export function SpotTradingTerminal({
   candles,
+  candleInterval = "1d",
   spotMarket,
   accountCngn = null,
   accountUsdc = null,
@@ -66,6 +68,8 @@ export function SpotTradingTerminal({
   lastAction = null,
 }: {
   candles: Candle[];
+  /** The interval `candles` are bucketed at, which streamed fills are folded in at. The page serves daily. */
+  candleInterval?: CandleInterval;
   spotMarket: SpotMarket;
   /** Subaccount balances as numbers — the ticket sizes a percentage of what the account can spend. */
   accountCngn?: number | null;
@@ -208,8 +212,13 @@ export function SpotTradingTerminal({
   // Fills the stream has seen since the server rendered: folded into the chart's candles and the
   // 24h figures here, on every render, so a trade on the market shows without a reload. The
   // minute's server re-read then corrects what folding cannot, like fills leaving the window.
-  const streamedFills = tradesSince(bookTrades, latestTradeMs(spotMarket.trades));
-  const liveCandles = applyTradesToCandles(candles, streamedFills, CANDLE_INTERVAL_MS["1d"], "1d");
+  const streamedFills = tradesSince(bookTrades, latestTradeId(spotMarket.trades));
+  const liveCandles = applyTradesToCandles(
+    candles,
+    streamedFills,
+    CANDLE_INTERVAL_MS[candleInterval],
+    candleInterval
+  );
   const liveStats = applyTradesToStats(spotMarket.stats24h, streamedFills);
   const lastPrice = getVenueLastPrice(bookTrades, liveCandles, spotMarket.mark);
   // The touch the trader is actually looking at. It drives the ticket's prefill and cost estimate

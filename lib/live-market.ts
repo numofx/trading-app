@@ -13,18 +13,19 @@ export const CANDLE_INTERVAL_MS = {
 } satisfies Record<CandleInterval, number>;
 
 /**
- * The newest fill the server rendered with. Streamed trades at or before it are already in the
- * server's candles and 24h stats; anything after it is what the page has to add itself.
+ * The newest fill the server rendered with, by the venue's trade id. Ids are assigned in execution
+ * order, so a streamed trade with a higher id is one the server's candles and 24h stats have not
+ * counted. Timestamps cannot tell two fills in the same second apart; ids can.
  */
-export function latestTradeMs(trades: readonly TradePrint[]): number {
-  return trades.reduce((latest, trade) => Math.max(latest, trade.atMs ?? 0), 0);
+export function latestTradeId(trades: readonly TradePrint[]): number {
+  return trades.reduce((latest, trade) => Math.max(latest, trade.id ?? 0), 0);
 }
 
-/** The streamed trades the server has not seen, oldest first; trades without a timestamp cannot be placed and are left out. */
-export function tradesSince(trades: readonly TradePrint[], watermarkMs: number): TradePrint[] {
+/** The streamed trades the server has not seen, in execution order; trades without an id cannot be told apart and are left out. */
+export function tradesSince(trades: readonly TradePrint[], watermarkId: number): TradePrint[] {
   return trades
-    .filter((trade): trade is TradePrint & { atMs: number } => (trade.atMs ?? -1) > watermarkMs)
-    .sort((a, b) => a.atMs - b.atMs);
+    .filter((trade): trade is TradePrint & { id: number } => (trade.id ?? -1) > watermarkId)
+    .sort((a, b) => a.id - b.id);
 }
 
 /**
