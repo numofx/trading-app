@@ -1,10 +1,7 @@
 "use client";
 
-import { ArrowUpDown } from "lucide-react";
-import type { ReactNode } from "react";
 import { useState } from "react";
 import { formatBalance, formatBalanceFigure } from "@/lib/account-balance-display";
-import { cn } from "@/lib/cn";
 import { formatNaira } from "@/lib/market-formatting";
 import {
   findOwnCrossingOrder,
@@ -21,6 +18,14 @@ import { SPOT_ORDER_LIFETIME_LABEL, SPOT_TAKER_FEE_RATE } from "@/lib/spot-order
 import type { OrderBookLevel, SpotOpenOrder } from "@/lib/trading.types";
 import { ConfirmOrderDialog } from "@/ui/trading-terminal/ConfirmOrderDialog";
 import { OrderTypeTabs } from "@/ui/trading-terminal/OrderTypeTabs";
+import { AmountSlider } from "@/ui/trading-terminal/order-form/AmountSlider";
+import { AvailableRow } from "@/ui/trading-terminal/order-form/AvailableRow";
+import { FormField } from "@/ui/trading-terminal/order-form/FormField";
+import { OrderFormShell } from "@/ui/trading-terminal/order-form/OrderFormShell";
+import { SideToggle } from "@/ui/trading-terminal/order-form/SideToggle";
+import { SubmitButton } from "@/ui/trading-terminal/order-form/SubmitButton";
+import { SummaryRow } from "@/ui/trading-terminal/order-form/SummaryRow";
+import { TokenUnit, TokenUnitSelect } from "@/ui/trading-terminal/order-form/TokenUnit";
 
 /*
  * No "Stop Limit". The signed envelope this ticket produces is a plain limit action — it carries
@@ -35,7 +40,18 @@ import { OrderTypeTabs } from "@/ui/trading-terminal/OrderTypeTabs";
 type SpotOrderType = "Limit" | "Market";
 type PayCurrency = "cNGN" | "USDC";
 
-const ORDER_TYPES = ["Limit", "Market"] as const satisfies readonly SpotOrderType[];
+const ORDER_TYPES = ["Market", "Limit"] as const satisfies readonly SpotOrderType[];
+
+const SIDES = [
+  { label: "Buy", tone: "buy", value: "buy" },
+  { label: "Sell", tone: "sell", value: "sell" },
+] as const;
+
+/** Presets under the size slider: shares of what the account can fund. */
+const SIZE_PRESETS = [25, 50, 75, 100].map((percent) => ({
+  label: `${percent}%`,
+  value: percent,
+}));
 
 /** The signed ceiling as basis points, derived from the rate the order is signed with. */
 const SPOT_TAKER_FEE_BPS = Number(SPOT_TAKER_FEE_RATE) * 10_000;
@@ -138,46 +154,6 @@ function formatSpotFee(usdc: number) {
   return `${usdc.toLocaleString("en-US", { maximumFractionDigits: 4, minimumFractionDigits: 2 })} USDC`;
 }
 
-/**
- * Field with its label inside the box and an adornment on the right — the unit, or the quick-fill
- * buttons on the price field. Keeping the label in the box buys back a row of height per field,
- * which is what puts the submit button above the fold on a 667px screen.
- */
-function FormField({
-  adornment,
-  id,
-  label,
-  onChange,
-  placeholder,
-  value,
-}: {
-  adornment?: ReactNode;
-  id: string;
-  label: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-sm bg-input-bg px-3 py-1.5 ring-1 ring-panel-border focus-within:ring-panel-text-muted">
-      <div className="flex items-center justify-between gap-2">
-        <label className="text-[10px] text-panel-text-muted" htmlFor={id}>
-          {label}
-        </label>
-        {adornment}
-      </div>
-      <input
-        className="w-full bg-transparent font-semibold text-[15px] text-panel-text-active outline-none placeholder:text-panel-text-muted"
-        id={id}
-        inputMode="decimal"
-        onChange={(event) => onChange(event.target.value.replace(/[^\d.,]/g, ""))}
-        placeholder={placeholder}
-        value={value}
-      />
-    </div>
-  );
-}
-
 /** Fills the price field from the book — the mid, or the touch on the side the order would rest. */
 function PriceQuickFill({
   bestLabel,
@@ -207,23 +183,6 @@ function PriceQuickFill({
         </button>
       ))}
     </span>
-  );
-}
-
-/** One `label — value` line in the cost breakdown above the submit button. */
-function CostRow({ emphasis, label, value }: { emphasis?: boolean; label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="text-panel-text-muted">{label}</span>
-      <span
-        className={cn(
-          "truncate",
-          emphasis ? "font-semibold text-[13px] text-panel-text-active" : "text-panel-text"
-        )}
-      >
-        {value}
-      </span>
-    </div>
   );
 }
 
@@ -373,133 +332,6 @@ function deriveOrderEconomics({
 }
 
 /** Buy/Sell selector. Tinted rather than filled, so the submit button stays the loudest control. */
-function SideTabs({
-  onSelect,
-  side,
-}: {
-  onSelect: (side: "buy" | "sell") => void;
-  side: "buy" | "sell";
-}) {
-  const isBuy = side === "buy";
-
-  return (
-    <div className="grid grid-cols-2 gap-1 rounded-sm bg-input-bg p-0.5">
-      <button
-        className={cn(
-          "h-8 cursor-pointer rounded-sm font-semibold text-[12px] transition-colors",
-          isBuy
-            ? "bg-bid-bg text-buy ring-1 ring-buy/40"
-            : "text-panel-text-muted hover:bg-input-hover"
-        )}
-        onClick={() => onSelect("buy")}
-        type="button"
-      >
-        Buy
-      </button>
-      <button
-        className={cn(
-          "h-8 cursor-pointer rounded-sm font-semibold text-[12px] transition-colors",
-          isBuy
-            ? "text-panel-text-muted hover:bg-input-hover"
-            : "bg-ask-bg text-sell ring-1 ring-sell/40"
-        )}
-        onClick={() => onSelect("sell")}
-        type="button"
-      >
-        Sell
-      </button>
-    </div>
-  );
-}
-
-/**
- * The balance an order draws on is the trading account's, not the connected wallet's — so this is
- * the number that answers "can I place this?". The plus opens the deposit dialog, which is the
- * action when the answer is no.
- *
- * The currency follows the selected side, because so does the balance an order spends: a buy pays
- * cNGN for USDC, a sell pays USDC. The figure is printed bare — the currency is already named one
- * gap to its left, and the ticker suffix the rest of the app uses would only repeat it.
- */
-function AvailableRow({
-  currency,
-  label,
-  onDepositRequest,
-}: {
-  currency: PayCurrency;
-  label: string;
-  onDepositRequest?: (currency: PayCurrency) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-2 text-[11px]">
-      <span className="text-panel-text-muted">Available ({currency})</span>
-      <span className="flex min-w-0 items-center gap-1.5">
-        <span className="truncate font-medium text-panel-text">{label}</span>
-        <button
-          aria-label={`Deposit ${currency}`}
-          className="flex size-4 cursor-pointer items-center justify-center rounded-full bg-input-bg text-[12px] text-panel-text-muted leading-none ring-1 ring-panel-border transition-colors hover:text-panel-text-active"
-          onClick={() => onDepositRequest?.(currency)}
-          type="button"
-        >
-          +
-        </button>
-      </span>
-    </div>
-  );
-}
-
-/**
- * Switches which leg the Amount field is denominated in.
- *
- * A market order is as often sized by what a trader wants to spend as by what they want to hold,
- * and on this pair those are different currencies. Only the USDC figure is submittable, so a cNGN
- * entry is converted at the price the order crosses at — the line under the field always shows the
- * other leg, so whichever way it is entered, both numbers are on screen before signing.
- */
-function AmountUnitToggle({ onToggle, unit }: { onToggle: () => void; unit: PayCurrency }) {
-  return (
-    <button
-      aria-label={`Amount in ${unit} — switch currency`}
-      className="flex cursor-pointer items-center gap-1 rounded-sm px-1 py-0.5 text-[10px] text-panel-text-muted transition-colors hover:bg-input-hover hover:text-panel-text-active"
-      onClick={onToggle}
-      type="button"
-    >
-      {unit}
-      <ArrowUpDown aria-hidden className="size-3" />
-    </button>
-  );
-}
-
-/**
- * Sizes the order as a share of what the account can fund. Inert — and visibly so — when that
- * ceiling is unknown, rather than sliding against an invented balance.
- */
-function SizeSlider({
-  disabled,
-  onChange,
-  percent,
-}: {
-  disabled: boolean;
-  onChange: (percent: number) => void;
-  percent: number;
-}) {
-  return (
-    <div>
-      <input
-        aria-label="Order size as a percentage of available balance"
-        className="h-1 w-full cursor-pointer appearance-none rounded-full bg-input-bg accent-panel-text-active disabled:cursor-not-allowed disabled:opacity-40"
-        disabled={disabled}
-        max={100}
-        min={0}
-        onChange={(event) => onChange(Number(event.target.value))}
-        step={25}
-        type="range"
-        value={percent}
-      />
-    </div>
-  );
-}
-
 /**
  * Resolves the CTA label. The wallet comes first — without one there is nothing to submit or
  * prepare, and submission rejects on the same condition. After that an in-flight order wins over
@@ -632,22 +464,6 @@ function deriveAmountEntry({
 }
 
 /** The Amount field's trailing control: a currency switch on a market ticket, a label otherwise. */
-function AmountAdornment({
-  isMarket,
-  onToggle,
-  unit,
-}: {
-  isMarket: boolean;
-  onToggle: () => void;
-  unit: PayCurrency;
-}) {
-  if (!isMarket) {
-    return <span className="text-[10px] text-panel-text-muted">USDC</span>;
-  }
-
-  return <AmountUnitToggle onToggle={onToggle} unit={unit} />;
-}
-
 /**
  * The other leg of the same order, so a size entered in one currency is never signed without its
  * counterpart on screen. An em dash until the book can price it: a conversion needs a touch, and
@@ -680,29 +496,34 @@ function MarketFillRows({
        * touch — on a thin book the two are not the same number, and the average is the one the
        * trader is charged.
        */}
-      <CostRow label="Average price" value={formatNaira(averagePrice)} />
+      <SummaryRow label="Average price" value={formatNaira(averagePrice)} />
       {/*
        * Not a cost: the room the order has to still cross if the quote moves between signing and
        * settlement. The fill itself lands at the maker's price, which `Average price` above quotes.
        */}
-      <CostRow label="Slippage" value={`<${(SPOT_MARKET_SLIPPAGE * 100).toFixed(1)}%`} />
+      <SummaryRow label="Slippage" value={`<${(SPOT_MARKET_SLIPPAGE * 100).toFixed(1)}%`} />
     </>
   );
 }
 
 /**
- * How long an order that does not fill stays on the book.
- *
- * A limit ticket's most surprising term — it leaves the book on its own and nothing else on screen
- * would say so. A market order crosses on submission, so the lifetime only ever applies to a
- * remainder the book could not cover, which the depth note above already names.
+ * How long an order that does not fill stays on the book: a limit ticket's most surprising term,
+ * since it leaves the book on its own and nothing else on screen would say so. A market order
+ * crosses on submission, so for it the lifetime only applies to a remainder the book could not
+ * cover; the row says so in its tooltip rather than disappearing.
  */
 function OrderLifetimeRow({ isMarket }: { isMarket: boolean }) {
-  if (isMarket) {
-    return null;
-  }
-
-  return <CostRow label="Expires" value={`${SPOT_ORDER_LIFETIME_LABEL} after signing`} />;
+  return (
+    <SummaryRow
+      label="Expires"
+      tooltip={
+        isMarket
+          ? "A market order crosses on submission; only a remainder the book could not cover rests this long"
+          : undefined
+      }
+      value={`${SPOT_ORDER_LIFETIME_LABEL} after signing`}
+    />
+  );
 }
 
 /**
@@ -748,9 +569,10 @@ function MarketDepthNote({
 function FeeRows({ ceiling, charged }: { ceiling: number; charged: number | null }) {
   return (
     <>
-      {charged === null ? null : <CostRow label="Fee" value={formatSpotFee(charged)} />}
-      <CostRow
-        label={charged === null ? "Max fee" : "Max fee (signed)"}
+      {charged === null ? null : <SummaryRow label="Fee" value={formatSpotFee(charged)} />}
+      <SummaryRow
+        label="Max fee"
+        tooltip="The most the order is signed to pay: a bound the venue reverts above, never a quote. An order that partly fills, or rests and never takes, is charged less."
         value={formatSpotFee(ceiling)}
       />
     </>
@@ -800,11 +622,69 @@ function OwnCrossingNote({ note }: { note: string | null }) {
  * the component for the same reason as `getOwnCrossingNote`: its branching stays off that budget.
  */
 function getSubmitBlock(isBusy: boolean, ownCrossingNote: string | null) {
-  const isBlocked = ownCrossingNote !== null;
-  return {
-    blockedClassName: isBlocked ? "cursor-not-allowed opacity-50" : undefined,
-    disabled: isBusy || isBlocked,
-  };
+  return { disabled: isBusy || ownCrossingNote !== null };
+}
+
+/**
+ * The Amount field. A market order offers the unit switch; a limit order is priced by the trader,
+ * so its size is the one number the ticket should not be restating for them, and it reads USDC.
+ */
+function AmountField({
+  amount,
+  isMarket,
+  onChange,
+  onUnitToggle,
+  unit,
+}: {
+  amount: string;
+  isMarket: boolean;
+  onChange: (value: string) => void;
+  onUnitToggle: () => void;
+  unit: PayCurrency;
+}) {
+  return (
+    <FormField
+      adornment={
+        isMarket ? (
+          <TokenUnitSelect
+            label={`Amount in ${unit} — switch currency`}
+            onSelect={(next) => next !== unit && onUnitToggle()}
+            options={["USDC", "cNGN"]}
+            selected={unit}
+          />
+        ) : (
+          <TokenUnit symbol="USDC" />
+        )
+      }
+      id="spot-amount"
+      label="Amount"
+      onChange={onChange}
+      placeholder="0.0000"
+      tooltip={
+        isMarket
+          ? "What you trade. Enter it in USDC or in cNGN; the other leg is shown underneath."
+          : "USDC notional: what the order trades."
+      }
+      value={amount}
+    />
+  );
+}
+
+/**
+ * The button's colour: the side's when it would place an order, neutral once it is a deposit
+ * remedy instead, so the trader is not asked to press a green "Buy"-coloured control that opens a
+ * deposit dialog.
+ */
+function getSubmitTone({
+  hasWallet,
+  shortfallCurrency,
+  side,
+}: {
+  hasWallet: boolean;
+  shortfallCurrency: PayCurrency | null;
+  side: "buy" | "sell";
+}) {
+  return shortfallCurrency !== null || !hasWallet ? "neutral" : side;
 }
 
 export function SpotOrderFormPanel({
@@ -1025,141 +905,132 @@ export function SpotOrderFormPanel({
   });
 
   return (
-    /*
-     * `min-h-fit` is what keeps the fields on screen: the ticket shares its column with the
-     * balance summary, and as a plain flex child it gave up whatever height the summary took —
-     * on a 700px window that left the price and amount fields a ~20px sliver behind an inner
-     * scrollbar. Refusing to shrink below its own content makes the *column* scroll instead,
-     * and the footer below sticks so the submit button never leaves the viewport.
-     */
-    <section className="flex flex-col overflow-clip bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 md:min-h-fit md:flex-1">
+    <OrderFormShell
+      footer={
+        <>
+          {/*
+           * One total, not a Subtotal/Total pair. The fee is charged on the USDC leg while the
+           * total is the cNGN one, so Total never differs from Subtotal — printing both implied
+           * the fee was added into it, and cost the Amount field its rows on a 700px screen.
+           */}
+          <div className="space-y-0.5">
+            <SummaryRow emphasis label="Total" value={totalLabel} />
+            <FeeRows ceiling={takerFee} charged={feeFromVenue} />
+            <MarketFillRows averagePrice={averagePrice} isMarket={isMarket} />
+            <OrderLifetimeRow isMarket={isMarket} />
+          </div>
+
+          <MarketDepthNote fill={fill} hasShortfall={shortfallCurrency !== null} />
+
+          <OwnCrossingNote note={ownCrossingNote} />
+
+          {shortfall === null || !hasWallet ? null : (
+            <p className="text-[10px] text-sell leading-snug">
+              Needs {formatBalance(shortfall.needed, shortfall.currency)}; account holds{" "}
+              {formatBalance(shortfall.held, shortfall.currency)}.
+            </p>
+          )}
+
+          {/*
+           * Neutral once it stops being an order button, so the trader is not asked to press a
+           * green "Buy"-coloured control that will open a deposit dialog. Stable id: the label
+           * changes with wallet and submission state, so text is not an identifier.
+           */}
+          <SubmitButton
+            busy={isBusy}
+            disabled={submitBlock.disabled && !isBusy}
+            id="spot-submit-cta"
+            onClick={handleSubmit}
+            tone={getSubmitTone({ hasWallet, shortfallCurrency, side })}
+          >
+            {submitLabel}
+          </SubmitButton>
+
+          <ConfirmOrderDialog
+            {...confirmation}
+            isSubmitting={isSubmitting}
+            onConfirm={handleConfirm}
+            onOpenChange={setConfirmOpen}
+            open={confirmOpen}
+            orderSide={side}
+          />
+
+          {statusText === null ? null : (
+            <p className="text-[10px] text-panel-text-muted leading-snug">{statusText}</p>
+          )}
+        </>
+      }
+    >
+      <SideToggle onSelect={setSide} options={SIDES} selected={side} />
+
+      <OrderTypeTabs onSelect={setOrderType} orderTypes={ORDER_TYPES} selected={orderType} />
+
       {/*
-       * The panel label only earns its space next to sibling panels. In the stacked
-       * sub-xl layout this is the only form on screen, so the row is dropped there to
-       * keep the submit button within the first screenful.
+       * The balance an order draws on is the trading account's, not the connected wallet's, so
+       * this is the number that answers "can I place this?". The currency follows the side,
+       * because so does the balance an order spends: a buy pays cNGN for USDC, a sell pays USDC.
        */}
-      <div className="hidden shrink-0 items-center border-panel-border border-b px-3 py-1.5 font-medium text-[11px] md:flex">
-        <span className="rounded-sm bg-input-bg px-2 py-0.5 text-panel-text-active">
-          Order form
-        </span>
-      </div>
+      <AvailableRow
+        depositLabel={`Deposit ${spendCurrency}`}
+        label={`Available (${spendCurrency})`}
+        onDeposit={() => onDepositRequest?.(spendCurrency)}
+        tooltip="Your trading account's balance less what your own resting orders already claim. The connected wallet funds a deposit, not an order."
+        value={availableLabel}
+      />
 
-      {/* No scroller of its own — the column is the one scroll region, so a squeezed ticket
-          scrolls the whole column rather than hiding fields inside an unmarked box. */}
-      <div className="space-y-1.5 px-3 py-1.5 md:min-h-0 md:flex-1">
-        <SideTabs onSelect={setSide} side={side} />
-
-        <OrderTypeTabs onSelect={setOrderType} orderTypes={ORDER_TYPES} selected={orderType} />
-
-        <AvailableRow
-          currency={spendCurrency}
-          label={availableLabel}
-          onDepositRequest={onDepositRequest}
-        />
-
-        {needsLimitPrice ? (
-          <FormField
-            adornment={
+      {needsLimitPrice ? (
+        <FormField
+          adornment={
+            <span className="flex items-center gap-2">
               <PriceQuickFill
                 bestLabel={isBuy ? "BID" : "ASK"}
                 bestPrice={isBuy ? bestBid : bestAsk}
                 midPrice={anchorPrice}
                 onSelect={(price) => setLimitPrice(price.toFixed(2))}
               />
-            }
-            id="spot-limit-price"
-            label="Limit price (cNGN)"
-            onChange={setLimitPrice}
-            placeholder="0.00"
-            value={limitPrice}
-          />
-        ) : null}
-
-        <FormField
-          adornment={
-            <AmountAdornment isMarket={isMarket} onToggle={handleUnitToggle} unit={activeUnit} />
+              <TokenUnit symbol="cNGN" />
+            </span>
           }
-          id="spot-amount"
-          label="Amount"
-          onChange={setAmount}
-          placeholder="0.0000"
-          value={amount}
+          id="spot-limit-price"
+          label="Limit price"
+          onChange={setLimitPrice}
+          tooltip="cNGN per USDC. Seeded from the mid, which cannot cross on either side."
+          value={limitPrice}
         />
-
-        <ConversionLine isMarket={isMarket} label={counterpartLabel} />
-
-        <SizeSlider
-          disabled={!canSizeByPercent}
-          onChange={handleSizePercent}
-          percent={sizePercent}
-        />
-      </div>
+      ) : null}
 
       {/*
-       * Fees and the submit CTA stay pinned so the primary action is never scrolled out of reach —
-       * sticky to the column's scrollport, so on a viewport too short for the whole ticket the CTA
-       * rides at the bottom of the column instead of sitting below the fold.
+       * A market order is as often sized by what a trader wants to spend as by what they want to
+       * hold, and on this pair those are different currencies. Only the USDC figure is
+       * submittable, so a cNGN entry is converted at the price the order crosses at; the line
+       * under the field shows the other leg either way. A limit order is priced by the trader, so
+       * its size is the one number the ticket should not be restating for them.
        */}
-      <div className="shrink-0 space-y-2 border-panel-border border-t bg-panel-bg-muted px-3 pt-1.5 pb-2 md:sticky md:bottom-0 md:z-10">
-        {/*
-         * One total, not a Subtotal/Total pair. The fee is charged on the USDC leg while the total
-         * is the cNGN one, so Total never differs from Subtotal — printing both implied the fee was
-         * added into it, and cost the two rows the Amount field needed on a 700px screen.
-         */}
-        <div className="space-y-1 text-[11px]">
-          <CostRow emphasis label="Total" value={totalLabel} />
-          <FeeRows ceiling={takerFee} charged={feeFromVenue} />
-          <MarketFillRows averagePrice={averagePrice} isMarket={isMarket} />
-          <OrderLifetimeRow isMarket={isMarket} />
-        </div>
+      <AmountField
+        amount={amount}
+        isMarket={isMarket}
+        onChange={setAmount}
+        onUnitToggle={handleUnitToggle}
+        unit={activeUnit}
+      />
 
-        <MarketDepthNote fill={fill} hasShortfall={shortfallCurrency !== null} />
+      <ConversionLine isMarket={isMarket} label={counterpartLabel} />
 
-        <OwnCrossingNote note={ownCrossingNote} />
-
-        {shortfall === null || !hasWallet ? null : (
-          <p className="text-[10px] text-sell leading-snug">
-            Needs {formatBalance(shortfall.needed, shortfall.currency)}; account holds{" "}
-            {formatBalance(shortfall.held, shortfall.currency)}.
-          </p>
-        )}
-
-        <button
-          className={cn(
-            "h-10 w-full cursor-pointer rounded-sm font-semibold text-[13px] transition-colors",
-            isBuy
-              ? "bg-buy text-background hover:bg-buy/90"
-              : "bg-sell text-white hover:bg-sell/90",
-            // Neutral once it stops being an order button, so the trader is not asked to press a
-            // green "Buy"-coloured control that will open a deposit dialog.
-            shortfallCurrency !== null &&
-              "bg-input-bg text-panel-text-active ring-1 ring-panel-border hover:bg-input-hover",
-            isBusy && "cursor-wait opacity-70",
-            submitBlock.blockedClassName
-          )}
-          disabled={submitBlock.disabled}
-          // Stable hook for the layout invariant check: the label changes with wallet and
-          // submission state ("Deposit", "Submitting…", "Buy USDC"), so text is not an identifier.
-          id="spot-submit-cta"
-          onClick={handleSubmit}
-          type="button"
-        >
-          {submitLabel}
-        </button>
-
-        <ConfirmOrderDialog
-          {...confirmation}
-          isSubmitting={isSubmitting}
-          onConfirm={handleConfirm}
-          onOpenChange={setConfirmOpen}
-          open={confirmOpen}
-          orderSide={side}
-        />
-
-        {statusText === null ? null : (
-          <p className="text-[10px] text-panel-text-muted leading-snug">{statusText}</p>
-        )}
-      </div>
-    </section>
+      {/*
+       * Sizes the order as a share of what the account can fund. Inert, and visibly so, when that
+       * ceiling is unknown, rather than sliding against an invented balance.
+       */}
+      <AmountSlider
+        disabled={!canSizeByPercent}
+        label="Order size as a percentage of available balance"
+        max={100}
+        min={0}
+        onChange={handleSizePercent}
+        presets={SIZE_PRESETS}
+        step={25}
+        value={sizePercent}
+        valueText={`${sizePercent}%`}
+      />
+    </OrderFormShell>
   );
 }

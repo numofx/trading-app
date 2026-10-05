@@ -7,6 +7,7 @@ import posthog from "posthog-js";
 import { useState } from "react";
 import { createWalletClient, custom } from "viem";
 import { buildOpenOrdersActivityView, getOwnedOpenOrders } from "@/lib/account-activity-views";
+import { formatBalance } from "@/lib/account-balance-display";
 import { getAppChain } from "@/lib/base-public-client";
 import {
   buildPerpCngnExposure,
@@ -46,6 +47,7 @@ import { get24hStats, getVenueLastPrice } from "@/lib/ticker-stats";
 import type { ActivityView } from "@/lib/trading.types";
 import type { WithdrawableAsset } from "@/lib/withdrawable-assets";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
+import { AccountSummary } from "@/ui/trading-terminal/order-form/AccountSummary";
 import { PerpMarginDialog } from "@/ui/trading-terminal/PerpMarginDialog";
 import type { PerpOrderRequest } from "@/ui/trading-terminal/PerpOrderFormPanel";
 import { PerpOrderFormPanel } from "@/ui/trading-terminal/PerpOrderFormPanel";
@@ -562,6 +564,14 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
   const [closingIndex, setClosingIndex] = useState<number | null>(null);
 
   const stack = market?.stack ?? null;
+  /** The header's deposit control and the account rows share one path: connect first, then deposit. */
+  function openDeposit() {
+    if (primaryWallet === null) {
+      login();
+      return;
+    }
+    setDepositOpen(true);
+  }
   const account = useTradingSubaccount(
     primaryWallet?.address ?? null,
     stack ? { depositAsset: stack.cashAddress, manager: stack.srmAddress } : undefined
@@ -826,6 +836,33 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
               referencePrice={price}
               state={market?.state ?? null}
               takerFeeBps={market?.takerFeeBps ?? null}
+            />
+            {/*
+             * The perp account's holdings under the ticket, as spot's column ends: cash, then each
+             * collateral asset the SRM accepts, at zero until it is held. The plus opens the margin
+             * deposit, which chooses the asset itself.
+             */}
+            <AccountSummary
+              rows={[
+                {
+                  balance: formatBalance(perpAccount.account?.cash ?? null, "USDC"),
+                  onDeposit: openDeposit,
+                  symbol: "USDC",
+                },
+                ...listedCollateralOf(stack)
+                  .filter((asset) => asset.symbol === "cNGN")
+                  .map((asset) => ({
+                    balance: formatBalance(
+                      perpAccount.account === null
+                        ? null
+                        : (perpAccount.account.collateral.find((row) => row.symbol === asset.symbol)
+                            ?.balance ?? 0),
+                      "cNGN"
+                    ),
+                    onDeposit: openDeposit,
+                    symbol: "cNGN" as const,
+                  })),
+              ]}
             />
           </div>
 

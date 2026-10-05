@@ -12,6 +12,7 @@ import {
   getFillTransactionUrl,
   getOwnedOpenOrders,
 } from "@/lib/account-activity-views";
+import { formatBalance } from "@/lib/account-balance-display";
 import { getAppChain } from "@/lib/base-public-client";
 import type { AccountFill, OrderHistoryOrder, SignedHistoryState } from "@/lib/order-history.types";
 import {
@@ -31,7 +32,7 @@ import {
 import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
 import { get24hStats, getVenueLastPrice } from "@/lib/ticker-stats";
 import type { ActivityView, Candle, SpotMarket } from "@/lib/trading.types";
-import { SpotBalanceSummary } from "@/ui/trading-terminal/SpotBalanceSummary";
+import { AccountSummary } from "@/ui/trading-terminal/order-form/AccountSummary";
 import type { SpotChartTab, SpotTimeframe } from "@/ui/trading-terminal/SpotChartPanel";
 import { SpotChartPanel } from "@/ui/trading-terminal/SpotChartPanel";
 import type { SpotBookTab } from "@/ui/trading-terminal/SpotOrderBookPanel";
@@ -539,10 +540,20 @@ export function SpotTradingTerminal({
               ownOpenOrders={ownedOpenOrders}
               takerFeeBps={spotMarket.takerFeeBps}
             />
-            <SpotBalanceSummary
-              accountCngn={accountCngn}
-              accountUsdc={accountUsdc}
-              onDepositRequest={onDepositRequest}
+            {/* Both legs of the account, in the order the ticket spends them. */}
+            <AccountSummary
+              rows={[
+                {
+                  balance: formatBalance(accountUsdc, "USDC"),
+                  symbol: "USDC",
+                  onDeposit: () => onDepositRequest?.("USDC"),
+                },
+                {
+                  balance: formatBalance(accountCngn, "cNGN"),
+                  symbol: "cNGN",
+                  onDeposit: () => onDepositRequest?.("cNGN"),
+                },
+              ]}
             />
           </div>
 

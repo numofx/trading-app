@@ -1,7 +1,9 @@
 "use client";
 
+import { formatBalance } from "@/lib/account-balance-display";
 import { parsePerpState } from "@/lib/perp-market";
 import type { PerpAccountMargin } from "@/lib/perp-market.types";
+import { AccountSummary } from "@/ui/trading-terminal/order-form/AccountSummary";
 import { PerpOrderFormPanel } from "@/ui/trading-terminal/PerpOrderFormPanel";
 
 const FIXTURE_PRICE = 1388.89;
@@ -51,6 +53,15 @@ export function PerpLayoutFixture() {
           referencePrice={FIXTURE_PRICE}
           state={FIXTURE_STATE}
           takerFeeBps={25}
+        />
+        <AccountSummary
+          rows={[
+            { balance: formatBalance(FIXTURE_ACCOUNT.cash, "USDC"), symbol: "USDC" },
+            {
+              balance: formatBalance(FIXTURE_ACCOUNT.collateral[0]?.balance ?? null, "cNGN"),
+              symbol: "cNGN",
+            },
+          ]}
         />
       </div>
     </main>
