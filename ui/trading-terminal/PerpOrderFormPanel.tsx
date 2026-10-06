@@ -317,9 +317,11 @@ type ButtonInputs = {
 
 /** What the one button says: it connects, deposits, or trades, depending on what is missing. */
 function submitLabel(inputs: ButtonInputs) {
-  // Amount and unit, as brief as spot's "Buy USDC": the market is named in the header already.
-  const amount = inputs.sizeUsd === null ? "" : ` ${SIZE.format(inputs.sizeUsd)}`;
-  const trade = `${inputs.isLong ? "Long" : "Short"}${amount} USDC`;
+  // Named by the naira leg, the way this market's traders think of it: the Long side is long
+  // USDC, which is short the naira, so the words flip while the direction does not. The size
+  // stays in the unit it is entered in (USDC notional), after a dot so it never reads as naira.
+  const amount = inputs.sizeUsd === null ? "" : ` · ${SIZE.format(inputs.sizeUsd)} USDC`;
+  const trade = `${inputs.isLong ? "Short naira" : "Long naira"}${amount}`;
   if (inputs.isPaused) {
     return "Trading paused";
   }
