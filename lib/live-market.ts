@@ -96,3 +96,34 @@ export function applyTradesToStats(
     quoteVolume: (stats?.quoteVolume ?? 0) + volume,
   };
 }
+
+/**
+ * A fill's stamp for the trade tape, in the viewer's zone: the time to the second, and a short
+ * date before it when the fill is from another day, so a tape spanning days reads in order.
+ */
+export function formatTradeStamp(
+  atMs: number,
+  { nowMs, timeZone }: { nowMs: number; timeZone: string }
+): { date: string | null; time: string } {
+  const dayOf = new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "numeric",
+    timeZone,
+    year: "numeric",
+  });
+  const sameDay = dayOf.format(new Date(atMs)) === dayOf.format(new Date(nowMs));
+  return {
+    date: sameDay
+      ? null
+      : new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short", timeZone }).format(
+          new Date(atMs)
+        ),
+    time: new Intl.DateTimeFormat("en-US", {
+      hour: "2-digit",
+      hour12: false,
+      minute: "2-digit",
+      second: "2-digit",
+      timeZone,
+    }).format(new Date(atMs)),
+  };
+}
