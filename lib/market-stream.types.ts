@@ -64,6 +64,8 @@ export type StreamTrade = {
   size: string;
   aggressor_side: "buy" | "sell";
   created_at?: string;
+  /** The settling transaction; absent for fills recorded before the venue stored it. */
+  tx_hash?: string;
 };
 
 /** How much the connection can offer the UI right now, so the order-book panel can fall back to

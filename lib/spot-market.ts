@@ -503,6 +503,7 @@ function presentTrades(trades: PresentedTrade[]) {
     .map((trade) => ({
       atMs: Date.parse(trade.created_at),
       id: trade.trade_id,
+      ...(trade.tx_hash ? { txHash: trade.tx_hash } : {}),
       price: Number(trade.spot_contract?.ui_intent.price ?? trade.price),
       side: trade.spot_contract?.ui_intent.side ?? trade.aggressor_side,
       // Spot sizes are USDC notional and can be fractional (e.g. a 0.073 USDC smoke trade),

@@ -98,6 +98,8 @@ export type PresentedTrade = {
   sub_id: string;
   taker_order_id?: string;
   trade_id: number;
+  /** The settling transaction; absent for fills recorded before the venue stored it. */
+  tx_hash?: string;
   spot_contract?: {
     balance_delta: {
       cngn: string;

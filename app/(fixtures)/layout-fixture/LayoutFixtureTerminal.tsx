@@ -160,6 +160,7 @@ export function LayoutFixtureTerminal() {
                     price: String(1 / INJECTED_TRADE.price),
                     size: String(INJECTED_TRADE.size * INJECTED_TRADE.price),
                     trade_id: Date.now(),
+                    tx_hash: `0x${"ab".repeat(32)}`,
                   },
                 })
               }

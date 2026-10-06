@@ -216,6 +216,7 @@ export function presentStreamTrade(
 
   return {
     ...(Number.isFinite(atMs) ? { atMs } : {}),
+    ...(trade.tx_hash ? { txHash: trade.tx_hash } : {}),
     id: trade.trade_id,
     price: quote.price,
     side: toUiSide(trade.aggressor_side, presenter),

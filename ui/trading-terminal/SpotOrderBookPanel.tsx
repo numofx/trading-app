@@ -1,9 +1,11 @@
 "use client";
 
 import { Menu } from "@base-ui/react/menu";
-import { ArrowDown, ArrowUp, ChevronDown } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ExternalLink } from "lucide-react";
 import { useState } from "react";
+import { getAppChain } from "@/lib/base-public-client";
 import { cn } from "@/lib/cn";
+import { getExplorerTransactionUrl } from "@/lib/explorer-links";
 import { formatTradeStamp } from "@/lib/live-market";
 import { formatMarketPrice, formatNaira } from "@/lib/market-formatting";
 import type { LadderRow, LadderUnit } from "@/lib/order-book-display";
@@ -300,9 +302,32 @@ function TradeStamp({ trade }: { trade: TradePrint }) {
 }
 
 /**
+ * A link to the fill's settling transaction on the explorer, when the venue recorded the hash.
+ * Fills from before the venue stored it, and a streamed fill from a venue not yet serving it,
+ * have no icon rather than a dead one.
+ */
+function TradeExplorerLink({ txHash }: { txHash: string | undefined }) {
+  const href = getExplorerTransactionUrl(txHash, getAppChain().blockExplorers?.default.url);
+  if (href === null) {
+    return null;
+  }
+  return (
+    <a
+      aria-label="View transaction on Basescan"
+      className="inline-flex shrink-0 text-panel-text-muted transition-colors hover:text-panel-text-active"
+      href={href}
+      rel="noopener noreferrer"
+      target="_blank"
+      title="View on Basescan"
+    >
+      <ExternalLink aria-hidden className="size-3" />
+    </a>
+  );
+}
+
+/**
  * The venue's fills, newest first: each row tinted by the side that took it, the price in that
- * side's colour, the size, and when it happened. No link to the settling transaction: the public
- * trade feed carries no transaction hash, only an owner's own fills do (Trade History).
+ * side's colour, the size, when it happened, and a link to the settling transaction.
  */
 function TradeTape({ trades }: { trades: TradePrint[] }) {
   if (trades.length === 0) {
@@ -327,7 +352,10 @@ function TradeTape({ trades }: { trades: TradePrint[] }) {
             {formatMarketPrice(trade.price, 2)}
           </span>
           <span className="text-right text-panel-text">{formatLadderAmount(trade.size)}</span>
-          <TradeStamp trade={trade} />
+          <span className="flex items-center justify-end gap-1.5">
+            <TradeStamp trade={trade} />
+            <TradeExplorerLink txHash={trade.txHash} />
+          </span>
         </div>
       ))}
     </div>

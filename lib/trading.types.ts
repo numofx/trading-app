@@ -28,6 +28,8 @@ export type TradePrint = {
   atMs?: number;
   /** The venue's trade id, assigned in execution order: what tells a streamed fill from one the server already had. */
   id?: number;
+  /** The settling transaction, when the venue recorded it: what the tape links to on the explorer. */
+  txHash?: string;
 };
 
 export type ActivityTab = {
