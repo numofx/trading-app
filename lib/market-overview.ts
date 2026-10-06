@@ -1,3 +1,4 @@
+import { MARKET_LABELS } from "@/lib/market-labels";
 import type {
   MarketOverviewRow,
   TerminalMarketEntry,
@@ -14,7 +15,7 @@ import type { SpotMarket } from "@/lib/trading.types";
  * switching never carries one terminal's ticket or book into the other, and each has its own URL.
  */
 export const TERMINAL_MARKETS = [
-  { href: "/", id: "spot", kind: "spot", symbol: "USDC-cNGN" },
+  { href: "/", id: "spot", kind: "spot", symbol: MARKET_LABELS["USDCcNGN-SPOT"] },
   { href: "/perp", id: "perp", kind: "perp", symbol: PERP_MARKET_LABEL },
 ] as const satisfies readonly TerminalMarketEntry[];
 

@@ -132,7 +132,8 @@ export function TradingActivityPanel({
                           activityView.columns[cellIndex] === "Side" && "whitespace-nowrap",
                           isMetricColumn(activityView.columns[cellIndex] ?? "") && "text-right",
                           cell.startsWith("-") && "text-sell",
-                          row.positiveCellIndexes?.includes(cellIndex) && "font-medium text-buy",
+                          row.tones?.[cellIndex] === "positive" && "font-medium text-buy",
+                          row.tones?.[cellIndex] === "negative" && "font-medium text-sell",
                           row.titles?.[cellIndex] !== undefined &&
                             "cursor-help underline decoration-dotted underline-offset-4"
                         )}

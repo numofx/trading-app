@@ -10,6 +10,7 @@ import type {
   PerpStack,
   PerpState,
 } from "@/lib/perp-market.types";
+import { sideTone } from "@/lib/side-tone";
 import { getCngnTokenAddress, getUsdcTokenAddress } from "@/lib/subaccount-deposit-config";
 import { formatCompactVolume } from "@/lib/ticker-stats";
 import type { WithdrawableAsset } from "@/lib/withdrawable-assets";
@@ -459,23 +460,23 @@ function signedUsd(value: number) {
 }
 
 /**
- * The naira leg of a side. The venue's long is long USDC, which is short the naira, so the two words
+ * The cNGN leg of a side. The venue's long is long USDC, which is short cNGN, so the two words
  * always disagree; `lib/perp-market.test.mjs` pins this against `perpOrderUiSide`, because a flip
  * in one and not the other would place a live order the opposite way from what the button said.
  */
-function nairaLeg(side: "long" | "short") {
-  return side === "long" ? "Short naira" : "Long naira";
+function cngnLeg(side: "long" | "short") {
+  return side === "long" ? "Short cNGN" : "Long cNGN";
 }
 
 const SUBMIT_SIZE = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
 
 /**
- * What the ticket's submit button says for a side: the naira leg, then the size in the unit it is
- * entered in (USDC notional) after a dot so it never reads as naira.
+ * What the ticket's submit button says for a side: the cNGN leg, then the size in the unit it is
+ * entered in (USDC notional) after a dot so it never reads as cNGN.
  */
 export function perpSubmitLabel(side: "long" | "short", sizeUsd: number | null) {
   const amount = sizeUsd === null ? "" : ` · ${SUBMIT_SIZE.format(sizeUsd)} USDC`;
-  return `${nairaLeg(side)}${amount}`;
+  return `${cngnLeg(side)}${amount}`;
 }
 
 /** The side an order is sent with: a venue long buys USD, exactly as a spot buy does. */
@@ -484,11 +485,11 @@ export function perpOrderUiSide(side: "long" | "short"): "buy" | "sell" {
 }
 
 /**
- * A position's side, in both the venue's word and the naira leg the ticket names: the button a
- * trader pressed said "Long naira", and a row that then said only "Short" read as a wrong fill.
+ * A position's side, in both the venue's word and the cNGN leg the ticket names: the button a
+ * trader pressed said "Long cNGN", and a row that then said only "Short" read as a wrong fill.
  */
 export function perpSideLabel(uiSide: "long" | "short") {
-  return `${uiSide === "long" ? "Long" : "Short"} · ${nairaLeg(uiSide)}`;
+  return `${uiSide === "long" ? "Long" : "Short"} · ${cngnLeg(uiSide)}`;
 }
 
 /** The Positions tab: side and size in the venue's terms, mark, liquidation price, PnL. */
@@ -496,6 +497,7 @@ export function buildPerpPositionsView(positions: PerpPosition[], label: string)
   return {
     columns: ["Instrument", "Side", "Size", "Mark price", "Liq. price", "Unrealized PnL"],
     rows: positions.map((position) => ({
+      tones: { 1: sideTone(perpOrderUiSide(position.uiSide)) },
       cells: [
         label,
         perpSideLabel(position.uiSide),

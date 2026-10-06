@@ -217,6 +217,23 @@ function LeverageSelector({
   );
 }
 
+/**
+ * Why a 1x long can be liquidated well short of a 100% move: the position is a fixed amount of
+ * cNGN, so a long USDC's loss grows faster the further cNGN strengthens, and the maintenance
+ * margin is charged on the position revalued at that price. Solving equity = requirement at 1x
+ * puts the long's liquidation at (1 + mm) / 2 of entry; a short loses ever more slowly as cNGN
+ * weakens and has no finite liquidation price at 1x.
+ */
+function liquidationTooltip(state: PerpState | null) {
+  const base = "For this margin alone; your whole perp account backs the position.";
+  if (state === null) {
+    return base;
+  }
+  const mm = state.maintenanceMarginRate;
+  const longMove = Math.round((1 - (1 + mm) / 2) * 100);
+  return `${base} The position is a fixed amount of cNGN, so a long USDC loses faster the further cNGN strengthens, and the ${Math.round(mm * 100)}% maintenance margin is charged on its value at that price: at 1x a long is liquidated about ${longMove}% below entry, not 100%.`;
+}
+
 /** Hourly funding from the chosen side's point of view: what it pays or receives. */
 function describeFunding(state: PerpState | null, side: PerpSide) {
   if (state === null) {
@@ -502,7 +519,7 @@ export function PerpOrderFormPanel({
           <div className="space-y-0.5">
             <SummaryRow
               label="Est. liq. price"
-              tooltip="For this margin alone; your whole perp account backs the position"
+              tooltip={liquidationTooltip(state)}
               value={formatNaira(liquidation)}
             />
             <SummaryRow

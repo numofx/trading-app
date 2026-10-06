@@ -127,9 +127,16 @@ export type DeliveryTerm = {
   value: string;
 };
 
+/** How a cell is tinted: the buy colour for a buy of USDC (or a good outcome), the sell colour for a sell. */
+export type CellTone = "positive" | "negative";
+
 export type ActivityRow = {
   cells: string[];
-  positiveCellIndexes?: number[];
+  /**
+   * Tint by cell index. One rule everywhere a side is shown: the venue's buy of USDC (the perp's
+   * long) takes the buy colour, its sell the sell colour, whatever words the cell carries.
+   */
+  tones?: Record<number, CellTone>;
   /** Hover text by cell index: the venue's own word behind a cell the terminal has translated. */
   titles?: Record<number, string>;
 };

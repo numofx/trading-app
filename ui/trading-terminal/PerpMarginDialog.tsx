@@ -140,7 +140,7 @@ export function PerpMarginDialog({
               {currency === "cNGN" && cngn !== null ? (
                 <p className="text-[12px] text-panel-text-muted leading-snug">
                   cNGN is valued at the index and {PERCENT.format(cngn.marginFactor)} of that counts
-                  as margin. If the naira strengthens, that haircut is what gets a leveraged short
+                  as margin. If cNGN strengthens, that haircut is what gets a leveraged short
                   liquidated: post about as much cNGN as you short.
                 </p>
               ) : null}

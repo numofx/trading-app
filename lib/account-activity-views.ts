@@ -1,10 +1,12 @@
 import { getExplorerTransactionUrl } from "@/lib/explorer-links";
+import { MARKET_LABELS, marketLabel } from "@/lib/market-labels";
 import type {
   AccountFill,
   FillLiquidity,
   OrderHistoryOrder,
   OrderHistoryStatus,
 } from "@/lib/order-history.types";
+import { sideTone } from "@/lib/side-tone";
 import type { ActivityView, SpotOpenOrder } from "@/lib/trading.types";
 
 /** Rendered when a balance is genuinely unknown — never substitute a zero or a placeholder figure. */
@@ -12,6 +14,15 @@ const UNKNOWN_BALANCE = "—";
 
 /** Columns for the Open Orders tab. The trailing column holds each row's cancel control. */
 export const OPEN_ORDERS_COLUMNS = ["Side", "Price", "Size", "Filled", ""] as const;
+
+const OPEN_ORDERS_SIDE_COLUMN = OPEN_ORDERS_COLUMNS.indexOf("Side");
+
+/** The instrument a row belongs to, under the terminal's one name for it. */
+function formatInstrument(row: { display_name?: string; market?: string }) {
+  return (
+    marketLabel(row.market) ?? row.display_name ?? row.market ?? MARKET_LABELS["USDCcNGN-SPOT"]
+  );
+}
 
 function formatUsdc(size: number) {
   return `${size.toLocaleString("en-US", { maximumFractionDigits: 3 })} USDC`;
@@ -38,6 +49,7 @@ export function buildOpenOrdersActivityView(
   return {
     columns: [...OPEN_ORDERS_COLUMNS],
     rows: owned.map((order) => ({
+      tones: { [OPEN_ORDERS_SIDE_COLUMN]: sideTone(order.side) },
       cells: [
         order.side === "buy" ? "Buy" : "Sell",
         `\u20a6${order.price.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 })}`,
@@ -133,6 +145,11 @@ function directionTitles(column: number, intent: IntentSide) {
   return title === undefined ? undefined : { [column]: title };
 }
 
+/** The direction cell's tint keyed by its column, or nothing when there is no intent. */
+function directionTones(column: number, intent: IntentSide) {
+  return intent === undefined ? undefined : { [column]: sideTone(intent.side) };
+}
+
 function formatNairaPrice(price: number) {
   return `\u20a6${price.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 })}`;
 }
@@ -180,17 +197,22 @@ export function buildOrderHistoryActivityView(
       const { averagePrice, filledUsdc } = getOrderFill(order);
 
       return {
-        positiveCellIndexes: order.status === "filled" ? [ORDER_HISTORY_STATUS_COLUMN] : undefined,
         titles: directionTitles(ORDER_HISTORY_DIRECTION_COLUMN, order.spot_contract?.ui_intent),
         cells: [
           formatOrderTime(order.created_at, timeZone),
-          order.display_name ?? order.market ?? "USDC/cNGN",
+          formatInstrument(order),
           formatIntentDirection(order.spot_contract?.ui_intent),
           filledUsdc === null ? UNKNOWN_BALANCE : formatHistoryUsdc(filledUsdc),
           averagePrice === null ? UNKNOWN_BALANCE : formatNairaPrice(averagePrice),
           Number.isFinite(limit) ? formatNairaPrice(limit) : UNKNOWN_BALANCE,
           ORDER_STATUS_LABELS[order.status] ?? order.status,
         ],
+        tones: {
+          ...directionTones(ORDER_HISTORY_DIRECTION_COLUMN, order.spot_contract?.ui_intent),
+          ...(order.status === "filled"
+            ? { [ORDER_HISTORY_STATUS_COLUMN]: "positive" as const }
+            : {}),
+        },
       };
     }),
   };
@@ -269,11 +291,11 @@ export function buildTradeHistoryActivityView(
       const totalCngn = Number(fill.size);
 
       return {
-        positiveCellIndexes: intent?.side === "buy" ? [TRADE_HISTORY_DIRECTION_COLUMN] : undefined,
         titles: directionTitles(TRADE_HISTORY_DIRECTION_COLUMN, intent),
+        tones: directionTones(TRADE_HISTORY_DIRECTION_COLUMN, intent),
         cells: [
           formatOrderTime(fill.created_at, timeZone),
-          fill.display_name ?? fill.market ?? "USDC/cNGN",
+          formatInstrument(fill),
           formatIntentDirection(intent),
           Number.isFinite(price) ? formatNairaPrice(price) : UNKNOWN_BALANCE,
           Number.isFinite(sizeUsdc) ? formatHistoryUsdc(sizeUsdc) : UNKNOWN_BALANCE,

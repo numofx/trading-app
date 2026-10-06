@@ -1,8 +1,9 @@
+import { MARKET_LABELS } from "@/lib/market-labels";
 import { ACTIVITY_VIEWS as SPOT_ACTIVITY_VIEWS } from "@/lib/spot-terminal-config";
 import type { ActivityTab, ActivityView } from "@/lib/trading.types";
 
-/** The venue's symbol for the perp, as the market selector and document title name it. */
-export const PERP_MARKET_LABEL = "USDC-cNGN-PERP";
+/** The perp's one display name, shared with the selector, document title, positions and history. */
+export const PERP_MARKET_LABEL = MARKET_LABELS["USDCcNGN-PERP"];
 
 /** The perp's stream and book symbol in markets-service. */
 export const PERP_MARKET_SYMBOL = "USDCcNGN-PERP";
