@@ -272,18 +272,25 @@ function BookLadder({
   );
 }
 
-/** The venue's recent fills, newest first. */
+/**
+ * The venue's fills, newest first: each row tinted by the side that took it, the price in that
+ * side's colour, the size, and the time to the second. No link to the settling transaction: the
+ * public trade feed carries no transaction hash, only an owner's own fills do (Trade History).
+ */
 function TradeTape({ trades }: { trades: TradePrint[] }) {
   if (trades.length === 0) {
     return <BookEmptyState message="No trades yet" />;
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+    <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-1">
       {trades.map((trade) => (
         <div
-          className="grid grid-cols-3 px-3 py-[3px] text-[11px] tabular-nums transition-colors hover:bg-input-hover"
-          key={`${trade.time}-${trade.price}-${trade.size}`}
+          className={cn(
+            "grid grid-cols-3 px-2 py-1 text-[11px] tabular-nums transition-colors hover:bg-input-hover",
+            trade.side === "buy" ? "bg-bid-bg" : "bg-ask-bg"
+          )}
+          key={`${trade.id ?? trade.time}-${trade.price}-${trade.size}`}
         >
           <span
             className={cn("font-medium", trade.side === "buy" ? "text-bid-text" : "text-ask-text")}
@@ -291,7 +298,7 @@ function TradeTape({ trades }: { trades: TradePrint[] }) {
             {formatMarketPrice(trade.price, 2)}
           </span>
           <span className="text-right text-panel-text">{formatLadderAmount(trade.size)}</span>
-          <span className="text-right text-panel-text-muted">{trade.time}</span>
+          <span className="text-right text-panel-text">{trade.time}</span>
         </div>
       ))}
     </div>
@@ -344,7 +351,7 @@ export function SpotOrderBookPanel({
           onClick={() => onTabChange("trades")}
           type="button"
         >
-          Recent trades
+          Trades
         </button>
       </div>
 
@@ -369,10 +376,8 @@ export function SpotOrderBookPanel({
       ) : null}
 
       <div className="grid grid-cols-3 border-panel-border border-y px-3 py-1.5 text-[10px] text-panel-text-muted">
-        <span>Price (cNGN)</span>
-        <span className="text-right">
-          {isBook ? `Amount (${UNIT_LABEL[unit]})` : "Size (USDC)"}
-        </span>
+        <span>{isBook ? "Price (cNGN)" : "Price cNGN"}</span>
+        <span className="text-right">{isBook ? `Amount (${UNIT_LABEL[unit]})` : "Size USDC"}</span>
         <span className="text-right">{isBook ? `Total (${UNIT_LABEL[unit]})` : "Time"}</span>
       </div>
 
