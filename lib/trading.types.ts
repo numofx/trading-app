@@ -130,6 +130,8 @@ export type DeliveryTerm = {
 export type ActivityRow = {
   cells: string[];
   positiveCellIndexes?: number[];
+  /** Hover text by cell index: the venue's own word behind a cell the terminal has translated. */
+  titles?: Record<number, string>;
 };
 
 export type ActivityView = {

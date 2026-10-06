@@ -77,6 +77,7 @@ export const ORDER_HISTORY_COLUMNS = [
 ] as const;
 
 const ORDER_HISTORY_STATUS_COLUMN = ORDER_HISTORY_COLUMNS.indexOf("Status");
+const ORDER_HISTORY_DIRECTION_COLUMN = ORDER_HISTORY_COLUMNS.indexOf("Direction");
 
 const ORDER_STATUS_LABELS = {
   active: "Open",
@@ -106,12 +107,30 @@ function formatOrderTime(createdAt: string, timeZone: string | undefined) {
   return `${day}, ${time}`;
 }
 
-/** The trader's side, from a UI intent; a dash when there is none. */
-function formatIntentDirection(intent: { side: "buy" | "sell" } | undefined) {
+type IntentSide = { side: "buy" | "sell" } | undefined;
+
+/**
+ * The trader's direction in the cNGN leg, from a UI intent; a dash when there is none. A buy of
+ * USDC is paid for in cNGN, so it is a short of cNGN, and a sell a long. The venue's own word is
+ * kept beside it as the cell's hover text (`describeVenueSide`), and untouched in the payloads
+ * the `/api/orders` and `/api/fills` proxies relay.
+ */
+function formatIntentDirection(intent: IntentSide) {
   if (intent === undefined) {
     return UNKNOWN_BALANCE;
   }
-  return intent.side === "buy" ? "Buy" : "Sell";
+  return intent.side === "buy" ? "Short cNGN" : "Long cNGN";
+}
+
+/** The side as the venue reports it, for the direction cell's hover text. */
+function describeVenueSide(intent: IntentSide) {
+  return intent === undefined ? undefined : `Venue side: ${intent.side}`;
+}
+
+/** The direction cell's hover text keyed by its column, or nothing when there is no intent. */
+function directionTitles(column: number, intent: IntentSide) {
+  const title = describeVenueSide(intent);
+  return title === undefined ? undefined : { [column]: title };
 }
 
 function formatNairaPrice(price: number) {
@@ -162,6 +181,7 @@ export function buildOrderHistoryActivityView(
 
       return {
         positiveCellIndexes: order.status === "filled" ? [ORDER_HISTORY_STATUS_COLUMN] : undefined,
+        titles: directionTitles(ORDER_HISTORY_DIRECTION_COLUMN, order.spot_contract?.ui_intent),
         cells: [
           formatOrderTime(order.created_at, timeZone),
           order.display_name ?? order.market ?? "USDC/cNGN",
@@ -250,6 +270,7 @@ export function buildTradeHistoryActivityView(
 
       return {
         positiveCellIndexes: intent?.side === "buy" ? [TRADE_HISTORY_DIRECTION_COLUMN] : undefined,
+        titles: directionTitles(TRADE_HISTORY_DIRECTION_COLUMN, intent),
         cells: [
           formatOrderTime(fill.created_at, timeZone),
           fill.display_name ?? fill.market ?? "USDC/cNGN",
