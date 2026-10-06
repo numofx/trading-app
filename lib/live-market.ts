@@ -127,3 +127,25 @@ export function formatTradeStamp(
     }).format(new Date(atMs)),
   };
 }
+
+/**
+ * The tape: the server's fills and the stream's, as one list, newest first, each fill once. The
+ * stream's copy of a fill wins, since it is the fresher presentation. A fill without an id is kept
+ * as it came, since nothing can say whether the other source has it.
+ */
+export function mergeTrades(
+  serverTrades: readonly TradePrint[],
+  streamTrades: readonly TradePrint[]
+): TradePrint[] {
+  const byId = new Map<number, TradePrint>();
+  const unidentified: TradePrint[] = [];
+  for (const trade of [...serverTrades, ...streamTrades]) {
+    if (trade.id === undefined) {
+      unidentified.push(trade);
+    } else {
+      byId.set(trade.id, trade);
+    }
+  }
+  const identified = [...byId.entries()].sort(([a], [b]) => b - a).map(([, trade]) => trade);
+  return [...identified, ...unidentified];
+}

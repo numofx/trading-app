@@ -10,6 +10,7 @@ import {
   applyTradesToStats,
   CANDLE_INTERVAL_MS,
   latestTradeId,
+  mergeTrades,
   tradesSince,
 } from "@/lib/live-market";
 import type { CandleInterval } from "@/lib/markets-service";
@@ -205,9 +206,10 @@ export function SpotTradingTerminal({
   // the venue has no resting orders both are empty and the panel says so.
   const bookBids = spotBook.isLive ? spotBook.bids : spotMarket.orderBookBids;
   const bookAsks = spotBook.isLive ? spotBook.asks : spotMarket.orderBookAsks;
-  // Trades are taken from the stream whenever it has any, whatever the book's status: a fill the
-  // trades channel delivered is the venue's own even while the book snapshot is still on its way.
-  const bookTrades = spotBook.trades.length > 0 ? spotBook.trades : spotMarket.trades;
+  // The server's fills and the stream's as one tape, each fill once: a fill the trades channel
+  // delivered is the venue's own whatever the book's status, and the server's list stays while
+  // the stream is still catching up.
+  const bookTrades = mergeTrades(spotMarket.trades, spotBook.trades);
 
   // Fills the stream has seen since the server rendered: folded into the chart's candles and the
   // 24h figures here, on every render, so a trade on the market shows without a reload. The

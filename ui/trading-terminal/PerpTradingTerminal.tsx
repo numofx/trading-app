@@ -17,6 +17,7 @@ import {
   applyTradesToStats,
   CANDLE_INTERVAL_MS,
   latestTradeId,
+  mergeTrades,
   tradesSince,
 } from "@/lib/live-market";
 import {
@@ -565,8 +566,8 @@ function usePerpBook(market: PerpMarket | null) {
   });
   const bids = book.isLive ? book.bids : (market?.orderBookBids ?? []);
   const asks = book.isLive ? book.asks : (market?.orderBookAsks ?? []);
-  // Streamed trades count whatever the book's status: see SpotTradingTerminal.
-  const trades = book.trades.length > 0 ? book.trades : (market?.trades ?? []);
+  // The server's fills and the stream's as one tape: see SpotTradingTerminal.
+  const trades = mergeTrades(market?.trades ?? [], book.trades);
   // Fills the stream has seen since the server rendered, folded into the candles and 24h figures
   // on every render; the minute's server re-read corrects what folding cannot.
   const streamedFills = tradesSince(trades, latestTradeId(market?.trades ?? []));
