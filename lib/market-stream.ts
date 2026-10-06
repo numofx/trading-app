@@ -219,10 +219,10 @@ export function presentStreamTrade(
     id: trade.trade_id,
     price: quote.price,
     side: toUiSide(trade.aggressor_side, presenter),
-    // Keyed on `type`, not the spec: this is display precision, not the inversion. Any spot market
-    // quotes a notional size that can be fractional (a 0.073 USDC trade rounds to 0), whereas
-    // futures sizes are contract counts. Mirrors the REST trade mapper.
-    size: presenter.type === "spot" ? Number(quote.size.toFixed(3)) : Math.round(quote.size),
+    // Three decimals on every market, as the REST trade mapper and the order book print sizes:
+    // spot and the perp both quote a USDC notional that can be fractional, and rounding the perp
+    // to whole units (a leftover from futures contract counts) showed a 0.3 USDC trade as 0.
+    size: Number(quote.size.toFixed(3)),
     time,
   };
 }
