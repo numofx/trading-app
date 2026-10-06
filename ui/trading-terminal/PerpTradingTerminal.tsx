@@ -26,6 +26,8 @@ import {
   describeOrderRejection,
   getPerpCollateralWithdrawableAsset,
   getPerpWithdrawableAsset,
+  perpOrderUiSide,
+  perpSideLabel,
 } from "@/lib/perp-market";
 import type {
   PerpAccountMargin,
@@ -82,7 +84,7 @@ import { usePrimaryWallet } from "@/ui/usePrimaryWallet";
 type PerpBottomTab = keyof typeof PERP_ACTIVITY_VIEWS;
 
 function toPerpSideLabel(cell: string) {
-  return cell === "Buy" ? "Long" : "Short";
+  return perpSideLabel(cell === "Buy" ? "long" : "short");
 }
 
 /** Spot's open-orders rows, read in the perp's terms: a UI buy is a long of USD. */
@@ -768,8 +770,7 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
       setDepositOpen(true);
       return;
     }
-    // A venue long buys USD, exactly as a spot buy does; the same translation signs both.
-    const uiSide = request.side === "long" ? "buy" : "sell";
+    const uiSide = perpOrderUiSide(request.side);
     const resolved = resolvePerpOrderPrice(request, uiSide, { bestAsk, bestBid, price });
     if ("error" in resolved) {
       orderStatus.announce(resolved.error);

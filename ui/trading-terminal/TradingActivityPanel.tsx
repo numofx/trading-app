@@ -128,6 +128,8 @@ export function TradingActivityPanel({
                         className={cn(
                           "text-panel-text",
                           cellIndex === 0 && "font-medium text-panel-text-active",
+                          // The perp's side reads "Short · Long naira": one line, not a wrapped word.
+                          activityView.columns[cellIndex] === "Side" && "whitespace-nowrap",
                           isMetricColumn(activityView.columns[cellIndex] ?? "") && "text-right",
                           cell.startsWith("-") && "text-sell",
                           row.positiveCellIndexes?.includes(cellIndex) && "font-medium text-buy"

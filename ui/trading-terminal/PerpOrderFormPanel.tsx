@@ -6,6 +6,8 @@ import {
   describePerpMarginSources,
   estimateLiquidationPrice,
   getLeverageCeiling,
+  perpOrderUiSide,
+  perpSubmitLabel,
   TRADING_PAUSED_MESSAGE,
 } from "@/lib/perp-market";
 import type { PerpAccountMargin, PerpState } from "@/lib/perp-market.types";
@@ -47,8 +49,6 @@ export type PerpOrderRequest = {
 };
 
 const USD = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 });
-/** The button's size: up to two decimals, no trailing zeros ("10", "10.5", "10.25"). */
-const SIZE = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
 const PRICE = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
   minimumFractionDigits: 2,
@@ -307,21 +307,17 @@ type ButtonInputs = {
   canSubmit: boolean;
   hasWallet: boolean;
   isLive: boolean;
-  isLong: boolean;
   isPreparingAccount: boolean;
   isPaused: boolean;
   isSubmitting: boolean;
   shortfall: number | null;
+  side: PerpSide;
   sizeUsd: number | null;
 };
 
 /** What the one button says: it connects, deposits, or trades, depending on what is missing. */
 function submitLabel(inputs: ButtonInputs) {
-  // Named by the naira leg, the way this market's traders think of it: the Long side is long
-  // USDC, which is short the naira, so the words flip while the direction does not. The size
-  // stays in the unit it is entered in (USDC notional), after a dot so it never reads as naira.
-  const amount = inputs.sizeUsd === null ? "" : ` · ${SIZE.format(inputs.sizeUsd)} USDC`;
-  const trade = `${inputs.isLong ? "Short naira" : "Long naira"}${amount}`;
+  const trade = perpSubmitLabel(inputs.side, inputs.sizeUsd);
   if (inputs.isPaused) {
     return "Trading paused";
   }
@@ -370,7 +366,7 @@ function buttonTone(inputs: ButtonInputs): "buy" | "sell" | "neutral" {
   if (!inputs.hasWallet || inputs.availableMargin === null || inputs.shortfall !== null) {
     return "neutral";
   }
-  return inputs.isLong ? "buy" : "sell";
+  return perpOrderUiSide(inputs.side);
 }
 
 /**
@@ -446,8 +442,6 @@ export function PerpOrderFormPanel({
     setLeverage(next);
     fields.onLeverage(next);
   }
-  const isLong = side === "long";
-
   const { feeUsd, liquidation, needsPrice, requiredMargin, shortfall, sizeUsd } = deriveTicket({
     availableMargin,
     limitPrice,
@@ -473,7 +467,7 @@ export function PerpOrderFormPanel({
     canSubmit,
     hasWallet,
     isLive,
-    isLong,
+    side,
     isPreparingAccount,
     isPaused: state?.paused === true,
     isSubmitting,
