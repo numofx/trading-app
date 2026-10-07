@@ -178,9 +178,9 @@ function OrderSizeCard({
   const sliderValue = sliderDisabled ? 0 : Math.min(sizeCngn ?? 0, sliderMax);
   const fillPercent = (sliderValue / sliderMax) * 100;
   return (
-    <div className="space-y-2 rounded-lg bg-input-bg px-3 py-2 ring-1 ring-panel-border focus-within:ring-panel-text-muted">
+    <div className="space-y-3 rounded-lg bg-input-bg px-3 pt-2.5 pb-3 ring-1 ring-panel-border focus-within:ring-panel-text-muted">
       <div className="flex items-start justify-between gap-3">
-        <div className="flex shrink-0 flex-col items-start gap-1.5 pt-0.5">
+        <div className="flex shrink-0 flex-col items-start gap-2 pt-0.5">
           <FieldLabel htmlFor="perp-size" tooltip={tooltip}>
             Order Size
           </FieldLabel>
@@ -299,7 +299,7 @@ function PositionLeverageCard({
   const tone =
     leverage === null || leverage === 0 ? "text-panel-text-muted" : "text-panel-text-active";
   return (
-    <div className="flex items-center justify-between gap-2 rounded-lg bg-input-bg px-3 py-2 ring-1 ring-panel-border">
+    <div className="flex items-center justify-between gap-2 rounded-lg bg-input-bg px-3 py-2.5 ring-1 ring-panel-border">
       <FieldLabel
         tooltip={`Your whole account's leverage after this order: the position's value at the ticket's price over the margin the SRM credits you (USDC in full, cNGN at its factor). The SRM opens up to ${state === null ? "its ceiling" : formatLeverage(state.maxLeverage)}; it margins the account together, so there is no per-position leverage to set.`}
       >
@@ -768,89 +768,97 @@ export function PerpOrderFormPanel({
         selected={orderType}
       />
 
-      {/* The account's initial-margin headroom; what it is made of sits in the tooltip. */}
-      <AvailableRow
-        depositLabel="Deposit margin"
-        label="Available to Trade"
-        onDeposit={onDepositRequest}
-        tooltip={[
-          "Cross-margin: everything in your perp account backs every position. USDC counts in full, cNGN at its index value times its margin factor. Profit and loss settle in USDC.",
-          marginSources,
-        ]
-          .filter((part) => part !== null)
-          .join(" ")}
-        value={availableMargin === null ? "—" : formatUsd(Math.max(0, availableMargin))}
-      />
-      <PositionRow current={positionChange.current} next={positionChange.next} />
-
-      {orderType === "Limit" ? (
-        <div className="space-y-1">
-          <FormField
-            adornment={<TokenUnit symbol="USDC" />}
-            id="perp-limit-price"
-            label="Limit price"
-            onChange={edited(setLimitPrice)}
-            placeholder="0.0000000"
-            tooltip="USDC per cNGN"
-            value={limitPrice}
+      {/*
+       * One rhythm below the tabs: the two account rows sit close as a pair, and everything after
+       * them (price, size, leverage, switches) is a block set the same distance from its neighbours.
+       */}
+      <div className="space-y-2.5 pt-1 pb-0.5">
+        <div className="space-y-1.5">
+          {/* The account's initial-margin headroom; what it is made of sits in the tooltip. */}
+          <AvailableRow
+            depositLabel="Deposit margin"
+            label="Available to Trade"
+            onDeposit={onDepositRequest}
+            tooltip={[
+              "Cross-margin: everything in your perp account backs every position. USDC counts in full, cNGN at its index value times its margin factor. Profit and loss settle in USDC.",
+              marginSources,
+            ]
+              .filter((part) => part !== null)
+              .join(" ")}
+            value={availableMargin === null ? "—" : formatUsd(Math.max(0, availableMargin))}
           />
-          {/* The same price the other way up, for traders who think in naira per dollar. */}
-          <p className="text-[11px] text-panel-text-muted tabular-nums">
-            {formatNairaPerUsdc(ticketPrice)}
-          </p>
+          <PositionRow current={positionChange.current} next={positionChange.next} />
         </div>
-      ) : null}
-      <OrderSizeCard
-        canToggleUnit={ticketPrice !== null && ticketPrice > 0}
-        maxCngn={maxSizeCngn}
-        onInput={edited(fields.onSizeInput)}
-        onSetCngn={edited(fields.setCngn)}
-        onToggleUnit={() => {
-          onEdit?.();
-          fields.toggleUnit();
-        }}
-        otherUnitText={
-          sizeUnit === "cNGN"
-            ? formatUsd(parseAmount(fields.sizeUsd))
-            : `${sizeCngn === null ? "0" : formatCngnAmount(sizeCngn)} cNGN`
-        }
-        shown={fields.shown}
-        sizeCngn={sizeCngn}
-        tooltip={sizeTooltip(sizeUnit, ticketPrice)}
-        unit={sizeUnit}
-      />
-      <PositionLeverageCard leverage={positionLeverage} state={state} />
 
-      <div className="space-y-2">
-        {/*
-         * Without a position there is nothing to reduce and the venue would refuse the order, so
-         * the switch is shown disabled and says why rather than letting a trader arm it.
-         */}
-        <CheckboxRow
-          checked={reduceOnly && hasPosition}
-          disabled={!hasPosition}
-          id="perp-reduce-only"
-          label="Reduce Only"
-          onChange={edited(setReduceOnly)}
-          tooltip={
-            hasPosition
-              ? "The venue clamps this order to your open position; it can never open or flip one"
-              : "Needs an open position to reduce"
+        {orderType === "Limit" ? (
+          <div className="space-y-1">
+            <FormField
+              adornment={<TokenUnit symbol="USDC" />}
+              id="perp-limit-price"
+              label="Limit price"
+              onChange={edited(setLimitPrice)}
+              placeholder="0.0000000"
+              tooltip="USDC per cNGN"
+              value={limitPrice}
+            />
+            {/* The same price the other way up, for traders who think in naira per dollar. */}
+            <p className="text-[11px] text-panel-text-muted tabular-nums">
+              {formatNairaPerUsdc(ticketPrice)}
+            </p>
+          </div>
+        ) : null}
+        <OrderSizeCard
+          canToggleUnit={ticketPrice !== null && ticketPrice > 0}
+          maxCngn={maxSizeCngn}
+          onInput={edited(fields.onSizeInput)}
+          onSetCngn={edited(fields.setCngn)}
+          onToggleUnit={() => {
+            onEdit?.();
+            fields.toggleUnit();
+          }}
+          otherUnitText={
+            sizeUnit === "cNGN"
+              ? formatUsd(parseAmount(fields.sizeUsd))
+              : `${sizeCngn === null ? "0" : formatCngnAmount(sizeCngn)} cNGN`
           }
+          shown={fields.shown}
+          sizeCngn={sizeCngn}
+          tooltip={sizeTooltip(sizeUnit, ticketPrice)}
+          unit={sizeUnit}
         />
-        {/*
-         * The venue takes market and limit orders only; it has no trigger orders to attach a take
-         * profit or stop loss to. Shown disabled rather than hidden so a trader can see the switch
-         * exists and read why it is off, instead of arming something nothing would execute.
-         */}
-        <CheckboxRow
-          checked={false}
-          disabled
-          id="perp-tp-sl"
-          label="Take Profit / Stop Loss"
-          onChange={() => undefined}
-          tooltip="Not available yet: the venue takes market and limit orders only, with no trigger orders to attach a take profit or stop loss to"
-        />
+        <PositionLeverageCard leverage={positionLeverage} state={state} />
+
+        <div className="space-y-2.5 px-0.5 pt-0.5">
+          {/*
+           * Without a position there is nothing to reduce and the venue would refuse the order, so
+           * the switch is shown disabled and says why rather than letting a trader arm it.
+           */}
+          <CheckboxRow
+            checked={reduceOnly && hasPosition}
+            disabled={!hasPosition}
+            id="perp-reduce-only"
+            label="Reduce Only"
+            onChange={edited(setReduceOnly)}
+            tooltip={
+              hasPosition
+                ? "The venue clamps this order to your open position; it can never open or flip one"
+                : "Needs an open position to reduce"
+            }
+          />
+          {/*
+           * The venue takes market and limit orders only; it has no trigger orders to attach a take
+           * profit or stop loss to. Shown disabled rather than hidden so a trader can see the switch
+           * exists and read why it is off, instead of arming something nothing would execute.
+           */}
+          <CheckboxRow
+            checked={false}
+            disabled
+            id="perp-tp-sl"
+            label="Take Profit / Stop Loss"
+            onChange={() => undefined}
+            tooltip="Not available yet: the venue takes market and limit orders only, with no trigger orders to attach a take profit or stop loss to"
+          />
+        </div>
       </div>
     </OrderFormShell>
   );
