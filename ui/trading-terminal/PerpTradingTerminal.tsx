@@ -12,6 +12,7 @@ import { createWalletClient, custom } from "viem";
 import {
   buildOpenOrdersActivityView,
   buildPerpOrderHistoryActivityView,
+  buildPerpTradeHistoryActivityView,
   getOwnedOpenOrders,
 } from "@/lib/account-activity-views";
 import { formatBalance } from "@/lib/account-balance-display";
@@ -803,6 +804,7 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
     signMessage: buildHistorySigner(primaryWallet, walletsReady),
     walletAddress: primaryWallet?.address ?? null,
     orderHistoryView: (orders) => buildPerpOrderHistoryActivityView(orders, PERP_MARKET_LABEL),
+    tradeHistoryView: (fills) => buildPerpTradeHistoryActivityView(fills, PERP_MARKET_LABEL),
   });
   /** The header's deposit control and the account rows share one path: connect first, then deposit. */
   function openDeposit() {

@@ -1,8 +1,12 @@
 "use client";
 
-import { buildPerpOrderHistoryActivityView } from "@/lib/account-activity-views";
+import { ExternalLink } from "lucide-react";
+import {
+  buildPerpOrderHistoryActivityView,
+  buildPerpTradeHistoryActivityView,
+} from "@/lib/account-activity-views";
 import { formatBalance } from "@/lib/account-balance-display";
-import type { OrderHistoryOrder } from "@/lib/order-history.types";
+import type { AccountFill, OrderHistoryOrder } from "@/lib/order-history.types";
 import { buildPerpPositionsView, parsePerpState } from "@/lib/perp-market";
 import type { PerpAccountMargin, PerpPosition } from "@/lib/perp-market.types";
 import { PERP_BOTTOM_TABS, PERP_MARKET_LABEL } from "@/lib/perp-terminal-config";
@@ -112,6 +116,48 @@ const FIXTURE_ORDERS: OrderHistoryOrder[] = [
   },
 ];
 
+/** The fills behind the two filled orders above, as GET /v1/fills returns them. */
+const FIXTURE_FILLS: AccountFill[] = [
+  {
+    created_at: "2026-10-07T17:01:02Z",
+    fee: "0.003338",
+    liquidity: "taker",
+    market: "USDCcNGN-PERP",
+    order_id: "perp-3",
+    price: "0.0007348",
+    side: "buy",
+    size: "1817",
+    spot_contract: { ui_intent: { price: "0.0007348", side: "buy", size: "1817" } },
+    trade_id: 3,
+    tx_hash: "0xb3df1d1d000000000000000000000000000000000000000000000000000000000",
+  },
+  {
+    created_at: "2026-10-07T11:01:05Z",
+    fee: "0",
+    liquidity: "maker",
+    market: "USDCcNGN-PERP",
+    order_id: "perp-2",
+    price: "0.000735",
+    side: "buy",
+    size: "56476",
+    spot_contract: { ui_intent: { price: "0.000735", side: "buy", size: "56476" } },
+    trade_id: 2,
+    tx_hash: "0xb3df1d1d000000000000000000000000000000000000000000000000000000001",
+  },
+  {
+    created_at: "2026-10-06T22:14:40Z",
+    fee: "0.000598",
+    liquidity: "taker",
+    market: "USDCcNGN-PERP",
+    order_id: "perp-0",
+    price: "0.0007316",
+    side: "sell",
+    size: "327",
+    spot_contract: { ui_intent: { price: "0.0007316", side: "sell", size: "327" } },
+    trade_id: 1,
+  },
+];
+
 export function PerpLayoutFixture() {
   return (
     <main className="flex min-h-screen flex-col gap-3 bg-terminal-bg p-3 text-foreground">
@@ -151,6 +197,24 @@ export function PerpLayoutFixture() {
           isSignedIn
           onTabSelect={() => undefined}
           selectedTab="order-history"
+          tabs={PERP_BOTTOM_TABS}
+        />
+      </div>
+      {/* The Trade History tab with the fixture's fills; the last has no settling transaction to link. */}
+      <div className="h-[200px] w-full">
+        <TradingActivityPanel
+          activityView={buildPerpTradeHistoryActivityView(FIXTURE_FILLS, PERP_MARKET_LABEL, "UTC")}
+          footerLinks={[]}
+          isSignedIn
+          onTabSelect={() => undefined}
+          rowAction={(rowIndex) =>
+            FIXTURE_FILLS[rowIndex]?.tx_hash === undefined ? null : (
+              <span className="inline-flex text-panel-text-muted">
+                <ExternalLink aria-hidden="true" className="size-3.5" />
+              </span>
+            )
+          }
+          selectedTab="trade-history"
           tabs={PERP_BOTTOM_TABS}
         />
       </div>

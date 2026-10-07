@@ -99,13 +99,14 @@ function getSignedHistoryView(
   tab: string,
   orderHistory: SignedHistoryState<OrderHistoryOrder>,
   tradeHistory: SignedHistoryState<AccountFill>,
-  orderHistoryView: (orders: OrderHistoryOrder[]) => ActivityView
+  orderHistoryView: (orders: OrderHistoryOrder[]) => ActivityView,
+  tradeHistoryView: (fills: AccountFill[]) => ActivityView
 ): ActivityView | null {
   if (tab === "order-history" && orderHistory.status === "ready") {
     return orderHistoryView(orderHistory.rows);
   }
   if (tab === "trade-history" && tradeHistory.status === "ready") {
-    return buildTradeHistoryActivityView(tradeHistory.rows);
+    return tradeHistoryView(tradeHistory.rows);
   }
   return null;
 }
@@ -170,6 +171,7 @@ export function useSignedHistoryTabs({
   market,
   orderHistoryView = (orders) => buildOrderHistoryActivityView(orders),
   signMessage,
+  tradeHistoryView = (fills) => buildTradeHistoryActivityView(fills),
   walletAddress,
 }: {
   bottomTab: string;
@@ -178,6 +180,8 @@ export function useSignedHistoryTabs({
   market: string;
   /** Builds the Order History rows from the loaded orders; spot's columns unless the terminal says otherwise. */
   orderHistoryView?: (orders: OrderHistoryOrder[]) => ActivityView;
+  /** Builds the Trade History rows from the loaded fills; spot's columns unless the terminal says otherwise. */
+  tradeHistoryView?: (fills: AccountFill[]) => ActivityView;
   /** personal_sign with the connected wallet; absent when there is no wallet to sign with. */
   signMessage?: (message: string) => Promise<string>;
   walletAddress: string | null;
@@ -225,6 +229,12 @@ export function useSignedHistoryTabs({
     /** The Trade History row control, undefined on every other tab. */
     rowAction: getTradeHistoryRowAction(bottomTab, tradeState),
     /** The open tab's rows once loaded; null on any other tab or state. */
-    view: getSignedHistoryView(bottomTab, orderState, tradeState, orderHistoryView),
+    view: getSignedHistoryView(
+      bottomTab,
+      orderState,
+      tradeState,
+      orderHistoryView,
+      tradeHistoryView
+    ),
   };
 }

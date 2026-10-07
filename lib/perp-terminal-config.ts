@@ -1,7 +1,9 @@
-import { PERP_ORDER_HISTORY_COLUMNS } from "@/lib/account-activity-views";
+import {
+  PERP_ORDER_HISTORY_COLUMNS,
+  PERP_TRADE_HISTORY_COLUMNS,
+} from "@/lib/account-activity-views";
 import { MARKET_LABELS } from "@/lib/market-labels";
 import { PERP_POSITIONS_COLUMNS } from "@/lib/perp-market";
-import { ACTIVITY_VIEWS as SPOT_ACTIVITY_VIEWS } from "@/lib/spot-terminal-config";
 import type { ActivityTab, ActivityView } from "@/lib/trading.types";
 
 /** The perp's one display name, shared with the selector, document title, positions and history. */
@@ -23,9 +25,9 @@ export const PERP_BOTTOM_TABS = [
  */
 export const PERP_ACTIVITY_VIEWS = {
   // The venue keeps one order and fill history per owner across every market, labelled by
-  // market. Trade History shares spot's columns; Order History has the perp's own.
+  // market; the perp's history tabs have their own columns over the same rows.
   "order-history": { columns: [...PERP_ORDER_HISTORY_COLUMNS], rows: [] },
-  "trade-history": SPOT_ACTIVITY_VIEWS["trade-history"],
+  "trade-history": { columns: [...PERP_TRADE_HISTORY_COLUMNS], rows: [] },
   "open-orders": {
     columns: ["Side", "Price", "Size", "Filled"],
     rows: [],

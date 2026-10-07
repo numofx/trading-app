@@ -344,6 +344,76 @@ function formatFillFee(fee: string | undefined) {
 }
 
 /**
+ * The perp's Trade History columns, one row per fill: when, the market, what the trader did, the
+ * order type with whether it made or took liquidity, the cNGN that changed hands, the price, the
+ * USDC value and the fee. No "Closed PnL": the SRM marks positions to market and keeps no entry
+ * price, so the venue reports no realized PnL per fill, and a figure here could only be invented.
+ * The trailing column holds the link to the fill's settling transaction on Basescan.
+ */
+export const PERP_TRADE_HISTORY_COLUMNS = [
+  "Time",
+  "Market",
+  "Action",
+  "Type",
+  "Size",
+  "Price",
+  "Trade Value",
+  "Fee",
+  "",
+] as const;
+
+const PERP_TRADE_HISTORY_ACTION_COLUMN = PERP_TRADE_HISTORY_COLUMNS.indexOf("Action");
+const PERP_TRADE_HISTORY_TYPE_COLUMN = PERP_TRADE_HISTORY_COLUMNS.indexOf("Type");
+
+const PERP_FILL_TYPE_NOTE =
+  "Every order is signed as a limit; a market order is a limit priced through the touch. M: your order rested and was hit (maker, no fee). T: your order crossed the book (taker).";
+
+/** "$1.3351", "$0.003338": a USDC amount in dollars, to as many places as the figure needs. */
+function formatDollars(value: number, maximumFractionDigits: number) {
+  return `$${value.toLocaleString("en-US", { maximumFractionDigits, minimumFractionDigits: 2 })}`;
+}
+
+/**
+ * The perp's Trade History: the fills on the connected wallet's orders, newest first. Action,
+ * price and size come from the fill's UI intent, which under the identity contract equals the
+ * engine fill; the value is the two multiplied; the fee is what the venue recorded, a dash when
+ * it recorded none. Maker or taker rides the Type cell as a pill.
+ */
+export function buildPerpTradeHistoryActivityView(
+  fills: AccountFill[],
+  label: string,
+  timeZone?: string
+): ActivityView {
+  return {
+    columns: [...PERP_TRADE_HISTORY_COLUMNS],
+    rows: fills.map((fill) => {
+      const intent = fill.spot_contract?.ui_intent;
+      const price = Number(intent?.price);
+      const sizeCngn = Number(intent?.size ?? fill.size);
+      const valueUsd = price * sizeCngn;
+      const fee = fill.fee === undefined ? Number.NaN : Number(fill.fee);
+      return {
+        titles: { [PERP_TRADE_HISTORY_TYPE_COLUMN]: PERP_FILL_TYPE_NOTE },
+        tones: directionTones(PERP_TRADE_HISTORY_ACTION_COLUMN, intent),
+        badges: {
+          [PERP_TRADE_HISTORY_TYPE_COLUMN]: [{ label: fill.liquidity === "maker" ? "M" : "T" }],
+        },
+        cells: [
+          formatOrderTime(fill.created_at, timeZone),
+          label,
+          formatPerpAction(intent, false),
+          "Limit",
+          Number.isFinite(sizeCngn) ? formatCngnSize(sizeCngn) : UNKNOWN_BALANCE,
+          formatDollarPrice(Number.isFinite(price) ? price : null),
+          Number.isFinite(valueUsd) ? formatDollars(valueUsd, 4) : UNKNOWN_BALANCE,
+          Number.isFinite(fee) ? formatDollars(fee, 6) : UNKNOWN_BALANCE,
+        ],
+      };
+    }),
+  };
+}
+
+/**
  * The fills on the connected wallet's orders, newest first, as `GET /v1/fills` returns them.
  *
  * Direction, price and size are read from the fill's UI intent, which markets-service derives from
