@@ -5,7 +5,7 @@ import { cn } from "@/lib/cn";
 
 /** The terminal's one tab style: underlined text, 13px, the active tab in the brightest tone. */
 const TAB_CLASSES =
-  "-mb-px shrink-0 cursor-pointer whitespace-nowrap border-b-2 py-2.5 font-medium text-[13px] transition-colors";
+  "-mb-px shrink-0 cursor-pointer whitespace-nowrap border-b-2 font-medium text-[13px] transition-colors";
 
 export type PanelTab<T extends string> = { id: T; label: string };
 
@@ -16,6 +16,7 @@ export type PanelTab<T extends string> = { id: T; label: string };
  */
 export function PanelTabs<T extends string>({
   className,
+  compact = false,
   fill = false,
   onSelect,
   selected,
@@ -23,6 +24,11 @@ export function PanelTabs<T extends string>({
   trailing,
 }: {
   className?: string;
+  /**
+   * Shorter tabs for a row inside a panel body, such as the ticket's Market/Limit: the panel-header
+   * height there cost the ticket column its balance summary on a 700px-tall viewport.
+   */
+  compact?: boolean;
   fill?: boolean;
   onSelect: (tab: T) => void;
   selected: T;
@@ -44,6 +50,7 @@ export function PanelTabs<T extends string>({
           <button
             className={cn(
               TAB_CLASSES,
+              compact ? "py-1" : "py-2.5",
               selected === tab.id
                 ? "border-panel-text-active text-panel-text-active"
                 : "border-transparent text-panel-text-muted hover:text-panel-text"
@@ -66,7 +73,7 @@ export function PanelTitle({ children, className }: { children: string; classNam
   return (
     <div
       className={cn(
-        "shrink-0 border-panel-border border-b px-3 py-2.5 font-medium text-[13px] text-panel-text-active",
+        "shrink-0 border-panel-border border-b px-3 py-2 font-medium text-[13px] text-panel-text-active",
         className
       )}
     >

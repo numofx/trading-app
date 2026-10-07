@@ -55,10 +55,10 @@ export function AccountSummary({ rows }: { rows: readonly AccountSummaryRow[] })
       {/* Rows get a real line height rather than being packed: this is a readout a trader checks
           at a glance, and at the ticket's field density it read as a footnote. No rule between
           the rows: holdings of one account are a list, and a divider made them read as sections. */}
-      <div className="space-y-1 px-3 py-2">
+      <div className="space-y-1 px-3 py-1.5">
         {rows.map((row) => (
           <div
-            className="flex min-h-11 items-center justify-between gap-2 text-[12px]"
+            className="flex min-h-10 items-center justify-between gap-2 text-[12px]"
             key={row.id ?? row.symbol}
           >
             <span className="flex min-w-0 items-center gap-2">

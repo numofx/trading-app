@@ -21,6 +21,7 @@ export function OrderTypeTabs<T extends string>({
 }) {
   return (
     <PanelTabs
+      compact
       onSelect={onSelect}
       selected={selected}
       tabs={orderTypes.map((type) => ({ id: type, label: labels?.[type] ?? type }))}
