@@ -1,8 +1,12 @@
 "use client";
 
-import { cn } from "@/lib/cn";
+import { PanelTabs } from "@/ui/trading-terminal/PanelTabs";
 
-/** Bounded pill-tab order type selector for the order form. */
+/**
+ * The ticket's order type selector, in the terminal's shared underlined-tab style rather than a
+ * filled segmented control: the side selector directly above is already a filled two-up, and
+ * stacking two of them made the order type read as a second buy/sell choice.
+ */
 export function OrderTypeTabs<T extends string>({
   labels,
   onSelect,
@@ -16,25 +20,10 @@ export function OrderTypeTabs<T extends string>({
   selected: T;
 }) {
   return (
-    // Underlined text tabs rather than a filled segmented control: the side selector directly above
-    // is already a filled two-up, and stacking two of them made the order type read as a second
-    // buy/sell choice.
-    <div className="flex items-center gap-4 border-panel-border border-b">
-      {orderTypes.map((type) => (
-        <button
-          className={cn(
-            "-mb-px cursor-pointer border-b-2 pb-1.5 font-medium text-[12px] transition-colors",
-            selected === type
-              ? "border-panel-text-active text-panel-text-active"
-              : "border-transparent text-panel-text-muted hover:text-panel-text"
-          )}
-          key={type}
-          onClick={() => onSelect(type)}
-          type="button"
-        >
-          {labels?.[type] ?? type}
-        </button>
-      ))}
-    </div>
+    <PanelTabs
+      onSelect={onSelect}
+      selected={selected}
+      tabs={orderTypes.map((type) => ({ id: type, label: labels?.[type] ?? type }))}
+    />
   );
 }

@@ -17,7 +17,7 @@ export function SummaryRow({
   value: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-2 text-[11px]">
+    <div className="flex items-center justify-between gap-2 text-[12px]">
       <FieldLabel tooltip={tooltip}>{label}</FieldLabel>
       <span
         className={cn(

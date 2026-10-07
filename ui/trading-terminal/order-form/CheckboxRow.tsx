@@ -24,7 +24,7 @@ export function CheckboxRow({
   return (
     <label
       className={cn(
-        "flex w-full items-center justify-between gap-2 text-[11px]",
+        "flex w-full items-center justify-between gap-2 text-[12px]",
         disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
       )}
       htmlFor={id}

@@ -447,7 +447,7 @@ function buildCloseRequest(
 }
 
 const ROW_BUTTON_CLASSES =
-  "cursor-pointer rounded-lg bg-input-bg px-2 py-1 font-medium text-[10px] text-panel-text ring-1 ring-panel-border transition-colors hover:text-panel-text-active disabled:cursor-wait disabled:opacity-60";
+  "cursor-pointer rounded-sm bg-input-bg px-2 py-1 font-medium text-[11px] text-panel-text ring-1 ring-panel-border transition-colors hover:text-panel-text-active disabled:cursor-wait disabled:opacity-60";
 
 /**
  * The button at the end of each row: Cancel on an open order, Close on a position, the fill's

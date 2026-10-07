@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import type { ActivityTab, ActivityView } from "@/lib/trading.types";
 import { SmartLink } from "@/ui/SmartLink";
+import { PanelTabs } from "@/ui/trading-terminal/PanelTabs";
 
 /** Tabs that describe the viewer's own account, so their rows must never render for a signed-out visitor. */
 const ACCOUNT_SCOPED_TABS = new Set(["open-orders", "order-history", "trade-history"]);
@@ -76,35 +77,13 @@ export function TradingActivityPanel({
 
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden bg-panel-bg/72 shadow-[0_24px_80px_var(--panel-shadow)] ring-1 ring-panel-ring transition-colors duration-300">
-      <div className="flex items-center gap-2 px-4 py-3">
-        {/*
-         * Scrolls sideways rather than wrapping: in the narrow two-column layout five tabs wrapped
-         * to a second row, and the ~40px it cost came straight out of the rows below it.
-         */}
-        <div className="flex min-w-0 gap-1.5 overflow-x-auto font-medium text-[12px]">
-          {tabs.map((tab) => (
-            <button
-              className={cn(
-                "shrink-0 cursor-pointer whitespace-nowrap rounded-sm px-2 py-1 transition-colors",
-                selectedTab === tab.id
-                  ? "bg-input-bg text-panel-text-active"
-                  : "text-panel-text-muted hover:text-panel-text"
-              )}
-              key={tab.id}
-              onClick={() => onTabSelect(tab.id)}
-              type="button"
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <PanelTabs className="px-4" onSelect={onTabSelect} selected={selectedTab} tabs={tabs} />
 
-      <div className="min-h-0 flex-1 overflow-auto px-4 pb-4">
+      <div className="min-h-0 flex-1 overflow-auto px-4 pt-2 pb-4">
         {/* Header and rows share this wrapper so they scroll sideways together and stay aligned. */}
         <div className="flex min-w-max flex-col">
           <div
-            className="grid gap-2 text-[12px] text-panel-text-muted"
+            className="grid gap-2 text-[11px] text-panel-text-muted"
             style={{ gridTemplateColumns }}
           >
             {activityView.columns.map((column) => (
@@ -119,7 +98,7 @@ export function TradingActivityPanel({
               <div className="flex flex-1 flex-col">
                 {rows.map((row, rowIndex) => (
                   <div
-                    className="grid min-h-10 items-center gap-2 border-panel-border border-b px-3 py-1.5 text-[11px] last:border-b-0"
+                    className="grid min-h-10 items-center gap-2 border-panel-border border-b px-3 py-1.5 text-[12px] last:border-b-0"
                     key={`${row.cells[0]}-${rowIndex}`}
                     style={{ gridTemplateColumns }}
                   >
@@ -178,7 +157,7 @@ export function TradingActivityPanel({
         {isEmpty ? (
           <div className="sticky left-0 mt-2 flex min-h-[96px] flex-col items-center justify-center gap-4 rounded-sm bg-input-bg/50 text-center">
             <div>
-              <div className="font-medium text-panel-text-active text-sm">
+              <div className="font-medium text-[13px] text-panel-text-active">
                 {emptyStateCopy.title}
               </div>
               <div className="mt-1 text-[11px] text-panel-text-muted">{emptyStateCopy.body}</div>
@@ -188,7 +167,7 @@ export function TradingActivityPanel({
         ) : null}
       </div>
 
-      <div className="flex flex-col gap-2 px-4 pb-3 text-[10px] text-panel-text-muted sm:flex-row sm:items-center sm:justify-end">
+      <div className="flex flex-col gap-2 px-4 pb-3 text-[11px] text-panel-text-muted sm:flex-row sm:items-center sm:justify-end">
         {footerLinks.map((link) => (
           <SmartLink
             className="transition-colors hover:text-panel-text-active"

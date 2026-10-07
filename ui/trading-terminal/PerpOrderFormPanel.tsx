@@ -536,7 +536,7 @@ export function PerpOrderFormPanel({
           </div>
 
           {shortfall !== null && hasWallet ? (
-            <p className="text-[10px] text-panel-text-muted leading-snug" data-note="shortfall">
+            <p className="text-[11px] text-panel-text-muted leading-snug" data-note="shortfall">
               Needs {USD.format(requiredMargin ?? 0)} USDC of margin; the account has{" "}
               {USD.format(availableMargin ?? 0)}.
             </p>
@@ -552,7 +552,7 @@ export function PerpOrderFormPanel({
           </SubmitButton>
 
           {statusText === null ? null : (
-            <p className="text-[10px] text-panel-text-muted leading-snug">{statusText}</p>
+            <p className="text-[11px] text-panel-text-muted leading-snug">{statusText}</p>
           )}
         </>
       }

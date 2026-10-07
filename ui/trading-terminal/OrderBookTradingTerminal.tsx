@@ -563,7 +563,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
                 refreshCngnBalance();
               }}
               open={legacyWithdrawOpen}
-              triggerClassName="cursor-pointer rounded-lg bg-input-bg px-2 py-1 font-medium text-[10px] text-panel-text ring-1 ring-panel-border transition-colors hover:text-panel-text-active"
+              triggerClassName="cursor-pointer rounded-sm bg-input-bg px-2 py-1 font-medium text-[11px] text-panel-text ring-1 ring-panel-border transition-colors hover:text-panel-text-active"
               triggerId="legacy-spot-withdraw-trigger"
               withdrawableAssets={legacyWithdrawableAssets(legacyStack)}
               withdrawOnly

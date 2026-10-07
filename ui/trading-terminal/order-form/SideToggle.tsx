@@ -31,7 +31,7 @@ export function SideToggle<T extends string>({
           <button
             aria-pressed={active}
             className={cn(
-              "h-8 cursor-pointer font-semibold text-[14px] transition-colors",
+              "h-8 cursor-pointer font-semibold text-[13px] transition-colors",
               !active && "text-panel-text-muted hover:bg-input-hover",
               active && option.tone === "buy" && "bg-bid-bg text-buy",
               active && option.tone === "sell" && "bg-ask-bg text-sell"

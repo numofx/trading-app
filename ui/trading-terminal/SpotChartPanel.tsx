@@ -7,6 +7,7 @@ import { formatNaira } from "@/lib/market-formatting";
 import type { SPOT_TIMEFRAME_OPTIONS } from "@/lib/spot-terminal-config";
 import { CHART_TOOL_ICONS, CHART_TOOLS } from "@/lib/spot-terminal-config";
 import type { Candle, OrderBookLevel } from "@/lib/trading.types";
+import { PanelTabs } from "@/ui/trading-terminal/PanelTabs";
 
 export type SpotChartTab = "depth" | "price";
 export type SpotTimeframe = (typeof SPOT_TIMEFRAME_OPTIONS)[number];
@@ -409,7 +410,7 @@ function OhlcReadout({ candle }: { candle: Candle | null }) {
   const valueClass = isUp ? "text-bid-text" : "text-ask-text";
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px]">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
       {(
         [
           ["O", candle.open],
@@ -470,66 +471,48 @@ export function SpotChartPanel({
 
   return (
     <section className="flex h-full min-h-[380px] flex-col overflow-hidden bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 md:min-h-0">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-panel-border border-b px-3 py-2">
-        <div className="flex items-center gap-1.5 font-medium text-[12px]">
-          <button
-            className={cn(
-              "cursor-pointer rounded-sm px-2 py-1 transition-colors",
-              chartTab === "price"
-                ? "bg-input-bg text-panel-text-active"
-                : "text-panel-text-muted hover:text-panel-text"
-            )}
-            onClick={() => onChartTabChange("price")}
-            type="button"
-          >
-            Price chart
-          </button>
-          <button
-            className={cn(
-              "cursor-pointer rounded-sm px-2 py-1 transition-colors",
-              chartTab === "depth"
-                ? "bg-input-bg text-panel-text-active"
-                : "text-panel-text-muted hover:text-panel-text"
-            )}
-            onClick={() => onChartTabChange("depth")}
-            type="button"
-          >
-            Depth chart
-          </button>
-        </div>
-
-        {chartTab === "price" ? (
-          <div className="flex flex-wrap items-center gap-1">
-            {timeframes.map((timeframe) => (
+      <PanelTabs
+        className="px-3"
+        onSelect={onChartTabChange}
+        selected={chartTab}
+        tabs={[
+          { id: "price", label: "Price chart" },
+          { id: "depth", label: "Depth chart" },
+        ]}
+        trailing={
+          chartTab === "price" ? (
+            <div className="flex shrink-0 items-center gap-1 py-1.5">
+              {timeframes.map((timeframe) => (
+                <button
+                  className={cn(
+                    "h-7 cursor-pointer rounded-sm px-2 font-medium text-[12px] transition-colors",
+                    selectedTimeframe === timeframe
+                      ? "bg-toolbar-active-bg text-toolbar-active-fg"
+                      : "text-panel-text-muted hover:bg-input-hover hover:text-panel-text-active"
+                  )}
+                  key={timeframe}
+                  onClick={() => onTimeframeChange(timeframe)}
+                  type="button"
+                >
+                  {timeframe}
+                </button>
+              ))}
               <button
                 className={cn(
                   "h-7 cursor-pointer rounded-sm px-2 font-medium text-[12px] transition-colors",
-                  selectedTimeframe === timeframe
+                  indicatorsEnabled
                     ? "bg-toolbar-active-bg text-toolbar-active-fg"
                     : "text-panel-text-muted hover:bg-input-hover hover:text-panel-text-active"
                 )}
-                key={timeframe}
-                onClick={() => onTimeframeChange(timeframe)}
+                onClick={onIndicatorsToggle}
                 type="button"
               >
-                {timeframe}
+                Indicators
               </button>
-            ))}
-            <button
-              className={cn(
-                "h-7 cursor-pointer rounded-sm px-2 font-medium text-[12px] transition-colors",
-                indicatorsEnabled
-                  ? "bg-toolbar-active-bg text-toolbar-active-fg"
-                  : "text-panel-text-muted hover:bg-input-hover hover:text-panel-text-active"
-              )}
-              onClick={onIndicatorsToggle}
-              type="button"
-            >
-              Indicators
-            </button>
-          </div>
-        ) : null}
-      </div>
+            </div>
+          ) : null
+        }
+      />
 
       {chartTab === "price" ? (
         <div className="border-panel-border border-b px-3 py-1.5">

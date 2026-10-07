@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { SmartImage } from "@/ui/SmartImage";
 import type { TokenSymbol } from "@/ui/trading-terminal/order-form/TokenUnit";
+import { PanelTitle } from "@/ui/trading-terminal/PanelTabs";
 
 const TOKEN_ICONS = {
   cNGN: "/tokens/cngn.svg",
@@ -49,9 +50,7 @@ export function AccountSummary({ rows }: { rows: readonly AccountSummaryRow[] })
     <section className="flex shrink-0 flex-col overflow-clip bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300">
       {/* Dropped in the stacked layout for the reason the ticket drops its own: below `md` this
           column is the whole screen, and the label is only telling panels apart from siblings. */}
-      <div className="hidden shrink-0 items-center border-panel-border border-b px-3 py-1.5 font-medium text-[12px] md:flex">
-        <span className="rounded-md bg-input-bg px-2 py-0.5 text-panel-text-active">Account</span>
-      </div>
+      <PanelTitle className="hidden md:block">Account</PanelTitle>
 
       {/* Rows get a real line height rather than being packed: this is a readout a trader checks
           at a glance, and at the ticket's field density it read as a footnote. No rule between
@@ -59,7 +58,7 @@ export function AccountSummary({ rows }: { rows: readonly AccountSummaryRow[] })
       <div className="space-y-1 px-3 py-2">
         {rows.map((row) => (
           <div
-            className="flex min-h-11 items-center justify-between gap-2 text-[13px]"
+            className="flex min-h-11 items-center justify-between gap-2 text-[12px]"
             key={row.id ?? row.symbol}
           >
             <span className="flex min-w-0 items-center gap-2">

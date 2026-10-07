@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { PanelTitle } from "@/ui/trading-terminal/PanelTabs";
 
 /**
  * The ticket's frame, shared by spot and the perp: a panel label that only shows beside sibling
@@ -21,11 +22,7 @@ export function OrderFormShell({ children, footer }: { children: ReactNode; foot
        * this is the only form on screen, so the row is dropped there to keep the submit button
        * within the first screenful.
        */}
-      <div className="hidden shrink-0 items-center border-panel-border border-b px-3 py-1.5 font-medium text-[12px] md:flex">
-        <span className="rounded-md bg-input-bg px-2 py-0.5 text-panel-text-active">
-          Order form
-        </span>
-      </div>
+      <PanelTitle className="hidden md:block">Order form</PanelTitle>
 
       {/* No scroller of its own: the column is the one scroll region, so a squeezed ticket scrolls
           the whole column rather than hiding fields inside an unmarked box. */}

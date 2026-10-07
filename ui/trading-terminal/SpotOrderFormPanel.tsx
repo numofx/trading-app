@@ -167,7 +167,7 @@ function PriceQuickFill({
   onSelect: (price: number) => void;
 }) {
   return (
-    <span className="flex items-center gap-1 text-[10px]">
+    <span className="flex items-center gap-1 text-[11px]">
       {[
         { label: "MID", price: midPrice },
         { label: bestLabel, price: bestPrice },
@@ -474,7 +474,7 @@ function ConversionLine({ isMarket, label }: { isMarket: boolean; label: string 
     return null;
   }
 
-  return <p className="text-[10px] text-panel-text-muted">≈ {label}</p>;
+  return <p className="text-[11px] text-panel-text-muted">≈ {label}</p>;
 }
 
 /** What a market order fills at, and the room it is signed with. A limit ticket has neither. */
@@ -547,7 +547,7 @@ function MarketDepthNote({
   }
 
   return (
-    <p className="text-[10px] text-panel-text-muted leading-snug">
+    <p className="text-[11px] text-panel-text-muted leading-snug">
       Book covers {formatBalance(fill.filledSize, "USDC")} — the rest rests until it expires.
     </p>
   );
@@ -614,7 +614,7 @@ function OwnCrossingNote({ note }: { note: string | null }) {
     return null;
   }
 
-  return <p className="text-[10px] text-panel-text-muted leading-snug">{note}</p>;
+  return <p className="text-[11px] text-panel-text-muted leading-snug">{note}</p>;
 }
 
 /**
@@ -935,7 +935,7 @@ export function SpotOrderFormPanel({
           <OwnCrossingNote note={ownCrossingNote} />
 
           {shortfall === null || !hasWallet ? null : (
-            <p className="text-[10px] text-panel-text-muted leading-snug" data-note="shortfall">
+            <p className="text-[11px] text-panel-text-muted leading-snug" data-note="shortfall">
               Needs {formatBalance(shortfall.needed, shortfall.currency)}; account holds{" "}
               {formatBalance(shortfall.held, shortfall.currency)}.
             </p>
@@ -966,7 +966,7 @@ export function SpotOrderFormPanel({
           />
 
           {statusText === null ? null : (
-            <p className="text-[10px] text-panel-text-muted leading-snug">{statusText}</p>
+            <p className="text-[11px] text-panel-text-muted leading-snug">{statusText}</p>
           )}
         </>
       }

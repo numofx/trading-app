@@ -21,7 +21,7 @@ export function AvailableRow({
   value: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-2 text-[11px]">
+    <div className="flex items-center justify-between gap-2 text-[12px]">
       <FieldLabel tooltip={tooltip}>{label}</FieldLabel>
       <span className="flex min-w-0 items-center gap-1.5">
         <span className="truncate font-medium text-panel-text tabular-nums">{value}</span>

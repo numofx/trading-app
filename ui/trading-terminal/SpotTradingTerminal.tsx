@@ -434,7 +434,7 @@ export function SpotTradingTerminal({
               tabs={SPOT_BOTTOM_TABS}
             />
             {cancelError === null ? null : (
-              <p className="px-4 pt-1 text-[10px] text-sell">{cancelError}</p>
+              <p className="px-4 pt-1 text-[11px] text-sell">{cancelError}</p>
             )}
           </div>
         </div>
@@ -505,7 +505,7 @@ function buildSpotRowAction(inputs: {
       const busy = inputs.cancellingNonce === order.nonce;
       return (
         <button
-          className="cursor-pointer rounded-lg bg-input-bg px-2 py-1 font-medium text-[10px] text-panel-text ring-1 ring-panel-border transition-colors hover:text-panel-text-active disabled:cursor-wait disabled:opacity-60"
+          className="cursor-pointer rounded-sm bg-input-bg px-2 py-1 font-medium text-[11px] text-panel-text ring-1 ring-panel-border transition-colors hover:text-panel-text-active disabled:cursor-wait disabled:opacity-60"
           disabled={busy}
           onClick={() => inputs.handleCancelOrder(order.nonce, order.ownerAddress)}
           type="button"

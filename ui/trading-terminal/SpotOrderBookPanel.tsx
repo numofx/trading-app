@@ -1,7 +1,7 @@
 "use client";
 
 import { Menu } from "@base-ui/react/menu";
-import { ArrowDown, ArrowUp, ChevronDown, ExternalLink } from "lucide-react";
+import { ArrowDown, ArrowLeftRight, ArrowUp, ChevronDown, ExternalLink } from "lucide-react";
 import { useState } from "react";
 import { getAppChain } from "@/lib/base-public-client";
 import { cn } from "@/lib/cn";
@@ -19,6 +19,7 @@ import {
 } from "@/lib/order-book-display";
 import { getAnchorPrice, getBestPrices } from "@/lib/spot-market";
 import type { OrderBookLevel, TradePrint } from "@/lib/trading.types";
+import { PanelTabs } from "@/ui/trading-terminal/PanelTabs";
 
 export type SpotBookTab = "book" | "trades";
 
@@ -45,7 +46,7 @@ function LadderSelect({
     <Menu.Root>
       <Menu.Trigger
         aria-label={label}
-        className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-sm border border-input-border bg-input-bg px-2 py-1.5 text-[11px] text-panel-text transition-colors hover:bg-input-hover"
+        className="flex cursor-pointer items-center gap-1 rounded-sm px-1.5 py-1 font-medium text-[12px] text-panel-text-active transition-colors hover:bg-input-hover"
       >
         <span>{options.find((option) => option.value === value)?.label}</span>
         <ChevronDown aria-hidden className="size-3.5 shrink-0 text-panel-text-muted" />
@@ -89,11 +90,12 @@ function BookLevelRow({
   const width = `${Math.min(100, (row.total / maxTotal) * 100)}%`;
 
   return (
-    <div className="relative grid grid-cols-3 px-3 py-[3px] text-[11px] tabular-nums transition-colors hover:bg-input-hover">
+    <div className="relative mx-2 my-px grid grid-cols-3 rounded-sm px-2 py-1 text-[12px] tabular-nums transition-colors hover:bg-input-hover">
+      {/* The bar grows from the price edge, as a rounded block the price sits inside of. */}
       <div
         aria-hidden
         className={cn(
-          "absolute inset-y-0 right-0",
+          "absolute inset-y-0 left-0 rounded-sm",
           side === "ask" ? "bg-ask-depth" : "bg-bid-depth"
         )}
         style={{ width }}
@@ -106,10 +108,10 @@ function BookLevelRow({
       >
         {formatMarketPrice(row.price, digits)}
       </span>
-      <span className="relative z-10 text-right text-panel-text">
+      <span className="relative z-10 text-right text-panel-text-active">
         {formatLadderAmount(row.amount)}
       </span>
-      <span className="relative z-10 text-right text-panel-text">
+      <span className="relative z-10 text-right text-panel-text-active">
         {formatLadderAmount(row.total)}
       </span>
     </div>
@@ -122,7 +124,7 @@ function BookLevelRow({
  */
 function BookEmptyRungRow({ digits, price }: { digits: number; price: number }) {
   return (
-    <div className="grid grid-cols-3 px-3 py-[3px] text-[11px] text-panel-text-muted/50 tabular-nums">
+    <div className="mx-2 my-px grid grid-cols-3 px-2 py-1 text-[12px] text-panel-text-muted/50 tabular-nums">
       <span>{formatMarketPrice(price, digits)}</span>
       <span className="text-right">—</span>
       <span className="text-right">—</span>
@@ -222,31 +224,29 @@ function BookLadder({
        * resting side and only then to the last trade. The arrow beside it is the last trade's
        * direction, which is the one thing here that says which way the market last moved.
        */}
-      <div className="border-panel-border border-y bg-input-bg/60 px-3 py-2">
-        <div className="flex items-center justify-between gap-2">
-          <span
-            className={cn(
-              "flex items-center gap-1 font-semibold text-[15px] tabular-nums",
-              lastSide === null ? "text-mid-price" : null,
-              lastSide === "buy" ? "text-bid-text" : null,
-              lastSide === "sell" ? "text-ask-text" : null
-            )}
-          >
-            {formatNaira(anchorPrice)}
-            {lastSide === "buy" ? (
-              <ArrowUp aria-label="Last trade was a buy" className="size-3.5" />
-            ) : null}
-            {lastSide === "sell" ? (
-              <ArrowDown aria-label="Last trade was a sell" className="size-3.5" />
-            ) : null}
-          </span>
-          <span className="text-right text-[11px] text-panel-text-muted tabular-nums">
-            Spread {spread === null ? "—" : formatNaira(spread)}
-            {spreadBps === null ? null : (
-              <span className="ml-1 text-spread-percent">({spreadBps.toFixed(2)} bps)</span>
-            )}
-          </span>
-        </div>
+      <div className="mx-2 my-1 grid grid-cols-3 items-center rounded-sm bg-input-bg px-2 py-1.5 text-[12px] tabular-nums">
+        <span
+          className={cn(
+            "flex items-center gap-1 font-semibold",
+            lastSide === null ? "text-mid-price" : null,
+            lastSide === "buy" ? "text-bid-text" : null,
+            lastSide === "sell" ? "text-ask-text" : null
+          )}
+        >
+          {formatNaira(anchorPrice)}
+          {lastSide === "buy" ? (
+            <ArrowUp aria-label="Last trade was a buy" className="size-3.5" />
+          ) : null}
+          {lastSide === "sell" ? (
+            <ArrowDown aria-label="Last trade was a sell" className="size-3.5" />
+          ) : null}
+        </span>
+        <span className="text-center font-medium text-panel-text">
+          Spread{spread === null ? "" : ` ${formatNaira(spread)}`}
+        </span>
+        <span className="text-right text-spread-percent">
+          {spreadBps === null ? "—" : `${(spreadBps / 100).toFixed(3)}%`}
+        </span>
       </div>
 
       {/* Bids already grow downward from the touch, so plain `auto` is enough: the scroll origin
@@ -275,8 +275,11 @@ function BookLadder({
   );
 }
 
-/** The tape's columns: the time takes the most room, since it can carry a date as well. */
-const TAPE_COLUMNS = "grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1.3fr)]";
+/**
+ * The tape's columns: the time is a fixed width wide enough for a date, a time with seconds and the
+ * explorer icon, so the size beside it never runs into it; price and size share the rest.
+ */
+const TAPE_COLUMNS = "grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_7.5rem]";
 
 /**
  * When a fill happened, in the viewer's zone, with its date when it is not from today: the tape
@@ -335,11 +338,11 @@ function TradeTape({ trades }: { trades: TradePrint[] }) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-1">
+    <div className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto px-2 py-1">
       {trades.map((trade) => (
         <div
           className={cn(
-            "grid px-2 py-1 text-[11px] tabular-nums transition-colors",
+            "grid rounded-sm px-2 py-1 text-[12px] tabular-nums transition-colors",
             TAPE_COLUMNS,
             // Hover deepens the side's tint rather than replacing it with the neutral one.
             trade.side === "buy" ? "bg-bid-bg hover:bg-bid-depth" : "bg-ask-bg hover:bg-ask-depth"
@@ -385,62 +388,46 @@ export function SpotOrderBookPanel({
 
   return (
     <section className="flex h-full min-h-[380px] flex-col overflow-hidden bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 md:min-h-0">
-      <div className="flex items-center gap-1.5 px-3 py-2 font-medium text-[12px]">
-        <button
-          className={cn(
-            "cursor-pointer rounded-sm px-2 py-1 transition-colors",
-            isBook
-              ? "bg-input-bg text-panel-text-active"
-              : "text-panel-text-muted hover:text-panel-text"
-          )}
-          onClick={() => onTabChange("book")}
-          type="button"
-        >
-          Order book
-        </button>
-        <button
-          className={cn(
-            "cursor-pointer rounded-sm px-2 py-1 transition-colors",
-            isBook
-              ? "text-panel-text-muted hover:text-panel-text"
-              : "bg-input-bg text-panel-text-active"
-          )}
-          onClick={() => onTabChange("trades")}
-          type="button"
-        >
-          Trades
-        </button>
-      </div>
+      <PanelTabs
+        fill
+        onSelect={onTabChange}
+        selected={tab}
+        tabs={[
+          { id: "book", label: "Order book" },
+          { id: "trades", label: "Trades" },
+        ]}
+      />
 
       {isBook ? (
-        <div className="grid grid-cols-2 gap-2 px-3 pb-2">
+        <div className="flex items-center justify-between px-2 pt-2 pb-1">
           <LadderSelect
             label="Price grouping"
             onSelect={(value) => setTick(Number(value))}
             options={PRICE_GROUPS.map((group) => ({ label: String(group), value: String(group) }))}
             value={String(tick)}
           />
-          <LadderSelect
-            label="Amount denomination"
-            onSelect={(value) => setUnit(value as LadderUnit)}
-            options={[
-              { label: UNIT_LABEL.base, value: "base" },
-              { label: UNIT_LABEL.quote, value: "quote" },
-            ]}
-            value={unit}
-          />
+          {/* The unit is a two-way swap, so a single button flips it rather than opening a menu. */}
+          <button
+            aria-label={`Amount denomination: ${UNIT_LABEL[unit]}. Switch to ${unit === "base" ? UNIT_LABEL.quote : UNIT_LABEL.base}`}
+            className="flex cursor-pointer items-center gap-1.5 rounded-sm px-1.5 py-1 font-medium text-[12px] text-panel-text-active transition-colors hover:bg-input-hover"
+            onClick={() => setUnit((current) => (current === "base" ? "quote" : "base"))}
+            type="button"
+          >
+            {UNIT_LABEL[unit]}
+            <ArrowLeftRight aria-hidden className="size-3.5 text-panel-text-muted" />
+          </button>
         </div>
       ) : null}
 
       <div
         className={cn(
-          "grid border-panel-border border-y px-3 py-1.5 text-[10px] text-panel-text-muted",
+          "grid whitespace-nowrap px-4 pt-1 pb-1.5 text-[11px] text-panel-text-muted",
           isBook ? "grid-cols-3" : TAPE_COLUMNS
         )}
       >
-        <span>{isBook ? "Price (cNGN)" : "Price cNGN"}</span>
-        <span className="text-right">{isBook ? `Amount (${UNIT_LABEL[unit]})` : "Size USDC"}</span>
-        <span className="text-right">{isBook ? `Total (${UNIT_LABEL[unit]})` : "Time"}</span>
+        <span>Price cNGN</span>
+        <span className="text-right">{isBook ? `Size ${UNIT_LABEL[unit]}` : "Size USDC"}</span>
+        <span className="text-right">{isBook ? `Total ${UNIT_LABEL[unit]}` : "Time"}</span>
       </div>
 
       {isBook ? (
