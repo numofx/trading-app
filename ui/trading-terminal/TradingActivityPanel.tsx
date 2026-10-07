@@ -10,6 +10,23 @@ const ACCOUNT_SCOPED_TABS = new Set(["open-orders", "order-history", "trade-hist
 /** Per-tab copy for an empty panel; tabs without an entry use the generic "No activity yet". */
 const EMPTY_STATE_COPY: Partial<Record<string, EmptyState>> = {};
 
+/** Columns whose cells are words rather than figures; every other column after the first is a number. */
+const TEXT_COLUMNS = new Set([
+  "Side",
+  "Direction",
+  "Role",
+  "Time",
+  "Asset",
+  "Instrument",
+  "Market",
+  "",
+]);
+
+/** Figures and their headers right-align so digits line up; the row's name and any words stay left. */
+function isNumericColumn(column: string, columnIndex: number) {
+  return columnIndex !== 0 && !TEXT_COLUMNS.has(column);
+}
+
 type EmptyState = {
   /** A control under the copy, e.g. Order History's signature prompt. */
   action?: ReactNode;
@@ -66,84 +83,87 @@ export function TradingActivityPanel({
   const rows = ACCOUNT_SCOPED_TABS.has(selectedTab) && !isSignedIn ? [] : activityView.rows;
   const emptyStateCopy = getEmptyStateCopy(selectedTab, isSignedIn, emptyState);
   const isEmpty = rows.length === 0;
-  const isMetricColumn = (column: string) =>
-    column.includes("PnL") || column.includes("%") || column.includes("Return");
-  // Columns hold a readable floor instead of compressing to nothing: at six columns on a phone an
-  // equal split gives each ~55px, narrower than a header like "UNREALIZED", so they overlapped.
-  // Below the floor the panel scrolls sideways; above it the tracks stay even, as before.
-  const gridTemplateColumns = `repeat(${activityView.columns.length}, minmax(96px, 1fr))`;
+  const columnCount = activityView.columns.length;
+  /**
+   * Each column is at least as wide as its widest value, and the spare width is shared evenly.
+   * Under the old equal `1fr` tracks inside a max-content wrapper, every column grew to the
+   * widest one (the Market cell with its pills), which pushed the last columns past the panel
+   * edge and into a sideways scroll.
+   */
+  const gridTemplateColumns = `repeat(${columnCount}, minmax(max-content, 1fr))`;
 
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden bg-panel-bg/72 shadow-[0_24px_80px_var(--panel-shadow)] ring-1 ring-panel-ring transition-colors duration-300">
       <PanelTabs className="px-4" onSelect={onTabSelect} selected={selectedTab} tabs={tabs} />
 
       <div className="min-h-0 flex-1 overflow-auto px-4 pt-1.5 pb-3">
-        {/* Header and rows share this wrapper so they scroll sideways together and stay aligned. */}
-        <div className="flex min-w-max flex-col">
-          <div
-            className="grid gap-2 text-[11px] text-panel-text-muted"
-            style={{ gridTemplateColumns }}
-          >
-            {activityView.columns.map((column) => (
-              <span className={isMetricColumn(column) ? "text-right" : undefined} key={column}>
+        {/*
+         * One grid for the header and every row: the rows are subgrids of it, so content-sized
+         * columns resolve once and the header labels sit over their values. Only the outer
+         * wrapper scrolls, as a fallback for viewports narrower than the content.
+         */}
+        <div className="grid gap-x-3" style={{ gridTemplateColumns }}>
+          <div className="col-span-full grid grid-cols-subgrid px-3 text-[11px] text-panel-text-muted">
+            {activityView.columns.map((column, columnIndex) => (
+              <span
+                className={cn(
+                  "whitespace-nowrap",
+                  isNumericColumn(column, columnIndex) && "text-right"
+                )}
+                key={column}
+              >
                 {column}
               </span>
             ))}
           </div>
 
           {isEmpty ? null : (
-            <div className="mt-1.5 flex flex-col overflow-hidden rounded-sm bg-input-bg/50">
-              <div className="flex flex-col">
-                {rows.map((row, rowIndex) => (
-                  <div
-                    className="grid min-h-8 items-center gap-2 border-panel-border border-b px-3 py-1 text-[12px] last:border-b-0"
-                    key={`${row.cells[0]}-${rowIndex}`}
-                    style={{ gridTemplateColumns }}
-                  >
-                    {row.cells.map((cell, cellIndex) => (
-                      <span
-                        className={cn(
-                          "text-panel-text",
-                          cellIndex === 0 && "font-medium text-panel-text-active",
-                          // A side cell, or one carrying pills, stays on one line whatever it says.
-                          (activityView.columns[cellIndex] === "Side" ||
-                            row.badges?.[cellIndex] !== undefined) &&
-                            "whitespace-nowrap",
-                          isMetricColumn(activityView.columns[cellIndex] ?? "") && "text-right",
-                          cell.startsWith("-") && "text-sell",
-                          row.tones?.[cellIndex] === "positive" && "font-medium text-buy",
-                          row.tones?.[cellIndex] === "negative" && "font-medium text-sell",
-                          row.titles?.[cellIndex] !== undefined && "cursor-help"
-                        )}
-                        key={`${cell}-${cellIndex}`}
-                        title={row.titles?.[cellIndex]}
-                      >
-                        {cell}
-                        {row.badges?.[cellIndex]?.map((badge) => (
-                          <span
-                            className={cn(
-                              "ml-1.5 inline-flex items-center rounded-sm px-1.5 py-0.5 align-middle font-medium text-[10px] leading-none",
-                              badge.tone === "positive" && "bg-buy/15 text-buy",
-                              badge.tone === "negative" && "bg-sell/15 text-sell",
-                              badge.tone === undefined &&
-                                "bg-input-bg text-panel-text ring-1 ring-panel-border"
-                            )}
-                            key={badge.label}
-                          >
-                            {badge.label}
-                          </span>
-                        ))}
-                        {row.details?.[cellIndex] === undefined ? null : (
-                          <span className="ml-1 font-normal text-[11px] text-panel-text-muted">
-                            {row.details[cellIndex]}
-                          </span>
-                        )}
-                      </span>
-                    ))}
-                    {rowAction ? <span className="text-right">{rowAction(rowIndex)}</span> : null}
-                  </div>
-                ))}
-              </div>
+            <div className="col-span-full mt-1.5 grid grid-cols-subgrid overflow-hidden rounded-sm bg-input-bg/50">
+              {rows.map((row, rowIndex) => (
+                <div
+                  className="col-span-full grid min-h-8 grid-cols-subgrid items-center border-panel-border border-b px-3 py-1 text-[12px] last:border-b-0"
+                  key={`${row.cells[0]}-${rowIndex}`}
+                >
+                  {row.cells.map((cell, cellIndex) => (
+                    <span
+                      className={cn(
+                        "whitespace-nowrap text-panel-text tabular-nums",
+                        cellIndex === 0 && "font-medium text-panel-text-active",
+                        isNumericColumn(activityView.columns[cellIndex] ?? "", cellIndex) &&
+                          "text-right",
+                        cell.startsWith("-") && "text-sell",
+                        row.tones?.[cellIndex] === "positive" && "font-medium text-buy",
+                        row.tones?.[cellIndex] === "negative" && "font-medium text-sell",
+                        row.titles?.[cellIndex] !== undefined && "cursor-help"
+                      )}
+                      key={`${cell}-${cellIndex}`}
+                      title={row.titles?.[cellIndex]}
+                    >
+                      {cell}
+                      {row.badges?.[cellIndex]?.map((badge) => (
+                        <span
+                          className={cn(
+                            "ml-1.5 inline-flex items-center rounded-sm px-1.5 py-0.5 align-middle font-medium text-[10px] leading-none",
+                            badge.tone === "positive" && "bg-buy/15 text-buy",
+                            badge.tone === "negative" && "bg-sell/15 text-sell",
+                            badge.tone === undefined &&
+                              "bg-input-bg text-panel-text ring-1 ring-panel-border"
+                          )}
+                          key={badge.label}
+                        >
+                          {badge.label}
+                        </span>
+                      ))}
+                      {row.details?.[cellIndex] === undefined ? null : (
+                        <span className="ml-1 font-normal text-[11px] text-panel-text-muted">
+                          {row.details[cellIndex]}
+                        </span>
+                      )}
+                    </span>
+                  ))}
+                  {rowAction ? <span className="text-right">{rowAction(rowIndex)}</span> : null}
+                </div>
+              ))}
             </div>
           )}
         </div>

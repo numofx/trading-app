@@ -56,16 +56,33 @@ const FIXTURE_POSITION: PerpPosition = {
   unrealizedPnl: 0.12,
 };
 
+/** A second, opposite position: two rows is what shows whether the columns stay aligned. */
+const FIXTURE_SHORT: PerpPosition = {
+  engineSize: 1_387_000n,
+  initialMarginSurplus: 250.35,
+  liquidationPrice: 0.000_951_2,
+  maintenanceMarginSurplus: 250.35,
+  markPrice: FIXTURE_PRICE,
+  notionalUsd: 1_387_000 * FIXTURE_PRICE,
+  uiSide: "short",
+  uiSize: 1_387_000,
+  unrealizedPnl: -15.66,
+};
+
 export function PerpLayoutFixture() {
   return (
     <main className="flex min-h-screen flex-col gap-3 bg-terminal-bg p-3 text-foreground">
       {/* The Positions tab with the fixture's position, as the terminal lays it out. */}
       <div className="h-[220px] w-full">
         <TradingActivityPanel
-          activityView={buildPerpPositionsView([FIXTURE_POSITION], PERP_MARKET_LABEL, {
-            account: FIXTURE_ACCOUNT,
-            state: FIXTURE_STATE,
-          })}
+          activityView={buildPerpPositionsView(
+            [FIXTURE_POSITION, FIXTURE_SHORT],
+            PERP_MARKET_LABEL,
+            {
+              account: FIXTURE_ACCOUNT,
+              state: FIXTURE_STATE,
+            }
+          )}
           footerLinks={[]}
           isSignedIn
           onTabSelect={() => undefined}
@@ -79,7 +96,7 @@ export function PerpLayoutFixture() {
           )}
           selectedTab="positions"
           tabs={PERP_BOTTOM_TABS.map((tab) =>
-            tab.id === "positions" ? { ...tab, label: `${tab.label} (1)` } : tab
+            tab.id === "positions" ? { ...tab, label: `${tab.label} (2)` } : tab
           )}
         />
       </div>
