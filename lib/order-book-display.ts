@@ -3,19 +3,19 @@ import type { OrderBookLevel } from "@/lib/trading.types";
 /**
  * Which asset the ladder's Amount and Total columns are counted in.
  *
- * `base` is USDC notional — the size a spot order is entered in. `quote` restates the same resting
- * depth as the cNGN it would change hands for, which is the number a trader funding from a naira
- * balance actually cares about. Both are derived from the venue's own levels; neither invents depth.
+ * `base` is cNGN — the size an order is entered in and the unit the engine rests it in. `quote`
+ * restates the same resting depth as the USDC it would change hands for. Both are derived from the
+ * venue's own levels; neither invents depth.
  */
 export type LadderUnit = "base" | "quote";
 
 /**
- * The price increments the ladder can be grouped by, coarsest last.
+ * The price increments the ladder can be grouped by, coarsest last, in USDC per cNGN.
  *
- * The venue quotes cNGN per USDC to two decimals, so `0.01` is the raw book: grouping at that tick
- * is a no-op and every level rests exactly where the ladder shows it.
+ * The finest is the display precision (`PRICE_DECIMALS`), about 0.14 bps at today's rate; the
+ * engine's own tick is 1e-18, so a level is never rounded by more than the ladder shows.
  */
-export const PRICE_GROUPS = [0.01, 0.1, 1, 10] as const;
+export const PRICE_GROUPS = [1e-7, 5e-7, 1e-6, 5e-6] as const;
 
 export type PriceGroup = (typeof PRICE_GROUPS)[number];
 
@@ -42,9 +42,9 @@ export function formatLadderAmount(value: number) {
   return Math.abs(value) >= 10_000 ? COMPACT_AMOUNT.format(value) : PLAIN_AMOUNT.format(value);
 }
 
-/** Prices are money, not floats — bucketing at 0.1 must not produce 1375.3000000000002. */
+/** Prices are money, not floats — bucketing at 5e-7 must not produce 0.0007335000000000001. */
 function roundPrice(value: number) {
-  return Math.round(value * 1e8) / 1e8;
+  return Math.round(value * 1e12) / 1e12;
 }
 
 function roundAmount(value: number) {
@@ -138,7 +138,8 @@ export function buildEmptyRungs({
   if (last === undefined || rows.length >= minimum) {
     return [];
   }
-  const digits = Math.max(0, -Math.round(Math.log10(tick)));
+  // Enough places for a 5e-7 tick to step cleanly; `toFixed` keeps the float from drifting.
+  const digits = Math.max(0, -Math.floor(Math.log10(tick)) + 1);
   const direction = side === "ask" ? 1 : -1;
   const rungs: number[] = [];
   for (let step = 1; rows.length + rungs.length < minimum; step += 1) {
@@ -157,7 +158,7 @@ export function getMaxLadderTotal(rows: LadderRow[]) {
 
 /**
  * The spread in basis points of the mid — the unit a stablecoin FX trader quotes it in, where a
- * percentage of a ~1375 price rounds to noise.
+ * percentage of a ~0.0007 price rounds to noise.
  */
 export function getSpreadBps(bestAsk: number | null, bestBid: number | null) {
   if (bestAsk === null || bestBid === null) {

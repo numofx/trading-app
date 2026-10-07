@@ -7,10 +7,11 @@ import posthog from "posthog-js";
 import { useEffect, useState } from "react";
 import { createWalletClient, custom } from "viem";
 import { getAppChain } from "@/lib/base-public-client";
+import { formatUsdcPrice } from "@/lib/market-formatting";
 import { MARKET_LABELS } from "@/lib/market-labels";
 import type { OrderOutcome } from "@/lib/order-settlement";
 import { pollOrderOutcome } from "@/lib/order-settlement";
-import { getMarketableLimitPrice, getMarketSizingPrice } from "@/lib/spot-market";
+import { getMarketableLimitPrice } from "@/lib/spot-market";
 import type { OrderMarketOverride } from "@/lib/spot-order-submission";
 import {
   buildCancelEnvelope,
@@ -44,7 +45,7 @@ import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount
 import { useUsdcBalance } from "@/ui/trading-terminal/useUsdcBalance";
 import { usePrimaryWallet } from "@/ui/usePrimaryWallet";
 
-type SpotExecutionPrice = { error: string } | { price: string; sizingPrice?: string };
+type SpotExecutionPrice = { error: string } | { price: string };
 
 /** The touch as displayed in the ladder at the moment the trader submitted. */
 type SubmittedBook = { bestAsk: number | null; bestBid: number | null };
@@ -70,22 +71,17 @@ function resolveSpotExecutionPrice(
   }
 
   // Signed through the touch rather than at it, so a quote that moves in the interim does not
-  // turn the market order into a resting limit. The fill still happens at the maker's price.
+  // turn the market order into a resting limit. The fill still happens at the maker's price. The
+  // ticket has already sized the order in cNGN at its expected fill, so the limit is all that is
+  // needed here. Ten places, never `String()`: a USDC-per-cNGN price is small enough that
+  // `String` can print it in scientific notation, which the envelope's parser rejects.
   const marketable = getMarketableLimitPrice(side, book.bestAsk, book.bestBid);
 
   if (marketable === null) {
     return { error: "No opposing spot liquidity to cross. Use a limit order." };
   }
 
-  // Its size, though, is counted at the expected fill the ticket sent, held inside that limit —
-  // counted at the limit itself, the slippage room was spent as extra size.
-  const sizing = getMarketSizingPrice(side, Number(enteredPrice), marketable);
-
-  if (sizing === null) {
-    return { error: "No price to size the market order at. Use a limit order." };
-  }
-
-  return { price: String(marketable), sizingPrice: String(sizing) };
+  return { price: marketable.toFixed(10) };
 }
 
 /**
@@ -141,11 +137,12 @@ const ORDER_SETTLE_TIMEOUT_MS = Duration.toMillis("8 seconds");
  * no execution price, and inventing one is how the limit came to be reported as the fill.
  */
 function describeOrderOutcome(outcome: OrderOutcome | null, size: string, price: string) {
+  const at = formatUsdcPrice(Number(price));
   if (outcome?.status === "filled") {
-    return `Filled ${size} USDC. Balances updated.`;
+    return `Filled ${size} cNGN. Balances updated.`;
   }
   if (outcome?.status === "expired") {
-    return `Order expired unfilled at ₦${price}.`;
+    return `Order expired unfilled at ${at}.`;
   }
   if (outcome?.status === "cancelled") {
     return "Order cancelled.";
@@ -153,11 +150,11 @@ function describeOrderOutcome(outcome: OrderOutcome | null, size: string, price:
   if (outcome?.status === "active") {
     const filled = Number(outcome.filled_amount ?? "0");
     return filled > 0
-      ? `Partly filled, the rest resting at ₦${price}. Expires ${SPOT_ORDER_LIFETIME_LABEL} after signing.`
-      : `Resting at ₦${price}. Expires ${SPOT_ORDER_LIFETIME_LABEL} after signing, or cancel it from Open Orders.`;
+      ? `Partly filled, the rest resting at ${at}. Expires ${SPOT_ORDER_LIFETIME_LABEL} after signing.`
+      : `Resting at ${at}. Expires ${SPOT_ORDER_LIFETIME_LABEL} after signing, or cancel it from Open Orders.`;
   }
   // No status yet: say what is certain rather than claiming a fill.
-  return `Order accepted at ₦${price}. Check Open Orders for its status.`;
+  return `Order accepted at ${at}. Check Open Orders for its status.`;
 }
 
 /** Reads the order back so the terminal reports what happened, not what was asked for. */
@@ -185,7 +182,7 @@ function buildSpotOrderEvent(
     market_id: "cngn-usdc-spot",
     order_side: side,
     order_type: orderType,
-    size_usdc_notional: size,
+    size_cngn: size,
   };
 }
 
@@ -383,7 +380,6 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
         subaccountId: resolvedTradingSubaccountId,
         uiPrice: executionPrice,
         uiSize: size,
-        uiSizingPrice: resolvedPrice.sizingPrice,
         walletAddress: primaryWallet.address,
       });
       orderStatus.announce(
@@ -634,19 +630,20 @@ function servedOrderMarket(spotMarket: SpotMarket): OrderMarketOverride | undefi
 
 /** One cent in the ledger's 18-decimal USDC units. */
 const LEGACY_DUST_USDC_UNITS = 10n ** 16n;
-/** cNGN per USDC to value cNGN dust at when the market shows no price: about a cent at ₦1,300. */
-const LEGACY_DUST_FALLBACK_CNGN_PER_USDC = 1300;
+/** USDC per cNGN to value cNGN dust at when the market shows no price: 1,300 cNGN to the dollar. */
+const LEGACY_DUST_FALLBACK_USDC_PER_CNGN = 1 / 1300;
 
 /**
  * The cNGN worth one cent, in 18-decimal ledger units, at the market's price. What is left after a
  * withdrawal rounds to less than this and is not worth a row.
  */
-function legacyDustCngnUnits(markCngnPerUsdc: number | null): bigint {
-  const rate =
-    markCngnPerUsdc !== null && markCngnPerUsdc > 0
-      ? markCngnPerUsdc
-      : LEGACY_DUST_FALLBACK_CNGN_PER_USDC;
-  return BigInt(Math.round(rate * 100)) * 10n ** 14n;
+function legacyDustCngnUnits(markUsdcPerCngn: number | null): bigint {
+  const price =
+    markUsdcPerCngn !== null && markUsdcPerCngn > 0
+      ? markUsdcPerCngn
+      : LEGACY_DUST_FALLBACK_USDC_PER_CNGN;
+  // A cent's worth of cNGN to six decimals, then scaled to the ledger's eighteen.
+  return BigInt(Math.round((0.01 / price) * 1e6)) * 10n ** 12n;
 }
 
 /**
@@ -658,7 +655,7 @@ function buildLegacySpotView(
   stack: { usdcEscrow: `0x${string}`; cngnEscrow: `0x${string}` } | null,
   accountId: string | null,
   rows: { asset: string; balance: bigint }[] | null,
-  markCngnPerUsdc: number | null
+  markUsdcPerCngn: number | null
 ): {
   accountId: string;
   cngnLabel: string | null;
@@ -674,7 +671,7 @@ function buildLegacySpotView(
   const usdcUnits = held(stack.usdcEscrow);
   const cngnUnits = held(stack.cngnEscrow);
   const showUsdc = usdcUnits >= LEGACY_DUST_USDC_UNITS;
-  const showCngn = cngnUnits >= legacyDustCngnUnits(markCngnPerUsdc);
+  const showCngn = cngnUnits >= legacyDustCngnUnits(markUsdcPerCngn);
   if (!(showUsdc || showCngn)) {
     return null;
   }

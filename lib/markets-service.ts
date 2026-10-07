@@ -193,14 +193,14 @@ export async function getLiveSpotMarket() {
     markets.find((market) => {
       return (
         market.contract_type === "spot" &&
-        market.base_asset_symbol === "USDC" &&
-        market.quote_asset_symbol === "cNGN"
+        market.base_asset_symbol === "cNGN" &&
+        market.quote_asset_symbol === "USDC"
       );
     }) ?? null
   );
 }
 
-/** USDCcNGN-PERP, when markets-service lists it: contract_type `perpetual`, USDC/cNGN. */
+/** USDCcNGN-PERP, when markets-service lists it: contract_type `perpetual`, cNGN over USDC. */
 export async function getLivePerpMarket() {
   const markets = await getMarketsServiceMarkets();
 
@@ -208,8 +208,8 @@ export async function getLivePerpMarket() {
     markets.find((market) => {
       return (
         market.contract_type === "perpetual" &&
-        market.base_asset_symbol === "USDC" &&
-        market.quote_asset_symbol === "cNGN"
+        market.base_asset_symbol === "cNGN" &&
+        market.quote_asset_symbol === "USDC"
       );
     }) ?? null
   );
@@ -250,15 +250,7 @@ export async function getMarketTrades(assetAddress: string, subId: string, limit
 
   const payload = (await response.json()) as TradesResponse;
   return {
-    // The stats travel with the spec their prices are quoted under, read from the same response, so
-    // they are never inverted under another contract than the one they were computed in.
-    stats24h:
-      payload.stats_24h === undefined
-        ? null
-        : {
-            orderEntrySpec: payload.market_presentation?.order_entry_spec ?? null,
-            stats: payload.stats_24h,
-          },
+    stats24h: payload.stats_24h ?? null,
     trades: payload.trades ?? [],
   };
 }

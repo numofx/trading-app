@@ -65,23 +65,29 @@ export function buildOverviewRow(
 }
 
 /**
- * The entries one tab lists, narrowed by the search box: a case-insensitive match on the symbol,
- * with the separators ignored so "usdccngn" and "usdc cngn" both find USDC-cNGN.
+ * The entries one tab lists, narrowed by the search box: a case-insensitive match of every word
+ * the trader typed against the symbol, separators ignored, so "cngn perp", "cngn-perp" and
+ * "cngnperp" all find cNGN-PERP.
  */
 export function filterTerminalMarkets(
   entries: readonly TerminalMarketEntry[],
   kind: TerminalMarketKind,
   query: string
 ): TerminalMarketEntry[] {
-  const needle = normalizeSymbol(query);
-  return entries.filter(
-    (entry) =>
-      entry.kind === kind && (needle === "" || normalizeSymbol(entry.symbol).includes(needle))
-  );
+  const needles = query
+    .toLowerCase()
+    .split(SYMBOL_SEPARATORS)
+    .filter((word) => word !== "");
+  return entries.filter((entry) => {
+    const symbol = normalizeSymbol(entry.symbol);
+    return entry.kind === kind && needles.every((needle) => symbol.includes(needle));
+  });
 }
 
+const SYMBOL_SEPARATORS = /[\s\-_/]+/g;
+
 function normalizeSymbol(value: string) {
-  return value.toLowerCase().replace(/[\s\-_/]+/g, "");
+  return value.toLowerCase().replace(SYMBOL_SEPARATORS, "");
 }
 
 export function formatOverviewVolume(value: number | null) {

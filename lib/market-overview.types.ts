@@ -18,7 +18,7 @@ export type TerminalMarketEntry = {
  */
 export type MarketOverviewRow = {
   id: TerminalMarketId;
-  /** cNGN per USDC: the book's mid, else its one resting side, else the last trade (the perp's mark last). */
+  /** USDC per cNGN: the book's mid, else its one resting side, else the last trade (the perp's mark last). */
   price: number | null;
   changePercent24h: number | null;
   /** USDC notional traded in the window. */

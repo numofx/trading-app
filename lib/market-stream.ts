@@ -1,16 +1,15 @@
+import { PRICE_DECIMALS } from "@/lib/market-formatting";
 import type {
   BookSnapshotData,
   BookUpdateData,
-  MarketStreamPresenter,
   StreamBookOrder,
   StreamTrade,
 } from "@/lib/market-stream.types";
-import { isInvertedOrderEntrySpec } from "@/lib/order-entry-spec";
 import type { OrderBookLevel, TradePrint } from "@/lib/trading.types";
 
 /**
- * A resting order in the client book, keyed by `order_id`, already translated into the UI's
- * display units (cNGN-per-USDC price, USDC-notional size). Snapshot and delta frames are both
+ * A resting order in the client book, keyed by `order_id`, in the units the terminal shows, which
+ * are the engine's own: USDC per cNGN, sized in cNGN. Snapshot and delta frames are both
  * normalized to this shape at ingestion so aggregation stays market-agnostic.
  */
 export type RestingOrder = {
@@ -32,90 +31,26 @@ export function parseDecimal(value: string | null | undefined): number {
 }
 
 /**
- * Whether this market's engine values need the USDC/cNGN inversion.
- *
- * Keyed on the spec rather than `type === "spot"` deliberately. The inversion is a property of
- * `usdc_cngn_spot_v1`, not of spot as a class — applying it to a normally-oriented spot market
- * would file every order into the wrong ladder and read as a crossed book, which fails silently.
+ * Normalizes a snapshot order into a resting order: the engine's price and what is left of its
+ * amount. Returns null if the order has no positive price/size.
  */
-function usesSpotTranslation(presenter: MarketStreamPresenter) {
-  return isInvertedOrderEntrySpec(presenter.orderEntrySpec);
-}
+function presentSnapshotOrder(order: StreamBookOrder): RestingOrder | null {
+  const price = parseDecimal(order.limit_price);
+  const size = parseDecimal(order.desired_amount) - parseDecimal(order.filled_amount);
 
-/**
- * Translates an engine limit price + resting amount into the UI's display convention.
- *
- * - **`usdc_cngn_spot_v1`**: UI price is cNGN-per-USDC = 1 / engine price, and UI size is USDC
- *   notional = engine cNGN amount × engine price (inverse of `engine_amount = ui_size * ui_price`).
- * - **Everything else**: price shown as-is; size is the resting contract count.
- */
-function toUiQuote(
-  engineLimitPrice: number,
-  restingAmount: number,
-  presenter: MarketStreamPresenter
-): { price: number; size: number } | null {
-  if (usesSpotTranslation(presenter)) {
-    if (engineLimitPrice <= 0) {
-      return null;
-    }
-    return { price: 1 / engineLimitPrice, size: restingAmount * engineLimitPrice };
-  }
-
-  return { price: engineLimitPrice, size: restingAmount };
-}
-
-/**
- * Translates an engine order side into the UI's side.
- *
- * Under `usdc_cngn_spot_v1` the book rests inverted: the engine trades WRAPPED_CNGN against
- * internal USDC cash, so an engine BUY of cNGN is a UI SELL of USDC. Every other market displays
- * the engine side directly.
- *
- * This has to stay in step with the price/size inversion in `toUiQuote` — translating one without
- * the other files UI-priced orders into the wrong ladder, which reads as a crossed book.
- */
-function toUiSide(engineSide: "buy" | "sell", presenter: MarketStreamPresenter): "buy" | "sell" {
-  if (!usesSpotTranslation(presenter)) {
-    return engineSide;
-  }
-  return engineSide === "buy" ? "sell" : "buy";
-}
-
-/** Normalizes a snapshot order into a UI resting order, preferring spot's server-computed
- * `ui_intent` when present. Returns null if the order has no positive price/size. */
-function presentSnapshotOrder(
-  order: StreamBookOrder,
-  presenter: MarketStreamPresenter
-): RestingOrder | null {
-  const uiIntent = usesSpotTranslation(presenter) ? order.spot_contract?.ui_intent : undefined;
-  const quote = uiIntent
-    ? { price: parseDecimal(uiIntent.price), size: parseDecimal(uiIntent.size) }
-    : toUiQuote(
-        parseDecimal(order.limit_price),
-        parseDecimal(order.desired_amount) - parseDecimal(order.filled_amount),
-        presenter
-      );
-
-  if (!(quote && quote.price > 0 && quote.size > 0)) {
+  if (!(price > 0 && size > 0)) {
     return null;
   }
 
-  return {
-    price: quote.price,
-    side: uiIntent?.side ?? toUiSide(order.side, presenter),
-    size: quote.size,
-  };
+  return { price, side: order.side, size };
 }
 
 /** Rebuilds book state from a `snapshot` frame, replacing any prior state. */
-export function applyBookSnapshot(
-  snapshot: BookSnapshotData,
-  presenter: MarketStreamPresenter
-): BookState {
+export function applyBookSnapshot(snapshot: BookSnapshotData): BookState {
   const state: BookState = new Map();
 
   for (const order of [...(snapshot.bids ?? []), ...(snapshot.asks ?? [])]) {
-    const resting = presentSnapshotOrder(order, presenter);
+    const resting = presentSnapshotOrder(order);
     if (resting) {
       state.set(order.order_id, resting);
     }
@@ -125,37 +60,28 @@ export function applyBookSnapshot(
 }
 
 /** Applies one `book` update (a per-order resting-size delta) in place. */
-export function applyBookDelta(
-  state: BookState,
-  delta: BookUpdateData,
-  presenter: MarketStreamPresenter
-): void {
-  const resting = parseDecimal(delta.order_open);
-  const quote = resting > 0 ? toUiQuote(parseDecimal(delta.limit_price), resting, presenter) : null;
+export function applyBookDelta(state: BookState, delta: BookUpdateData): void {
+  const size = parseDecimal(delta.order_open);
+  const price = parseDecimal(delta.limit_price);
 
-  if (!(quote && quote.price > 0 && quote.size > 0)) {
+  if (!(size > 0 && price > 0)) {
     state.delete(delta.order_id);
     return;
   }
 
-  // Delta frames carry no `spot_contract`, so the side has to be inverted here rather than read
-  // off a server-computed `ui_intent`.
-  state.set(delta.order_id, {
-    price: quote.price,
-    side: toUiSide(delta.side, presenter),
-    size: quote.size,
-  });
+  state.set(delta.order_id, { price, side: delta.side, size });
 }
 
-/** Aggregation key so orders at the same displayed (2-dp) price collapse into one ladder level. */
+const PRICE_KEY_SCALE = 10 ** PRICE_DECIMALS;
+
+/** Aggregation key so orders at the same displayed price collapse into one ladder level. */
 function priceKey(price: number): number {
-  return Math.round(price * 100) / 100;
+  return Math.round(price * PRICE_KEY_SCALE) / PRICE_KEY_SCALE;
 }
 
 /**
- * Spot depth is USDC notional and routinely fractional — a 0.4 USDC order is real resting depth.
- * Sizes keep 3 decimals (the venue's amount step) rather than being rounded to whole units, which
- * displayed sub-unit levels as "0".
+ * Sizes are cNGN. A partly filled order's remainder can be fractional, so sizes keep 3 decimals
+ * rather than being rounded to whole units, which displayed sub-unit levels as "0".
  */
 function roundSize(value: number) {
   return Math.round(value * 1000) / 1000;
@@ -192,14 +118,12 @@ export function buildBookSide(state: BookState, side: "ask" | "bid"): OrderBookL
   return ordered;
 }
 
-/** Presents a stream trade into the UI `TradePrint` shape. */
-export function presentStreamTrade(
-  trade: StreamTrade,
-  presenter: MarketStreamPresenter
-): TradePrint | null {
-  const quote = toUiQuote(parseDecimal(trade.price), parseDecimal(trade.size), presenter);
+/** Presents a stream trade into the UI `TradePrint` shape: the engine's price, side and cNGN size. */
+export function presentStreamTrade(trade: StreamTrade): TradePrint | null {
+  const price = parseDecimal(trade.price);
+  const size = parseDecimal(trade.size);
 
-  if (!(quote && quote.price > 0 && quote.size > 0)) {
+  if (!(price > 0 && size > 0)) {
     return null;
   }
 
@@ -218,12 +142,10 @@ export function presentStreamTrade(
     ...(Number.isFinite(atMs) ? { atMs } : {}),
     ...(trade.tx_hash ? { txHash: trade.tx_hash } : {}),
     id: trade.trade_id,
-    price: quote.price,
-    side: toUiSide(trade.aggressor_side, presenter),
-    // Three decimals on every market, as the REST trade mapper and the order book print sizes:
-    // spot and the perp both quote a USDC notional that can be fractional, and rounding the perp
-    // to whole units (a leftover from futures contract counts) showed a 0.3 USDC trade as 0.
-    size: Number(quote.size.toFixed(3)),
+    price,
+    side: trade.aggressor_side,
+    // Three decimals on every market, as the REST trade mapper and the order book print sizes.
+    size: Number(size.toFixed(3)),
     time,
   };
 }

@@ -196,11 +196,7 @@ export function SpotTradingTerminal({
 
   // No simulated ticking: candles are real venue OHLCV.
 
-  const spotBook = useMarketOrderBook({
-    market: SPOT_MARKET_SYMBOL,
-    orderEntrySpec: spotMarket.orderEntrySpec,
-    type: "spot",
-  });
+  const spotBook = useMarketOrderBook({ market: SPOT_MARKET_SYMBOL, type: "spot" });
   // Both sources are the venue's own depth: the stream when it is live, and the server-rendered
   // REST snapshot while the socket is unavailable, one-sided, crossed, or still connecting. When
   // the venue has no resting orders both are empty and the panel says so.
@@ -250,8 +246,8 @@ export function SpotTradingTerminal({
   const ownedOpenOrders = getOwnedOpenOrders(workingOrders, walletAddress);
   /*
    * What a new order can actually spend: the account balance less what this trader's own resting
-   * orders already claim. Showing the raw balance let an account with 1,300 cNGN and 1,382 already
-   * working read as fully available.
+   * orders already claim. Showing the raw balance let an account with 1,300 cNGN and 1,382 cNGN
+   * already working read as fully available.
    */
   const committed = getCommittedBalances(workingOrders, walletAddress);
   const spendableCngn = accountCngn === null ? null : Math.max(0, accountCngn - committed.cngn);

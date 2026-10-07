@@ -13,7 +13,6 @@ import type {
   BookSnapshotData,
   BookUpdateData,
   MarketStreamFrame,
-  MarketStreamPresenter,
   MarketStreamRequest,
   MarketStreamStatus,
   StreamTrade,
@@ -55,13 +54,10 @@ const EMPTY_VIEW: MarketOrderBookView = { asks: [], bids: [], status: "connectin
 export function useMarketOrderBook({
   market,
   type,
-  orderEntrySpec = null,
   enabled = true,
 }: {
   market: string | null | undefined;
   type: MarketType;
-  /** The market's `order_entry_spec`; decides whether engine values are translated. */
-  orderEntrySpec?: string | null;
   enabled?: boolean;
 }) {
   const [view, setView] = useState<MarketOrderBookView>(EMPTY_VIEW);
@@ -78,7 +74,6 @@ export function useMarketOrderBook({
     }
 
     const marketSymbol: string = market;
-    const presenter: MarketStreamPresenter = { orderEntrySpec, type };
     const bookState: BookState = new Map();
     let trades: TradePrint[] = [];
     let hasBookSnapshot = false;
@@ -116,14 +111,14 @@ export function useMarketOrderBook({
 
     function handleBookFrame(frame: MarketStreamFrame) {
       if (frame.type === "snapshot") {
-        const next = applyBookSnapshot((frame.data ?? {}) as BookSnapshotData, presenter);
+        const next = applyBookSnapshot((frame.data ?? {}) as BookSnapshotData);
         bookState.clear();
         for (const [id, order] of next) {
           bookState.set(id, order);
         }
         hasBookSnapshot = true;
       } else if (frame.type === "update" && hasBookSnapshot) {
-        applyBookDelta(bookState, (frame.data ?? {}) as BookUpdateData, presenter);
+        applyBookDelta(bookState, (frame.data ?? {}) as BookUpdateData);
       }
       publish("ok");
     }
@@ -131,11 +126,11 @@ export function useMarketOrderBook({
     function handleTradesFrame(frame: MarketStreamFrame) {
       if (frame.type === "snapshot") {
         trades = ((frame.data ?? []) as StreamTrade[])
-          .map((trade) => presentStreamTrade(trade, presenter))
+          .map((trade) => presentStreamTrade(trade))
           .filter((trade): trade is TradePrint => trade !== null)
           .slice(0, MAX_TRADES);
       } else if (frame.type === "update") {
-        const trade = presentStreamTrade((frame.data ?? {}) as StreamTrade, presenter);
+        const trade = presentStreamTrade((frame.data ?? {}) as StreamTrade);
         if (trade) {
           trades = [trade, ...trades].slice(0, MAX_TRADES);
         }
@@ -235,7 +230,7 @@ export function useMarketOrderBook({
         socket.close();
       }
     };
-  }, [enabled, market, orderEntrySpec, type]);
+  }, [enabled, market, type]);
 
   // `ok` already excludes the empty and crossed books; a one-sided book is a real book and is
   // shown as one rather than being replaced by the older REST snapshot.

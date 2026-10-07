@@ -1,4 +1,5 @@
 import { MARKET_LABELS } from "@/lib/market-labels";
+import { PERP_POSITIONS_COLUMNS } from "@/lib/perp-market";
 import { ACTIVITY_VIEWS as SPOT_ACTIVITY_VIEWS } from "@/lib/spot-terminal-config";
 import type { ActivityTab, ActivityView } from "@/lib/trading.types";
 
@@ -29,7 +30,7 @@ export const PERP_ACTIVITY_VIEWS = {
     rows: [],
   },
   positions: {
-    columns: ["Instrument", "Side", "Size", "Mark price", "Liq. price", "Unrealized PnL"],
+    columns: PERP_POSITIONS_COLUMNS,
     rows: [],
   },
 } satisfies Record<(typeof PERP_BOTTOM_TABS)[number]["id"], ActivityView>;

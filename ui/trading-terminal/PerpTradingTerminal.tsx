@@ -47,6 +47,7 @@ import {
   getBestPrices,
   getMarketableLimitPrice,
   getMarketSizingPrice,
+  toOrderSizeCngn,
 } from "@/lib/spot-market";
 import type { OrderIdempotencyKey } from "@/lib/spot-order-submission";
 import {
@@ -83,32 +84,55 @@ import { usePrimaryWallet } from "@/ui/usePrimaryWallet";
 
 type PerpBottomTab = keyof typeof PERP_ACTIVITY_VIEWS;
 
+/** A venue side cell as the perp names it: a buy of cNGN is a Long, a sell a Short; anything else passes through. */
 function toPerpSideLabel(cell: string) {
-  return perpSideLabel(cell === "Buy" ? "long" : "short");
+  if (cell === "Buy") {
+    return perpSideLabel("long");
+  }
+  return cell === "Sell" ? perpSideLabel("short") : cell;
 }
 
-/** Spot's open-orders rows, read in the perp's terms: a UI buy is a long of USD. */
-function perpOpenOrdersView(view: ActivityView): ActivityView {
+/**
+ * Spot's activity rows read in the perp's terms: the side column (Open Orders' "Side", the history
+ * tabs' "Direction") says Long or Short, so a trader sees one vocabulary across this terminal.
+ */
+function perpActivityView(view: ActivityView, column: "Side" | "Direction"): ActivityView {
+  const index = view.columns.indexOf(column);
+  if (index === -1) {
+    return view;
+  }
   return {
     ...view,
     rows: view.rows.map((row) => ({
       ...row,
-      cells: row.cells.map((cell, index) => (index === 0 ? toPerpSideLabel(cell) : cell)),
+      cells: row.cells.map((cell, cellIndex) =>
+        cellIndex === index ? toPerpSideLabel(cell) : cell
+      ),
     })),
   };
 }
 
+/** The signed limit as a decimal string: never `String()`, which prints 0.00073 as "7.3e-4". */
+function toPriceString(price: number) {
+  return price.toFixed(10);
+}
+
 /**
- * The signed limit (and, for a market order, the price its size is counted at) in cNGN per USDC.
- * A market order crosses the touch the trader is looking at, with the same slippage room as spot's.
+ * The signed limit and, for a market order, the price a USDC-denominated size is converted at, in
+ * USDC per cNGN. A market order crosses the touch the trader is looking at, with the same slippage
+ * room as spot's; a limit order is sized at its own limit.
  */
 function resolvePerpOrderPrice(
-  request: PerpOrderRequest,
+  request: Pick<PerpOrderRequest, "limitPrice" | "orderType">,
   uiSide: "buy" | "sell",
   touch: { bestAsk: number | null; bestBid: number | null; price: number | null }
-): { uiPrice: string; uiSizingPrice?: string } | { error: string } {
+): { uiPrice: string; sizingPrice: number } | { error: string } {
   if (request.orderType === "Limit") {
-    return { uiPrice: request.limitPrice };
+    const limit = Number(request.limitPrice.replaceAll(",", ""));
+    if (!Number.isFinite(limit) || limit <= 0) {
+      return { error: "Enter a limit price in USDC per cNGN." };
+    }
+    return { sizingPrice: limit, uiPrice: request.limitPrice };
   }
   const marketable = getMarketableLimitPrice(uiSide, touch.bestAsk, touch.bestBid);
   if (marketable === null) {
@@ -118,18 +142,30 @@ function resolvePerpOrderPrice(
   if (sizing === null) {
     return { error: "No price to size the market order at. Use a limit order." };
   }
-  return { uiPrice: String(marketable), uiSizingPrice: String(sizing) };
+  return { sizingPrice: sizing, uiPrice: toPriceString(marketable) };
+}
+
+/**
+ * The ticket's size as whole cNGN contracts: what was typed when the unit is cNGN, else the USDC
+ * figure converted at the sizing price. Null when it does not come to at least 1 cNGN, the venue's
+ * minimum.
+ */
+function resolvePerpOrderSize(request: PerpOrderRequest, sizingPrice: number): string | null {
+  const typed = Number(request.size.replaceAll(",", ""));
+  const sizeCngn = Math.floor(toOrderSizeCngn(typed, request.sizeUnit, sizingPrice));
+  return Number.isFinite(sizeCngn) && sizeCngn >= 1 ? sizeCngn.toFixed(0) : null;
 }
 
 type SigningWallet = NonNullable<ReturnType<typeof usePrimaryWallet>["primaryWallet"]>;
 
 /**
- * Signs a perp order for the perp's own module and asset, then posts it. `engineAmountWhole` sizes
- * the order in cNGN contracts directly, for closing a position exactly; otherwise the size is the
- * USD notional counted at the sizing price. `reduceOnly` asks the venue to clamp the order to the
- * account's position. With an `idempotency` key the order is identified once by the caller, and a
- * POST that fails in transit is re-sent as the same order: the venue answers a duplicate with 409,
- * which here means the first attempt landed.
+ * Signs a perp order for the perp's own module and asset, then posts it. `size` is cNGN contracts
+ * and `price` the limit in USDC per cNGN, as the engine rests them; `engineAmountWhole` sizes the
+ * order from the engine's own contract count instead, for closing a position exactly.
+ * `reduceOnly` asks the venue to clamp the order to the account's position. With an `idempotency`
+ * key the order is identified once by the caller, and a POST that fails in transit is re-sent as
+ * the same order: the venue answers a duplicate with 409, which here means the first attempt
+ * landed.
  */
 async function signAndPostPerpOrder({
   engineAmountWhole,
@@ -147,7 +183,7 @@ async function signAndPostPerpOrder({
   idempotency?: OrderIdempotencyKey;
   market: PerpMarket;
   onAwaitingSignature: () => void;
-  price: { uiPrice: string; uiSizingPrice?: string };
+  price: string;
   reduceOnly?: boolean;
   side: "buy" | "sell";
   size: string;
@@ -169,9 +205,8 @@ async function signAndPostPerpOrder({
     reduceOnly,
     side,
     subaccountId,
-    uiPrice: price.uiPrice,
+    uiPrice: price,
     uiSize: size,
-    uiSizingPrice: price.uiSizingPrice,
     walletAddress: wallet.address,
   });
   onAwaitingSignature();
@@ -308,10 +343,14 @@ function buildActivityView(inputs: ActivityInputs): ActivityView {
     return buildPerpPositionsView(inputs.positions, PERP_MARKET_LABEL);
   }
   if (inputs.bottomTab === "order-history" || inputs.bottomTab === "trade-history") {
-    return inputs.signedHistoryView ?? PERP_ACTIVITY_VIEWS[inputs.bottomTab];
+    return perpActivityView(
+      inputs.signedHistoryView ?? PERP_ACTIVITY_VIEWS[inputs.bottomTab],
+      "Direction"
+    );
   }
-  return perpOpenOrdersView(
-    buildOpenOrdersActivityView(inputs.market.openOrders, inputs.walletAddress)
+  return perpActivityView(
+    buildOpenOrdersActivityView(inputs.market.openOrders, inputs.walletAddress),
+    "Side"
   );
 }
 
@@ -403,47 +442,24 @@ function buildEmptyState(
 }
 
 /**
- * The market order that flattens a position: the opposite UI side, priced at the touch like any
- * market order, sized in the engine's contracts. The USD size is only reported, never signed.
+ * The market order that flattens a position: the opposite side (a long of cNGN closes with a
+ * sell), priced at the touch like any market order, sized in the engine's own contracts.
  */
 function buildCloseRequest(
   position: PerpPosition,
   touch: { bestAsk: number | null; bestBid: number | null; price: number | null }
-):
-  | {
-      engineSize: bigint;
-      price: { uiPrice: string; uiSizingPrice?: string };
-      sizeUsd: string;
-      uiSide: "buy" | "sell";
-    }
-  | { error: string } {
+): { engineSize: bigint; price: string; uiSide: "buy" | "sell" } | { error: string } {
   if (position.engineSize === null) {
     return {
       error: "This position cannot be closed from here: the venue did not report its size.",
     };
   }
   const uiSide = position.uiSide === "long" ? "sell" : "buy";
-  const resolved = resolvePerpOrderPrice(
-    {
-      limitPrice: "",
-      orderType: "Market",
-      reduceOnly: true,
-      side: position.uiSide === "long" ? "short" : "long",
-      size: "",
-    },
-    uiSide,
-    touch
-  );
+  const resolved = resolvePerpOrderPrice({ limitPrice: "", orderType: "Market" }, uiSide, touch);
   if ("error" in resolved) {
     return resolved;
   }
-  const sizingPrice = Number(resolved.uiSizingPrice ?? resolved.uiPrice);
-  return {
-    engineSize: position.engineSize,
-    price: resolved,
-    sizeUsd: (Number(position.engineSize) / sizingPrice).toFixed(6),
-    uiSide,
-  };
+  return { engineSize: position.engineSize, price: resolved.uiPrice, uiSide };
 }
 
 const ROW_BUTTON_CLASSES =
@@ -563,7 +579,6 @@ function usePerpBook(market: PerpMarket | null) {
   const book = useMarketOrderBook({
     enabled: market !== null,
     market: market ? PERP_MARKET_SYMBOL : null,
-    orderEntrySpec: market?.orderEntrySpec ?? null,
     type: "perp",
   });
   const bids = book.isLive ? book.bids : (market?.orderBookBids ?? []);
@@ -698,7 +713,7 @@ function HeaderActionButton({ children, onClick }: { children: string; onClick: 
 }
 
 /**
- * The USDC-cNGN perpetual terminal, laid out on the spot terminal's grid so switching markets does
+ * The cNGN-USDC perpetual terminal, laid out on the spot terminal's grid so switching markets does
  * not move the panels.
  *
  * `market` is null until markets-service lists the perp with its chain state and stack; the
@@ -776,21 +791,26 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
       orderStatus.announce(resolved.error);
       return;
     }
+    const sizeCngn = resolvePerpOrderSize(request, resolved.sizingPrice);
+    if (sizeCngn === null) {
+      orderStatus.announce("Order too small: the size must come to at least 1 cNGN.");
+      return;
+    }
 
     const event = {
       market_id: "cngn-usdc-perp",
       order_side: request.side,
       order_type: request.orderType,
-      size_usdc_notional: request.size,
+      size_cngn: sizeCngn,
     };
     setIsSubmitting(true);
     try {
       const { body, ok, status } = await signAndPostPerpOrder({
         market,
-        price: resolved,
+        price: resolved.uiPrice,
         reduceOnly: request.reduceOnly,
         side: uiSide,
-        size: request.size,
+        size: sizeCngn,
         subaccountId: account.subaccountId,
         wallet: primaryWallet,
         onAwaitingSignature: () =>
@@ -863,7 +883,7 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
         market_id: "cngn-usdc-perp",
         order_side: close.uiSide === "buy" ? "long" : "short",
         order_type: "Close",
-        size_usdc_notional: close.sizeUsd,
+        size_cngn: close.engineSize.toString(),
       };
       const { body, ok, status } = await signAndPostPerpOrder({
         engineAmountWhole: close.engineSize,
@@ -872,7 +892,7 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
         price: close.price,
         reduceOnly: true,
         side: close.uiSide,
-        size: close.sizeUsd,
+        size: close.engineSize.toString(),
         subaccountId,
         wallet: primaryWallet,
         onAwaitingSignature: () =>

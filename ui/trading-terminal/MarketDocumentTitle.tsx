@@ -1,22 +1,10 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-
-function getCurrencySymbol(pair: string) {
-  if (pair.includes("EURC") || pair.includes("EUR")) {
-    return "€";
-  }
-  if (pair.includes("cNGN") || pair.includes("NGN")) {
-    return "₦";
-  }
-  if (pair.includes("BRZ")) {
-    return "R$";
-  }
-  return "$";
-}
+import { formatPrice } from "@/lib/market-formatting";
 
 /**
- * The app labels markets `USDC-cNGN` everywhere else, so the tab matches rather than introducing
+ * The app labels markets `cNGN-USDC` everywhere else, so the tab matches rather than introducing
  * a second form of the same name. Normalized here so it holds for any caller, whatever
  * separator they pass.
  */
@@ -24,27 +12,15 @@ function formatPairForTitle(pair: string) {
   return pair.replaceAll("/", "-");
 }
 
-function getPrecisionDigits(pair: string) {
-  return pair.includes("EURC") || pair.includes("EUR") || pair.includes("BRZ") ? 4 : 2;
-}
-
-function formatPrice(price: number | null, pair: string) {
-  if (price === null) {
-    return "--";
-  }
-  const digits = getPrecisionDigits(pair);
-  return new Intl.NumberFormat("en-US", {
-    maximumFractionDigits: digits,
-    minimumFractionDigits: digits,
-  }).format(price);
-}
-
+/**
+ * Keeps the tab title on the live price: "↓ 0.0007335 cNGN-USDC | Numo". The price carries no
+ * currency sign — it is USDC per cNGN, and the pair label beside it says so.
+ */
 export function MarketDocumentTitle({ pair, price }: { pair: string; price: number | null }) {
   const prevPriceRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const currencySymbol = getCurrencySymbol(pair);
-    const formatted = formatPrice(price, pair);
+    const formatted = price === null ? "--" : formatPrice(price);
 
     let prefix = "";
 
@@ -56,7 +32,7 @@ export function MarketDocumentTitle({ pair, price }: { pair: string; price: numb
       }
     }
 
-    const desiredTitle = `${prefix}${currencySymbol}${formatted} ${formatPairForTitle(pair)} | Numo`;
+    const desiredTitle = `${prefix}${formatted} ${formatPairForTitle(pair)} | Numo`;
     prevPriceRef.current = price;
 
     function applyTitle() {

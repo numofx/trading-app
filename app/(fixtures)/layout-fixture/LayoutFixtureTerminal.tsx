@@ -14,21 +14,22 @@ const OPENING_BALANCES = { cngn: 41_470.685_234, usdc: 31.028_472_772_594_67 };
  * the terminal derives the spendable balance from the book the way the venue serves it.
  */
 const CLAIMED = { cngn: 12_224, usdc: 8.927_931 };
-const FIXTURE_PRICE = 1400;
+/** USDC per cNGN, about ₦1,400 per USDC. */
+const FIXTURE_PRICE = 1 / 1400;
 /**
  * The trader's own orders rest outside the band a market order is signed through (the touch
  * plus the slippage allowance). Resting at the mid, or at the touch, they crossed the ticket's
  * own order and its own-crossing guard disabled the CTA before the check could type an amount.
  */
-const OWN_BUY_PRICE = 1390;
-const OWN_SELL_PRICE = 1410;
+const OWN_BUY_PRICE = 1 / 1410;
+const OWN_SELL_PRICE = 1 / 1390;
 const FIXTURE_WALLET = "0x1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d";
 
 const FIXTURE_BUTTON_CLASSES =
   "flex h-10 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-4 font-semibold text-[14px] text-panel-text ring-1 ring-panel-border";
 
-/** The fill "Inject trade" streams in, in UI terms: 5 USDC at ₦1,402, a buy of USDC. */
-const INJECTED_TRADE = { price: 1402, size: 5 };
+/** The fill "Inject trade" streams in: 7,010 cNGN (about 5 USDC) at ₦1,402 per USDC, a buy of cNGN. */
+const INJECTED_TRADE = { price: 1 / 1402, size: 5 * 1402 };
 
 /** What one fixture deposit adds. Large enough to clear any shortfall the check types in. */
 const DEPOSIT_AMOUNT = { cngn: 500_000, usdc: 500 };
@@ -41,7 +42,7 @@ const DEPOSIT_AMOUNT = { cngn: 500_000, usdc: 500 };
 const FIXTURE_MARKET: SpotMarket = {
   candles: [],
   mark: FIXTURE_PRICE,
-  orderEntrySpec: "usdc_cngn_spot_v1",
+  orderEntrySpec: "cngn_usdc_spot_v1",
   orderStack: null,
   stats24h: null,
   takerFeeBps: 25,
@@ -55,7 +56,7 @@ const FIXTURE_MARKET: SpotMarket = {
       ownerAddress: FIXTURE_WALLET,
       price: OWN_BUY_PRICE,
       side: "buy",
-      size: CLAIMED.cngn / OWN_BUY_PRICE,
+      size: CLAIMED.usdc / OWN_BUY_PRICE,
     },
     {
       expiresAtMs: null,
@@ -65,16 +66,16 @@ const FIXTURE_MARKET: SpotMarket = {
       ownerAddress: FIXTURE_WALLET,
       price: OWN_SELL_PRICE,
       side: "sell",
-      size: CLAIMED.usdc,
+      size: CLAIMED.cngn,
     },
   ],
   orderBookAsks: [
-    { price: 1401, size: 12, total: 12 },
-    { price: 1403, size: 20, total: 32 },
+    { price: 1 / 1399, size: 16_800, total: 16_800 },
+    { price: 1 / 1397, size: 28_000, total: 44_800 },
   ],
   orderBookBids: [
-    { price: 1399, size: 14, total: 14 },
-    { price: 1397, size: 25, total: 39 },
+    { price: 1 / 1401, size: 19_600, total: 19_600 },
+    { price: 1 / 1403, size: 35_000, total: 54_600 },
   ],
   // Timestamped an hour back, so a fill injected now reads as newer than what the server knew.
   trades: [
@@ -83,7 +84,7 @@ const FIXTURE_MARKET: SpotMarket = {
       id: 1,
       price: FIXTURE_PRICE,
       side: "buy",
-      size: 3,
+      size: 4200,
       time: "12:00:00",
     },
   ],
@@ -155,10 +156,10 @@ export function LayoutFixtureTerminal() {
                   channel: "trades",
                   type: "update",
                   data: {
-                    aggressor_side: "sell",
+                    aggressor_side: "buy",
                     created_at: new Date().toISOString(),
-                    price: String(1 / INJECTED_TRADE.price),
-                    size: String(INJECTED_TRADE.size * INJECTED_TRADE.price),
+                    price: INJECTED_TRADE.price.toFixed(10),
+                    size: String(INJECTED_TRADE.size),
                     trade_id: Date.now(),
                     tx_hash: `0x${"ab".repeat(32)}`,
                   },

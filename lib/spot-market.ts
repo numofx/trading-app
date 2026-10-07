@@ -1,5 +1,5 @@
+import { PRICE_DECIMALS } from "@/lib/market-formatting";
 import type { BookResponse, PresentedTrade, TradeStats24h } from "@/lib/markets-service";
-import { isInvertedOrderEntrySpec } from "@/lib/order-entry-spec";
 import type {
   Candle,
   OrderBookLevel,
@@ -44,10 +44,10 @@ export function getAnchorPrice(
 }
 
 /**
- * The largest USDC order the trading account can currently fund.
+ * The largest order, in cNGN, the trading account can currently fund.
  *
- * A buy spends cNGN, so the ceiling is the cNGN balance converted at the order's price; a sell
- * spends USDC directly. Null whenever the balance is unknown or there is no price to convert at —
+ * A buy spends USDC, so the ceiling is the USDC balance converted at the order's price; a sell
+ * spends the cNGN directly. Null whenever the balance is unknown or there is no price to convert at —
  * the ticket's size slider goes inert rather than sliding against a guessed ceiling.
  */
 export function getMaxOrderSize({
@@ -60,9 +60,9 @@ export function getMaxOrderSize({
   availableCngn: number | null;
   availableUsdc: number | null;
   /**
-   * The fee ceiling the order is signed with, as a fraction of its USDC notional. A sell pays its
+   * The fee ceiling the order is signed with, as a fraction of its USDC notional. A buy pays its
    * fee in the USDC it is also spending, so the ceiling leaves that much of the balance unspent:
-   * a 100% sell sized to the whole balance would have nothing left for the fee. A buy pays its
+   * a 100% buy sized to the whole balance would have nothing left for the fee. A sell pays its
    * fee out of the USDC it receives, so its ceiling is unaffected.
    */
   feeRate?: number;
@@ -70,18 +70,18 @@ export function getMaxOrderSize({
   price: number | null;
 }) {
   if (!isBuy) {
-    return availableUsdc === null ? null : availableUsdc / (1 + Math.max(0, feeRate));
+    return availableCngn;
   }
 
-  if (availableCngn === null || price === null || !Number.isFinite(price) || price <= 0) {
+  if (availableUsdc === null || price === null || !Number.isFinite(price) || price <= 0) {
     return null;
   }
 
-  return availableCngn / price;
+  return availableUsdc / (price * (1 + Math.max(0, feeRate)));
 }
 
 /**
- * What an order takes out of the account if it fills: cNGN for a buy, USDC for a sell.
+ * What an order takes out of the account if it fills: USDC for a buy, cNGN for a sell.
  *
  * Null when either input is unusable — an unknown cost must not read as a free order.
  */
@@ -90,12 +90,12 @@ export function getOrderCost(side: "buy" | "sell", price: number | null, size: n
     return null;
   }
   if (side === "sell") {
-    return { amount: size, currency: "USDC" as const };
+    return { amount: size, currency: "cNGN" as const };
   }
   if (price === null || !Number.isFinite(price) || price <= 0) {
     return null;
   }
-  return { amount: size * price, currency: "cNGN" as const };
+  return { amount: size * price, currency: "USDC" as const };
 }
 
 /**
@@ -175,8 +175,8 @@ export function getCommittedBalances(openOrders: SpotOpenOrder[], walletAddress:
 }
 
 /**
- * The price a market order crosses at: the opposing touch. A UI BUY of USDC lifts the best ask,
- * a UI SELL hits the best bid. Null when that side is empty — there is nothing to cross.
+ * The price a market order crosses at: the opposing touch. A buy of cNGN lifts the best ask, a
+ * sell hits the best bid. Null when that side is empty — there is nothing to cross.
  */
 /**
  * How far through the touch a market order is priced. 0.5%.
@@ -188,14 +188,14 @@ export function getCommittedBalances(openOrders: SpotOpenOrder[], walletAddress:
 export const SPOT_MARKET_SLIPPAGE = 0.005;
 
 /**
- * The price a market order's USDC size is counted in cNGN at: where it is expected to fill, held
- * inside the signed limit.
+ * The price a market order's USDC-denominated entry is converted to cNGN at: where it is expected
+ * to fill, held inside the signed limit.
  *
- * The engine amount is whole cNGN, so the USDC a trader asks for is only what they get if cNGN is
- * counted at the fill. Counted at the signed limit — the touch plus slippage room — "buy 1 USDC"
- * spent 1,346 cNGN for 1.0049 USDC (trades #341 and #342), and a market sell delivered ~0.995 USDC.
- * The room belongs in the limit alone. Held at the limit because a size counted past it is exactly
- * that inflated amount. Null when either price is unusable, rather than falling back to the limit.
+ * The order is sized in cNGN, so a trader who types a USDC amount only spends that much if the
+ * conversion uses the fill price. Converted at the signed limit — the touch plus slippage room —
+ * the order would be sized for the slippage room too. Held at the limit because a size converted
+ * past it is exactly that inflated amount. Null when either price is unusable, rather than falling
+ * back to the limit.
  */
 export function getMarketSizingPrice(
   side: "buy" | "sell",
@@ -278,7 +278,7 @@ export function getMarketableLimitPrice(
   }
 
   const priced = side === "buy" ? touch * (1 + tolerance) : touch * (1 - tolerance);
-  return Number(priced.toFixed(2));
+  return Number(priced.toFixed(PRICE_DECIMALS));
 }
 
 export function getCrossingPrice(
@@ -290,7 +290,7 @@ export function getCrossingPrice(
 }
 
 /**
- * What a market order of `size` USDC would actually fill at, walked level by level through the
+ * What a market order of `size` cNGN would actually fill at, walked level by level through the
  * depth on screen.
  *
  * A market order does not trade at the touch — it trades at the touch and then at every level
@@ -339,18 +339,18 @@ export function getMarketFill(
 }
 
 /**
- * A market order's size in USDC, whichever currency the trader entered it in.
+ * An order's size in cNGN, whichever currency the trader entered it in.
  *
- * The Amount field can be denominated in either leg — USDC, the notional the order is signed for,
- * or cNGN, what the trader is spending or receiving. Only the USDC figure is submittable, so a
- * cNGN entry is converted at the price the order would cross at. Null when there is no price to
- * convert with, rather than a size derived from a guess.
+ * The Size field can be denominated in either leg — cNGN, the amount the order is signed for, or
+ * USDC, what the trader is spending or receiving. Only the cNGN figure is submittable, so a USDC
+ * entry is converted at the price the order would cross at. NaN when there is no price to convert
+ * with, rather than a size derived from a guess.
  */
-export function toOrderSizeUsdc(amount: number, unit: "USDC" | "cNGN", price: number | null) {
+export function toOrderSizeCngn(amount: number, unit: "USDC" | "cNGN", price: number | null) {
   if (!Number.isFinite(amount)) {
     return Number.NaN;
   }
-  if (unit === "USDC") {
+  if (unit === "cNGN") {
     return amount;
   }
   return price === null || price <= 0 ? Number.NaN : amount / price;
@@ -360,11 +360,8 @@ export type LiveSpotRuntime = {
   book: BookResponse | null;
   /** Real OHLCV from markets-service; empty when the market has not traded yet. */
   candles?: Candle[];
-  /**
-   * markets-service's trailing-24h `stats_24h`, with the `order_entry_spec` of the trades response it
-   * came in. Null when the service did not report stats.
-   */
-  stats24h?: { orderEntrySpec: string | null; stats: TradeStats24h } | null;
+  /** markets-service's trailing-24h `stats_24h`. Null when the service did not report stats. */
+  stats24h?: TradeStats24h | null;
   trades: PresentedTrade[];
   /** The market's asset and TradeModule as `/v1/markets` serves them; see SpotMarket.orderStack. */
   orderStack?: SpotMarket["orderStack"];
@@ -407,18 +404,10 @@ export function collectOpenOrders(book: BookResponse | null): SpotOpenOrder[] {
         return null;
       }
       const expiry = Number(order.expiry);
-      // desired_amount and filled_amount are engine cNGN; limit_price is engine USDC-per-cNGN.
-      // Their product is the USDC notional the trader signed, which is what `filled` promises and
-      // what every reader of it assumes: `size - filled` for the reservation, and the Filled cell.
-      // Reported as "1,307 USDC filled" on a 0.995 USDC buy — the raw engine amount, printed with a
-      // USDC label. Verified against the live book: desired_amount * limit_price == ui_intent.size
-      // on every resting order, and 1/limit_price == ui_intent.price.
-      const enginePrice = Number(order.limit_price);
+      // filled_amount is engine cNGN, the same unit as `size`: what `size - filled` reserves and
+      // what the Filled cell prints.
       const filledEngine = Number(order.filled_amount ?? "0");
-      const filled =
-        Number.isFinite(enginePrice) && Number.isFinite(filledEngine)
-          ? filledEngine * enginePrice
-          : 0;
+      const filled = Number.isFinite(filledEngine) ? filledEngine : 0;
       return {
         expiresAtMs: Number.isFinite(expiry) && expiry > 0 ? expiry * 1000 : null,
         filled,
@@ -441,9 +430,9 @@ export function collectOpenOrders(book: BookResponse | null): SpotOpenOrder[] {
 }
 
 /**
- * Spot depth is USDC notional and routinely fractional — a 0.4 USDC order is real resting depth.
- * Sizes keep 3 decimals (the venue's amount step) rather than being rounded to whole units, which
- * displayed sub-unit levels as "0".
+ * Sizes are cNGN. The engine rests whole cNGN, but the venue presents what a partly filled order
+ * has left to three decimals, so the ladder keeps those rather than rounding a sub-unit remainder
+ * to "0".
  */
 function roundSize(value: number) {
   return Math.round(value * 1000) / 1000;
@@ -452,9 +441,9 @@ function roundSize(value: number) {
 function buildLiveBookSide(items: NonNullable<BookResponse["asks"]>, side: "ask" | "bid") {
   const levels = items
     .map((item) => ({
-      // markets-service presents prices/amounts as plain human decimals (e.g. "1377", "28"),
-      // not fixed-point atomic. Spot levels carry a `spot_contract.ui_intent` presentation;
-      // the raw engine fields are the fallback.
+      // markets-service presents prices/amounts as plain human decimals (e.g. "0.00073", "28"),
+      // not fixed-point atomic. Levels carry a `spot_contract.ui_intent` presentation, which under
+      // the identity contract equals the engine fields; those are the fallback.
       price: Number(item.spot_contract?.ui_intent.price ?? Number(item.limit_price)),
       size: Number(item.spot_contract?.ui_intent.size ?? Number(item.desired_amount)),
     }))
@@ -506,8 +495,7 @@ function presentTrades(trades: PresentedTrade[]) {
       ...(trade.tx_hash ? { txHash: trade.tx_hash } : {}),
       price: Number(trade.spot_contract?.ui_intent.price ?? trade.price),
       side: trade.spot_contract?.ui_intent.side ?? trade.aggressor_side,
-      // Spot sizes are USDC notional and can be fractional (e.g. a 0.073 USDC smoke trade),
-      // so they keep 3 decimals rather than being rounded to whole units.
+      // Sizes are cNGN; a partial fill can be fractional, so they keep 3 decimals.
       size: Number(Number(trade.spot_contract?.ui_intent.size ?? trade.size).toFixed(3)),
       time: new Intl.DateTimeFormat("en-US", {
         hour: "2-digit",
@@ -539,43 +527,27 @@ function positiveOrNull(value: number | null) {
   return value !== null && Number.isFinite(value) && value > 0 ? value : null;
 }
 
-function inverted(value: number | null) {
-  const positive = positiveOrNull(value);
-  return positive === null ? null : 1 / positive;
-}
-
 /**
  * markets-service's `stats_24h` in the terms the header shows.
  *
- * The venue reports engine prices and a change (last minus the window's first price). Under
- * `usdc_cngn_spot_v1` those are USDC per cNGN, so each price is inverted — which swaps the extremes:
- * the engine's lowest USDC-per-cNGN is the highest cNGN-per-USDC. The window's first price is
- * recovered as last minus change. Volume is the quote-asset notional (USDC), never the cNGN size sum.
+ * The venue reports engine prices (USDC per cNGN, the orientation shown) and a change (last minus
+ * the window's first price). The window's first price is recovered as last minus change. Volume is
+ * the quote-asset notional (USDC), never the cNGN size sum.
  */
-export function presentStats24h(runtime: LiveSpotRuntime["stats24h"]): Stats24h | null {
-  if (!runtime) {
+export function presentStats24h(stats: LiveSpotRuntime["stats24h"]): Stats24h | null {
+  if (!stats) {
     return null;
   }
-  const { orderEntrySpec, stats } = runtime;
   const last = positiveDecimal(stats.last);
   const change =
     stats.change === undefined || stats.change.trim() === "" ? Number.NaN : Number(stats.change);
-  const engineFirst = last !== null && Number.isFinite(change) ? last - change : null;
-  const quoteVolume = positiveDecimal(stats.quote_volume);
+  const first = last !== null && Number.isFinite(change) ? last - change : null;
 
-  if (!isInvertedOrderEntrySpec(orderEntrySpec)) {
-    return {
-      firstPrice: positiveOrNull(engineFirst),
-      high: positiveDecimal(stats.high),
-      low: positiveDecimal(stats.low),
-      quoteVolume,
-    };
-  }
   return {
-    firstPrice: inverted(engineFirst),
-    high: inverted(positiveDecimal(stats.low)),
-    low: inverted(positiveDecimal(stats.high)),
-    quoteVolume,
+    firstPrice: positiveOrNull(first),
+    high: positiveDecimal(stats.high),
+    low: positiveDecimal(stats.low),
+    quoteVolume: positiveDecimal(stats.quote_volume),
   };
 }
 
@@ -591,12 +563,9 @@ export function buildSpotMarket(liveSpot: LiveSpotRuntime | null): SpotMarket {
     return EMPTY_SPOT_MARKET;
   }
 
-  // Spot presents in UI orientation (cNGN per USDC price, USDC size) while the engine
-  // book rests inverted (USDC per cNGN, cNGN amounts). A resting engine ASK (sell cNGN)
-  // is a UI BUY of USDC, so the engine book's asks are the UI bids and vice versa;
-  // buildLiveBookSide already reads the spot_contract.ui_intent presentation.
-  const orderBookBids = buildLiveBookSide(liveSpot.book?.asks ?? [], "bid");
-  const orderBookAsks = buildLiveBookSide(liveSpot.book?.bids ?? [], "ask");
+  // The book is shown as the engine rests it: cNGN bids and asks at USDC per cNGN.
+  const orderBookBids = buildLiveBookSide(liveSpot.book?.bids ?? [], "bid");
+  const orderBookAsks = buildLiveBookSide(liveSpot.book?.asks ?? [], "ask");
   const trades = presentTrades(liveSpot.trades);
 
   return {
@@ -605,7 +574,7 @@ export function buildSpotMarket(liveSpot: LiveSpotRuntime | null): SpotMarket {
     openOrders: collectOpenOrders(liveSpot.book),
     orderBookAsks,
     orderBookBids,
-    // Taken from the venue rather than assumed: it is what tells the stream to invert engine values.
+    // Taken from the venue rather than assumed: every order is signed under it.
     orderEntrySpec: liveSpot.book?.market_presentation?.order_entry_spec ?? null,
     orderStack: liveSpot.orderStack ?? null,
     stats24h: presentStats24h(liveSpot.stats24h),

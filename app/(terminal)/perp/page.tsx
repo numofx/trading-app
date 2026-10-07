@@ -56,7 +56,7 @@ async function loadPerpMarket(): Promise<PerpMarket | null> {
     getMarketTrades(assetAddress, subId),
   ]);
 
-  // The perp's book and trades carry the same inverted `spot_contract` echo spot's do, so spot's
+  // The perp's book and trades carry the same `spot_contract` echo spot's do, so spot's
   // builder presents them without change.
   const market = buildSpotMarket({
     book: bookResult.status === "fulfilled" ? bookResult.value : null,

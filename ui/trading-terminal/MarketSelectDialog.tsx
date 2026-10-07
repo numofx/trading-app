@@ -5,7 +5,7 @@ import { Duration } from "effect";
 import { Check, ChevronDown, Search, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
-import { formatNaira } from "@/lib/market-formatting";
+import { formatPrice } from "@/lib/market-formatting";
 import {
   emptyOverviewRow,
   filterTerminalMarkets,
@@ -46,30 +46,39 @@ const RADIUS = "rounded-lg";
 const CELL_CLASS = "min-w-0 truncate text-right text-[13px] text-panel-text tabular-nums";
 const HIDDEN_ON_PHONE = "hidden md:block";
 
+/** The token marks a symbol carries, in the order its name reads: "cNGN-USDC" shows both, "cNGN-PERP" the one. */
+const TOKEN_MARKS = {
+  cNGN: "/tokens/cngn.svg",
+  USDC: "/tokens/usdc.svg",
+} as const satisfies Record<string, string>;
+
+function marksFor(symbol: string) {
+  return symbol
+    .split("-")
+    .filter((part): part is keyof typeof TOKEN_MARKS => part in TOKEN_MARKS)
+    .map((part) => ({ alt: part, src: TOKEN_MARKS[part] }));
+}
+
 /**
- * The paired token marks and symbol, shared by the header pill and the selector's rows. `compact`
- * is the row form: smaller marks beside a symbol one step larger than the pill's.
+ * The symbol with the marks of the tokens it names, shared by the header pill and the selector's
+ * rows: the pair's two on spot, the perp's one. `compact` is the row form: smaller marks beside a
+ * symbol one step larger than the pill's.
  */
 export function MarketIdentity({ compact, symbol }: { compact?: boolean; symbol: string }) {
   return (
     <>
       <span className="flex shrink-0 items-center -space-x-1.5">
-        <SmartImage<string>
-          alt="USDC"
-          className={cn(
-            "animate-none rounded-full bg-input-bg p-0.5 ring-1 ring-panel-border",
-            compact ? "size-5" : "size-6"
-          )}
-          src="/tokens/usdc.svg"
-        />
-        <SmartImage<string>
-          alt="cNGN"
-          className={cn(
-            "animate-none rounded-full bg-input-bg p-0.5 ring-1 ring-panel-border",
-            compact ? "size-5" : "size-6"
-          )}
-          src="/tokens/cngn.svg"
-        />
+        {marksFor(symbol).map((mark) => (
+          <SmartImage<string>
+            alt={mark.alt}
+            className={cn(
+              "animate-none rounded-full bg-input-bg p-0.5 ring-1 ring-panel-border",
+              compact ? "size-5" : "size-6"
+            )}
+            key={mark.alt}
+            src={mark.src}
+          />
+        ))}
       </span>
       <span
         className={cn(
@@ -157,7 +166,7 @@ function MarketRow({
       <span className="flex min-w-0 items-center gap-2">
         <MarketIdentity compact symbol={entry.symbol} />
       </span>
-      <span className={cn(CELL_CLASS, "text-panel-text-active")}>{formatNaira(row.price)}</span>
+      <span className={cn(CELL_CLASS, "text-panel-text-active")}>{formatPrice(row.price)}</span>
       <ChangeCell value={row.changePercent24h} />
       <span className={cn(CELL_CLASS, HIDDEN_ON_PHONE)}>
         {formatOverviewVolume(row.volume24hUsd)}

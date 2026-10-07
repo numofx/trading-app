@@ -5,9 +5,8 @@ import type { Candle, MarketType } from "@/lib/trading.types";
  * Converts markets-service candles into the UI's display convention.
  *
  * markets-service returns raw engine values, matching `/v1/trades`. Futures show
- * those directly. Spot displays cNGN-per-USDC = 1 / engine price, which **reverses
- * the ordering**: the bucket's highest displayed price comes from its lowest engine
- * price. Mapping high to high there would silently invert every candle's wick.
+ * those directly, and so do spot and the perp: the engine already quotes USDC per cNGN, the
+ * orientation the terminal shows. Nothing is inverted, so highs stay highs.
  *
  * Volume follows the same split: futures show base volume (contract count), spot
  * shows `quote_volume` (USDC notional), which is why the server accumulates it per
@@ -59,19 +58,18 @@ export function toUiCandle(
     return null;
   }
 
-  // USDCcNGN-SPOT and USDCcNGN-PERP are both quoted in USD per cNGN/NGN on chain and shown inverted.
+  // USDCcNGN-SPOT and USDCcNGN-PERP are shown as the engine quotes them, USDC per cNGN. Their
+  // volume is the USDC that changed hands, not the cNGN count: the figure a ticker reports.
   if (marketType === "spot" || marketType === "perp") {
-    // Every engine price must be positive to invert; a zero would produce Infinity.
     if (open <= 0 || high <= 0 || low <= 0 || close <= 0) {
       return null;
     }
 
     return {
-      close: 1 / close,
-      // Inverting reverses the ordering, so high and low swap.
-      high: 1 / low,
-      low: 1 / high,
-      open: 1 / open,
+      close,
+      high,
+      low,
+      open,
       time,
       bucketStartMs,
       volume: toFiniteNumber(candle.quote_volume) ?? 0,

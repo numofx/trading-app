@@ -30,9 +30,8 @@ export function formatBalanceFigure(value: number | null, symbol: BalanceSymbol)
  *
  * One shape for every holding on screen: the header, the ticket's shortfall note and the Assets tab
  * all read the same way, so two figures for the same asset can no longer look like two different
- * quantities. The ₦ sign stays on *prices*, where naira is the unit a market is quoted in rather
- * than something the account holds — the header previously spent it on both, which made the cNGN
- * balance read as a price.
+ * quantities. The ₦ sign stays on the secondary naira-per-dollar reading of a price, never on a
+ * holding — the header previously spent it on both, which made the cNGN balance read as a price.
  */
 export function formatBalance(value: number | null, symbol: BalanceSymbol) {
   const figure = formatBalanceFigure(value, symbol);

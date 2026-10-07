@@ -55,7 +55,7 @@ export type SpotOpenOrder = {
    * snapshot has to age them out itself.
    */
   expiresAtMs: number | null;
-  /** USDC notional already filled; the rest is still working. */
+  /** cNGN already filled; the rest is still working. */
   filled: number;
   nonce: string;
   orderId: string;
@@ -81,10 +81,7 @@ export type SpotMarket = {
   mark: number | null;
   orderBookAsks: OrderBookLevel[];
   orderBookBids: OrderBookLevel[];
-  /**
-   * The venue's `order_entry_spec`. Present only for contracts whose engine values differ from the
-   * UI's (today just `usdc_cngn_spot_v1`); null means engine values are presented directly.
-   */
+  /** The venue's `order_entry_spec`, which every order is signed under; null when it served none. */
   orderEntrySpec: string | null;
   /**
    * The venue's own trailing-24h stats in trader-facing terms, or null when markets-service did not
@@ -112,7 +109,7 @@ export type SpotMarket = {
   trades: TradePrint[];
 };
 
-/** Trailing-24h market stats in trader-facing terms: prices in cNGN per USDC, volume in USDC. */
+/** Trailing-24h market stats as shown: prices in USDC per cNGN, volume in USDC. */
 export type Stats24h = {
   /** The window's first traded price, which the 24h change is measured from; null when none traded. */
   firstPrice: number | null;

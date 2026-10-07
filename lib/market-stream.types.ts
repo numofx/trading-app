@@ -1,4 +1,4 @@
-import type { MarketType } from "@/lib/trading.types";
+
 
 /** Real-time channels exposed by markets-service `GET /v1/ws`. */
 export type MarketStreamChannel = "book" | "trades" | "orders";
@@ -33,7 +33,7 @@ export type StreamBookOrder = {
   filled_amount: string;
   spot_contract?: {
     ui_intent?: {
-      /** UI side, already inverted by the server — the opposite of the engine `side` above. */
+      /** The side as the venue presents it; under the identity contract, the engine `side` above. */
       side?: "buy" | "sell";
       price: string;
       size: string;
@@ -77,15 +77,3 @@ export type MarketStreamStatus =
   | "crossed"
   | "unconfigured"
   | "error";
-
-/**
- * Presentation config derived from the selected market.
- *
- * `orderEntrySpec` is the market's `order_entry_spec`, and it — not `type` — decides whether engine
- * values get translated. The inversion belongs to the `usdc_cngn_spot_v1` contract, not to spot in
- * general, and markets-service only sets the field for that contract.
- */
-export type MarketStreamPresenter = {
-  type: MarketType;
-  orderEntrySpec?: string | null;
-};

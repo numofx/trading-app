@@ -3,7 +3,7 @@
 import type { MouseEvent } from "react";
 import { useRef, useState } from "react";
 import { cn } from "@/lib/cn";
-import { formatNaira } from "@/lib/market-formatting";
+import { formatPrice } from "@/lib/market-formatting";
 import type { SPOT_TIMEFRAME_OPTIONS } from "@/lib/spot-terminal-config";
 import { CHART_TOOL_ICONS, CHART_TOOLS } from "@/lib/spot-terminal-config";
 import type { Candle, OrderBookLevel } from "@/lib/trading.types";
@@ -28,7 +28,8 @@ function getPriceScale(candles: Candle[]) {
   const lows = candles.map((candle) => candle.low);
   const rawMax = Math.max(...highs);
   const rawMin = Math.min(...lows);
-  const padding = Math.max((rawMax - rawMin) * 0.08, 0.5);
+  // The floor is a tenth of a basis point at this pair's price, so a flat day still has a scale.
+  const padding = Math.max((rawMax - rawMin) * 0.08, rawMax * 0.0001);
 
   return { max: rawMax + padding, min: rawMin - padding };
 }
@@ -114,7 +115,7 @@ function CandlestickChart({
       ref={containerRef}
     >
       <svg
-        aria-label="USDC/cNGN candlestick chart"
+        aria-label="cNGN-USDC candlestick chart"
         className="size-full"
         preserveAspectRatio="none"
         role="img"
@@ -141,7 +142,7 @@ function CandlestickChart({
                 x={PLOT_RIGHT + 10}
                 y={y + 4}
               >
-                {formatNaira(price, 1)}
+                {formatPrice(price, 6)}
               </text>
             </g>
           );
@@ -312,7 +313,7 @@ function DepthChart({ asks, bids }: { asks: OrderBookLevel[]; bids: OrderBookLev
 
   return (
     <svg
-      aria-label="USDC/cNGN market depth chart"
+      aria-label="cNGN-USDC market depth chart"
       className="size-full"
       preserveAspectRatio="none"
       role="img"
@@ -373,7 +374,7 @@ function DepthChart({ asks, bids }: { asks: OrderBookLevel[]; bids: OrderBookLev
         x={xForPrice(midPrice)}
         y={depthTop - 10}
       >
-        Mid {formatNaira(midPrice)}
+        Mid {formatPrice(midPrice)}
       </text>
 
       <line
@@ -393,7 +394,7 @@ function DepthChart({ asks, bids }: { asks: OrderBookLevel[]; bids: OrderBookLev
           x={xForPrice(price)}
           y={TIME_LABEL_Y}
         >
-          {formatNaira(price, 0)}
+          {formatPrice(price, 6)}
         </text>
       ))}
     </svg>
@@ -421,7 +422,7 @@ function OhlcReadout({ candle }: { candle: Candle | null }) {
       ).map(([label, value]) => (
         <span className="flex items-center gap-1" key={label}>
           <span className="text-panel-text-muted">{label}</span>
-          <span className={cn("font-medium", valueClass)}>{formatNaira(value)}</span>
+          <span className={cn("font-medium", valueClass)}>{formatPrice(value)}</span>
         </span>
       ))}
       <span className={cn("font-medium", valueClass)}>

@@ -6,19 +6,21 @@ import type { PerpAccountMargin } from "@/lib/perp-market.types";
 import { AccountSummary } from "@/ui/trading-terminal/order-form/AccountSummary";
 import { PerpOrderFormPanel } from "@/ui/trading-terminal/PerpOrderFormPanel";
 
-const FIXTURE_PRICE = 1388.89;
+/** USDC per cNGN, about ₦1,388.89 per USDC. */
+const FIXTURE_PRICE = 1 / 1388.89;
 
 /** The perp's chain state, in the shape markets-service serves it. */
 const FIXTURE_STATE = parsePerpState({
   funding_interval_seconds: 3600,
-  index_price_ui: String(FIXTURE_PRICE),
+  index_price_ui: FIXTURE_PRICE.toFixed(10),
   initial_margin_rate: "0.33333",
   maintenance_margin_rate: "0.2",
-  mark_price_ui: String(FIXTURE_PRICE),
+  mark_price_ui: FIXTURE_PRICE.toFixed(10),
   max_leverage: "3",
   open_interest_usd: "7200",
   trading_enabled: true,
-  ui_long_funding_rate_1h: "-0.0000125",
+  // The chain's rate as served: positive, so longs (long cNGN) pay.
+  ui_long_funding_rate_1h: "0.0000125",
 });
 
 /** A funded perp account: USDC cash plus some cNGN posted as collateral. */

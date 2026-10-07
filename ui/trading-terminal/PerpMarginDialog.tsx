@@ -140,8 +140,9 @@ export function PerpMarginDialog({
               {currency === "cNGN" && cngn !== null ? (
                 <p className="text-[12px] text-panel-text-muted leading-snug">
                   cNGN is valued at the index and {PERCENT.format(cngn.marginFactor)} of that counts
-                  as margin. If cNGN strengthens, that haircut is what gets a leveraged short
-                  liquidated: post about as much cNGN as you short.
+                  as margin. A short of cNGN loses as cNGN strengthens; the cNGN you post gains
+                  then, but only that share of the gain is credited, so the haircut is what gets a
+                  leveraged short liquidated: post about as much cNGN as you short.
                 </p>
               ) : null}
               <div className="rounded-sm bg-input-bg px-3 py-2 ring-1 ring-panel-border focus-within:ring-panel-text-muted">

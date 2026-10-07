@@ -1,8 +1,7 @@
 import { getAddress, isAddress, parseUnits } from "viem";
-import { formatNaira } from "@/lib/market-formatting";
+import { formatNairaPerUsdc, formatPrice, PRICE_DECIMALS } from "@/lib/market-formatting";
 import type {
   PerpAccountMargin,
-  PerpCngnExposure,
   PerpCollateralAsset,
   PerpCollateralBalance,
   PerpHeaderMetric,
@@ -250,46 +249,48 @@ export function getLeverageCeiling(state: PerpState | null): number {
 
 /**
  * Where a new position would be liquidated, for an account that holds only this position and
- * `margin` of cash. Venue orientation in and out (cNGN per USDC); the arithmetic runs in the engine's
- * (USDC per cNGN), where maintenance surplus is linear in price:
+ * `margin` of cash, in USDC per cNGN: the orientation shown, which is the engine's own, where
+ * maintenance surplus is linear in price:
  *
- *   surplus(e) = C + S·(e − e0) − |S|·mm·e
+ *   surplus(p) = C + S·(p − p0) − |S|·mm·p
  *
- * with S the signed NGN position (negative for a venue long). Null when no positive price gets
- * there. An estimate: it ignores fees and funding.
+ * with S the signed cNGN position (positive for a long). Null when no positive price gets there:
+ * a long at 1x never does, since its equity (S·p) always exceeds the requirement (mm·S·p). An
+ * estimate: it ignores fees and funding.
  */
 export function estimateLiquidationPrice({
   side,
-  sizeUsd,
+  sizeCngn,
   entryPrice,
   margin,
   maintenanceMarginRate,
 }: {
   side: "long" | "short";
-  sizeUsd: number;
+  sizeCngn: number;
   entryPrice: number;
   margin: number;
   maintenanceMarginRate: number;
 }): number | null {
-  if (!(sizeUsd > 0 && entryPrice > 0 && margin >= 0 && maintenanceMarginRate > 0)) {
+  if (!(sizeCngn > 0 && entryPrice > 0 && margin >= 0 && maintenanceMarginRate > 0)) {
     return null;
   }
-  const e0 = 1 / entryPrice;
-  const ngn = sizeUsd * entryPrice;
-  const s = side === "long" ? -ngn : ngn;
-  // C + S(e - e0) - |S| mm e = 0  =>  e = (S e0 - C) / (S - |S| mm)
+  const s = side === "long" ? sizeCngn : -sizeCngn;
+  // C + S(p - p0) - |S| mm p = 0  =>  p = (S p0 - C) / (S - |S| mm)
   const denominator = s - Math.abs(s) * maintenanceMarginRate;
   if (denominator === 0) {
     return null;
   }
-  const e = (s * e0 - margin) / denominator;
-  return e > 0 ? 1 / e : null;
+  const price = (s * entryPrice - margin) / denominator;
+  return price > 0 ? price : null;
 }
 
 type PresentedPositionPayload = {
   ui_side?: string;
   ui_size?: string;
-  /** Signed whole cNGN contracts; negative is the venue's long. */
+  /** The same position valued at the index, USDC. */
+  ui_notional_usdc?: string;
+  index_price_ui?: string;
+  /** Signed whole cNGN contracts; positive is a long. */
   engine_position?: string;
   mark_price_ui?: string;
   unrealized_pnl?: string;
@@ -319,6 +320,11 @@ export function parsePositionsResponse(body: unknown): {
     const uiSize = positive(row.ui_size);
     const engineSize = wholeMagnitude(row.engine_position);
     const markPrice = positive(row.mark_price_ui);
+    const indexPrice = positive(row.index_price_ui);
+    // The venue values the position at the index; an older service that does not is valued here.
+    const notionalUsd =
+      positive(row.ui_notional_usdc) ??
+      (uiSize !== null && indexPrice !== null ? uiSize * indexPrice : null);
     const unrealizedPnl = finite(row.unrealized_pnl);
     const initialMarginSurplus = finite(row.initial_margin_surplus);
     const maintenanceMarginSurplus = finite(row.maintenance_margin_surplus);
@@ -329,7 +335,8 @@ export function parsePositionsResponse(body: unknown): {
       markPrice === null ||
       unrealizedPnl === null ||
       initialMarginSurplus === null ||
-      maintenanceMarginSurplus === null
+      maintenanceMarginSurplus === null ||
+      notionalUsd === null
     ) {
       continue;
     }
@@ -339,6 +346,7 @@ export function parsePositionsResponse(body: unknown): {
       liquidationPrice: positive(row.liquidation_price_ui),
       maintenanceMarginSurplus,
       markPrice,
+      notionalUsd,
       uiSide: row.ui_side,
       uiSize,
       unrealizedPnl,
@@ -398,50 +406,8 @@ export function getPerpCollateralWithdrawableAsset(
   };
 }
 
-const HOURS_PER_DAY = 24;
 /** For the simple annualised funding figure: the hourly rate times the hours in a year. */
-const HOURS_PER_YEAR = HOURS_PER_DAY * 365;
-const DAYS_PER_MONTH = 30;
-
-/**
- * What an account's cNGN does for its position, or null for an account that posted no cNGN.
- * Information only (the ticket's naira-doubling warning reads it): how much of the account's long
- * USD the cNGN offsets at the index, what is left exposed to the naira either way, and the funding
- * the offset part pays or receives at the current rate.
- */
-export function buildPerpCngnExposure(
-  account: PerpAccountMargin | null,
-  positions: PerpPosition[],
-  state: PerpState | null
-): PerpCngnExposure | null {
-  if (account === null || state === null) {
-    return null;
-  }
-  const cngn = account.collateral.filter((row) => row.symbol === "cNGN");
-  if (cngn.length === 0) {
-    return null;
-  }
-  const collateralCngn = cngn.reduce((sum, row) => sum + row.balance, 0);
-  const collateralUsd = cngn.reduce((sum, row) => sum + row.valueUsd, 0);
-  const longUsd = positions
-    .filter((position) => position.uiSide === "long")
-    .reduce((sum, position) => sum + position.uiSize, 0);
-  const longNairaUsd = positions
-    .filter((position) => position.uiSide === "short")
-    .reduce((sum, position) => sum + position.uiSize, 0);
-  const offsetUsd = Math.min(collateralUsd, longUsd);
-  const fundingPerDayUsd = offsetUsd * state.uiLongFundingRate1h * HOURS_PER_DAY;
-  return {
-    collateralCngn,
-    collateralUsd,
-    fundingPerDayUsd,
-    fundingPerMonthUsd: fundingPerDayUsd * DAYS_PER_MONTH,
-    longNairaUsd,
-    longUsd,
-    nairaExposureUsd: collateralUsd + longNairaUsd - longUsd,
-    offsetUsd,
-  };
-}
+const HOURS_PER_YEAR = 24 * 365;
 
 const USD_CELL = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
@@ -459,56 +425,62 @@ function signedUsd(value: number) {
   return `${signOf(value)}${USD_CELL.format(Math.abs(value))} USDC`;
 }
 
-/**
- * The cNGN leg of a side. The venue's long is long USDC, which is short cNGN, so the two words
- * always disagree; `lib/perp-market.test.mjs` pins this against `perpOrderUiSide`, because a flip
- * in one and not the other would place a live order the opposite way from what the button said.
- */
-function cngnLeg(side: "long" | "short") {
-  return side === "long" ? "Short cNGN" : "Long cNGN";
-}
-
 const SUBMIT_SIZE = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
 
 /**
- * What the ticket's submit button says for a side: the cNGN leg, then the size in the unit it is
- * entered in (USDC notional) after a dot so it never reads as cNGN.
+ * What the ticket's submit button says for a side: "Long 1,000 cNGN". A long is long cNGN, the
+ * engine's own long; `lib/perp-market.test.mjs` pins this against `perpOrderUiSide`, so the button
+ * and the order it sends cannot drift apart.
  */
-export function perpSubmitLabel(side: "long" | "short", sizeUsd: number | null) {
-  const amount = sizeUsd === null ? "" : ` · ${SUBMIT_SIZE.format(sizeUsd)} USDC`;
-  return `${cngnLeg(side)}${amount}`;
+export function perpSubmitLabel(side: "long" | "short", sizeCngn: number | null) {
+  const amount = sizeCngn === null ? "" : ` ${SUBMIT_SIZE.format(sizeCngn)}`;
+  return `${perpSideLabel(side)}${amount} cNGN`;
 }
 
-/** The side an order is sent with: a venue long buys USD, exactly as a spot buy does. */
+/** The side an order is sent with: a long buys cNGN, exactly as a spot buy does. */
 export function perpOrderUiSide(side: "long" | "short"): "buy" | "sell" {
   return side === "long" ? "buy" : "sell";
 }
 
-/**
- * A position's side, in both the venue's word and the cNGN leg the ticket names: the button a
- * trader pressed said "Long cNGN", and a row that then said only "Short" read as a wrong fill.
- */
+/** A position's side as the venue and the ticket both name it. */
 export function perpSideLabel(uiSide: "long" | "short") {
-  return `${uiSide === "long" ? "Long" : "Short"} · ${cngnLeg(uiSide)}`;
+  return uiSide === "long" ? "Long" : "Short";
 }
 
-/** The Positions tab: side and size in the venue's terms, mark, liquidation price, PnL. */
+const CNGN_CELL = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+
+/**
+ * The Positions tab: side, the cNGN size with its USDC value at the index beside it, mark and
+ * liquidation prices in USDC per cNGN, PnL in USDC.
+ */
 export function buildPerpPositionsView(positions: PerpPosition[], label: string) {
   return {
-    columns: ["Instrument", "Side", "Size", "Mark price", "Liq. price", "Unrealized PnL"],
+    columns: PERP_POSITIONS_COLUMNS,
     rows: positions.map((position) => ({
       tones: { 1: sideTone(perpOrderUiSide(position.uiSide)) },
       cells: [
         label,
         perpSideLabel(position.uiSide),
-        `${USD_CELL.format(position.uiSize)} USDC`,
-        `₦${USD_CELL.format(position.markPrice)}`,
-        position.liquidationPrice === null ? "—" : `₦${USD_CELL.format(position.liquidationPrice)}`,
+        `${CNGN_CELL.format(position.uiSize)} cNGN`,
+        `${USD_CELL.format(position.notionalUsd)} USDC`,
+        formatPrice(position.markPrice),
+        formatPrice(position.liquidationPrice),
         signedUsd(position.unrealizedPnl),
       ],
     })),
   };
 }
+
+/** The Positions tab's columns, shared with the empty view the terminal renders before data. */
+export const PERP_POSITIONS_COLUMNS = [
+  "Instrument",
+  "Side",
+  "Size",
+  "Value",
+  "Mark price",
+  "Liq. price",
+  "Unrealized PnL",
+];
 
 const PERCENT_CELL = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0, style: "percent" });
 
@@ -600,8 +572,8 @@ export function describePerpMarginSources(account: PerpAccountMargin | null): st
   return `${parts.join(" + ")}${used}`;
 }
 
-function signedNaira(value: number) {
-  return `${value < 0 ? "-" : "+"}${formatNaira(Math.abs(value))}`;
+function signedPrice(value: number) {
+  return `${value < 0 ? "-" : "+"}${formatPrice(Math.abs(value), PRICE_DECIMALS)}`;
 }
 
 function signedPercent(value: number, digits: number) {
@@ -652,15 +624,17 @@ export function buildPerpHeaderMetrics({
   return [
     {
       label: "Mark",
+      // The same price the other way up, for traders who think in naira per dollar.
+      labelSuffix: state === null ? undefined : formatNairaPerUsdc(state.markPrice),
       tone: null,
       tooltip: "The price positions are valued and liquidated at, from the venue's chain state",
-      value: formatNaira(state?.markPrice ?? null),
+      value: formatPrice(state?.markPrice ?? null),
     },
     {
       label: "Index",
       tone: null,
       tooltip: "The external NGN/USD reference the mark tracks; funding pushes the two together",
-      value: formatNaira(state?.indexPrice ?? null),
+      value: formatPrice(state?.indexPrice ?? null),
     },
     {
       label: "24h Change",
@@ -668,7 +642,7 @@ export function buildPerpHeaderMetrics({
       value:
         change === null || changePercent === null
           ? "—"
-          : `${signedNaira(change)} (${signedPercent(changePercent, 2)})`,
+          : `${signedPrice(change)} (${signedPercent(changePercent, 2)})`,
     },
     { label: "24h Volume", tone: null, value: volumeLabel },
     {
@@ -685,7 +659,7 @@ export function buildPerpHeaderMetrics({
         funding === null ? undefined : `${signedPercent(funding * HOURS_PER_YEAR * 100, 1)} APR`,
       tone: toneOf(funding),
       tooltip:
-        "Hourly, as the long side sees it: positive means longs pay shorts. Beside it, the same rate annualised (hourly × 24 × 365, not compounded). It accrues every second; there is no funding settlement to count down to.",
+        "Hourly, as the long side sees it: positive means longs (long cNGN) pay shorts. Beside it, the same rate annualised (hourly × 24 × 365, not compounded). It accrues every second; there is no funding settlement to count down to.",
       value: funding === null ? "—" : signedPercent(funding * 100, 4),
     },
   ];

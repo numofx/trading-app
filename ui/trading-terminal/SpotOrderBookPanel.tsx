@@ -7,7 +7,7 @@ import { getAppChain } from "@/lib/base-public-client";
 import { cn } from "@/lib/cn";
 import { getExplorerTransactionUrl } from "@/lib/explorer-links";
 import { formatTradeStamp } from "@/lib/live-market";
-import { formatMarketPrice, formatNaira } from "@/lib/market-formatting";
+import { formatMarketPrice, formatPrice, PRICE_DECIMALS } from "@/lib/market-formatting";
 import type { LadderRow, LadderUnit } from "@/lib/order-book-display";
 import {
   buildEmptyRungs,
@@ -23,12 +23,18 @@ import { PanelTabs } from "@/ui/trading-terminal/PanelTabs";
 
 export type SpotBookTab = "book" | "trades";
 
-/** What each ladder unit is called on screen. Base is the USDC notional an order is entered in. */
-const UNIT_LABEL = { base: "USDC", quote: "cNGN" } satisfies Record<LadderUnit, string>;
+/** What each ladder unit is called on screen. Base is the cNGN an order is entered in and rests as. */
+const UNIT_LABEL = { base: "cNGN", quote: "USDC" } satisfies Record<LadderUnit, string>;
 
 /** Prices carry exactly the precision the ladder is grouped at: a 0.1 tick has no second decimal. */
 function getPriceDigits(tick: number) {
-  return Math.max(0, -Math.round(Math.log10(tick)));
+  // Floor, not round: a 5e-7 tick needs all seven places, and nothing shows more than the display precision.
+  return Math.min(PRICE_DECIMALS, Math.max(0, -Math.floor(Math.log10(tick) + 1e-9)));
+}
+
+/** A grouping tick as a plain decimal — "0.0000005", never the "5e-7" that `String` prints. */
+function formatTickLabel(tick: number) {
+  return tick.toFixed(getPriceDigits(tick));
 }
 
 function LadderSelect({
@@ -233,7 +239,7 @@ function BookLadder({
             lastSide === "sell" ? "text-ask-text" : null
           )}
         >
-          {formatNaira(anchorPrice)}
+          {formatPrice(anchorPrice)}
           {lastSide === "buy" ? (
             <ArrowUp aria-label="Last trade was a buy" className="size-3.5" />
           ) : null}
@@ -242,7 +248,7 @@ function BookLadder({
           ) : null}
         </span>
         <span className="text-center font-medium text-panel-text">
-          Spread{spread === null ? "" : ` ${formatNaira(spread)}`}
+          Spread{spread === null ? "" : ` ${formatPrice(spread)}`}
         </span>
         <span className="text-right text-spread-percent">
           {spreadBps === null ? "—" : `${(spreadBps / 100).toFixed(3)}%`}
@@ -352,7 +358,7 @@ function TradeTape({ trades }: { trades: TradePrint[] }) {
           <span
             className={cn("font-medium", trade.side === "buy" ? "text-bid-text" : "text-ask-text")}
           >
-            {formatMarketPrice(trade.price, 2)}
+            {formatPrice(trade.price)}
           </span>
           <span className="text-right text-panel-text">{formatLadderAmount(trade.size)}</span>
           <span className="flex items-center justify-end gap-1.5">
@@ -403,7 +409,10 @@ export function SpotOrderBookPanel({
           <LadderSelect
             label="Price grouping"
             onSelect={(value) => setTick(Number(value))}
-            options={PRICE_GROUPS.map((group) => ({ label: String(group), value: String(group) }))}
+            options={PRICE_GROUPS.map((group) => ({
+              label: formatTickLabel(group),
+              value: String(group),
+            }))}
             value={String(tick)}
           />
           {/* The unit is a two-way swap, so a single button flips it rather than opening a menu. */}
@@ -425,8 +434,8 @@ export function SpotOrderBookPanel({
           isBook ? "grid-cols-3" : TAPE_COLUMNS
         )}
       >
-        <span>Price cNGN</span>
-        <span className="text-right">{isBook ? `Size ${UNIT_LABEL[unit]}` : "Size USDC"}</span>
+        <span>Price USDC</span>
+        <span className="text-right">{isBook ? `Size ${UNIT_LABEL[unit]}` : "Size cNGN"}</span>
         <span className="text-right">{isBook ? `Total ${UNIT_LABEL[unit]}` : "Time"}</span>
       </div>
 

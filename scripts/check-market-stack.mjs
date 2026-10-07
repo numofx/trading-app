@@ -44,8 +44,8 @@ try {
 const spot = (Array.isArray(markets) ? markets : []).find(
   (market) =>
     market.contract_type === "spot" &&
-    market.base_asset_symbol === "USDC" &&
-    market.quote_asset_symbol === "cNGN"
+    market.base_asset_symbol === "cNGN" &&
+    market.quote_asset_symbol === "USDC"
 );
 if (!spot) {
   note(`${url} serves no USDC/cNGN spot market; nothing to compare against`);

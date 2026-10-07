@@ -4,7 +4,7 @@ import { Moon, Sun } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
-import { formatNaira } from "@/lib/market-formatting";
+import { formatNairaPerUsdc, formatPrice } from "@/lib/market-formatting";
 import type { TerminalMarketId } from "@/lib/market-overview.types";
 import { PrivyWalletButton } from "@/ui/PrivyWalletButton";
 import { SmartImage } from "@/ui/SmartImage";
@@ -38,6 +38,7 @@ function HeaderMetric({
   className,
   label,
   labelSuffix,
+  secondary,
   tooltip,
 }: {
   children: ReactNode;
@@ -46,6 +47,8 @@ function HeaderMetric({
   label: string;
   /** A muted figure after the label, outside its underline. */
   labelSuffix?: string;
+  /** A muted line under the value: the same figure read another way. */
+  secondary?: string;
   /** A hint on the label, dotted-underlined like the ticket's. */
   tooltip?: string;
 }) {
@@ -63,6 +66,9 @@ function HeaderMetric({
       <span className="flex items-baseline gap-1.5 whitespace-nowrap font-medium text-[13px] text-panel-text-active">
         {children}
       </span>
+      {secondary === undefined ? null : (
+        <span className="whitespace-nowrap text-[11px] text-panel-text-muted">{secondary}</span>
+      )}
     </div>
   );
 }
@@ -114,9 +120,9 @@ export function TerminalHeaderBar({
   /**
    * What the market is worth here now: the book's mid, else its one resting side, else the last
    * trade. NOT the last trade alone — on a quiet venue that print can be days old and sit outside
-   * the current spread. On 2026-09-16 the header read 1,327.34 from a trade two days earlier while
-   * every resting order stood between 1,361 and 1,383, and the order ticket, which prices off the
-   * same anchor the order book centres on, was seeded at 1,372.15.
+   * the current spread. On 2026-09-16 the header read a trade two days old that sat outside every
+   * resting order, and the order ticket, which prices off the same anchor the order book centres
+   * on, was seeded off it. In USDC per cNGN.
    */
   price: number | null;
   volume24hLabel: string;
@@ -172,8 +178,8 @@ export function TerminalHeaderBar({
        */}
       {metrics === undefined ? (
         <div className="hidden min-w-0 items-center gap-6 overflow-hidden lg:flex">
-          <HeaderMetric label="Price">
-            {formatNaira(price)}
+          <HeaderMetric label="Price" secondary={formatNairaPerUsdc(price)}>
+            {formatPrice(price)}
             <span className={cn("text-[11px]", getChangeClassName(changePercent24h))}>
               {formatChangePercent(changePercent24h)}
             </span>
@@ -181,7 +187,7 @@ export function TerminalHeaderBar({
           {/*
            * Volume stands down below `xl` for the same reason the extremes stand down below `2xl`:
            * measured at 1024px, Price, volume and a claim-noted balance pair overrun the row by
-           * ~40px, and the metrics box is the one that gives — clipping "24H volume ₦1" mid-figure.
+           * ~40px, and the metrics box is the one that gives — clipping "24H volume 1" mid-figure.
            * Price is the figure worth keeping at every width the metrics show at all.
            */}
           <HeaderMetric className="hidden xl:flex" label="24H volume">
@@ -195,10 +201,10 @@ export function TerminalHeaderBar({
            * `hasWallet` rearranged the row at the moment of connecting, which reads as a glitch.
            */}
           <HeaderMetric className="hidden xl:flex" label="24H high">
-            {formatNaira(high24h)}
+            {formatPrice(high24h)}
           </HeaderMetric>
           <HeaderMetric className="hidden xl:flex" label="24H low">
-            {formatNaira(low24h)}
+            {formatPrice(low24h)}
           </HeaderMetric>
         </div>
       ) : (

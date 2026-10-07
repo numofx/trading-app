@@ -52,7 +52,7 @@ export function applyTradesToCandles(
         close: trade.price,
         high: Math.max(last.high, trade.price),
         low: Math.min(last.low, trade.price),
-        volume: last.volume + trade.size,
+        volume: last.volume + trade.size * trade.price,
       };
       continue;
     }
@@ -68,7 +68,7 @@ export function applyTradesToCandles(
       low: trade.price,
       open: trade.price,
       time: formatCandleTimeLabel(new Date(bucketStartMs).toISOString(), interval),
-      volume: trade.size,
+      volume: trade.size * trade.price,
     });
   }
   return next;
@@ -88,7 +88,8 @@ export function applyTradesToStats(
     return stats;
   }
   const prices = trades.map((trade) => trade.price);
-  const volume = trades.reduce((sum, trade) => sum + trade.size, 0);
+  // Sizes are cNGN; the stats' volume is the USDC that changed hands, so each fill is valued at its price.
+  const volume = trades.reduce((sum, trade) => sum + trade.size * trade.price, 0);
   return {
     firstPrice: stats?.firstPrice ?? prices[0] ?? null,
     high: Math.max(stats?.high ?? Number.NEGATIVE_INFINITY, ...prices),

@@ -50,23 +50,17 @@ const TRAILING_ZEROES_PATTERN = /0+$/;
 const UNSIGNED_INTEGER_PATTERN = /^\d+$/;
 
 /**
- * USDCcNGN-SPOT trades wrapped cNGN against internal USDC cash. The UI expresses an
- * order as: side (buy/sell USDC), price in cNGN per USDC, size in USDC notional. The
- * matching engine, however, is quoted the other way round — price in USDC per cNGN,
- * amount in whole cNGN, side inverted:
+ * USDCcNGN-SPOT trades wrapped cNGN against wrapped USDC, and the UI expresses an order exactly
+ * as the engine takes it: side (buy/sell cNGN), price in USDC per cNGN, size in cNGN. The engine
+ * rests whole cNGN (markets-service enforces an atomic amount step of "1"), so the size is floored:
  *
- *   engineSide  = ui buy -> sell, ui sell -> buy   (BUY acquires USDC by selling cNGN)
- *   enginePrice = 1 / uiPrice
- *   engineAmount = floor(uiSize * sizingPrice)      (whole cNGN; markets-service enforces
- *                                                    an atomic amount step of "1")
+ *   engineSide   = side
+ *   enginePrice  = uiPrice, as 18-decimal fixed point
+ *   engineAmount = floor(uiSize)
  *
- * `sizingPrice` is the limit for a limit order and the expected fill for a market order, whose
- * limit is signed through the touch with slippage room that must not also be spent as size.
- *
- * The order BODY carries the engine-native values (side/limit_price/desired_amount) with
- * no ui_intent — markets-service's ui_intent path recomputes ui_size*ui_price as an exact
- * rational, which almost never lands on a whole cNGN and is rejected. The SIGNED action
- * carries the same values scaled to 1e18 wei. This mirrors the market-maker's spot path.
+ * The order BODY carries the engine-native values (side/limit_price/desired_amount) with no
+ * ui_intent. The SIGNED action carries the same values scaled to 1e18 wei. This mirrors the
+ * market-maker's spot path.
  */
 
 type Rational = { numerator: bigint; denominator: bigint };
@@ -218,8 +212,8 @@ export function getNonceSignedAtMs(nonce: bigint | string) {
 }
 
 /**
- * Where an order is signed for when it is not spot. The perp shares spot's translation (both are
- * quoted in USD per cNGN/NGN on chain) but lives on its own stack: its own asset, and its own
+ * Where an order is signed for when it is not spot. The perp takes the same order shape (both are
+ * cNGN at USDC per cNGN on chain) but lives on its own stack: its own asset, and its own
  * TradeModule settling in its own cash. markets-service rejects an order naming the other market's
  * module, so these must come from the perp's `/v1/markets` entry, never from spot's defaults.
  */
@@ -258,7 +252,6 @@ function reduceOnlyField(reduceOnly: boolean): { reduce_only: true } | Record<ne
 export function buildSpotOrderEnvelope({
   uiPrice,
   uiSize,
-  uiSizingPrice,
   side,
   subaccountId,
   walletAddress,
@@ -275,25 +268,18 @@ export function buildSpotOrderEnvelope({
    * the position its own ledger shows, and cancels the remainder. Perp only.
    */
   reduceOnly?: boolean;
-  /** The signed limit, in cNGN per USDC. */
+  /** The signed limit, in USDC per cNGN. */
   uiPrice: string;
+  /** The size in cNGN; floored to whole cNGN, which is what the engine rests. */
   uiSize: string;
-  /**
-   * The price the USDC size is counted in whole cNGN at, when it should differ from the limit — a
-   * market order's expected fill. Omitted for a limit order, which is sized at its own price. It may
-   * not sit past the limit: a buy counted above it, or a sell below it, is the inflated amount this
-   * parameter exists to prevent.
-   */
-  uiSizingPrice?: string;
   side: "buy" | "sell";
   subaccountId: string;
   walletAddress: string;
   /** Omit for spot. */
   market?: OrderMarketOverride;
   /**
-   * Sizes the order in whole cNGN directly, instead of from `uiSize` x the sizing price. For closing
-   * a perp position exactly: the engine holds the position in cNGN contracts, and a size derived
-   * from a USD figure lands a contract short or long of flat after rounding.
+   * Sizes the order in whole cNGN directly, bypassing `uiSize`. For closing a perp position exactly
+   * from the engine's own contract count, which no decimal string has to round-trip.
    */
   engineAmountWhole?: bigint;
 }) {
@@ -313,55 +299,32 @@ export function buildSpotOrderEnvelope({
     throw new Error("Size must be greater than zero");
   }
 
-  const sizingRational =
-    uiSizingPrice === undefined
-      ? priceRational
-      : parseDecimalToRational(sanitizeDecimalInput(uiSizingPrice, "Sizing price"));
+  // The price as an 18-decimal fixed-point wei value, exactly as the engine quotes it.
+  const enginePriceWei = roundRationalToScaledUnits(priceRational, ENGINE_DECIMALS);
 
-  if (sizingRational.numerator <= 0n) {
-    throw new Error("Sizing price must be greater than zero");
-  }
-
-  // sizing - limit, cross-multiplied so the comparison stays exact.
-  const sizingPastLimit =
-    sizingRational.numerator * priceRational.denominator -
-    priceRational.numerator * sizingRational.denominator;
-  if (side === "buy" ? sizingPastLimit > 0n : sizingPastLimit < 0n) {
-    throw new Error("Sizing price must not be past the limit price");
-  }
-
-  // enginePrice = 1 / uiPrice, as an 18-decimal fixed-point wei value.
-  const enginePriceWei = roundRationalToScaledUnits(
-    { denominator: priceRational.numerator, numerator: priceRational.denominator },
-    ENGINE_DECIMALS
-  );
-
-  // engineAmount = floor(uiSize * sizingPrice), in whole cNGN. The sizing price is the limit unless
-  // one was given, so a limit order is sized exactly as before.
-  const productNumerator = sizeRational.numerator * sizingRational.numerator;
-  const productDenominator = sizeRational.denominator * sizingRational.denominator;
-  const engineAmountWhole = engineAmountOverride ?? productNumerator / productDenominator;
+  // The size floored to whole cNGN, which is what the engine rests.
+  const engineAmountWhole =
+    engineAmountOverride ?? sizeRational.numerator / sizeRational.denominator;
 
   if (engineAmountWhole < 1n) {
-    throw new Error("Order too small: USDC size × price must be at least 1 cNGN");
+    throw new Error("Order too small: size must be at least 1 cNGN");
   }
   if (enginePriceWei <= 0n) {
-    throw new Error("Price is too large to represent");
+    throw new Error("Price is too small to represent");
   }
 
   const engineAmountWei = engineAmountWhole * 10n ** BigInt(ENGINE_DECIMALS);
-  const engineSide: "buy" | "sell" = side === "buy" ? "sell" : "buy";
+  const engineSide: "buy" | "sell" = side;
   const isBid = engineSide === "buy";
 
   // TradeModule compares worstFee against fee-per-cNGN (fee / amountFilled). One whole cNGN is
-  // worth enginePrice = 1 / uiPrice USDC, so the signed bound is the fee tier scaled by that
-  // per-cNGN notional — mirroring the futures worstFee = feeRate × contract notional. Charging
-  // worstFee on every filled cNGN totals SPOT_TAKER_FEE_RATE of the USDC notional.
+  // worth the price in USDC, so the signed bound is the fee tier scaled by that per-cNGN notional.
+  // Charging worstFee on every filled cNGN totals SPOT_TAKER_FEE_RATE of the USDC notional.
   const spotFeeRational = parseDecimalToRational(SPOT_TAKER_FEE_RATE);
   const worstFeeUnits = roundRationalToScaledUnits(
     {
-      denominator: spotFeeRational.denominator * priceRational.numerator,
-      numerator: spotFeeRational.numerator * priceRational.denominator,
+      denominator: spotFeeRational.denominator * priceRational.denominator,
+      numerator: spotFeeRational.numerator * priceRational.numerator,
     },
     ENGINE_DECIMALS
   );

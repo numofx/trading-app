@@ -2,18 +2,22 @@
 
 **An orderbook exchange for stablecoin FX.**
 
-Renders the USDC/cNGN spot market through an orderbook UI, with off/on ramping via Busha and Coinbase APIs for instant USD/USDC and NGN/cNGN conversions. Integrated with `markets-service` for live books and trades.
+Renders the cNGN-USDC spot market through an orderbook UI, with off/on ramping via Busha and Coinbase APIs for instant USD/USDC and NGN/cNGN conversions. Integrated with `markets-service` for live books and trades.
 
-The app renders spot at `/` and **USDC-cNGN-PERP** at `/perp`, switched from the market selector in
-the header. The perp is a USDC-settled perpetual on its own stack (numofx/exchange
+The app renders **cNGN-USDC** spot at `/` and **cNGN-PERP** at `/perp`, switched from the market
+selector in the header. Both are shown exactly as the engine trades them: cNGN is the base and USDC the
+quote, prices are USDC per cNGN (about 0.00073, to seven decimals, with ₦ per USDC as a secondary
+line in the header and under the ticket's price field), sizes are cNGN, a buy or long is a buy of
+cNGN. The venue's internal symbols stay `USDCcNGN-SPOT` and `USDCcNGN-PERP`; only the display names
+changed. The display names live in `lib/market-labels.ts` and nowhere else. The perp is a USDC-settled perpetual on its own stack (numofx/exchange
 `deploy-cngn-perp-stack.s.sol`): its own CashAsset, SRM and TradeModule. The app reads everything
 about it from `markets-service`, with no env of its own:
 
 - `/v1/markets` lists `USDCcNGN-PERP` (`contract_type: perpetual`) with a `perp` object: mark, index,
   funding, margin rates, max leverage, and the module, cash and SRM a trader signs and deposits for.
   Until it does, `/perp` renders its not-live state: empty panels and a ticket that cannot submit.
-- Orders use spot's translation (cNGN per USDC on screen, USDC per cNGN on chain, side flipped) but are
-  signed for the perp's module and asset. A trader's perp margin is a separate account under the perp
+- Orders are signed exactly as entered (USDC per cNGN, cNGN contracts, a long is the on-chain long)
+  for the perp's module and asset. A trader's perp margin is a separate account under the perp
   SRM, opened by the first "Deposit margin"; it is not the spot account. "Withdraw" on the Margin
   tab signs a WithdrawalModule action for the perp's CashAsset, like a spot withdrawal, and the
   venue pays USDC to the wallet; cash backing an open position is refused by the venue's
@@ -227,27 +231,29 @@ Deposit flow address semantics (naming follows the risk-core deployment artifact
   are open; on WL deployments only operator-whitelisted subaccounts can deposit, and the create-and-deposit path
   cannot activate.
 
-## Spot Order Contract
+## Order Contract
 
-For spot `USDC/cNGN`, the trader-facing API contract is intentionally different from the raw engine order.
+The trader-facing contract is the engine's own, on both markets, under the identity order-entry
+specs `cngn_usdc_spot_v1` and `cngn_usdc_perp_v1` (`lib/order-entry-spec.ts`):
 
-- UI price: `cNGN per USDC`
-- UI size: `USDC notional`
-- UI `BUY`: acquire USDC
-- UI `SELL`: dispose of USDC
-
-The engine still trades `WRAPPED_CNGN` against internal USDC cash, so the app must translate:
-
-```text
-engine_price = 1 / ui_price
-engine_amount = ui_size * ui_price
-UI BUY  -> engine SELL
-UI SELL -> engine BUY
-```
-
-Fill deltas should reconcile as:
+- UI price: `USDC per cNGN` (shown to seven decimals; the engine's tick is 1e-18)
+- UI size: `cNGN` (the engine rests whole cNGN, so the signer floors the size)
+- UI `BUY` / perp `Long`: acquire cNGN, pay USDC
+- UI `SELL` / perp `Short`: deliver cNGN, receive USDC
 
 ```text
-UI BUY  -> dUSDC = +ui_size, d cNGN = -(ui_size * ui_price)
-UI SELL -> dUSDC = -ui_size, d cNGN = +(ui_size * ui_price)
+engine_side   = ui_side
+engine_price  = ui_price
+engine_amount = floor(ui_size)
 ```
+
+Fill deltas reconcile as:
+
+```text
+BUY  -> d cNGN = +size, dUSDC = -(size * price)
+SELL -> d cNGN = -size, dUSDC = +(size * price)
+```
+
+Until 2026-10-07 the app showed the pair the other way up (cNGN per USDC, sized in USDC, side
+flipped against the engine) under `usdc_cngn_*_v1`; that translation is gone from both the app and
+markets-service.

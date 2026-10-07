@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { formatNaira } from "@/lib/market-formatting";
+import { formatNairaPerUsdc, formatPrice } from "@/lib/market-formatting";
 import {
   describePerpMarginSources,
   estimateLiquidationPrice,
@@ -40,95 +40,105 @@ const SIDES = [
 export type PerpOrderRequest = {
   side: PerpSide;
   orderType: PerpOrderType;
-  /** cNGN per USDC; the limit for a limit order, ignored for a market order (priced off the touch). */
+  /** USDC per cNGN; the limit for a limit order, ignored for a market order (priced off the touch). */
   limitPrice: string;
-  /** USD notional. */
+  /** The figure the trader typed, in `sizeUnit`: cNGN contracts, or USDC to convert at the sizing price. */
   size: string;
+  sizeUnit: "cNGN" | "USDC";
   /** Only shrink the open position: the venue clamps the fill to it and never opens or flips one. */
   reduceOnly: boolean;
 };
 
 const USD = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 });
-const PRICE = new Intl.NumberFormat("en-US", {
-  maximumFractionDigits: 2,
-  minimumFractionDigits: 2,
-});
 
 function parseAmount(value: string) {
   const parsed = Number(value.replaceAll(",", ""));
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
-/** A derived amount as the input shows it: at most two decimals, no trailing zeros. */
+/** A derived USDC amount as the input shows it: at most two decimals, no trailing zeros. */
 function formatDerived(value: number) {
   return String(Number(value.toFixed(2)));
 }
 
-const SIZE_UNITS = ["USDC", "cNGN"] as const satisfies readonly TokenSymbol[];
+/** A derived cNGN size as the input shows it: whole contracts, which is what the engine rests. */
+function formatDerivedCngn(value: number) {
+  return String(Math.round(value));
+}
+
+const SIZE_UNITS = ["cNGN", "USDC"] as const satisfies readonly TokenSymbol[];
 
 type SizeUnit = (typeof SIZE_UNITS)[number];
 
-/** What the Size field counts, for its tooltip: USD notional, or the same in cNGN at the ticket's price. */
-function sizeTooltip(unit: SizeUnit, conversion: number | null) {
-  if (unit === "USDC") {
-    return "What you trade: USD notional.";
+/** What the Size field counts, for its tooltip: cNGN contracts, or their USDC value at the ticket's price. */
+function sizeTooltip(unit: SizeUnit, price: number | null) {
+  if (unit === "cNGN") {
+    return "What you trade: cNGN contracts, which is what the order is signed in.";
   }
-  const at = conversion === null ? "" : ` at ₦${PRICE.format(conversion)}`;
-  return `What you trade, as cNGN notional${at}. The order is signed in USDC.`;
+  const at = price === null ? "" : ` at ${formatPrice(price)} USDC per cNGN`;
+  return `What you trade, as its USDC value${at}. The order is signed in cNGN.`;
 }
 
 /**
- * The ticket's size and margin fields, kept in step: size and margin through the leverage, and the
- * size's cNGN rendering through the ticket's price. USD notional is the figure underneath; the
- * cNGN unit is a view of it that the trader can also type into.
+ * The ticket's size and margin fields, kept in step: the cNGN size is the figure underneath, its
+ * USDC value follows through the ticket's price (USDC per cNGN), and the margin is that value
+ * through the leverage. The USDC unit is a view of the size that the trader can also type into,
+ * as can the margin.
  */
-function usePerpSizeFields(leverage: number, conversion: number | null) {
+function usePerpSizeFields(leverage: number, price: number | null) {
   const [margin, setMargin] = useState("");
-  const [size, setSize] = useState("");
   const [sizeCngn, setSizeCngn] = useState("");
-  const [sizeUnit, setSizeUnit] = useState<SizeUnit>("USDC");
+  const [sizeUsd, setSizeUsd] = useState("");
+  const [sizeUnit, setSizeUnit] = useState<SizeUnit>("cNGN");
+  const priced = price !== null && price > 0;
 
-  function toCngn(usd: number | null) {
-    return usd === null || conversion === null ? "" : formatDerived(usd * conversion);
+  function toUsd(cngn: number | null) {
+    return cngn === null || !priced ? null : cngn * price;
   }
 
-  function setUsd(usd: number | null) {
-    setSize(usd === null ? "" : formatDerived(usd));
+  /** Sets the USDC value and the margin from the cNGN size; both blank without a price. */
+  function setFromCngn(cngn: number | null) {
+    const usd = toUsd(cngn);
+    setSizeUsd(usd === null ? "" : formatDerived(usd));
+    setMargin(usd === null ? "" : formatDerived(usd / leverage));
+  }
+
+  /** Sets the cNGN size and the margin from a USDC value; the size is blank without a price. */
+  function setFromUsd(usd: number | null) {
+    setSizeCngn(usd === null || !priced ? "" : formatDerivedCngn(usd / price));
     setMargin(usd === null ? "" : formatDerived(usd / leverage));
   }
 
   function onSizeInput(value: string) {
-    if (sizeUnit === "USDC") {
-      setSize(value);
-      const parsed = parseAmount(value);
-      setMargin(parsed === null ? "" : formatDerived(parsed / leverage));
-      setSizeCngn(toCngn(parsed));
+    if (sizeUnit === "cNGN") {
+      setSizeCngn(value);
+      setFromCngn(parseAmount(value));
       return;
     }
-    setSizeCngn(value);
-    const parsed = parseAmount(value);
-    setUsd(parsed === null || conversion === null || conversion <= 0 ? null : parsed / conversion);
+    setSizeUsd(value);
+    setFromUsd(parseAmount(value));
   }
 
   function onMargin(value: string) {
     setMargin(value);
     const parsed = parseAmount(value);
     const usd = parsed === null ? null : parsed * leverage;
-    setSize(usd === null ? "" : formatDerived(usd));
-    setSizeCngn(toCngn(usd));
+    setSizeUsd(usd === null ? "" : formatDerived(usd));
+    setSizeCngn(usd === null || !priced ? "" : formatDerivedCngn(usd / price));
   }
 
   function onUnit(unit: SizeUnit) {
     setSizeUnit(unit);
-    setSizeCngn(toCngn(parseAmount(size)));
+    const usd = toUsd(parseAmount(sizeCngn));
+    setSizeUsd(usd === null ? "" : formatDerived(usd));
   }
 
   function onLeverage(next: number) {
     const parsed = parseAmount(margin);
     if (parsed !== null) {
       const usd = parsed * next;
-      setSize(formatDerived(usd));
-      setSizeCngn(toCngn(usd));
+      setSizeUsd(formatDerived(usd));
+      setSizeCngn(priced ? formatDerivedCngn(usd / price) : "");
     }
   }
 
@@ -138,9 +148,9 @@ function usePerpSizeFields(leverage: number, conversion: number | null) {
     onMargin,
     onSizeInput,
     onUnit,
-    /** What the Size field shows: the USD notional, or its cNGN rendering. */
-    shown: sizeUnit === "USDC" ? size : sizeCngn,
-    size,
+    /** What the Size field shows: the cNGN size, or its USDC value. */
+    shown: sizeUnit === "cNGN" ? sizeCngn : sizeUsd,
+    sizeCngn,
     sizeUnit,
   };
 }
@@ -218,11 +228,10 @@ function LeverageSelector({
 }
 
 /**
- * Why a 1x long can be liquidated well short of a 100% move: the position is a fixed amount of
- * cNGN, so a long USDC's loss grows faster the further cNGN strengthens, and the maintenance
- * margin is charged on the position revalued at that price. Solving equity = requirement at 1x
- * puts the long's liquidation at (1 + mm) / 2 of entry; a short loses ever more slowly as cNGN
- * weakens and has no finite liquidation price at 1x.
+ * Why a 1x short has a liquidation price and a 1x long has none: the position is a fixed amount of
+ * cNGN valued in USDC, so a short's loss grows without bound as cNGN strengthens while a long can
+ * lose at most its notional. Solving equity = requirement at 1x puts the short's liquidation at
+ * 2 / (1 + mm) of entry; the long's equity always exceeds the maintenance requirement.
  */
 function liquidationTooltip(state: PerpState | null) {
   const base = "For this margin alone; your whole perp account backs the position.";
@@ -230,8 +239,8 @@ function liquidationTooltip(state: PerpState | null) {
     return base;
   }
   const mm = state.maintenanceMarginRate;
-  const longMove = Math.round((1 - (1 + mm) / 2) * 100);
-  return `${base} The position is a fixed amount of cNGN, so a long USDC loses faster the further cNGN strengthens, and the ${Math.round(mm * 100)}% maintenance margin is charged on its value at that price: at 1x a long is liquidated about ${longMove}% below entry, not 100%.`;
+  const shortMove = Math.round((2 / (1 + mm) - 1) * 100);
+  return `${base} The position is a fixed amount of cNGN valued in USDC, so a short's loss grows without bound as cNGN strengthens while a long can lose at most its notional: at 1x a short is liquidated about ${shortMove}% above entry, and a long at no price.`;
 }
 
 /** Hourly funding from the chosen side's point of view: what it pays or receives. */
@@ -259,19 +268,25 @@ type TicketInputs = {
   takerFeeBps: number | null;
 };
 
-/** Everything the ticket shows that follows from its inputs: fee, margin needed, shortfall, liq. price. */
+/**
+ * Everything the ticket shows that follows from its inputs: the USDC value, fee, margin needed,
+ * shortfall and liq. price. The size is cNGN; its value, and everything charged on it, is at the
+ * entry price (the typed limit, else where a market order fills), so without one the fee and
+ * margin are unknown rather than zero.
+ */
 function deriveTicket(inputs: TicketInputs) {
-  const sizeUsd = parseAmount(inputs.size);
+  const sizeCngn = parseAmount(inputs.size);
   const marginUsd = parseAmount(inputs.margin);
   const entryPrice =
     inputs.orderType === "Limit" ? parseAmount(inputs.limitPrice) : inputs.referencePrice;
+  const notionalUsd = sizeCngn !== null && entryPrice !== null ? sizeCngn * entryPrice : null;
   const feeUsd =
-    sizeUsd !== null && inputs.takerFeeBps !== null
-      ? (sizeUsd * inputs.takerFeeBps) / 10_000
+    notionalUsd !== null && inputs.takerFeeBps !== null
+      ? (notionalUsd * inputs.takerFeeBps) / 10_000
       : null;
   const requiredMargin =
-    sizeUsd !== null && inputs.state !== null
-      ? sizeUsd * inputs.state.initialMarginRate + (feeUsd ?? 0)
+    notionalUsd !== null && inputs.state !== null
+      ? notionalUsd * inputs.state.initialMarginRate + (feeUsd ?? 0)
       : null;
   const shortfall =
     requiredMargin !== null &&
@@ -280,13 +295,13 @@ function deriveTicket(inputs: TicketInputs) {
       ? requiredMargin - inputs.availableMargin
       : null;
   const liquidation =
-    inputs.state !== null && sizeUsd !== null && entryPrice !== null && marginUsd !== null
+    inputs.state !== null && sizeCngn !== null && entryPrice !== null && marginUsd !== null
       ? estimateLiquidationPrice({
           entryPrice,
           maintenanceMarginRate: inputs.state.maintenanceMarginRate,
           margin: marginUsd,
           side: inputs.side,
-          sizeUsd,
+          sizeCngn,
         })
       : null;
   const needsPrice = inputs.orderType === "Limit" && parseAmount(inputs.limitPrice) === null;
@@ -296,7 +311,7 @@ function deriveTicket(inputs: TicketInputs) {
     needsPrice,
     requiredMargin,
     shortfall,
-    sizeUsd,
+    sizeCngn,
   };
 }
 
@@ -307,14 +322,14 @@ function isTicketComplete(inputs: {
   isPreparingAccount: boolean;
   isSubmitting: boolean;
   needsPrice: boolean;
-  sizeUsd: number | null;
+  sizeCngn: number | null;
 }) {
   return (
     inputs.isLive &&
     inputs.hasWallet &&
     !inputs.isSubmitting &&
     !inputs.isPreparingAccount &&
-    inputs.sizeUsd !== null &&
+    inputs.sizeCngn !== null &&
     !inputs.needsPrice
   );
 }
@@ -329,12 +344,12 @@ type ButtonInputs = {
   isSubmitting: boolean;
   shortfall: number | null;
   side: PerpSide;
-  sizeUsd: number | null;
+  sizeCngn: number | null;
 };
 
 /** What the one button says: it connects, deposits, or trades, depending on what is missing. */
 function submitLabel(inputs: ButtonInputs) {
-  const trade = perpSubmitLabel(inputs.side, inputs.sizeUsd);
+  const trade = perpSubmitLabel(inputs.side, inputs.sizeCngn);
   if (inputs.isPaused) {
     return "Trading paused";
   }
@@ -389,11 +404,12 @@ function buttonTone(inputs: ButtonInputs): "buy" | "sell" | "neutral" {
 /**
  * The perp order ticket. Without a live perp (`state` null) it renders the form but cannot submit.
  * With one, leverage is bounded by the SRM's ceiling, size and margin are linked through it
- * (margin = size / leverage), and the order is checked against the account's initial-margin surplus
- * before it is signed. Size is what trades: it is the first field and the number the button and the
- * summary repeat. Margin is what that size costs at the chosen leverage, editable the other way
- * round for traders who think in margin. Leverage only sizes the order: the SRM margins the whole
- * account together, so there is no per-position leverage to set on chain.
+ * (margin = size × price / leverage), and the order is checked against the account's
+ * initial-margin surplus before it is signed. Size is what trades, in cNGN contracts: it is the
+ * first field and the number the button and the summary repeat; its USDC value at the ticket's
+ * price is the alternative unit. Margin is what that size costs at the chosen leverage, editable
+ * the other way round for traders who think in margin. Leverage only sizes the order: the SRM
+ * margins the whole account together, so there is no per-position leverage to set on chain.
  */
 export function PerpOrderFormPanel({
   account = null,
@@ -426,7 +442,7 @@ export function PerpOrderFormPanel({
   /** Any change to the ticket: the host clears the order status line on it. */
   onEdit?: () => void;
   onSubmit?: (request: PerpOrderRequest) => void;
-  /** The price a market order would fill near, cNGN per USDC: the touch, else the mark. */
+  /** The price a market order would fill near, USDC per cNGN: the touch, else the mark. */
   referencePrice?: number | null;
   state?: PerpState | null;
   takerFeeBps?: number | null;
@@ -448,18 +464,18 @@ export function PerpOrderFormPanel({
   const marginSources = describePerpMarginSources(account);
   const ceiling = getLeverageCeiling(state);
   const effectiveLeverage = Math.min(leverage, ceiling);
-  // cNGN per USDC for the Size field's cNGN unit: the limit price when one is typed, else the
-  // price a market order fills near. The field keeps USD notional underneath either way.
-  const sizeConversion =
+  // The price in use, USDC per cNGN: the limit price when one is typed, else the price a market
+  // order fills near. It values the cNGN size in USDC and so sets the margin either way.
+  const ticketPrice =
     orderType === "Limit" ? (parseAmount(limitPrice) ?? referencePrice) : referencePrice;
-  const fields = usePerpSizeFields(effectiveLeverage, sizeConversion);
-  const { margin, size, sizeUnit } = fields;
+  const fields = usePerpSizeFields(effectiveLeverage, ticketPrice);
+  const { margin, sizeCngn: size, sizeUnit } = fields;
 
   function handleLeverageChange(next: number) {
     setLeverage(next);
     fields.onLeverage(next);
   }
-  const { feeUsd, liquidation, needsPrice, requiredMargin, shortfall, sizeUsd } = deriveTicket({
+  const { feeUsd, liquidation, needsPrice, requiredMargin, shortfall, sizeCngn } = deriveTicket({
     availableMargin,
     limitPrice,
     margin,
@@ -477,7 +493,7 @@ export function PerpOrderFormPanel({
     isPreparingAccount,
     isSubmitting,
     needsPrice,
-    sizeUsd,
+    sizeCngn,
   });
   const buttonInputs: ButtonInputs = {
     availableMargin,
@@ -489,7 +505,7 @@ export function PerpOrderFormPanel({
     isPaused: state?.paused === true,
     isSubmitting,
     shortfall,
-    sizeUsd,
+    sizeCngn,
   };
   const buttonEnabled = isButtonEnabled(buttonInputs);
 
@@ -506,7 +522,14 @@ export function PerpOrderFormPanel({
       return;
     }
     if (canSubmit) {
-      onSubmit({ limitPrice, orderType, reduceOnly: reduceOnly && hasPosition, side, size });
+      onSubmit({
+        limitPrice,
+        orderType,
+        reduceOnly: reduceOnly && hasPosition,
+        side,
+        size: fields.shown,
+        sizeUnit,
+      });
     }
   }
 
@@ -520,7 +543,7 @@ export function PerpOrderFormPanel({
             <SummaryRow
               label="Est. liq. price"
               tooltip={liquidationTooltip(state)}
-              value={formatNaira(liquidation)}
+              value={formatPrice(liquidation)}
             />
             <SummaryRow
               label="Funding"
@@ -580,22 +603,29 @@ export function PerpOrderFormPanel({
       />
 
       {orderType === "Limit" ? (
-        <FormField
-          adornment={<TokenUnit symbol="cNGN" />}
-          id="perp-limit-price"
-          label="Limit price"
-          onChange={edited(setLimitPrice)}
-          tooltip="cNGN per USDC"
-          value={limitPrice}
-        />
+        <div className="space-y-1">
+          <FormField
+            adornment={<TokenUnit symbol="USDC" />}
+            id="perp-limit-price"
+            label="Limit price"
+            onChange={edited(setLimitPrice)}
+            placeholder="0.0000000"
+            tooltip="USDC per cNGN"
+            value={limitPrice}
+          />
+          {/* The same price the other way up, for traders who think in naira per dollar. */}
+          <p className="text-[11px] text-panel-text-muted tabular-nums">
+            {formatNairaPerUsdc(ticketPrice)}
+          </p>
+        </div>
       ) : null}
       <FormField
         adornment={
           <TokenUnitSelect
             disabledReason={
-              sizeConversion !== null && sizeConversion > 0
+              ticketPrice !== null && ticketPrice > 0
                 ? undefined
-                : { cNGN: "Needs a price: type a limit price, or wait for the market" }
+                : { USDC: "Needs a price: type a limit price, or wait for the market" }
             }
             label="Size unit"
             onSelect={edited((unit) => fields.onUnit(unit as SizeUnit))}
@@ -606,8 +636,8 @@ export function PerpOrderFormPanel({
         id="perp-size"
         label="Size"
         onChange={edited(fields.onSizeInput)}
-        placeholder="0.0"
-        tooltip={sizeTooltip(sizeUnit, sizeConversion)}
+        placeholder="0"
+        tooltip={sizeTooltip(sizeUnit, ticketPrice)}
         value={fields.shown}
       />
       <LeverageSelector
@@ -621,7 +651,7 @@ export function PerpOrderFormPanel({
         label="Margin"
         onChange={edited(fields.onMargin)}
         placeholder="0.0"
-        tooltip={`What it costs you: size ÷ ${effectiveLeverage}x. Editable the other way round, for traders who think in margin.`}
+        tooltip={`What it costs you: the size's USDC value ÷ ${effectiveLeverage}x. Editable the other way round, for traders who think in margin.`}
         value={margin}
       />
 
