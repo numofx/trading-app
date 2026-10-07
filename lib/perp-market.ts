@@ -682,7 +682,7 @@ export function buildPerpPositionsView(
       const pnl = pnlTone(position.unrealizedPnl);
       const details: Record<number, string> = { 5: "Cross" };
       if (pnlShare !== null) {
-        details[6] = `(${signOf(pnlShare)}${pnlShare.toFixed(2)}%)`;
+        details[6] = `(${signOf(pnlShare)}${Math.abs(pnlShare).toFixed(2)}%)`;
       }
       const tones: Record<number, CellTone> = { 1: side };
       if (pnl !== undefined) {
