@@ -7,7 +7,7 @@ import {
 } from "@/lib/account-activity-views";
 import { formatBalance } from "@/lib/account-balance-display";
 import type { AccountFill, OrderHistoryOrder } from "@/lib/order-history.types";
-import { buildPerpPositionsView, parsePerpState } from "@/lib/perp-market";
+import { buildPerpBalancesView, buildPerpPositionsView, parsePerpState } from "@/lib/perp-market";
 import type { PerpAccountMargin, PerpPosition } from "@/lib/perp-market.types";
 import { PERP_BOTTOM_TABS, PERP_MARKET_LABEL } from "@/lib/perp-terminal-config";
 import { AccountSummary } from "@/ui/trading-terminal/order-form/AccountSummary";
@@ -158,6 +158,9 @@ const FIXTURE_FILLS: AccountFill[] = [
   },
 ];
 
+const FIXTURE_ROW_BUTTON =
+  "cursor-pointer rounded-sm bg-input-bg px-2 py-1 font-medium text-[11px] text-panel-text ring-1 ring-panel-border";
+
 export function PerpLayoutFixture() {
   return (
     <main className="flex min-h-screen flex-col gap-3 bg-terminal-bg p-3 text-foreground">
@@ -176,10 +179,7 @@ export function PerpLayoutFixture() {
           isSignedIn
           onTabSelect={() => undefined}
           rowAction={() => (
-            <button
-              className="cursor-pointer rounded-sm bg-input-bg px-2 py-1 font-medium text-[11px] text-panel-text ring-1 ring-panel-border"
-              type="button"
-            >
+            <button className={FIXTURE_ROW_BUTTON} type="button">
               Close
             </button>
           )}
@@ -197,6 +197,27 @@ export function PerpLayoutFixture() {
           isSignedIn
           onTabSelect={() => undefined}
           selectedTab="order-history"
+          tabs={PERP_BOTTOM_TABS}
+        />
+      </div>
+      {/* The Balances tab: cash, the cNGN posted as collateral, Deposit and Withdraw on each. */}
+      <div className="h-[170px] w-full">
+        <TradingActivityPanel
+          activityView={buildPerpBalancesView(FIXTURE_ACCOUNT)}
+          footerLinks={[]}
+          isSignedIn
+          onTabSelect={() => undefined}
+          rowAction={() => (
+            <span className="inline-flex gap-1.5">
+              <button className={FIXTURE_ROW_BUTTON} type="button">
+                Deposit
+              </button>
+              <button className={FIXTURE_ROW_BUTTON} type="button">
+                Withdraw
+              </button>
+            </span>
+          )}
+          selectedTab="balances"
           tabs={PERP_BOTTOM_TABS}
         />
       </div>

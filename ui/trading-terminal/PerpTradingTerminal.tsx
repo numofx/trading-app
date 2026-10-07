@@ -26,6 +26,7 @@ import {
   tradesSince,
 } from "@/lib/live-market";
 import {
+  buildPerpBalancesView,
   buildPerpHeaderMetrics,
   buildPerpPositionsView,
   describeOrderRejection,
@@ -374,6 +375,12 @@ function buildActivityView(inputs: ActivityInputs): ActivityView {
       state: inputs.market.state,
     });
   }
+  if (inputs.bottomTab === "balances") {
+    return buildPerpBalancesView(inputs.account, listedCollateralOf(inputs.market.stack));
+  }
+  if (inputs.bottomTab === "funding-history") {
+    return PERP_ACTIVITY_VIEWS["funding-history"];
+  }
   if (inputs.bottomTab === "order-history" || inputs.bottomTab === "trade-history") {
     return perpActivityView(
       inputs.signedHistoryView ?? PERP_ACTIVITY_VIEWS[inputs.bottomTab],
@@ -454,6 +461,12 @@ function buildEmptyState(
   if (signedHistoryEmptyState !== undefined) {
     return signedHistoryEmptyState;
   }
+  if (bottomTab === "funding-history") {
+    return {
+      body: "Funding accrues continuously on chain at the rate in the header; there is no settlement to list. The venue does not yet publish funding payments per account.",
+      title: "No funding history",
+    };
+  }
   if (market === null) {
     return {
       body: "Perp trading isn't live yet.",
@@ -505,7 +518,33 @@ const ROW_BUTTON_CLASSES =
  * The button at the end of each row: Cancel on an open order, Close on a position, the fill's
  * transaction on a trade. Each is the one action the row is for.
  */
+/**
+ * Deposit and Withdraw at the end of each Balances row. The row order is the ledger's (cash, then
+ * each collateral asset held), so a held row's index is its withdraw row; an asset listed but not
+ * held can only be deposited.
+ */
+function buildBalanceRowAction(
+  account: PerpAccountMargin | null,
+  onDeposit: () => void,
+  onWithdraw: (ledgerRow: number) => void
+) {
+  const heldRows = 1 + (account?.collateral.length ?? 0);
+  return (rowIndex: number) => (
+    <span className="inline-flex gap-1.5">
+      <button className={ROW_BUTTON_CLASSES} onClick={onDeposit} type="button">
+        Deposit
+      </button>
+      {rowIndex < heldRows ? (
+        <button className={ROW_BUTTON_CLASSES} onClick={() => onWithdraw(rowIndex)} type="button">
+          Withdraw
+        </button>
+      ) : null}
+    </span>
+  );
+}
+
 function buildRowAction(inputs: {
+  account: PerpAccountMargin | null;
   bottomTab: PerpBottomTab;
   cancellingNonce: string | null;
   closingIndex: number | null;
@@ -514,6 +553,8 @@ function buildRowAction(inputs: {
   market: PerpMarket | null;
   onCancel: (nonce: string, ownerAddress: string) => void;
   onClose: (position: PerpPosition, rowIndex: number) => void;
+  onDeposit: () => void;
+  onWithdraw: (ledgerRow: number) => void;
   ownedOpenOrders: { nonce: string; ownerAddress: string }[];
   positions: PerpPosition[];
   /** The Trade History row control (the fill's transaction), undefined on every other tab. */
@@ -544,6 +585,9 @@ function buildRowAction(inputs: {
         </button>
       );
     };
+  }
+  if (bottomTab === "balances") {
+    return buildBalanceRowAction(inputs.account, inputs.onDeposit, inputs.onWithdraw);
   }
   if (bottomTab === "positions") {
     return (rowIndex: number) => {
@@ -1124,12 +1168,15 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
               isSignedIn={isSignedIn}
               onTabSelect={(tab) => setBottomTab(tab as PerpBottomTab)}
               rowAction={buildRowAction({
+                account: perpAccount.account,
                 bottomTab,
                 closingIndex,
                 cancellingNonce,
                 hasWallet: primaryWallet !== null,
                 isSubmitting,
                 market,
+                onDeposit: openDeposit,
+                onWithdraw: setWithdrawRow,
                 onCancel: (nonce, ownerAddress) => void handleCancel(nonce, ownerAddress),
                 onClose: (position, rowIndex) => void handleClose(position, rowIndex),
                 ownedOpenOrders,

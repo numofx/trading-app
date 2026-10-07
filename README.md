@@ -18,7 +18,7 @@ about it from `markets-service`, with no env of its own:
   Until it does, `/perp` renders its not-live state: empty panels and a ticket that cannot submit.
 - Orders are signed exactly as entered (USDC per cNGN, cNGN contracts, a long is the on-chain long)
   for the perp's module and asset. A trader's perp margin is a separate account under the perp
-  SRM, opened by the first "Deposit margin"; it is not the spot account. "Withdraw" on the Margin
+  SRM, opened by the first "Deposit margin"; it is not the spot account. "Withdraw" on the Balances
   tab signs a WithdrawalModule action for the perp's CashAsset, like a spot withdrawal, and the
   venue pays USDC to the wallet; cash backing an open position is refused by the venue's
   simulation. "Close" on a position row sends a market order on the opposite side sized in the
@@ -27,7 +27,7 @@ about it from `markets-service`, with no env of its own:
 - `/v1/positions` (proxied at `/api/positions`) serves positions and margin, polled every 15s.
 - **cNGN as margin.** When the perp block lists `collateral_assets` (the perp stack's own cNGN
   escrow, whitelisted on the perp SRM as a base asset), "Deposit margin" offers cNGN beside USDC,
-  depositing into that escrow through the same deposit machine; the Margin tab shows one row per
+  depositing into that escrow through the same deposit machine; the Balances tab shows one row per
   asset (cash, then each collateral asset at its index value and the share the SRM credits —
   50% for cNGN), and each row's Withdraw signs a WithdrawalModule action for that row's escrow.
   Without `collateral_assets` the terminal is cash-only, exactly as before. The haircut is what
@@ -37,7 +37,7 @@ about it from `markets-service`, with no env of its own:
   longer limits a cNGN-holding account to long USD or to the cNGN posted. A short (long naira) on
   such an account carries a warning that it doubles the naira exposure. Margin is shown by source:
   the ticket's "Available to trade" lists the cash, each collateral asset with its value and margin
-  credit, and what positions already use (tooltip: cross-margin, P&L in USDC); the Margin tab has a
+  credit, and what positions already use (tooltip: cross-margin, P&L in USDC); the Balances tab has a
   row per asset with balance, value and margin credit, listing an accepted asset at zero with a
   Deposit action until it is held; and the Size field takes cNGN as well as USDC, converted at the
   ticket's own price.
