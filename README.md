@@ -154,34 +154,48 @@ the browser bundle: keep the Alchemy key domain-restricted, and rotate it there 
 
 ### Matching stack (Base mainnet)
 
-Defaults live in `MATCHING_STACK` (`lib/subaccount-deposit-config.ts`) and
-`lib/spot-order-submission.ts`; the envs below only override them.
+Since the **unified-account cutover on 2026-10-04**, spot and the perp trade on one stack: the
+perp's TradeModule, under the perp's StandardManager (SRM), quoted in the perp's CashAsset, with
+the perp's cNGN escrow as the spot asset. A wallet has one trading account for both markets, so a
+spot fill settles into the same cash and collateral the perp margins against.
 
-| Env | Mainnet address | What it is |
+`GET /v1/markets` is the source of truth for the stack: the ticket signs spot orders for the
+`asset_address` and `trade_module_address` the venue reports, and the perp reads its whole stack
+from the `perp` block. The `NEXT_PUBLIC_*` envs below feed deposits, withdrawals, the legacy rows
+and account resolution, and must name the same stack. `scripts/check-market-stack.mjs` runs before
+every build and fails a Vercel production build whose envs disagree with the venue, since a
+half-flipped deployment would deposit into one escrow and trade another.
+
+| Env | Mainnet address (live) | What it is |
 | --- | --- | --- |
 | `NEXT_PUBLIC_MATCHING_ADDRESS` | `0x9E90A9cD13d859Bd6a08168082FB1F6F7405F191` | Matching — EIP-712 domain, `DepositedSubAccount` source |
-| `NEXT_PUBLIC_TRADE_MODULE_ADDRESS` | `0x12423B366F6F07130961900bE00d05Ea63Acd071` | wrapped-quote TradeModule — the one module the venue's trades are submitted through |
+| `NEXT_PUBLIC_TRADE_MODULE_ADDRESS` | `0xDea968188598BA0E3F58A56C0fdfF338C74F699f` | the perp TradeModule — the one module both markets' trades go through; it trades any base asset the order names |
 | `NEXT_PUBLIC_WITHDRAWAL_MODULE_ADDRESS` | `0x0a10AE2f5D2482cE1e43bC309D430B8861C2b5aB` | WithdrawalModule — signed withdrawals from accounts Matching holds, submitted by the venue's executor |
 | `NEXT_PUBLIC_SUBACCOUNT_CREATOR_ADDRESS` | `0x568890A8D63Ba8a03b6eCbEedA1bD9f6ea014D5D` | periphery for `createAndDepositSubAccount` |
-| `NEXT_PUBLIC_USDCCNGN_MANAGER_ADDRESS` | `0x3195Bd7e02d93982bCF8b34DF5B941fFCaE1E49b` | StandardManager (SRM) — manager new trading accounts are created under |
+| `NEXT_PUBLIC_USDCCNGN_MANAGER_ADDRESS` | `0xDE0423D0a1E15536265C9513d2e0c10DAb5835D4` | the perp SRM — the manager every trading account is resolved and created under |
 | `NEXT_PUBLIC_SUBACCOUNTS_ADDRESS` | `0x7019244E25FA416e6Ca2ed2F3cA25277aef72843` | SubAccounts ERC-721 ledger |
-| `NEXT_PUBLIC_WRAPPED_USDC_ASSET_ADDRESS` | `0x364058aFF6f36E01505fB2Cc870f8B6BD4835e84` | wrapped USDC — the USDC deposit escrow and the module's `quoteAsset()` |
+| `NEXT_PUBLIC_WRAPPED_USDC_ASSET_ADDRESS` | `0xA74E49b4Ed7cb176bc02ef4D8a1A3240C9aD4272` | the perp CashAsset — the USDC deposit escrow and the module's `quoteAsset()`, holding real USDC |
+| `NEXT_PUBLIC_SPOT_ASSET_ADDRESS` / `NEXT_PUBLIC_CNGN_ASSET_ADDRESS` | `0x37c976bb5d4887a714ef19AF6B83e34fe2f37c98` | the perp cNGN escrow — the spot asset, the cNGN deposit escrow, and the collateral the SRM credits at its factor |
 | `NEXT_PUBLIC_USDC_TOKEN_ADDRESS` | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` | canonical Base USDC, 6 decimals |
 
-Each was verified against Base 8453 rather than copied: `Matching` emits the `ModuleAllowed` and
-`DepositedSubAccount` events this app decodes and answers `allowedModules` true for the trade module
-above, the creator answers to `createAndDepositSubAccount(address,uint256,address)` and points back
-at that same Matching and SubAccounts pair, and the module's `quoteAsset()` is the wrapped USDC
-escrow, whose `wrappedAsset()` returns the USDC token above.
+The perp's own asset (`0xC74EfC8B4808803dBCF439E76Fde076d56625b8E`) is read from the `perp`
+block only; no env names it.
 
-> **Spot moved to the SRM on 2026-09-10** (numofx/exchange `c779ed9`). The CashAsset-quoted module
-> `0x44813aD3…eD1c` is disallowed on Matching, and DeliverableFXManager `0xcE01f3D7…4d49` is
-> deprecated: its accounts can never settle a trade, and SubAccounts cannot change an account's
-> manager. The app therefore only resolves a wallet's trading account among accounts under the
-> configured manager, and creates a fresh one under the SRM otherwise. A deployment still carrying
-> the old addresses as env overrides fails at submit with `action_json.module … is not this venue's
-> trade module`. The CashAsset `0x6B232A21…6fc6` is not offered anywhere in the app, withdrawals included:
-> its ledger claims exceed the USDC it holds, so it cannot pay out.
+> **The code defaults lag the venue.** `MATCHING_STACK` in `lib/subaccount-deposit-config.ts`
+> and the defaults in `lib/spot-order-submission.ts` still name the stack spot ran on from
+> 2026-09-10 to 2026-10-04 (wrapped-quote TradeModule `0x12423B36…d071`, SRM `0x3195Bd7e…E49b`,
+> wrapped USDC `0x364058aF…5e84`, cNGN escrow `0x9d806fd0…9493`). Production is correct because
+> the Vercel project sets every env above, and the build check guards it; a deployment without
+> them builds against a stack whose module is disallowed on Matching and fails at submit with
+> `action_json.module … is not this venue's trade module`. Moving the defaults is open work.
+
+> **Legacy balances.** Accounts under the two retired stacks can withdraw but never trade again:
+> Matching has disallowed their modules, and SubAccounts cannot change an account's manager. With
+> `NEXT_PUBLIC_LEGACY_SPOT_MANAGER_ADDRESS`, `NEXT_PUBLIC_LEGACY_SPOT_USDC_ESCROW_ADDRESS` and
+> `NEXT_PUBLIC_LEGACY_SPOT_CNGN_ESCROW_ADDRESS` set (production: the 2026-09-10 stack above), the
+> spot Assets tab lists a wallet's account on that stack withdraw-only. The original CashAsset
+> `0x6B232A21…6fc6` and DeliverableFXManager `0xcE01f3D7…4d49` from before 2026-09-10 are offered
+> nowhere, withdrawals included: that ledger's claims exceed the USDC it holds, so it cannot pay out.
 
 > **The stack moves as one.** None of the Sepolia addresses have code on mainnet, so a half-flipped
 > config is not a degraded app — it builds transactions against contracts that do not exist.
@@ -210,16 +224,18 @@ Deposit flow address semantics (naming follows the risk-core deployment artifact
   `risk-core/deployments/<chainId>/WRAPPED_CNGN.json`, whose `base` is the escrow and `wrappedAsset` the token.
   The asset is the cNGN counterpart to `NEXT_PUBLIC_WRAPPED_USDC_ASSET_ADDRESS` — what a cNGN deposit approves
   and pays into, and the id labeling the cNGN leg of a subaccount balance. The token is the ERC-20 pulled from
-  the wallet, which the spot terminal's Assets tab reads. Defaults per chain:
+  the wallet, which the spot terminal's Assets tab reads. Per chain:
 
   | Chain | Asset (escrow) | Token (ERC-20) | Token decimals |
   | --- | --- | --- | --- |
-  | Base mainnet (8453) | `0x9d806fd040a719d27a8e5e77dc5ae0ed1e089493` | `0x46C85152bFe9f96829aA94755D9f915F9B10EF5F` | 6 |
+  | Base mainnet (8453), live | `0x37c976bb5d4887a714ef19AF6B83e34fe2f37c98` (env; the perp cNGN escrow) | `0x46C85152bFe9f96829aA94755D9f915F9B10EF5F` | 6 |
+  | Base mainnet (8453), code default | `0x9d806fd040a719d27a8e5e77dc5ae0ed1e089493` (the 2026-09-10 stack, now legacy withdraw-only) | `0x46C85152bFe9f96829aA94755D9f915F9B10EF5F` | 6 |
   | Base Sepolia (84532) | `0x1c08f30c204EE18EbBDc161c0f0864AFb826934b` | `0x6B232A2155Bd0C9bf741dB4cf8E7e8A0176A6fc6` | 18 |
 
-  Both escrows are verified on-chain: `wrappedAsset()` returns the paired token, `deposit(uint256,uint256)` is
-  present, and neither has a `wlEnabled()` gate. The mainnet escrow is also the spot market's `asset_address`
-  from `GET /v1/markets`, so cNGN deposits and cNGN orders settle against one contract.
+  Each escrow is verified on-chain: `wrappedAsset()` returns the paired token, `deposit(uint256,uint256)` is
+  present, and none has a `wlEnabled()` gate. The live mainnet escrow is also the spot market's `asset_address`
+  from `GET /v1/markets` and the perp's collateral escrow, so cNGN deposits, cNGN orders and cNGN margin all
+  settle against one contract; the build check enforces that the env matches it.
 
   > **Override the two together or not at all.** An escrow only accepts the exact ERC-20 it wraps. Base Sepolia
   > also hosts `0xe2387F04d3858e7Cb64Ef5Ed6617f9B2fcEEAfa2` — likewise named `cNGN`, but 6 decimals and not
