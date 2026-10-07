@@ -13,7 +13,7 @@ import { sideTone } from "@/lib/side-tone";
 import { getMarketFill, SPOT_MARKET_SLIPPAGE } from "@/lib/spot-market";
 import { getCngnTokenAddress, getUsdcTokenAddress } from "@/lib/subaccount-deposit-config";
 import { formatCompactUsd } from "@/lib/ticker-stats";
-import type { OrderBookLevel } from "@/lib/trading.types";
+import type { ActivityRow, CellBadge, CellTone, OrderBookLevel } from "@/lib/trading.types";
 import type { WithdrawableAsset } from "@/lib/withdrawable-assets";
 
 /** The `perp` object markets-service serves on `/v1/markets` for the perpetual. */
@@ -632,37 +632,94 @@ export function perpSideLabel(uiSide: "long" | "short") {
 
 const CNGN_CELL = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 
+function signedDollars(value: number) {
+  return `${signOf(value)}$${USD_CELL.format(Math.abs(value))}`;
+}
+
+function pnlTone(value: number): CellTone | undefined {
+  if (value === 0) {
+    return undefined;
+  }
+  return value > 0 ? "positive" : "negative";
+}
+
 /**
- * The Positions tab: side, the cNGN size with its USDC value at the index beside it, mark and
- * liquidation prices in USDC per cNGN, PnL in USDC.
+ * The Positions tab, one row per position: the market with its side and the account's leverage
+ * as pills, the cNGN size in the side's colour, the value at the index, mark and liquidation
+ * prices, the initial margin the position uses (marked Cross, since the whole account backs it)
+ * and the unrealized PnL with its share of the value. The trailing column holds Close, which
+ * the terminal renders; the rows carry no cell for it.
+ *
+ * No entry price: the SRM marks positions to market and keeps none on chain, so the column could
+ * only be invented. No funding or TP/SL columns either: the venue reports no per-position funding
+ * and takes no trigger orders. The leverage pill is the position's value over the margin the SRM
+ * credits the account (its surplus plus what every open position uses), the same count the
+ * ticket's Position Leverage shows.
  */
-export function buildPerpPositionsView(positions: PerpPosition[], label: string) {
+export function buildPerpPositionsView(
+  positions: PerpPosition[],
+  label: string,
+  context: { account: PerpAccountMargin | null; state: PerpState | null } = {
+    account: null,
+    state: null,
+  }
+) {
+  const imRate = context.state?.initialMarginRate ?? null;
+  const totalNotional = positions.reduce((sum, position) => sum + position.notionalUsd, 0);
+  const equity =
+    context.account !== null && imRate !== null
+      ? context.account.initialMarginSurplus + totalNotional * imRate
+      : null;
   return {
     columns: PERP_POSITIONS_COLUMNS,
-    rows: positions.map((position) => ({
-      tones: { 1: sideTone(perpOrderUiSide(position.uiSide)) },
-      cells: [
-        label,
-        perpSideLabel(position.uiSide),
-        `${CNGN_CELL.format(position.uiSize)} cNGN`,
-        `${USD_CELL.format(position.notionalUsd)} USDC`,
-        formatPrice(position.markPrice),
-        formatPrice(position.liquidationPrice),
-        signedUsd(position.unrealizedPnl),
-      ],
-    })),
+    rows: positions.map((position): ActivityRow => {
+      const side = sideTone(perpOrderUiSide(position.uiSide));
+      const leverage =
+        equity !== null && equity > 0 ? formatLeverage(position.notionalUsd / equity) : null;
+      const pnlShare =
+        position.notionalUsd > 0 ? (position.unrealizedPnl / position.notionalUsd) * 100 : null;
+      const marginUsed = imRate === null ? null : position.notionalUsd * imRate;
+      const pnl = pnlTone(position.unrealizedPnl);
+      const details: Record<number, string> = { 5: "Cross" };
+      if (pnlShare !== null) {
+        details[6] = `(${signOf(pnlShare)}${pnlShare.toFixed(2)}%)`;
+      }
+      const tones: Record<number, CellTone> = { 1: side };
+      if (pnl !== undefined) {
+        tones[6] = pnl;
+      }
+      const badges: CellBadge[] = [{ label: perpSideLabel(position.uiSide), tone: side }];
+      if (leverage !== null) {
+        badges.push({ label: leverage });
+      }
+      return {
+        badges: { 0: badges },
+        cells: [
+          label,
+          `${CNGN_CELL.format(position.uiSize)} cNGN`,
+          `$${USD_CELL.format(position.notionalUsd)}`,
+          formatDollarPrice(position.markPrice),
+          formatDollarPrice(position.liquidationPrice),
+          marginUsed === null ? "—" : `$${USD_CELL.format(marginUsed)}`,
+          signedDollars(position.unrealizedPnl),
+        ],
+        details,
+        tones,
+      };
+    }),
   };
 }
 
 /** The Positions tab's columns, shared with the empty view the terminal renders before data. */
 export const PERP_POSITIONS_COLUMNS = [
-  "Instrument",
-  "Side",
+  "Market",
   "Size",
-  "Value",
-  "Mark price",
-  "Liq. price",
-  "Unrealized PnL",
+  "Position Value",
+  "Mark Price",
+  "Liq Price",
+  "Margin",
+  "uPnL",
+  "",
 ];
 
 const PERCENT_CELL = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0, style: "percent" });

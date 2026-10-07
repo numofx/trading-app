@@ -127,8 +127,19 @@ export type DeliveryTerm = {
 /** How a cell is tinted: the buy colour for a buy of USDC (or a good outcome), the sell colour for a sell. */
 export type CellTone = "positive" | "negative";
 
+/** A small pill after a cell's text: a position's side, its leverage. */
+export type CellBadge = {
+  label: string;
+  /** Coloured like a side; a badge without one is neutral. */
+  tone?: CellTone;
+};
+
 export type ActivityRow = {
   cells: string[];
+  /** Pills after a cell's text, by cell index. */
+  badges?: Record<number, CellBadge[]>;
+  /** A muted second line under a cell, by cell index: a PnL's percentage, a margin's mode. */
+  details?: Record<number, string>;
   /**
    * Tint by cell index. One rule everywhere a side is shown: the venue's buy of USDC (the perp's
    * long) takes the buy colour, its sell the sell colour, whatever words the cell carries.

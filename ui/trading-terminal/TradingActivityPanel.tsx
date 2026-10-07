@@ -107,8 +107,10 @@ export function TradingActivityPanel({
                         className={cn(
                           "text-panel-text",
                           cellIndex === 0 && "font-medium text-panel-text-active",
-                          // A side cell stays on one line, whatever words it carries.
-                          activityView.columns[cellIndex] === "Side" && "whitespace-nowrap",
+                          // A side cell, or one carrying pills, stays on one line whatever it says.
+                          (activityView.columns[cellIndex] === "Side" ||
+                            row.badges?.[cellIndex] !== undefined) &&
+                            "whitespace-nowrap",
                           isMetricColumn(activityView.columns[cellIndex] ?? "") && "text-right",
                           cell.startsWith("-") && "text-sell",
                           row.tones?.[cellIndex] === "positive" && "font-medium text-buy",
@@ -119,6 +121,25 @@ export function TradingActivityPanel({
                         title={row.titles?.[cellIndex]}
                       >
                         {cell}
+                        {row.badges?.[cellIndex]?.map((badge) => (
+                          <span
+                            className={cn(
+                              "ml-1.5 inline-flex items-center rounded-sm px-1.5 py-0.5 align-middle font-medium text-[10px] leading-none",
+                              badge.tone === "positive" && "bg-buy/15 text-buy",
+                              badge.tone === "negative" && "bg-sell/15 text-sell",
+                              badge.tone === undefined &&
+                                "bg-input-bg text-panel-text ring-1 ring-panel-border"
+                            )}
+                            key={badge.label}
+                          >
+                            {badge.label}
+                          </span>
+                        ))}
+                        {row.details?.[cellIndex] === undefined ? null : (
+                          <span className="block font-normal text-[11px] text-panel-text-muted">
+                            {row.details[cellIndex]}
+                          </span>
+                        )}
                       </span>
                     ))}
                     {rowAction ? <span className="text-right">{rowAction(rowIndex)}</span> : null}

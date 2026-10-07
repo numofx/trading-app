@@ -1,10 +1,12 @@
 "use client";
 
 import { formatBalance } from "@/lib/account-balance-display";
-import { parsePerpState } from "@/lib/perp-market";
+import { buildPerpPositionsView, parsePerpState } from "@/lib/perp-market";
 import type { PerpAccountMargin, PerpPosition } from "@/lib/perp-market.types";
+import { PERP_BOTTOM_TABS, PERP_MARKET_LABEL } from "@/lib/perp-terminal-config";
 import { AccountSummary } from "@/ui/trading-terminal/order-form/AccountSummary";
 import { PerpOrderFormPanel } from "@/ui/trading-terminal/PerpOrderFormPanel";
+import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
 
 /** USDC per cNGN, about ₦1,388.89 per USDC. */
 const FIXTURE_PRICE = 1 / 1388.89;
@@ -56,7 +58,31 @@ const FIXTURE_POSITION: PerpPosition = {
 
 export function PerpLayoutFixture() {
   return (
-    <main className="flex min-h-screen flex-col bg-terminal-bg p-3 text-foreground">
+    <main className="flex min-h-screen flex-col gap-3 bg-terminal-bg p-3 text-foreground">
+      {/* The Positions tab with the fixture's position, as the terminal lays it out. */}
+      <div className="h-[220px] w-full">
+        <TradingActivityPanel
+          activityView={buildPerpPositionsView([FIXTURE_POSITION], PERP_MARKET_LABEL, {
+            account: FIXTURE_ACCOUNT,
+            state: FIXTURE_STATE,
+          })}
+          footerLinks={[]}
+          isSignedIn
+          onTabSelect={() => undefined}
+          rowAction={() => (
+            <button
+              className="cursor-pointer rounded-sm bg-input-bg px-2 py-1 font-medium text-[11px] text-panel-text ring-1 ring-panel-border"
+              type="button"
+            >
+              Close
+            </button>
+          )}
+          selectedTab="positions"
+          tabs={PERP_BOTTOM_TABS.map((tab) =>
+            tab.id === "positions" ? { ...tab, label: `${tab.label} (1)` } : tab
+          )}
+        />
+      </div>
       <div className="mx-auto flex w-full max-w-[340px] flex-col gap-2">
         <PerpOrderFormPanel
           account={FIXTURE_ACCOUNT}

@@ -58,7 +58,7 @@ import {
 } from "@/lib/spot-order-submission";
 import { FOOTER_LINKS, SPOT_TIMEFRAME_OPTIONS } from "@/lib/spot-terminal-config";
 import { get24hStats, getVenueLastPrice } from "@/lib/ticker-stats";
-import type { ActivityView } from "@/lib/trading.types";
+import type { ActivityTab, ActivityView } from "@/lib/trading.types";
 import type { WithdrawableAsset } from "@/lib/withdrawable-assets";
 import { SmartImage } from "@/ui/SmartImage";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
@@ -331,6 +331,24 @@ function listedCollateralOf(stack: PerpStack | null): PerpCollateralAsset[] {
   return stack === null ? [] : stack.collateralAssets;
 }
 
+/**
+ * "Positions (1)": the tabs with the wallet's own counts. Plain labels without a wallet, since
+ * the counts would be of an account that does not exist yet.
+ */
+function withCounts(
+  tabs: typeof PERP_BOTTOM_TABS,
+  hasWallet: boolean,
+  counts: Partial<Record<PerpBottomTab, number>>
+): ActivityTab[] {
+  if (!hasWallet) {
+    return [...tabs];
+  }
+  return tabs.map((tab) => {
+    const count = counts[tab.id as PerpBottomTab];
+    return count === undefined ? tab : { ...tab, label: `${tab.label} (${count})` };
+  });
+}
+
 type ActivityInputs = {
   account: PerpAccountMargin | null;
   bottomTab: PerpBottomTab;
@@ -346,7 +364,10 @@ function buildActivityView(inputs: ActivityInputs): ActivityView {
     return PERP_ACTIVITY_VIEWS[inputs.bottomTab];
   }
   if (inputs.bottomTab === "positions") {
-    return buildPerpPositionsView(inputs.positions, PERP_MARKET_LABEL);
+    return buildPerpPositionsView(inputs.positions, PERP_MARKET_LABEL, {
+      account: inputs.account,
+      state: inputs.market.state,
+    });
   }
   if (inputs.bottomTab === "order-history" || inputs.bottomTab === "trade-history") {
     return perpActivityView(
@@ -1109,7 +1130,10 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
                 tradeHistoryRowAction: signedHistory.rowAction,
               })}
               selectedTab={bottomTab}
-              tabs={PERP_BOTTOM_TABS}
+              tabs={withCounts(PERP_BOTTOM_TABS, primaryWallet !== null, {
+                "open-orders": ownedOpenOrders.length,
+                positions: perpAccount.positions.length,
+              })}
             />
           </div>
         </div>
