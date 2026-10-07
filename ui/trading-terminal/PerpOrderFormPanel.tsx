@@ -720,23 +720,37 @@ export function PerpOrderFormPanel({
         value={margin}
       />
 
-      {/*
-       * Without a position there is nothing to reduce and the venue would refuse the order, so
-       * the switch is shown disabled and says why rather than letting a trader arm it.
-       */}
-      <CheckboxRow
-        checked={reduceOnly && hasPosition}
-        disabled={!hasPosition}
-        id="perp-reduce-only"
-        label="Reduce only"
-        note={hasPosition ? "never opens or flips the position" : "no open position"}
-        onChange={edited(setReduceOnly)}
-        tooltip={
-          hasPosition
-            ? "The venue clamps this order to your open position; it can never open or flip one"
-            : "Needs an open position to reduce"
-        }
-      />
+      <div className="space-y-2">
+        {/*
+         * Without a position there is nothing to reduce and the venue would refuse the order, so
+         * the switch is shown disabled and says why rather than letting a trader arm it.
+         */}
+        <CheckboxRow
+          checked={reduceOnly && hasPosition}
+          disabled={!hasPosition}
+          id="perp-reduce-only"
+          label="Reduce Only"
+          onChange={edited(setReduceOnly)}
+          tooltip={
+            hasPosition
+              ? "The venue clamps this order to your open position; it can never open or flip one"
+              : "Needs an open position to reduce"
+          }
+        />
+        {/*
+         * The venue takes market and limit orders only; it has no trigger orders to attach a take
+         * profit or stop loss to. Shown disabled rather than hidden so a trader can see the switch
+         * exists and read why it is off, instead of arming something nothing would execute.
+         */}
+        <CheckboxRow
+          checked={false}
+          disabled
+          id="perp-tp-sl"
+          label="Take Profit / Stop Loss"
+          onChange={() => undefined}
+          tooltip="Not available yet: the venue takes market and limit orders only, with no trigger orders to attach a take profit or stop loss to"
+        />
+      </div>
     </OrderFormShell>
   );
 }
