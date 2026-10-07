@@ -101,8 +101,6 @@ export type PerpCollateralBalance = {
 /** One figure in the perp terminal's header: a label, an optional hint, the value and its colour. */
 export type PerpHeaderMetric = {
   label: string;
-  /** A muted figure after the label, e.g. the funding rate annualised. */
-  labelSuffix?: string;
   tooltip?: string;
   value: string;
   /** Coloured like a rise or a fall; null for a neutral figure. */

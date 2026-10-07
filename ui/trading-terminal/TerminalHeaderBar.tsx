@@ -37,7 +37,6 @@ function HeaderMetric({
   children,
   className,
   label,
-  labelSuffix,
   secondary,
   tooltip,
 }: {
@@ -45,8 +44,6 @@ function HeaderMetric({
   /** Lets a metric yield its place at narrower widths; merged over the display class. */
   className?: string;
   label: string;
-  /** A muted figure after the label, outside its underline. */
-  labelSuffix?: string;
   /** A muted line under the value: the same figure read another way. */
   secondary?: string;
   /** A hint on the label, dotted-underlined like the ticket's. */
@@ -54,14 +51,14 @@ function HeaderMetric({
 }) {
   return (
     <div className={cn("flex flex-col gap-1", className)}>
-      <span className="flex items-baseline gap-1 whitespace-nowrap text-[9px] text-panel-text-muted">
-        <span
-          className={cn(tooltip && "cursor-help underline decoration-dotted underline-offset-4")}
-          title={tooltip}
-        >
-          {label}
-        </span>
-        {labelSuffix ? <span>{labelSuffix}</span> : null}
+      <span
+        className={cn(
+          "whitespace-nowrap text-[9px] text-panel-text-muted",
+          tooltip && "cursor-help underline decoration-dotted underline-offset-4"
+        )}
+        title={tooltip}
+      >
+        {label}
       </span>
       <span className="flex items-baseline gap-1.5 whitespace-nowrap font-medium text-[11px] text-panel-text-active">
         {children}
@@ -83,8 +80,6 @@ function HeaderMetric({
  */
 export type HeaderMetricItem = {
   label: string;
-  /** A muted figure after the label. */
-  labelSuffix?: string;
   tooltip?: string;
   value: string;
   tone: "up" | "down" | null;
@@ -219,7 +214,6 @@ export function TerminalHeaderBar({
               className="shrink-0"
               key={metric.label}
               label={metric.label}
-              labelSuffix={metric.labelSuffix}
               tooltip={metric.tooltip}
             >
               <span

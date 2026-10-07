@@ -1,5 +1,5 @@
 import { getAddress, isAddress, parseUnits } from "viem";
-import { formatNairaPerUsdc, formatPrice, PRICE_DECIMALS } from "@/lib/market-formatting";
+import { formatPrice, PRICE_DECIMALS } from "@/lib/market-formatting";
 import type {
   PerpAccountMargin,
   PerpCollateralAsset,
@@ -624,8 +624,6 @@ export function buildPerpHeaderMetrics({
   return [
     {
       label: "Mark",
-      // The same price the other way up, for traders who think in naira per dollar.
-      labelSuffix: state === null ? undefined : formatNairaPerUsdc(state.markPrice),
       tone: null,
       tooltip: "The price positions are valued and liquidated at, from the venue's chain state",
       value: formatPrice(state?.markPrice ?? null),
