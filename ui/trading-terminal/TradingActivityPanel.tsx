@@ -61,13 +61,11 @@ export function TradingActivityPanel({
   tabs: ActivityTab[];
   onTabSelect: (tabId: string) => void;
 }) {
-  const minimumVisibleRows = 3;
   // Account rows read as the viewer's own balances, orders, and trades. A signed-out visitor has
   // no account for them to belong to, so they get the empty state instead.
   const rows = ACCOUNT_SCOPED_TABS.has(selectedTab) && !isSignedIn ? [] : activityView.rows;
   const emptyStateCopy = getEmptyStateCopy(selectedTab, isSignedIn, emptyState);
   const isEmpty = rows.length === 0;
-  const fillerRowCount = Math.max(0, minimumVisibleRows - rows.length);
   const isMetricColumn = (column: string) =>
     column.includes("PnL") || column.includes("%") || column.includes("Return");
   // Columns hold a readable floor instead of compressing to nothing: at six columns on a phone an
@@ -79,7 +77,7 @@ export function TradingActivityPanel({
     <section className="flex h-full min-h-0 flex-col overflow-hidden bg-panel-bg/72 shadow-[0_24px_80px_var(--panel-shadow)] ring-1 ring-panel-ring transition-colors duration-300">
       <PanelTabs className="px-4" onSelect={onTabSelect} selected={selectedTab} tabs={tabs} />
 
-      <div className="min-h-0 flex-1 overflow-auto px-4 pt-2 pb-4">
+      <div className="min-h-0 flex-1 overflow-auto px-4 pt-1.5 pb-3">
         {/* Header and rows share this wrapper so they scroll sideways together and stay aligned. */}
         <div className="flex min-w-max flex-col">
           <div
@@ -94,11 +92,11 @@ export function TradingActivityPanel({
           </div>
 
           {isEmpty ? null : (
-            <div className="mt-2 flex min-h-[96px] flex-1 flex-col overflow-hidden rounded-sm bg-input-bg/50">
-              <div className="flex flex-1 flex-col">
+            <div className="mt-1.5 flex flex-col overflow-hidden rounded-sm bg-input-bg/50">
+              <div className="flex flex-col">
                 {rows.map((row, rowIndex) => (
                   <div
-                    className="grid min-h-10 items-center gap-2 border-panel-border border-b px-3 py-1.5 text-[12px] last:border-b-0"
+                    className="grid min-h-8 items-center gap-2 border-panel-border border-b px-3 py-1 text-[12px] last:border-b-0"
                     key={`${row.cells[0]}-${rowIndex}`}
                     style={{ gridTemplateColumns }}
                   >
@@ -136,33 +134,13 @@ export function TradingActivityPanel({
                           </span>
                         ))}
                         {row.details?.[cellIndex] === undefined ? null : (
-                          <span className="block font-normal text-[11px] text-panel-text-muted">
+                          <span className="ml-1 font-normal text-[11px] text-panel-text-muted">
                             {row.details[cellIndex]}
                           </span>
                         )}
                       </span>
                     ))}
                     {rowAction ? <span className="text-right">{rowAction(rowIndex)}</span> : null}
-                  </div>
-                ))}
-
-                {Array.from({ length: fillerRowCount }, (_, rowIndex) => (
-                  <div
-                    className="grid min-h-10 items-center gap-2 border-panel-border border-b px-3 py-1.5"
-                    key={`filler-${rowIndex}`}
-                    style={{ gridTemplateColumns }}
-                  >
-                    {activityView.columns.map((column, columnIndex) => (
-                      <span
-                        className={cn(
-                          "block h-px w-full rounded-full bg-panel-border",
-                          isMetricColumn(column) && "ml-auto max-w-[72px]",
-                          columnIndex === 0 && "max-w-[160px]",
-                          columnIndex !== 0 && !isMetricColumn(column) && "max-w-[110px]"
-                        )}
-                        key={`filler-${rowIndex}-${column}`}
-                      />
-                    ))}
                   </div>
                 ))}
               </div>

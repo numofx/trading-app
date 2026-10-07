@@ -646,8 +646,8 @@ function pnlTone(value: number): CellTone | undefined {
 /**
  * The Positions tab, one row per position: the market with its side and the account's leverage
  * as pills, the cNGN size in the side's colour, the value at the index, mark and liquidation
- * prices, the initial margin the position uses (marked Cross, since the whole account backs it)
- * and the unrealized PnL with its share of the value. The trailing column holds Close, which
+ * prices, the initial margin the position uses (marked Cross beside it, since the whole account
+ * backs it) and the unrealized PnL with its share of the value beside it. The trailing column holds Close, which
  * the terminal renders; the rows carry no cell for it.
  *
  * No entry price: the SRM marks positions to market and keeps none on chain, so the column could
