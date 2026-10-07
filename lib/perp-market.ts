@@ -769,7 +769,7 @@ function formatOpenInterest(state: PerpState | null) {
     return "—";
   }
   const compact = formatCompactUsd(state.openInterestUsd);
-  return compact === "—" ? "$0" : compact;
+  return compact === "—" ? "$0.00" : compact;
 }
 
 function toneOf(value: number | null): PerpHeaderMetric["tone"] {

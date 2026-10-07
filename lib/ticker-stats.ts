@@ -1,17 +1,21 @@
 import type { Candle, Stats24h, TradePrint } from "@/lib/trading.types";
 
 export function formatCompactVolume(value: number) {
-  const compact = formatCompactNumber(value);
+  const compact = formatCompactNumber(value, 0);
   return compact === "—" ? compact : `${compact} USDC`;
 }
 
-/** The same compact figure read as dollars, where the unit goes in front: "$7.2K"; "—" for none. */
+/**
+ * The same compact figure read as dollars, where the unit goes in front: "$73.42", "$7.2K"; "—"
+ * for none. Under a thousand it keeps its cents, as a dollar figure is expected to.
+ */
 export function formatCompactUsd(value: number) {
-  const compact = formatCompactNumber(value);
+  const compact = formatCompactNumber(value, 2);
   return compact === "—" ? compact : `$${compact}`;
 }
 
-function formatCompactNumber(value: number) {
+/** @param smallDigits decimals shown under a thousand; K and M always take one. */
+function formatCompactNumber(value: number, smallDigits: number) {
   if (!Number.isFinite(value) || value <= 0) {
     return "—";
   }
@@ -24,7 +28,10 @@ function formatCompactNumber(value: number) {
     return `${(value / 1000).toFixed(1)}K`;
   }
 
-  return Math.round(value).toLocaleString("en-US");
+  return value.toLocaleString("en-US", {
+    maximumFractionDigits: smallDigits,
+    minimumFractionDigits: smallDigits,
+  });
 }
 
 /**
