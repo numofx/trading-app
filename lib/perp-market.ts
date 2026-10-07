@@ -598,9 +598,9 @@ function toneOf(value: number | null): PerpHeaderMetric["tone"] {
 
 /**
  * The perp header's figures, in the order a perp trader reads them: mark and index from the chain,
- * the day's move against the live price, volume, open interest and the hourly funding rate. Every
- * figure is the venue's own; a missing one is a dash. There is no market cap: a stablecoin FX
- * perp has no supply to value. There is no funding countdown either: the PerpAsset contract
+ * the day's move against the live price, volume, open interest, the hourly funding rate and that
+ * rate annualised. Every figure is the venue's own; a missing one is a dash. There is no market
+ * cap: a stablecoin FX perp has no supply to value. There is no funding countdown either: the PerpAsset contract
  * accrues funding continuously (`aggregatedFunding += rate × elapsed / 1 hour` on every touch),
  * so there is no settlement moment to count down to, and a timer would be fiction.
  */
@@ -653,14 +653,19 @@ export function buildPerpHeaderMetrics({
     },
     {
       label: "1h Funding",
-      // Annualised beside the label rather than in the value: the value row is what sets the
-      // metric's width, and six metrics have to share the row with the account buttons.
-      labelSuffix:
-        funding === null ? undefined : `${signedPercent(funding * HOURS_PER_YEAR * 100, 1)} APR`,
       tone: toneOf(funding),
       tooltip:
-        "Hourly, as the long side sees it: positive means longs (long cNGN) pay shorts. Beside it, the same rate annualised (hourly × 24 × 365, not compounded). It accrues every second; there is no funding settlement to count down to.",
+        "Hourly, as the long side sees it: positive means longs (long cNGN) pay shorts. It accrues every second; there is no funding settlement to count down to.",
       value: funding === null ? "—" : signedPercent(funding * 100, 4),
+    },
+    {
+      // The same rate annualised, as its own figure: hourly × 24 × 365, not compounded, with the
+      // same sign and colour as the hourly rate it is read from.
+      label: "APR",
+      tone: toneOf(funding),
+      tooltip:
+        "The hourly funding rate annualised (hourly × 24 × 365, not compounded), as the long side sees it",
+      value: funding === null ? "—" : signedPercent(funding * HOURS_PER_YEAR * 100, 1),
     },
   ];
 }

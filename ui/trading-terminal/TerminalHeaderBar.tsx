@@ -54,7 +54,7 @@ function HeaderMetric({
 }) {
   return (
     <div className={cn("flex flex-col gap-1", className)}>
-      <span className="flex items-baseline gap-1.5 whitespace-nowrap text-[10px] text-panel-text-muted">
+      <span className="flex items-baseline gap-1 whitespace-nowrap text-[9px] text-panel-text-muted">
         <span
           className={cn(tooltip && "cursor-help underline decoration-dotted underline-offset-4")}
           title={tooltip}
@@ -63,11 +63,11 @@ function HeaderMetric({
         </span>
         {labelSuffix ? <span>{labelSuffix}</span> : null}
       </span>
-      <span className="flex items-baseline gap-1.5 whitespace-nowrap font-medium text-[13px] text-panel-text-active">
+      <span className="flex items-baseline gap-1.5 whitespace-nowrap font-medium text-[11px] text-panel-text-active">
         {children}
       </span>
       {secondary === undefined ? null : (
-        <span className="whitespace-nowrap text-[11px] text-panel-text-muted">{secondary}</span>
+        <span className="whitespace-nowrap text-[10px] text-panel-text-muted">{secondary}</span>
       )}
     </div>
   );
@@ -180,7 +180,7 @@ export function TerminalHeaderBar({
         <div className="hidden min-w-0 items-center gap-6 overflow-hidden lg:flex">
           <HeaderMetric label="Price" secondary={formatNairaPerUsdc(price)}>
             {formatPrice(price)}
-            <span className={cn("text-[11px]", getChangeClassName(changePercent24h))}>
+            <span className={cn("text-[10px]", getChangeClassName(changePercent24h))}>
               {formatChangePercent(changePercent24h)}
             </span>
           </HeaderMetric>
@@ -213,7 +213,7 @@ export function TerminalHeaderBar({
          * row's height with a gap tall enough that nothing of a second row shows. Breakpoints
          * could not say how many fit, since the wallet button's width is not knowable in advance.
          */
-        <div className="hidden max-h-10 min-w-0 flex-wrap content-start gap-x-4 gap-y-10 overflow-hidden lg:flex">
+        <div className="hidden max-h-9 min-w-0 flex-wrap content-start gap-x-4 gap-y-10 overflow-hidden lg:flex">
           {metrics.map((metric) => (
             <HeaderMetric
               className="shrink-0"
