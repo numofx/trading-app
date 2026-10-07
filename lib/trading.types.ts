@@ -138,6 +138,8 @@ export type ActivityRow = {
   cells: string[];
   /** Pills after a cell's text, by cell index. */
   badges?: Record<number, CellBadge[]>;
+  /** A small image before a cell's text, by cell index: a token's mark on its balance row. */
+  icons?: Record<number, string>;
   /** Muted text after a cell's figure, by cell index: a PnL's percentage, a margin's mode. */
   details?: Record<number, string>;
   /**

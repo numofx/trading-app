@@ -13,6 +13,7 @@ import { sideTone } from "@/lib/side-tone";
 import { getMarketFill, SPOT_MARKET_SLIPPAGE } from "@/lib/spot-market";
 import { getCngnTokenAddress, getUsdcTokenAddress } from "@/lib/subaccount-deposit-config";
 import { formatCompactUsd } from "@/lib/ticker-stats";
+import { tokenIcon } from "@/lib/token-icons";
 import type {
   ActivityRow,
   ActivityView,
@@ -726,60 +727,81 @@ export const PERP_POSITIONS_COLUMNS = [
 
 const PERCENT_CELL = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0, style: "percent" });
 
-/**
- * The Balances tab's columns. The trailing column holds each row's Deposit and Withdraw.
- */
-export const PERP_BALANCES_COLUMNS = ["Asset", "Balance", "Value", "Counts as Margin", ""];
+/** The Balances tab's columns. The trailing column holds each row's Deposit and Withdraw. */
+export const PERP_BALANCES_COLUMNS = [
+  "Asset",
+  "Amount",
+  "Price",
+  "Notional Value",
+  "Collateral Weight",
+  "Collateral Value",
+  "",
+];
+
+const AMOUNT_CELL = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 2,
+  minimumFractionDigits: 2,
+});
 
 /**
- * The Balances tab: one row per asset the account's margin is made of, with the balance, its
- * value in dollars and what the SRM credits as margin. Cash first, worth and credited at face
- * value; then each collateral asset held, at its index value and its margin factor; then, at
- * zero, every collateral asset the venue accepts that the account does not hold, so a depositor
- * sees where it would go. The row order is what the terminal's Withdraw indexes by: cash is
- * ledger row 0, the held collateral rows 1.., and the unheld rows have nothing to withdraw.
+ * The Balances tab: one row per asset the account's margin is made of, each with its mark, the
+ * amount held, its price in dollars, the notional value, and the share of that value the SRM
+ * credits as margin with the value credited. Cash first, at $1.00 and credited in full; then each
+ * collateral asset held, at the index price the venue valued it at and its margin factor; then,
+ * at zero, every collateral asset the venue accepts that the account does not hold, so a
+ * depositor sees where it would go. The row order is what the terminal's Withdraw indexes by:
+ * cash is ledger row 0, the held collateral rows 1.., and the unheld rows have nothing to
+ * withdraw.
  */
 export function buildPerpBalancesView(
   account: PerpAccountMargin | null,
-  listed: PerpCollateralAsset[] = []
+  listed: PerpCollateralAsset[] = [],
+  context: { indexPrice: number | null } = { indexPrice: null }
 ): ActivityView {
   const held = account?.collateral ?? [];
   const unheld = listed.filter(
     (asset) => !held.some((row) => row.escrow.toLowerCase() === asset.escrow.toLowerCase())
   );
   const dollars = (value: number) => `$${USD_CELL.format(value)}`;
+  const withIcon = (symbol: string, cells: string[]): ActivityRow => {
+    const icon = tokenIcon(symbol);
+    return icon === undefined ? { cells } : { cells, icons: { 0: icon } };
+  };
   return {
     columns: [...PERP_BALANCES_COLUMNS],
     rows:
       account === null
         ? []
         : [
-            {
-              cells: [
-                "USDC",
-                `${USD_CELL.format(account.cash)} USDC`,
-                dollars(account.cash),
-                `${dollars(account.cash)} (100%)`,
-              ],
-            },
-            ...held.map((row) => ({
-              cells: [
+            withIcon("USDC", [
+              "USDC",
+              AMOUNT_CELL.format(account.cash),
+              "$1.00",
+              dollars(account.cash),
+              "100%",
+              dollars(account.cash),
+            ]),
+            ...held.map((row) =>
+              withIcon(row.symbol, [
                 row.symbol,
-                `${USD_CELL.format(row.balance)} ${row.symbol}`,
+                AMOUNT_CELL.format(row.balance),
+                // The index the venue valued the balance at, read back from the two figures.
+                row.balance > 0 ? formatDollarPrice(row.valueUsd / row.balance) : "—",
                 dollars(row.valueUsd),
-                `${dollars(row.marginValueUsd)} (${PERCENT_CELL.format(
-                  row.valueUsd > 0 ? row.marginValueUsd / row.valueUsd : 0
-                )})`,
-              ],
-            })),
-            ...unheld.map((asset) => ({
-              cells: [
+                PERCENT_CELL.format(row.valueUsd > 0 ? row.marginValueUsd / row.valueUsd : 0),
+                dollars(row.marginValueUsd),
+              ])
+            ),
+            ...unheld.map((asset) =>
+              withIcon(asset.symbol, [
                 asset.symbol,
-                `0.00 ${asset.symbol}`,
+                "0.00",
+                formatDollarPrice(context.indexPrice),
                 "$0.00",
-                `$0.00 (${PERCENT_CELL.format(asset.marginFactor)})`,
-              ],
-            })),
+                PERCENT_CELL.format(asset.marginFactor),
+                "$0.00",
+              ])
+            ),
           ],
   };
 }

@@ -376,7 +376,9 @@ function buildActivityView(inputs: ActivityInputs): ActivityView {
     });
   }
   if (inputs.bottomTab === "balances") {
-    return buildPerpBalancesView(inputs.account, listedCollateralOf(inputs.market.stack));
+    return buildPerpBalancesView(inputs.account, listedCollateralOf(inputs.market.stack), {
+      indexPrice: inputs.market.state.indexPrice,
+    });
   }
   if (inputs.bottomTab === "funding-history") {
     return PERP_ACTIVITY_VIEWS["funding-history"];

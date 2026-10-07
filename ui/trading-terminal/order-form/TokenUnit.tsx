@@ -3,14 +3,10 @@
 import { Menu } from "@base-ui/react/menu";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { TOKEN_ICONS } from "@/lib/token-icons";
 import { SmartImage } from "@/ui/SmartImage";
 
 export type TokenSymbol = "cNGN" | "USDC";
-
-const TOKEN_ICONS = {
-  cNGN: "/tokens/cngn.svg",
-  USDC: "/tokens/usdc.svg",
-} satisfies Record<TokenSymbol, string>;
 
 /** A token mark and ticker, set beside the input it denominates. */
 export function TokenUnit({ symbol }: { symbol: TokenSymbol }) {

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import type { ActivityTab, ActivityView } from "@/lib/trading.types";
+import { SmartImage } from "@/ui/SmartImage";
 import { SmartLink } from "@/ui/SmartLink";
 import { PanelTabs } from "@/ui/trading-terminal/PanelTabs";
 
@@ -142,6 +143,13 @@ export function TradingActivityPanel({
                       key={`${cell}-${cellIndex}`}
                       title={row.titles?.[cellIndex]}
                     >
+                      {row.icons?.[cellIndex] === undefined ? null : (
+                        <SmartImage<string>
+                          alt=""
+                          className="mr-1.5 inline-block size-4 animate-none rounded-full align-[-3px]"
+                          src={row.icons[cellIndex]}
+                        />
+                      )}
                       {cell}
                       {row.badges?.[cellIndex]?.map((badge) => (
                         <span
