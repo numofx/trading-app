@@ -1,6 +1,7 @@
 import { getAddress, parseAbiItem } from "viem";
 import { base } from "viem/chains";
 import { getAppChain } from "@/lib/base-public-client";
+import stackDefaults from "@/lib/matching-stack-defaults.json";
 import type { DepositAddresses, DepositCurrency } from "@/lib/subaccount-deposit.types";
 
 /**
@@ -12,44 +13,35 @@ import type { DepositAddresses, DepositCurrency } from "@/lib/subaccount-deposit
  */
 
 /**
- * The matching stack, per chain. These used to be single Sepolia constants, which made a chain
- * flip a silent misconfiguration: none of the Sepolia addresses have code on mainnet, so every
- * deposit and order would have been built against contracts that do not exist.
+ * The matching stack, per chain, from `matching-stack-defaults.json`. The JSON is shared with
+ * `scripts/check-market-stack.mjs`, which compares the resolved stack (env, else these defaults)
+ * against what the venue serves before every build, so a default that falls behind the venue
+ * fails the build rather than shipping. These used to be single Sepolia constants, which made a
+ * chain flip a silent misconfiguration: none of the Sepolia addresses have code on mainnet, so
+ * every deposit and order would have been built against contracts that do not exist.
  *
- * Every mainnet entry is verified on-chain (Base 8453):
+ * Mainnet is the unified stack spot and the perp share since the cutover on 2026-10-04, each
+ * entry read back from `GET /v1/markets` and the Base 8453 chain:
  * - `matching` emits the `DepositedSubAccount` / `ModuleAllowed` events this app decodes, and is
  *   the contract the venue's own trades are submitted to.
  * - `subaccountCreator` answers to `createAndDepositSubAccount(address,uint256,address)` and
- *   points back at that same matching and subaccounts pair; accounts 11 and 12 were minted
- *   through it.
- * - `manager` is the StandardManager (SRM) spot moved onto on 2026-09-10. The previous manager,
- *   DeliverableFXManager `0xcE01…4d49`, is deprecated: the settlement vault reverts
- *   `MW_UnknownManager` on its accounts, and SubAccounts has no way to change an account's manager.
- * - `tradeModule` is the wrapped-quote TradeModule, the only module Matching still allows and the
- *   one markets-service pins every order to. The CashAsset-quoted module `0x4481…eD1c` is disabled.
- * - `wrappedUsdcAsset` is that module's `quoteAsset()`: a plain WrappedERC20Asset over canonical
- *   Base USDC (6 decimals), token-backed 1:1 — not the CashAsset, whose accounting is corrupted.
+ *   points back at that same matching and subaccounts pair.
+ * - `manager` is the perp StandardManager (SRM): the one manager every trading account is resolved
+ *   and created under, for spot and the perp alike. The two it replaced can never trade again:
+ *   DeliverableFXManager `0xcE01…4d49` (settlement reverts `MW_UnknownManager`) and the spot SRM
+ *   `0x3195…E49b` of 2026-09-10 to 2026-10-04 (its module is disallowed), and SubAccounts has no
+ *   way to change an account's manager, so those balances leave by withdrawal only.
+ * - `tradeModule` is the perp TradeModule, the only module Matching allows and the one
+ *   markets-service pins every order, spot or perp, to; it trades any base asset the order names.
+ *   The CashAsset-quoted module `0x4481…eD1c` and the wrapped-quote module `0x1242…d071` are
+ *   both disallowed.
+ * - `wrappedUsdcAsset` is that module's `quoteAsset()`: the perp CashAsset, holding real USDC
+ *   (canonical Base USDC, 6 decimals) 1:1 — not the original CashAsset `0x6B23…6fc6`, whose
+ *   accounting is corrupted, nor the wrapped USDC `0x3640…5e84` of the 2026-09-10 stack.
+ * - `cngnAsset` / `cngnToken` are the cNGN escrow and the ERC-20 it wraps; see
+ *   `getCngnDeployment` below.
  */
-const MATCHING_STACK = {
-  mainnet: {
-    manager: "0x3195Bd7e02d93982bCF8b34DF5B941fFCaE1E49b",
-    matching: "0x9E90A9cD13d859Bd6a08168082FB1F6F7405F191",
-    subaccountCreator: "0x568890A8D63Ba8a03b6eCbEedA1bD9f6ea014D5D",
-    tradeModule: "0x12423B366F6F07130961900bE00d05Ea63Acd071",
-    usdcToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-    withdrawalModule: "0x0a10AE2f5D2482cE1e43bC309D430B8861C2b5aB",
-    wrappedUsdcAsset: "0x364058aFF6f36E01505fB2Cc870f8B6BD4835e84",
-  },
-  sepolia: {
-    manager: "0x1917960763BF3a0DfA10a05f0a112E828C1A934f",
-    matching: "0x1599636347FD5bA1fBE21D58AfE0b8B9cbe283FF",
-    subaccountCreator: "0x5448B304AD283f24A741B54AE9b3a71C8d7DCDF2",
-    tradeModule: "0x0AAE65AaA66Fe7f54486cDbD007956d3De611990",
-    usdcToken: "0x8b3C43D2b2555ca3fc4Fa1BC34544133B8576110",
-    withdrawalModule: "0xfdDb0D00Df6d1569E46e72D35e7B6CEE4Bb7F9FB",
-    wrappedUsdcAsset: "0xdC3f31B61a2128B3D1ECB8b6f6d0DE82eBd6c7Ae",
-  },
-} as const;
+const MATCHING_STACK = stackDefaults;
 
 function getMatchingStack() {
   return isAppMainnet() ? MATCHING_STACK.mainnet : MATCHING_STACK.sepolia;
@@ -64,8 +56,12 @@ const DEFAULT_SUBACCOUNTS_ADDRESS_MAINNET = "0x7019244e25fa416e6ca2ed2f3ca25277a
 const DEFAULT_SUBACCOUNTS_ADDRESS_SEPOLIA = "0xdEEF5903FEfEEde7A4F4369050AFd228dFB3E9c0";
 
 /**
- * cNGN deployment per chain, mirroring `risk-core/deployments/<chainId>/WRAPPED_CNGN.json`
- * (`asset` is the artifact's `base`, `token` its `wrappedAsset`).
+ * The cNGN escrow and token per chain, from the same JSON. On mainnet the escrow is the perp
+ * stack's cNGN escrow (`0x37c9…7c98`, deployed at block 52112046): the spot market's
+ * `asset_address`, the cNGN deposit escrow, and the collateral the perp SRM credits at its
+ * factor, so cNGN deposits, cNGN orders and cNGN margin all settle against one contract. The
+ * escrow of the 2026-09-10 stack (`0x9d80…9493`) is reachable withdraw-only through the legacy
+ * envs below.
  *
  * Kept as a pair because the two must match: the escrow only accepts the exact ERC-20 it wraps,
  * and Base Sepolia hosts two unrelated contracts both calling themselves cNGN — the one this
@@ -73,24 +69,12 @@ const DEFAULT_SUBACCOUNTS_ADDRESS_SEPOLIA = "0xdEEF5903FEfEEde7A4F4369050AFd228d
  * the app previously pointed at. Approving the wrong one leaves a deposit that cannot settle, so
  * these are only ever read together.
  *
- * Both `asset` entries are verified on-chain: `wrappedAsset()` returns the paired token,
- * `deposit(uint256,uint256)` is present, and neither has a `wlEnabled()` gate. The mainnet asset
- * is also the spot market's `asset_address` from `GET /v1/markets`, so cNGN deposits and cNGN
- * orders settle against one escrow.
+ * Each escrow is verified on-chain: `wrappedAsset()` returns the paired token,
+ * `deposit(uint256,uint256)` is present, and none has a `wlEnabled()` gate.
  */
-const CNGN_DEPLOYMENTS = {
-  mainnet: {
-    asset: "0x9d806fd040a719d27a8e5e77dc5ae0ed1e089493",
-    token: "0x46C85152bFe9f96829aA94755D9f915F9B10EF5F",
-  },
-  sepolia: {
-    asset: "0x1c08f30c204EE18EbBDc161c0f0864AFb826934b",
-    token: "0x6B232A2155Bd0C9bf741dB4cf8E7e8A0176A6fc6",
-  },
-} as const;
-
 function getCngnDeployment() {
-  return isAppMainnet() ? CNGN_DEPLOYMENTS.mainnet : CNGN_DEPLOYMENTS.sepolia;
+  const stack = getMatchingStack();
+  return { asset: stack.cngnAsset, token: stack.cngnToken };
 }
 
 function isAppMainnet() {

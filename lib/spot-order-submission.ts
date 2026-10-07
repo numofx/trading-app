@@ -1,12 +1,12 @@
 import { Duration } from "effect";
 import { encodeAbiParameters, getAddress } from "viem";
 import { getAppChain } from "@/lib/base-public-client";
-import { getTradeModuleAddress as getConfiguredTradeModuleAddress } from "@/lib/subaccount-deposit-config";
+import {
+  getCngnAssetAddress,
+  getTradeModuleAddress as getConfiguredTradeModuleAddress,
+} from "@/lib/subaccount-deposit-config";
 
 const DEFAULT_MATCHING_ADDRESS = "0x9E90A9cD13d859Bd6a08168082FB1F6F7405F191";
-// The spot instrument's asset in markets-service (/v1/markets USDCcNGN-SPOT.asset_address):
-// the wrapped-cNGN WLWrappedERC20Asset, always sub_id 0.
-const DEFAULT_SPOT_ASSET_ADDRESS = "0x9d806fd040a719d27a8e5e77dc5ae0ed1e089493";
 const ENGINE_DECIMALS = 18;
 
 /**
@@ -122,10 +122,14 @@ function getTradeModuleAddress() {
   return getConfiguredTradeModuleAddress();
 }
 
+/**
+ * The spot instrument's asset (`/v1/markets` USDCcNGN-SPOT.asset_address, always sub_id 0) when
+ * the served market is not at hand: the env, else the chain's cNGN escrow, which is the same
+ * contract cNGN deposits pay into.
+ */
 function getSpotAssetAddress() {
-  return getAddress(
-    process.env.NEXT_PUBLIC_SPOT_ASSET_ADDRESS?.trim() || DEFAULT_SPOT_ASSET_ADDRESS
-  );
+  const override = process.env.NEXT_PUBLIC_SPOT_ASSET_ADDRESS?.trim();
+  return override ? getAddress(override) : getCngnAssetAddress();
 }
 
 /**
