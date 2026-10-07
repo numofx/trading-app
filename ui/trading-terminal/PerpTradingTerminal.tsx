@@ -599,8 +599,20 @@ function usePerpBook(market: PerpMarket | null) {
   const price = market
     ? (getAnchorPrice(bestAsk, bestBid, lastPrice) ?? market.state.markPrice)
     : null;
-  const stats = get24hStats(applyTradesToStats(market?.stats24h ?? null, streamedFills), price);
-  return { asks, bestAsk, bestBid, bids, candles, lastPrice, price, stats, trades };
+  const stats24h = applyTradesToStats(market?.stats24h ?? null, streamedFills);
+  const stats = get24hStats(stats24h, price);
+  return {
+    asks,
+    bestAsk,
+    bestBid,
+    bids,
+    candles,
+    lastPrice,
+    price,
+    stats,
+    trades,
+    volumeUsd: stats24h?.quoteVolume ?? null,
+  };
 }
 
 /**
@@ -694,12 +706,16 @@ function positionsSignature(positions: PerpPosition[]) {
 }
 
 /** The header's figures for the perp on screen, or dashes while it is not live. */
-function perpHeaderMetrics(market: PerpMarket | null, price: number | null, volumeLabel: string) {
+function perpHeaderMetrics(
+  market: PerpMarket | null,
+  price: number | null,
+  volumeUsd: number | null
+) {
   return buildPerpHeaderMetrics({
     firstPrice: market?.stats24h?.firstPrice ?? null,
     price,
     state: market?.state ?? null,
-    volumeLabel,
+    volumeUsd,
   });
 }
 
@@ -769,7 +785,7 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
   const orderStatus = useOrderStatus(positionsSignature(perpAccount.positions));
   const withdrawing = withdrawTarget(stack, perpAccount.account, withdrawRow);
 
-  const { asks, bestAsk, bestBid, bids, candles, lastPrice, price, stats, trades } =
+  const { asks, bestAsk, bestBid, bids, candles, lastPrice, price, stats, trades, volumeUsd } =
     usePerpBook(market);
 
   const ownedOpenOrders = getOwnedOpenOrders(
@@ -988,7 +1004,7 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
         high24h={stats.high}
         low24h={stats.low}
         market="perp"
-        metrics={perpHeaderMetrics(market, price, stats.volumeLabel)}
+        metrics={perpHeaderMetrics(market, price, volumeUsd)}
         onPortfolioSelect={() => setBottomTab("positions")}
         price={price}
         volume24hLabel={stats.volumeLabel}

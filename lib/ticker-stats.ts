@@ -1,19 +1,30 @@
 import type { Candle, Stats24h, TradePrint } from "@/lib/trading.types";
 
 export function formatCompactVolume(value: number) {
+  const compact = formatCompactNumber(value);
+  return compact === "—" ? compact : `${compact} USDC`;
+}
+
+/** The same compact figure read as dollars, where the unit goes in front: "$7.2K"; "—" for none. */
+export function formatCompactUsd(value: number) {
+  const compact = formatCompactNumber(value);
+  return compact === "—" ? compact : `$${compact}`;
+}
+
+function formatCompactNumber(value: number) {
   if (!Number.isFinite(value) || value <= 0) {
     return "—";
   }
 
   if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M USDC`;
+    return `${(value / 1_000_000).toFixed(1)}M`;
   }
 
   if (value >= 1000) {
-    return `${(value / 1000).toFixed(1)}K USDC`;
+    return `${(value / 1000).toFixed(1)}K`;
   }
 
-  return `${Math.round(value).toLocaleString("en-US")} USDC`;
+  return Math.round(value).toLocaleString("en-US");
 }
 
 /**

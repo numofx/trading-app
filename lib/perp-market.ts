@@ -1,5 +1,5 @@
 import { getAddress, isAddress, parseUnits } from "viem";
-import { formatPrice, PRICE_DECIMALS } from "@/lib/market-formatting";
+import { formatDollarPrice, formatPrice, PRICE_DECIMALS } from "@/lib/market-formatting";
 import type {
   PerpAccountMargin,
   PerpCollateralAsset,
@@ -11,7 +11,7 @@ import type {
 } from "@/lib/perp-market.types";
 import { sideTone } from "@/lib/side-tone";
 import { getCngnTokenAddress, getUsdcTokenAddress } from "@/lib/subaccount-deposit-config";
-import { formatCompactVolume } from "@/lib/ticker-stats";
+import { formatCompactUsd } from "@/lib/ticker-stats";
 import type { WithdrawableAsset } from "@/lib/withdrawable-assets";
 
 /** The `perp` object markets-service serves on `/v1/markets` for the perpetual. */
@@ -585,8 +585,8 @@ function formatOpenInterest(state: PerpState | null) {
   if (state === null) {
     return "—";
   }
-  const compact = formatCompactVolume(state.openInterestUsd);
-  return compact === "—" ? "0 USDC" : compact;
+  const compact = formatCompactUsd(state.openInterestUsd);
+  return compact === "—" ? "$0" : compact;
 }
 
 function toneOf(value: number | null): PerpHeaderMetric["tone"] {
@@ -608,14 +608,15 @@ export function buildPerpHeaderMetrics({
   firstPrice,
   price,
   state,
-  volumeLabel,
+  volumeUsd,
 }: {
   /** The 24h window's first trade, which the change is measured from. */
   firstPrice: number | null;
   /** The live price the change is measured to: the book's mid, else the mark. */
   price: number | null;
   state: PerpState | null;
-  volumeLabel: string;
+  /** The 24h window's quote volume in USDC; null when nothing traded or the window is unknown. */
+  volumeUsd: number | null;
 }): PerpHeaderMetric[] {
   const change = firstPrice !== null && price !== null ? price - firstPrice : null;
   const changePercent =
@@ -626,13 +627,13 @@ export function buildPerpHeaderMetrics({
       label: "Mark",
       tone: null,
       tooltip: "The price positions are valued and liquidated at, from the venue's chain state",
-      value: formatPrice(state?.markPrice ?? null),
+      value: formatDollarPrice(state?.markPrice ?? null),
     },
     {
       label: "Index",
       tone: null,
       tooltip: "The external NGN/USD reference the mark tracks; funding pushes the two together",
-      value: formatPrice(state?.indexPrice ?? null),
+      value: formatDollarPrice(state?.indexPrice ?? null),
     },
     {
       label: "24h Change",
@@ -642,7 +643,7 @@ export function buildPerpHeaderMetrics({
           ? "—"
           : `${signedPrice(change)} (${signedPercent(changePercent, 2)})`,
     },
-    { label: "24h Volume", tone: null, value: volumeLabel },
+    { label: "24h Volume", tone: null, value: formatCompactUsd(volumeUsd ?? Number.NaN) },
     {
       label: "Open Interest",
       tone: null,

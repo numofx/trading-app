@@ -30,6 +30,12 @@ export function formatUsdcPrice(value: number | null, digits = PRICE_DECIMALS) {
   return price === "—" ? price : `${price} USDC`;
 }
 
+/** A USDC-per-cNGN price as dollars, where the unit goes in front: "$0.0007337"; "—" for none. */
+export function formatDollarPrice(value: number | null, digits = PRICE_DECIMALS) {
+  const price = formatPrice(value, digits);
+  return price === "—" ? price : `$${price}`;
+}
+
 /** The same price the other way up, cNGN per USDC, for the secondary ₦ line; null when unknown. */
 export function toNairaPerUsdc(price: number | null) {
   return price === null || !Number.isFinite(price) || price <= 0 ? null : 1 / price;
