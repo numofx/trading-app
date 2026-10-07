@@ -34,9 +34,3 @@ export const PERP_ACTIVITY_VIEWS = {
     rows: [],
   },
 } satisfies Record<(typeof PERP_BOTTOM_TABS)[number]["id"], ActivityView>;
-
-/**
- * Quick picks under the leverage slider. The ceiling itself is the SRM's (1 / initial margin, from
- * /v1/markets); presets above it are not shown.
- */
-export const PERP_LEVERAGE_PRESETS = [1, 2, 3, 5, 10] as const;

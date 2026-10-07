@@ -334,6 +334,113 @@ export function estimatePerpEntry({
   return { expectedPrice: averagePrice, slippage: Math.max(0, adverse / touch) };
 }
 
+const CNGN_AMOUNT = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
+
+/** A cNGN amount as the ticket prints it: "2,793.39", "500,000". */
+export function formatCngnAmount(value: number) {
+  return CNGN_AMOUNT.format(value);
+}
+
+const TRAILING_POINT_ZERO = /\.0$/;
+
+/** A leverage as the ticket prints it: "8.7x", "1x", "0x". */
+export function formatLeverage(value: number) {
+  const text = value.toFixed(1).replace(TRAILING_POINT_ZERO, "");
+  return `${text}x`;
+}
+
+/**
+ * The largest order the account can open, in whole cNGN: the initial-margin surplus spread over
+ * what each cNGN of notional costs to open (its initial margin plus the taker fee) at the
+ * ticket's price. An order against an open position reduces it first, which frees margin rather
+ * than using it, so that position's size is added. Null when the ticket has no price or the
+ * account is unknown; zero when there is no margin left to open with.
+ */
+export function maxOrderSizeCngn({
+  availableMargin,
+  position,
+  price,
+  side,
+  state,
+  takerFeeBps,
+}: {
+  availableMargin: number | null;
+  position: PerpPosition | null;
+  price: number | null;
+  side: "long" | "short";
+  state: PerpState | null;
+  takerFeeBps: number | null;
+}): number | null {
+  if (availableMargin === null || price === null || price <= 0 || state === null) {
+    return null;
+  }
+  const costPerUsd = state.initialMarginRate + (takerFeeBps ?? 0) / 10_000;
+  const fromMargin = costPerUsd > 0 ? Math.max(0, availableMargin) / (costPerUsd * price) : 0;
+  const reducing = position !== null && position.uiSide !== side ? position.uiSize : 0;
+  return Math.floor(fromMargin + reducing);
+}
+
+/** A cNGN amount signed by its side: a long positive, a short negative. */
+function signedCngn(side: "long" | "short", size: number) {
+  return side === "long" ? size : -size;
+}
+
+/**
+ * The position after this order, signed in cNGN (a long positive): what the Position row shows
+ * and what the leverage after the order is counted on. A reduce-only order never crosses zero.
+ */
+export function positionAfterOrder({
+  position,
+  reduceOnly,
+  side,
+  sizeCngn,
+}: {
+  position: PerpPosition | null;
+  reduceOnly: boolean;
+  side: "long" | "short";
+  sizeCngn: number | null;
+}): { current: number; next: number } {
+  const current = position === null ? 0 : signedCngn(position.uiSide, position.uiSize);
+  const delta = sizeCngn === null ? 0 : signedCngn(side, sizeCngn);
+  if (reduceOnly) {
+    if (current === 0 || Math.sign(delta) === Math.sign(current)) {
+      return { current, next: current };
+    }
+    return { current, next: Math.sign(current) * Math.max(0, Math.abs(current) - Math.abs(delta)) };
+  }
+  return { current, next: current + delta };
+}
+
+/**
+ * The account's leverage after the order: the position's notional at the ticket's price over the
+ * margin the SRM credits the account. That margin is read back from the initial-margin surplus
+ * the venue reports plus what the open position already uses, so it is the SRM's own count (cNGN
+ * at its factor, P&L in USDC) rather than the wallet's balances. Null without an account, a
+ * price or margin; zero when nothing would be open.
+ */
+export function estimatePositionLeverage({
+  availableMargin,
+  nextPositionCngn,
+  position,
+  price,
+  state,
+}: {
+  availableMargin: number | null;
+  nextPositionCngn: number;
+  position: PerpPosition | null;
+  price: number | null;
+  state: PerpState | null;
+}): number | null {
+  if (availableMargin === null || price === null || price <= 0 || state === null) {
+    return null;
+  }
+  const equity = availableMargin + (position?.notionalUsd ?? 0) * state.initialMarginRate;
+  if (equity <= 0) {
+    return nextPositionCngn === 0 ? 0 : null;
+  }
+  return (Math.abs(nextPositionCngn) * price) / equity;
+}
+
 export function estimateLiquidationPrice({
   side,
   sizeCngn,

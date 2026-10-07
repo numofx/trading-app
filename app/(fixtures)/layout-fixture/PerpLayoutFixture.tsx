@@ -2,7 +2,7 @@
 
 import { formatBalance } from "@/lib/account-balance-display";
 import { parsePerpState } from "@/lib/perp-market";
-import type { PerpAccountMargin } from "@/lib/perp-market.types";
+import type { PerpAccountMargin, PerpPosition } from "@/lib/perp-market.types";
 import { AccountSummary } from "@/ui/trading-terminal/order-form/AccountSummary";
 import { PerpOrderFormPanel } from "@/ui/trading-terminal/PerpOrderFormPanel";
 
@@ -41,6 +41,19 @@ const FIXTURE_ACCOUNT: PerpAccountMargin = {
   ],
 };
 
+/** A small open long, so the Position row and reduce-only have something to start from. */
+const FIXTURE_POSITION: PerpPosition = {
+  engineSize: 20_000n,
+  initialMarginSurplus: 250.35,
+  liquidationPrice: null,
+  maintenanceMarginSurplus: 250.35,
+  markPrice: FIXTURE_PRICE,
+  notionalUsd: 20_000 * FIXTURE_PRICE,
+  uiSide: "long",
+  uiSize: 20_000,
+  unrealizedPnl: 0.12,
+};
+
 export function PerpLayoutFixture() {
   return (
     <main className="flex min-h-screen flex-col bg-terminal-bg p-3 text-foreground">
@@ -48,10 +61,10 @@ export function PerpLayoutFixture() {
         <PerpOrderFormPanel
           account={FIXTURE_ACCOUNT}
           availableMargin={FIXTURE_ACCOUNT.initialMarginSurplus}
-          hasPosition
           hasWallet
           onDepositRequest={() => undefined}
           onSubmit={() => undefined}
+          position={FIXTURE_POSITION}
           referencePrice={FIXTURE_PRICE}
           state={FIXTURE_STATE}
           takerFeeBps={25}

@@ -1,22 +1,26 @@
 "use client";
 
+import { ArrowLeftRight, ArrowRight } from "lucide-react";
 import { useState } from "react";
+import { cn } from "@/lib/cn";
 import { formatDollarPrice, formatNairaPerUsdc, formatPrice } from "@/lib/market-formatting";
 import {
   describePerpMarginSources,
   estimateLiquidationPrice,
   estimatePerpEntry,
-  getLeverageCeiling,
+  estimatePositionLeverage,
+  formatCngnAmount,
+  formatLeverage,
+  maxOrderSizeCngn,
   PERP_DEFAULT_MAX_SLIPPAGE,
   perpOrderUiSide,
   perpSubmitLabel,
+  positionAfterOrder,
   TRADING_PAUSED_MESSAGE,
 } from "@/lib/perp-market";
-import type { PerpAccountMargin, PerpState } from "@/lib/perp-market.types";
-import { PERP_LEVERAGE_PRESETS } from "@/lib/perp-terminal-config";
+import type { PerpAccountMargin, PerpPosition, PerpState } from "@/lib/perp-market.types";
 import type { OrderBookLevel } from "@/lib/trading.types";
 import { OrderTypeTabs } from "@/ui/trading-terminal/OrderTypeTabs";
-import { AmountSlider } from "@/ui/trading-terminal/order-form/AmountSlider";
 import { AvailableRow } from "@/ui/trading-terminal/order-form/AvailableRow";
 import { CheckboxRow } from "@/ui/trading-terminal/order-form/CheckboxRow";
 import { FieldLabel } from "@/ui/trading-terminal/order-form/FieldLabel";
@@ -27,7 +31,7 @@ import { SlippageRow } from "@/ui/trading-terminal/order-form/SlippageRow";
 import { SubmitButton } from "@/ui/trading-terminal/order-form/SubmitButton";
 import { SummaryRow } from "@/ui/trading-terminal/order-form/SummaryRow";
 import type { TokenSymbol } from "@/ui/trading-terminal/order-form/TokenUnit";
-import { TokenUnit, TokenUnitSelect } from "@/ui/trading-terminal/order-form/TokenUnit";
+import { TokenUnit } from "@/ui/trading-terminal/order-form/TokenUnit";
 
 type PerpSide = "long" | "short";
 
@@ -85,13 +89,11 @@ function sizeTooltip(unit: SizeUnit, price: number | null) {
 }
 
 /**
- * The ticket's size and margin fields, kept in step: the cNGN size is the figure underneath, its
- * USDC value follows through the ticket's price (USDC per cNGN), and the margin is that value
- * through the leverage. The USDC unit is a view of the size that the trader can also type into,
- * as can the margin.
+ * The ticket's size, kept in both units: the cNGN size is the figure underneath (what the order
+ * is signed in), its USDC value follows through the ticket's price (USDC per cNGN). The USDC
+ * unit is a view of the size the trader can also type into.
  */
-function usePerpSizeFields(leverage: number, price: number | null) {
-  const [margin, setMargin] = useState("");
+function usePerpSize(price: number | null) {
   const [sizeCngn, setSizeCngn] = useState("");
   const [sizeUsd, setSizeUsd] = useState("");
   const [sizeUnit, setSizeUnit] = useState<SizeUnit>("cNGN");
@@ -101,133 +103,216 @@ function usePerpSizeFields(leverage: number, price: number | null) {
     return cngn === null || !priced ? null : cngn * price;
   }
 
-  /** Sets the USDC value and the margin from the cNGN size; both blank without a price. */
-  function setFromCngn(cngn: number | null) {
-    const usd = toUsd(cngn);
-    setSizeUsd(usd === null ? "" : formatDerived(usd));
-    setMargin(usd === null ? "" : formatDerived(usd / leverage));
-  }
-
-  /** Sets the cNGN size and the margin from a USDC value; the size is blank without a price. */
-  function setFromUsd(usd: number | null) {
-    setSizeCngn(usd === null || !priced ? "" : formatDerivedCngn(usd / price));
-    setMargin(usd === null ? "" : formatDerived(usd / leverage));
-  }
-
   function onSizeInput(value: string) {
     if (sizeUnit === "cNGN") {
       setSizeCngn(value);
-      setFromCngn(parseAmount(value));
+      const usd = toUsd(parseAmount(value));
+      setSizeUsd(usd === null ? "" : formatDerived(usd));
       return;
     }
     setSizeUsd(value);
-    setFromUsd(parseAmount(value));
-  }
-
-  function onMargin(value: string) {
-    setMargin(value);
-    const parsed = parseAmount(value);
-    const usd = parsed === null ? null : parsed * leverage;
-    setSizeUsd(usd === null ? "" : formatDerived(usd));
+    const usd = parseAmount(value);
     setSizeCngn(usd === null || !priced ? "" : formatDerivedCngn(usd / price));
   }
 
-  function onUnit(unit: SizeUnit) {
-    setSizeUnit(unit);
+  /** Sets the size in cNGN from the slider or MAX; the USDC view follows. */
+  function setCngn(cngn: number) {
+    setSizeCngn(cngn <= 0 ? "" : formatDerivedCngn(cngn));
+    const usd = toUsd(cngn > 0 ? cngn : null);
+    setSizeUsd(usd === null ? "" : formatDerived(usd));
+  }
+
+  function toggleUnit() {
+    setSizeUnit(sizeUnit === "cNGN" ? "USDC" : "cNGN");
     const usd = toUsd(parseAmount(sizeCngn));
     setSizeUsd(usd === null ? "" : formatDerived(usd));
   }
 
-  function onLeverage(next: number) {
-    const parsed = parseAmount(margin);
-    if (parsed !== null) {
-      const usd = parsed * next;
-      setSizeUsd(formatDerived(usd));
-      setSizeCngn(priced ? formatDerivedCngn(usd / price) : "");
-    }
-  }
-
   return {
-    margin,
-    onLeverage,
-    onMargin,
     onSizeInput,
-    onUnit,
+    setCngn,
     /** What the Size field shows: the cNGN size, or its USDC value. */
     shown: sizeUnit === "cNGN" ? sizeCngn : sizeUsd,
     sizeCngn,
     sizeUnit,
+    /** The size's USDC value at the ticket's price, as the USDC view would show it. */
+    sizeUsd,
+    toggleUnit,
   };
 }
 
+const SLIDER_MARKS = [25, 50, 75] as const;
+
 /**
- * Leverage as a typed value, a filled slider and presets, all driving one number, bounded by the
- * SRM's own ceiling (1 / initial margin) rather than a number of the app's choosing. A typed value
- * applies as soon as it is a whole number in range; blurring drops any draft that is not.
+ * The order's size in one card: the label and unit switch on the left, the typed figure and its
+ * value in the other unit on the right, and under them a slider across everything the account's
+ * margin can open, with MAX at its end. The slider is inert, and visibly so, until the ticket
+ * knows that ceiling: it never slides against a number it does not have.
  */
-function LeverageSelector({
-  ceiling,
-  leverage,
-  onSelect,
+function OrderSizeCard({
+  canToggleUnit,
+  maxCngn,
+  onInput,
+  onSetCngn,
+  onToggleUnit,
+  otherUnitText,
+  shown,
+  sizeCngn,
+  tooltip,
+  unit,
 }: {
-  ceiling: number;
-  leverage: number;
-  onSelect: (leverage: number) => void;
+  canToggleUnit: boolean;
+  maxCngn: number | null;
+  onInput: (value: string) => void;
+  onSetCngn: (cngn: number) => void;
+  onToggleUnit: () => void;
+  otherUnitText: string;
+  shown: string;
+  sizeCngn: number | null;
+  tooltip: string;
+  unit: SizeUnit;
 }) {
-  const [draft, setDraft] = useState<string | null>(null);
-  const presets = PERP_LEVERAGE_PRESETS.filter((preset) => preset <= ceiling).map((preset) => ({
-    label: `${preset}x`,
-    value: preset,
-  }));
-
-  function handleDraftChange(value: string) {
-    const digits = value.replace(/\D/g, "");
-    setDraft(digits);
-    const parsed = Number(digits);
-    if (digits !== "" && parsed >= 1 && parsed <= ceiling) {
-      onSelect(parsed);
-    }
-  }
-
-  function selectFromControl(value: number) {
-    setDraft(null);
-    onSelect(value);
-  }
-
+  const sliderDisabled = maxCngn === null || maxCngn <= 0;
+  const sliderMax = sliderDisabled ? 1 : maxCngn;
+  // Without a ceiling the track stays empty: a typed size has nothing to be a share of.
+  const sliderValue = sliderDisabled ? 0 : Math.min(sizeCngn ?? 0, sliderMax);
+  const fillPercent = (sliderValue / sliderMax) * 100;
   return (
-    <div>
-      <AmountSlider
-        disabled={ceiling <= 1}
-        header={
-          <div className="flex items-center justify-between gap-2">
-            <FieldLabel
-              htmlFor="perp-leverage-value"
-              tooltip="Sizes the order only: the SRM margins your whole account together, so there is no per-position leverage on chain. The ceiling is the SRM's own."
-            >
-              Leverage
-            </FieldLabel>
-            <span className="flex items-baseline text-[13px] text-panel-text-active tabular-nums">
-              <input
-                className="w-8 bg-transparent text-right text-[16px] outline-none md:text-[13px]"
-                id="perp-leverage-value"
-                inputMode="numeric"
-                onBlur={() => setDraft(null)}
-                onChange={(event) => handleDraftChange(event.target.value)}
-                value={draft ?? String(leverage)}
-              />
-              x
-            </span>
-          </div>
-        }
-        label="Leverage slider"
-        max={ceiling}
-        min={1}
-        onChange={selectFromControl}
-        presets={presets}
-        step={1}
-        value={leverage}
-        valueText={`${leverage}x`}
-      />
+    <div className="space-y-2 rounded-lg bg-input-bg px-3 py-2 ring-1 ring-panel-border focus-within:ring-panel-text-muted">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex shrink-0 flex-col items-start gap-1.5 pt-0.5">
+          <FieldLabel htmlFor="perp-size" tooltip={tooltip}>
+            Order Size
+          </FieldLabel>
+          <button
+            aria-label={`Size in ${unit}; switch to ${unit === "cNGN" ? "USDC" : "cNGN"}`}
+            className="flex cursor-pointer items-center gap-1.5 rounded-md bg-panel-bg px-2 py-1 font-semibold text-[12px] text-panel-text-active ring-1 ring-panel-border transition-colors hover:bg-input-hover disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={!canToggleUnit}
+            onClick={onToggleUnit}
+            title={
+              canToggleUnit
+                ? undefined
+                : "Needs a price: type a limit price, or wait for the market"
+            }
+            type="button"
+          >
+            {unit}
+            <ArrowLeftRight aria-hidden className="size-3 text-panel-text-muted" />
+          </button>
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col items-end">
+          <input
+            className="w-full bg-transparent text-right font-semibold text-[22px] text-panel-text-active tabular-nums outline-none placeholder:text-panel-text-muted"
+            id="perp-size"
+            inputMode="decimal"
+            onChange={(event) => onInput(event.target.value.replace(/[^\d.,]/g, ""))}
+            placeholder="0"
+            value={shown}
+          />
+          <span className="text-[12px] text-panel-text-muted tabular-nums">{otherUnitText}</span>
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        <div className="relative flex min-w-0 flex-1 items-center">
+          {SLIDER_MARKS.map((mark) => (
+            <span
+              aria-hidden
+              className="pointer-events-none absolute size-1.5 -translate-x-1/2 rounded-full bg-panel-text-muted/50"
+              key={mark}
+              style={{ left: `${mark}%` }}
+            />
+          ))}
+          <input
+            aria-label="Order size slider"
+            aria-valuetext={`${formatCngnAmount(sliderValue)} cNGN`}
+            className="relative h-1 w-full cursor-pointer appearance-none rounded-full disabled:cursor-not-allowed disabled:opacity-40 [&::-moz-range-thumb]:size-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-panel-text-active [&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-panel-text-active"
+            disabled={sliderDisabled}
+            max={sliderMax}
+            min={0}
+            onChange={(event) => onSetCngn(Number(event.target.value))}
+            step={1}
+            style={{
+              background: `linear-gradient(to right, var(--buy) ${fillPercent}%, var(--input-hover) ${fillPercent}%)`,
+            }}
+            type="range"
+            value={sliderValue}
+          />
+        </div>
+        <button
+          className="shrink-0 cursor-pointer rounded-md bg-panel-bg px-2.5 py-1 font-semibold text-[11px] text-panel-text-active ring-1 ring-panel-border transition-colors hover:bg-input-hover disabled:cursor-not-allowed disabled:opacity-40"
+          disabled={sliderDisabled}
+          onClick={() => maxCngn !== null && onSetCngn(maxCngn)}
+          title={
+            maxCngn === null
+              ? "Needs an account and a price"
+              : `${formatCngnAmount(maxCngn)} cNGN: the most the account's margin can open at this price`
+          }
+          type="button"
+        >
+          MAX
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** The sign's colour: the long colour above zero, the short colour below, muted at zero. */
+function signTone(value: number) {
+  if (value > 0) {
+    return "text-bid-text";
+  }
+  return value < 0 ? "text-ask-text" : "text-panel-text-muted";
+}
+
+/** The position now and after this order, in cNGN, each coloured by its side. */
+function PositionRow({ current, next }: { current: number; next: number }) {
+  return (
+    <div className="flex items-center justify-between gap-2 text-[12px]">
+      <FieldLabel tooltip="Your cNGN position now, and what it becomes if this order fills in full. A long is positive.">
+        Position
+      </FieldLabel>
+      {current === 0 && next === 0 ? (
+        <span className="text-panel-text">—</span>
+      ) : (
+        <span className="flex items-center gap-1 tabular-nums">
+          <span className={signTone(current)}>{formatCngnAmount(Math.abs(current))}</span>
+          <ArrowRight aria-hidden className="size-3 text-panel-text-muted" />
+          <span className={signTone(next)}>{formatCngnAmount(Math.abs(next))} cNGN</span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The account's leverage once this order fills, against the SRM's ceiling. Red at or past the
+ * ceiling: the venue would refuse the order, and the Deposit remedy on the button says so.
+ */
+function PositionLeverageCard({
+  leverage,
+  state,
+}: {
+  leverage: number | null;
+  state: PerpState | null;
+}) {
+  const overCeiling = leverage !== null && state !== null && leverage > state.maxLeverage;
+  const tone =
+    leverage === null || leverage === 0 ? "text-panel-text-muted" : "text-panel-text-active";
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-lg bg-input-bg px-3 py-2 ring-1 ring-panel-border">
+      <FieldLabel
+        tooltip={`Your whole account's leverage after this order: the position's value at the ticket's price over the margin the SRM credits you (USDC in full, cNGN at its factor). The SRM opens up to ${state === null ? "its ceiling" : formatLeverage(state.maxLeverage)}; it margins the account together, so there is no per-position leverage to set.`}
+      >
+        Position Leverage
+      </FieldLabel>
+      <span
+        className={cn(
+          "font-semibold text-[15px] tabular-nums",
+          overCeiling ? "text-ask-text" : tone
+        )}
+      >
+        {leverage === null ? "—" : formatLeverage(leverage)}
+      </span>
     </div>
   );
 }
@@ -239,7 +324,8 @@ function LeverageSelector({
  * 2 / (1 + mm) of entry; the long's equity always exceeds the maintenance requirement.
  */
 function liquidationTooltip(state: PerpState | null) {
-  const base = "For this margin alone; your whole perp account backs the position.";
+  const base =
+    "If this were your only position, backed by everything available in your perp account.";
   if (state === null) {
     return base;
   }
@@ -267,8 +353,9 @@ type TicketInputs = {
   availableMargin: number | null;
   bids: OrderBookLevel[];
   limitPrice: string;
-  margin: string;
   orderType: PerpOrderType;
+  position: PerpPosition | null;
+  reduceOnly: boolean;
   referencePrice: number | null;
   side: PerpSide;
   size: string;
@@ -278,14 +365,13 @@ type TicketInputs = {
 
 /**
  * Everything the ticket shows that follows from its inputs: the expected price and slippage, the
- * order's USDC value, fee, margin needed, shortfall and liq. price. The size is cNGN; its value,
- * and everything charged on it, is at the expected price (the typed limit, else the walk through
- * the book for a market order of this size), so without one the fee and margin are unknown rather
- * than zero.
+ * order's USDC value, fee, margin needed, shortfall, the position and leverage after it, and the
+ * liq. price. The size is cNGN; its value, and everything charged on it, is at the expected price
+ * (the typed limit, else the walk through the book for a market order of this size), so without
+ * one the fee and margin are unknown rather than zero.
  */
 function deriveTicket(inputs: TicketInputs) {
   const sizeCngn = parseAmount(inputs.size);
-  const marginUsd = parseAmount(inputs.margin);
   const entry = estimatePerpEntry({
     asks: inputs.asks,
     bids: inputs.bids,
@@ -311,23 +397,57 @@ function deriveTicket(inputs: TicketInputs) {
     requiredMargin > inputs.availableMargin
       ? requiredMargin - inputs.availableMargin
       : null;
+  // Backed by everything the account has available, as cross-margin backs it; a position already
+  // open is not folded in, since the SRM keeps no entry price to fold it in at.
   const liquidation =
-    inputs.state !== null && sizeCngn !== null && entryPrice !== null && marginUsd !== null
+    inputs.state !== null &&
+    sizeCngn !== null &&
+    entryPrice !== null &&
+    inputs.availableMargin !== null &&
+    inputs.position === null
       ? estimateLiquidationPrice({
           entryPrice,
           maintenanceMarginRate: inputs.state.maintenanceMarginRate,
-          margin: marginUsd,
+          margin: Math.max(0, inputs.availableMargin),
           side: inputs.side,
           sizeCngn,
         })
       : null;
   const needsPrice = inputs.orderType === "Limit" && parseAmount(inputs.limitPrice) === null;
+  const positionChange = positionAfterOrder({
+    position: inputs.position,
+    reduceOnly: inputs.reduceOnly,
+    side: inputs.side,
+    sizeCngn,
+  });
+  const positionLeverage = estimatePositionLeverage({
+    availableMargin: inputs.availableMargin,
+    nextPositionCngn: positionChange.next,
+    position: inputs.position,
+    price: entryPrice,
+    state: inputs.state,
+  });
+  const maxSizeCngn = maxOrderSizeCngn({
+    availableMargin: inputs.availableMargin,
+    position: inputs.position,
+    price: entryPrice ?? inputs.referencePrice,
+    side: inputs.side,
+    state: inputs.state,
+    takerFeeBps: inputs.takerFeeBps,
+  });
   return {
     expectedPrice: sizeCngn === null ? null : entryPrice,
     feeUsd,
     liquidation,
+    // A reduce-only order can only be as large as the position it shrinks.
+    maxSizeCngn:
+      inputs.reduceOnly && inputs.position !== null
+        ? Math.floor(inputs.position.uiSize)
+        : maxSizeCngn,
     needsPrice,
     notionalUsd,
+    positionChange,
+    positionLeverage,
     requiredMargin,
     shortfall,
     sizeCngn,
@@ -423,20 +543,17 @@ function buttonTone(inputs: ButtonInputs): "buy" | "sell" | "neutral" {
 
 /**
  * The perp order ticket. Without a live perp (`state` null) it renders the form but cannot submit.
- * With one, leverage is bounded by the SRM's ceiling, size and margin are linked through it
- * (margin = size × price / leverage), and the order is checked against the account's
- * initial-margin surplus before it is signed. Size is what trades, in cNGN contracts: it is the
- * first field and the number the button and the summary repeat; its USDC value at the ticket's
- * price is the alternative unit. Margin is what that size costs at the chosen leverage, editable
- * the other way round for traders who think in margin. Leverage only sizes the order: the SRM
- * margins the whole account together, so there is no per-position leverage to set on chain.
+ * With one, the size slides across what the account's margin can open, and the order is checked
+ * against the account's initial-margin surplus before it is signed. Size is what trades, in cNGN
+ * contracts: it is the one field and the number the button and the summary repeat; its USDC value
+ * at the ticket's price is the alternative unit. There is no leverage to set: the SRM margins the
+ * whole account together, so the ticket reports the account's leverage after the order instead.
  */
 export function PerpOrderFormPanel({
   account = null,
   asks = [],
   availableMargin = null,
   bids = [],
-  hasPosition = false,
   hasWallet = false,
   isPreparingAccount = false,
   isSubmitting = false,
@@ -445,12 +562,11 @@ export function PerpOrderFormPanel({
   onDepositRequest,
   onEdit,
   onSubmit,
+  position = null,
   referencePrice = null,
   state = null,
   takerFeeBps = null,
 }: {
-  /** Whether the account holds a perp position: what a reduce-only order needs. */
-  hasPosition?: boolean;
   /** The perp account's margin, by asset: what "Available to trade" is made of. */
   account?: PerpAccountMargin | null;
   /** The resting book, from the touch outward, that a market order of the ticket's size would walk. */
@@ -467,6 +583,8 @@ export function PerpOrderFormPanel({
   /** Any change to the ticket: the host clears the order status line on it. */
   onEdit?: () => void;
   onSubmit?: (request: PerpOrderRequest) => void;
+  /** The account's open perp position, if any: what the Position row starts from and reduce-only needs. */
+  position?: PerpPosition | null;
   /** The price a market order would fill near, USDC per cNGN: the touch, else the mark. */
   referencePrice?: number | null;
   state?: PerpState | null;
@@ -475,7 +593,6 @@ export function PerpOrderFormPanel({
   const [side, setSide] = useState<PerpSide>("long");
   const [orderType, setOrderType] = useState<PerpOrderType>("Market");
   const [limitPrice, setLimitPrice] = useState("");
-  const [leverage, setLeverage] = useState(1);
   const [reduceOnly, setReduceOnly] = useState(false);
   const [maxSlippage, setMaxSlippage] = useState(PERP_DEFAULT_MAX_SLIPPAGE);
   /** Wraps a field setter so every edit also tells the host. */
@@ -487,26 +604,23 @@ export function PerpOrderFormPanel({
   }
 
   const isLive = state?.tradingEnabled === true && onSubmit !== undefined;
+  const hasPosition = position !== null;
   const marginSources = describePerpMarginSources(account);
-  const ceiling = getLeverageCeiling(state);
-  const effectiveLeverage = Math.min(leverage, ceiling);
   // The price in use, USDC per cNGN: the limit price when one is typed, else the price a market
   // order fills near. It values the cNGN size in USDC and so sets the margin either way.
   const ticketPrice =
     orderType === "Limit" ? (parseAmount(limitPrice) ?? referencePrice) : referencePrice;
-  const fields = usePerpSizeFields(effectiveLeverage, ticketPrice);
-  const { margin, sizeCngn: size, sizeUnit } = fields;
-
-  function handleLeverageChange(next: number) {
-    setLeverage(next);
-    fields.onLeverage(next);
-  }
+  const fields = usePerpSize(ticketPrice);
+  const { sizeCngn: size, sizeUnit } = fields;
   const {
     expectedPrice,
     feeUsd,
     liquidation,
+    maxSizeCngn,
     needsPrice,
     notionalUsd,
+    positionChange,
+    positionLeverage,
     requiredMargin,
     shortfall,
     sizeCngn,
@@ -516,8 +630,9 @@ export function PerpOrderFormPanel({
     availableMargin,
     bids,
     limitPrice,
-    margin,
     orderType,
+    position,
+    reduceOnly: reduceOnly && hasPosition,
     referencePrice,
     side,
     size,
@@ -656,7 +771,7 @@ export function PerpOrderFormPanel({
       {/* The account's initial-margin headroom; what it is made of sits in the tooltip. */}
       <AvailableRow
         depositLabel="Deposit margin"
-        label="Available to trade"
+        label="Available to Trade"
         onDeposit={onDepositRequest}
         tooltip={[
           "Cross-margin: everything in your perp account backs every position. USDC counts in full, cNGN at its index value times its margin factor. Profit and loss settle in USDC.",
@@ -664,8 +779,9 @@ export function PerpOrderFormPanel({
         ]
           .filter((part) => part !== null)
           .join(" ")}
-        value={`${availableMargin === null ? "—" : USD.format(Math.max(0, availableMargin))} USDC`}
+        value={availableMargin === null ? "—" : formatUsd(Math.max(0, availableMargin))}
       />
+      <PositionRow current={positionChange.current} next={positionChange.next} />
 
       {orderType === "Limit" ? (
         <div className="space-y-1">
@@ -684,41 +800,26 @@ export function PerpOrderFormPanel({
           </p>
         </div>
       ) : null}
-      <FormField
-        adornment={
-          <TokenUnitSelect
-            disabledReason={
-              ticketPrice !== null && ticketPrice > 0
-                ? undefined
-                : { USDC: "Needs a price: type a limit price, or wait for the market" }
-            }
-            label="Size unit"
-            onSelect={edited((unit) => fields.onUnit(unit as SizeUnit))}
-            options={SIZE_UNITS}
-            selected={sizeUnit}
-          />
+      <OrderSizeCard
+        canToggleUnit={ticketPrice !== null && ticketPrice > 0}
+        maxCngn={maxSizeCngn}
+        onInput={edited(fields.onSizeInput)}
+        onSetCngn={edited(fields.setCngn)}
+        onToggleUnit={() => {
+          onEdit?.();
+          fields.toggleUnit();
+        }}
+        otherUnitText={
+          sizeUnit === "cNGN"
+            ? formatUsd(parseAmount(fields.sizeUsd))
+            : `${sizeCngn === null ? "0" : formatCngnAmount(sizeCngn)} cNGN`
         }
-        id="perp-size"
-        label="Size"
-        onChange={edited(fields.onSizeInput)}
-        placeholder="0"
+        shown={fields.shown}
+        sizeCngn={sizeCngn}
         tooltip={sizeTooltip(sizeUnit, ticketPrice)}
-        value={fields.shown}
+        unit={sizeUnit}
       />
-      <LeverageSelector
-        ceiling={ceiling}
-        leverage={effectiveLeverage}
-        onSelect={edited(handleLeverageChange)}
-      />
-      <FormField
-        adornment={<TokenUnit symbol="USDC" />}
-        id="perp-margin"
-        label="Margin"
-        onChange={edited(fields.onMargin)}
-        placeholder="0.0"
-        tooltip={`What it costs you: the size's USDC value ÷ ${effectiveLeverage}x. Editable the other way round, for traders who think in margin.`}
-        value={margin}
-      />
+      <PositionLeverageCard leverage={positionLeverage} state={state} />
 
       <div className="space-y-2">
         {/*

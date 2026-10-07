@@ -1057,7 +1057,6 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
               asks={asks}
               availableMargin={perpAccount.account?.initialMarginSurplus ?? null}
               bids={bids}
-              hasPosition={perpAccount.positions.length > 0}
               hasWallet={primaryWallet !== null}
               isPreparingAccount={account.isLoading || (isSignedIn && !walletsReady)}
               isSubmitting={isSubmitting}
@@ -1066,6 +1065,7 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
               onDepositRequest={() => setDepositOpen(true)}
               onEdit={orderStatus.clear}
               onSubmit={market === null ? undefined : handleSubmit}
+              position={perpAccount.positions[0] ?? null}
               referencePrice={price}
               state={market?.state ?? null}
               takerFeeBps={market?.takerFeeBps ?? null}
