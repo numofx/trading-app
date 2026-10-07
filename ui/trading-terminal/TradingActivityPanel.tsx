@@ -14,6 +14,9 @@ const EMPTY_STATE_COPY: Partial<Record<string, EmptyState>> = {};
 const TEXT_COLUMNS = new Set([
   "Side",
   "Direction",
+  "Action",
+  "Type",
+  "Status",
   "Role",
   "Time",
   "Asset",

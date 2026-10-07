@@ -1,5 +1,5 @@
 import { getExplorerTransactionUrl } from "@/lib/explorer-links";
-import { formatPrice } from "@/lib/market-formatting";
+import { formatDollarPrice, formatPrice } from "@/lib/market-formatting";
 import { MARKET_LABELS, marketLabel } from "@/lib/market-labels";
 import type {
   AccountFill,
@@ -8,7 +8,7 @@ import type {
   OrderHistoryStatus,
 } from "@/lib/order-history.types";
 import { sideTone } from "@/lib/side-tone";
-import type { ActivityView, SpotOpenOrder } from "@/lib/trading.types";
+import type { ActivityRow, ActivityView, CellBadge, SpotOpenOrder } from "@/lib/trading.types";
 
 /** Rendered when a balance is genuinely unknown — never substitute a zero or a placeholder figure. */
 const UNKNOWN_BALANCE = "—";
@@ -157,6 +157,104 @@ function getOrderFill(order: OrderHistoryOrder) {
 
 function formatHistoryUsdc(value: number) {
   return `${value.toLocaleString("en-US", { maximumFractionDigits: 4 })} USDC`;
+}
+
+/**
+ * The perp's Order History columns. Unlike spot's, the order's own size and price are shown (the
+ * size is whole cNGN contracts, so it is what the trader asked for and not a slippage-room figure),
+ * with the fill beside them and the average fill price as its note. The trailing column is Filled
+ * rather than an action: a historical order has nothing to act on.
+ */
+export const PERP_ORDER_HISTORY_COLUMNS = [
+  "Time",
+  "Market",
+  "Action",
+  "Type",
+  "Status",
+  "Size",
+  "Price",
+  "Filled",
+] as const;
+
+const PERP_ORDER_HISTORY_ACTION_COLUMN = PERP_ORDER_HISTORY_COLUMNS.indexOf("Action");
+const PERP_ORDER_HISTORY_TYPE_COLUMN = PERP_ORDER_HISTORY_COLUMNS.indexOf("Type");
+const PERP_ORDER_HISTORY_STATUS_COLUMN = PERP_ORDER_HISTORY_COLUMNS.indexOf("Status");
+const PERP_ORDER_HISTORY_FILLED_COLUMN = PERP_ORDER_HISTORY_COLUMNS.indexOf("Filled");
+
+const PERP_ORDER_TYPE_NOTE =
+  "Every order is signed as a limit; a market order is a limit priced through the touch. RO: reduce-only, clamped to the open position. PO: post-only, rested and never crossed.";
+
+/**
+ * What the order did, in the perp's words: a buy of cNGN is a Long, a sell a Short. A reduce-only
+ * order can only have shrunk the opposite position, so it reads as closing that one: a reduce-only
+ * buy is "Close Short".
+ */
+function formatPerpAction(intent: IntentSide, reduceOnly: boolean) {
+  if (intent === undefined) {
+    return UNKNOWN_BALANCE;
+  }
+  if (reduceOnly) {
+    return intent.side === "buy" ? "Close Short" : "Close Long";
+  }
+  return intent.side === "buy" ? "Long" : "Short";
+}
+
+/**
+ * The perp's Order History: the connected wallet's orders in every status, newest first. Every
+ * figure is the order's own or its fills': the venue records the side, the reduce-only and
+ * post-only flags, the size and limit, what filled and for how much. It does not record whether
+ * the ticket sent a market or a limit order, since both are signed as limits, so the Type cell
+ * says so rather than guessing.
+ */
+export function buildPerpOrderHistoryActivityView(
+  orders: OrderHistoryOrder[],
+  label: string,
+  timeZone?: string
+): ActivityView {
+  return {
+    columns: [...PERP_ORDER_HISTORY_COLUMNS],
+    rows: orders.map((order) => {
+      const intent = order.spot_contract?.ui_intent;
+      const limit = Number(order.limit_price);
+      const size = Number(order.desired_amount);
+      const { averagePrice, filledCngn } = getOrderFill(order);
+      const flags: CellBadge[] = [];
+      if (order.reduce_only === true) {
+        flags.push({ label: "RO" });
+      }
+      if (order.post_only === true) {
+        flags.push({ label: "PO" });
+      }
+      const row: ActivityRow = {
+        titles: { [PERP_ORDER_HISTORY_TYPE_COLUMN]: PERP_ORDER_TYPE_NOTE },
+        cells: [
+          formatOrderTime(order.created_at, timeZone),
+          label,
+          formatPerpAction(intent, order.reduce_only === true),
+          "Limit",
+          ORDER_STATUS_LABELS[order.status] ?? order.status,
+          Number.isFinite(size) ? formatCngnSize(size) : UNKNOWN_BALANCE,
+          formatDollarPrice(Number.isFinite(limit) ? limit : null),
+          formatCngnSize(filledCngn),
+        ],
+        tones: {
+          ...directionTones(PERP_ORDER_HISTORY_ACTION_COLUMN, intent),
+          ...(order.status === "filled"
+            ? { [PERP_ORDER_HISTORY_STATUS_COLUMN]: "positive" as const }
+            : {}),
+        },
+      };
+      if (flags.length > 0) {
+        row.badges = { [PERP_ORDER_HISTORY_TYPE_COLUMN]: flags };
+      }
+      if (averagePrice !== null) {
+        row.details = {
+          [PERP_ORDER_HISTORY_FILLED_COLUMN]: `@ ${formatDollarPrice(averagePrice)}`,
+        };
+      }
+      return row;
+    }),
+  };
 }
 
 /**

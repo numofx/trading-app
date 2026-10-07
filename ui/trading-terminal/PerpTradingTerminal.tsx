@@ -9,7 +9,11 @@ import posthog from "posthog-js";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { createWalletClient, custom } from "viem";
-import { buildOpenOrdersActivityView, getOwnedOpenOrders } from "@/lib/account-activity-views";
+import {
+  buildOpenOrdersActivityView,
+  buildPerpOrderHistoryActivityView,
+  getOwnedOpenOrders,
+} from "@/lib/account-activity-views";
 import { formatBalance } from "@/lib/account-balance-display";
 import { getAppChain } from "@/lib/base-public-client";
 import {
@@ -798,6 +802,7 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
     market: PERP_MARKET_SYMBOL,
     signMessage: buildHistorySigner(primaryWallet, walletsReady),
     walletAddress: primaryWallet?.address ?? null,
+    orderHistoryView: (orders) => buildPerpOrderHistoryActivityView(orders, PERP_MARKET_LABEL),
   });
   /** The header's deposit control and the account rows share one path: connect first, then deposit. */
   function openDeposit() {

@@ -1,6 +1,8 @@
 "use client";
 
+import { buildPerpOrderHistoryActivityView } from "@/lib/account-activity-views";
 import { formatBalance } from "@/lib/account-balance-display";
+import type { OrderHistoryOrder } from "@/lib/order-history.types";
 import { buildPerpPositionsView, parsePerpState } from "@/lib/perp-market";
 import type { PerpAccountMargin, PerpPosition } from "@/lib/perp-market.types";
 import { PERP_BOTTOM_TABS, PERP_MARKET_LABEL } from "@/lib/perp-terminal-config";
@@ -69,6 +71,47 @@ const FIXTURE_SHORT: PerpPosition = {
   unrealizedPnl: -15.66,
 };
 
+/** Three orders as GET /v1/orders returns them: a filled long, a filled post-only long, a resting reduce-only close. */
+const FIXTURE_ORDERS: OrderHistoryOrder[] = [
+  {
+    created_at: "2026-10-07T17:01:00Z",
+    desired_amount: "1817",
+    filled_amount: "1817",
+    filled_quote: "1.335132",
+    limit_price: "0.000738500000000000",
+    market: "USDCcNGN-PERP",
+    order_id: "perp-3",
+    side: "buy",
+    spot_contract: { ui_intent: { price: "0.0007385", side: "buy", size: "1817" } },
+    status: "filled",
+  },
+  {
+    created_at: "2026-10-07T11:01:00Z",
+    desired_amount: "56476",
+    filled_amount: "56476",
+    filled_quote: "41.50986",
+    limit_price: "0.000738700000000000",
+    market: "USDCcNGN-PERP",
+    order_id: "perp-2",
+    post_only: true,
+    side: "buy",
+    spot_contract: { ui_intent: { price: "0.0007387", side: "buy", size: "56476" } },
+    status: "filled",
+  },
+  {
+    created_at: "2026-10-07T00:32:00Z",
+    desired_amount: "327",
+    filled_amount: "0",
+    limit_price: "0.000728000000000000",
+    market: "USDCcNGN-PERP",
+    order_id: "perp-1",
+    reduce_only: true,
+    side: "sell",
+    spot_contract: { ui_intent: { price: "0.000728", side: "sell", size: "327" } },
+    status: "active",
+  },
+];
+
 export function PerpLayoutFixture() {
   return (
     <main className="flex min-h-screen flex-col gap-3 bg-terminal-bg p-3 text-foreground">
@@ -98,6 +141,17 @@ export function PerpLayoutFixture() {
           tabs={PERP_BOTTOM_TABS.map((tab) =>
             tab.id === "positions" ? { ...tab, label: `${tab.label} (2)` } : tab
           )}
+        />
+      </div>
+      {/* The Order History tab with the fixture's orders. */}
+      <div className="h-[200px] w-full">
+        <TradingActivityPanel
+          activityView={buildPerpOrderHistoryActivityView(FIXTURE_ORDERS, PERP_MARKET_LABEL, "UTC")}
+          footerLinks={[]}
+          isSignedIn
+          onTabSelect={() => undefined}
+          selectedTab="order-history"
+          tabs={PERP_BOTTOM_TABS}
         />
       </div>
       <div className="mx-auto flex w-full max-w-[340px] flex-col gap-2">

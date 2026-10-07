@@ -32,6 +32,10 @@ export type OrderHistoryOrder = {
   limit_price: string;
   market?: string;
   order_id: string;
+  /** Rested only, never crossed: the venue refused it if it would have taken. */
+  post_only?: boolean;
+  /** Clamped to the open position: it could shrink one, never open or flip one. */
+  reduce_only?: boolean;
   /** The engine side, which is the inverse of the trader's side on this pair. */
   side: "buy" | "sell";
   spot_contract?: {

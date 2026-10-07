@@ -98,10 +98,11 @@ function getSignedHistoryPrompt(
 function getSignedHistoryView(
   tab: string,
   orderHistory: SignedHistoryState<OrderHistoryOrder>,
-  tradeHistory: SignedHistoryState<AccountFill>
+  tradeHistory: SignedHistoryState<AccountFill>,
+  orderHistoryView: (orders: OrderHistoryOrder[]) => ActivityView
 ): ActivityView | null {
   if (tab === "order-history" && orderHistory.status === "ready") {
-    return buildOrderHistoryActivityView(orderHistory.rows);
+    return orderHistoryView(orderHistory.rows);
   }
   if (tab === "trade-history" && tradeHistory.status === "ready") {
     return buildTradeHistoryActivityView(tradeHistory.rows);
@@ -167,6 +168,7 @@ export function useSignedHistoryTabs({
   bottomTab,
   isSignedIn,
   market,
+  orderHistoryView = (orders) => buildOrderHistoryActivityView(orders),
   signMessage,
   walletAddress,
 }: {
@@ -174,6 +176,8 @@ export function useSignedHistoryTabs({
   isSignedIn: boolean;
   /** The venue's symbol for this terminal's market, as history rows carry it. */
   market: string;
+  /** Builds the Order History rows from the loaded orders; spot's columns unless the terminal says otherwise. */
+  orderHistoryView?: (orders: OrderHistoryOrder[]) => ActivityView;
   /** personal_sign with the connected wallet; absent when there is no wallet to sign with. */
   signMessage?: (message: string) => Promise<string>;
   walletAddress: string | null;
@@ -221,6 +225,6 @@ export function useSignedHistoryTabs({
     /** The Trade History row control, undefined on every other tab. */
     rowAction: getTradeHistoryRowAction(bottomTab, tradeState),
     /** The open tab's rows once loaded; null on any other tab or state. */
-    view: getSignedHistoryView(bottomTab, orderState, tradeState),
+    view: getSignedHistoryView(bottomTab, orderState, tradeState, orderHistoryView),
   };
 }
