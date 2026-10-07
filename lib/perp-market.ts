@@ -10,8 +10,10 @@ import type {
   PerpState,
 } from "@/lib/perp-market.types";
 import { sideTone } from "@/lib/side-tone";
+import { getMarketFill, SPOT_MARKET_SLIPPAGE } from "@/lib/spot-market";
 import { getCngnTokenAddress, getUsdcTokenAddress } from "@/lib/subaccount-deposit-config";
 import { formatCompactUsd } from "@/lib/ticker-stats";
+import type { OrderBookLevel } from "@/lib/trading.types";
 import type { WithdrawableAsset } from "@/lib/withdrawable-assets";
 
 /** The `perp` object markets-service serves on `/v1/markets` for the perpetual. */
@@ -258,6 +260,80 @@ export function getLeverageCeiling(state: PerpState | null): number {
  * a long at 1x never does, since its equity (S·p) always exceeds the requirement (mm·S·p). An
  * estimate: it ignores fees and funding.
  */
+/**
+ * How far through the touch a perp market order is signed unless the trader edits it: spot's
+ * 0.5%. Not a cost the trader pays (fills land at the maker's price) but the room the order has
+ * to still cross if the book moves between the ticket reading it and the engine matching.
+ */
+export const PERP_DEFAULT_MAX_SLIPPAGE = SPOT_MARKET_SLIPPAGE;
+
+/** The most slippage room the ticket lets a trader sign for: 5%. */
+export const PERP_MAX_SLIPPAGE_LIMIT = 0.05;
+
+/**
+ * A typed slippage tolerance, "0.5" or "1%", as a fraction; null when it is not a number in
+ * (0, limit]. Zero is refused because a market order signed exactly at the touch fails to cross
+ * the moment the book ticks.
+ */
+export function parseSlippagePercent(text: string) {
+  const parsed = Number(text.replace("%", "").trim());
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  const fraction = parsed / 100;
+  return fraction <= PERP_MAX_SLIPPAGE_LIMIT ? fraction : null;
+}
+
+const TRAILING_ZEROS = /\.?0+$/;
+
+/** A slippage fraction as the ticket prints it: "0.5%", "0.046%", at most three decimals. */
+export function formatSlippagePercent(fraction: number) {
+  const pct = fraction * 100;
+  const text = pct.toFixed(3).replace(TRAILING_ZEROS, "");
+  return `${text === "" ? "0" : text}%`;
+}
+
+/**
+ * Where an order is expected to trade, and how far past the touch that is. A limit order trades
+ * at its limit, with no slippage to speak of. A market order trades at the touch and then at
+ * every level behind it until it is filled, so its expected price is the size-weighted average
+ * over the depth it consumes, and its slippage is how far that average sits past the touch, as a
+ * fraction of the touch. With nothing resting on that side the expected price falls back to the
+ * reference price (where the ticket sizes from) and the slippage is unknown rather than zero.
+ */
+export function estimatePerpEntry({
+  asks,
+  bids,
+  limitPrice,
+  orderType,
+  referencePrice,
+  side,
+  sizeCngn,
+}: {
+  asks: OrderBookLevel[];
+  bids: OrderBookLevel[];
+  /** The typed limit, USDC per cNGN; null when none or unparseable. */
+  limitPrice: number | null;
+  orderType: "Market" | "Limit";
+  /** The price a market order fills near: the touch, else the mark. */
+  referencePrice: number | null;
+  side: "long" | "short";
+  sizeCngn: number | null;
+}): { expectedPrice: number | null; slippage: number | null } {
+  if (orderType === "Limit") {
+    return { expectedPrice: limitPrice, slippage: null };
+  }
+  const uiSide = perpOrderUiSide(side);
+  const touch = (uiSide === "buy" ? asks[0]?.price : bids[0]?.price) ?? null;
+  const fill = sizeCngn === null ? null : getMarketFill(uiSide, asks, bids, sizeCngn);
+  const averagePrice = fill?.averagePrice ?? null;
+  if (averagePrice === null || touch === null || touch <= 0) {
+    return { expectedPrice: averagePrice ?? referencePrice, slippage: null };
+  }
+  const adverse = uiSide === "buy" ? averagePrice - touch : touch - averagePrice;
+  return { expectedPrice: averagePrice, slippage: Math.max(0, adverse / touch) };
+}
+
 export function estimateLiquidationPrice({
   side,
   sizeCngn,

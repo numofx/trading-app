@@ -1,18 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { formatNairaPerUsdc, formatPrice } from "@/lib/market-formatting";
+import { formatDollarPrice, formatNairaPerUsdc, formatPrice } from "@/lib/market-formatting";
 import {
   describePerpMarginSources,
   estimateLiquidationPrice,
+  estimatePerpEntry,
   getLeverageCeiling,
+  PERP_DEFAULT_MAX_SLIPPAGE,
   perpOrderUiSide,
   perpSubmitLabel,
   TRADING_PAUSED_MESSAGE,
 } from "@/lib/perp-market";
 import type { PerpAccountMargin, PerpState } from "@/lib/perp-market.types";
 import { PERP_LEVERAGE_PRESETS } from "@/lib/perp-terminal-config";
-import { SPOT_ORDER_LIFETIME_LABEL } from "@/lib/spot-order-submission";
+import type { OrderBookLevel } from "@/lib/trading.types";
 import { OrderTypeTabs } from "@/ui/trading-terminal/OrderTypeTabs";
 import { AmountSlider } from "@/ui/trading-terminal/order-form/AmountSlider";
 import { AvailableRow } from "@/ui/trading-terminal/order-form/AvailableRow";
@@ -21,6 +23,7 @@ import { FieldLabel } from "@/ui/trading-terminal/order-form/FieldLabel";
 import { FormField } from "@/ui/trading-terminal/order-form/FormField";
 import { OrderFormShell } from "@/ui/trading-terminal/order-form/OrderFormShell";
 import { SideToggle } from "@/ui/trading-terminal/order-form/SideToggle";
+import { SlippageRow } from "@/ui/trading-terminal/order-form/SlippageRow";
 import { SubmitButton } from "@/ui/trading-terminal/order-form/SubmitButton";
 import { SummaryRow } from "@/ui/trading-terminal/order-form/SummaryRow";
 import type { TokenSymbol } from "@/ui/trading-terminal/order-form/TokenUnit";
@@ -47,6 +50,8 @@ export type PerpOrderRequest = {
   sizeUnit: "cNGN" | "USDC";
   /** Only shrink the open position: the venue clamps the fill to it and never opens or flips one. */
   reduceOnly: boolean;
+  /** How far through the touch a market order is signed, as a fraction; ignored for a limit order. */
+  maxSlippage: number;
 };
 
 const USD = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 });
@@ -243,21 +248,24 @@ function liquidationTooltip(state: PerpState | null) {
   return `${base} The position is a fixed amount of cNGN valued in USDC, so a short's loss grows without bound as cNGN strengthens while a long can lose at most its notional: at 1x a short is liquidated about ${shortMove}% above entry, and a long at no price.`;
 }
 
-/** Hourly funding from the chosen side's point of view: what it pays or receives. */
-function describeFunding(state: PerpState | null, side: PerpSide) {
-  if (state === null) {
+/** A USDC amount as the summary prints it: "$593,142.80"; "—" when unknown. */
+function formatUsd(value: number | null) {
+  return value === null ? "—" : `$${USD.format(value)}`;
+}
+
+/** The taker fee as a rate, with what it comes to on this order once the order has a value. */
+function describeFee(takerFeeBps: number | null, feeUsd: number | null) {
+  if (takerFeeBps === null) {
     return "—";
   }
-  const sideRate = side === "long" ? state.uiLongFundingRate1h : -state.uiLongFundingRate1h;
-  if (sideRate === 0) {
-    return "0%/h";
-  }
-  const pct = `${(Math.abs(sideRate) * 100).toFixed(4)}%/h`;
-  return sideRate > 0 ? `pays ${pct}` : `receives ${pct}`;
+  const rate = `${(takerFeeBps / 100).toFixed(2)}%`;
+  return feeUsd === null ? rate : `${rate} (${formatUsd(feeUsd)})`;
 }
 
 type TicketInputs = {
+  asks: OrderBookLevel[];
   availableMargin: number | null;
+  bids: OrderBookLevel[];
   limitPrice: string;
   margin: string;
   orderType: PerpOrderType;
@@ -269,16 +277,25 @@ type TicketInputs = {
 };
 
 /**
- * Everything the ticket shows that follows from its inputs: the USDC value, fee, margin needed,
- * shortfall and liq. price. The size is cNGN; its value, and everything charged on it, is at the
- * entry price (the typed limit, else where a market order fills), so without one the fee and
- * margin are unknown rather than zero.
+ * Everything the ticket shows that follows from its inputs: the expected price and slippage, the
+ * order's USDC value, fee, margin needed, shortfall and liq. price. The size is cNGN; its value,
+ * and everything charged on it, is at the expected price (the typed limit, else the walk through
+ * the book for a market order of this size), so without one the fee and margin are unknown rather
+ * than zero.
  */
 function deriveTicket(inputs: TicketInputs) {
   const sizeCngn = parseAmount(inputs.size);
   const marginUsd = parseAmount(inputs.margin);
-  const entryPrice =
-    inputs.orderType === "Limit" ? parseAmount(inputs.limitPrice) : inputs.referencePrice;
+  const entry = estimatePerpEntry({
+    asks: inputs.asks,
+    bids: inputs.bids,
+    limitPrice: parseAmount(inputs.limitPrice),
+    orderType: inputs.orderType,
+    referencePrice: inputs.referencePrice,
+    side: inputs.side,
+    sizeCngn,
+  });
+  const entryPrice = entry.expectedPrice;
   const notionalUsd = sizeCngn !== null && entryPrice !== null ? sizeCngn * entryPrice : null;
   const feeUsd =
     notionalUsd !== null && inputs.takerFeeBps !== null
@@ -306,12 +323,15 @@ function deriveTicket(inputs: TicketInputs) {
       : null;
   const needsPrice = inputs.orderType === "Limit" && parseAmount(inputs.limitPrice) === null;
   return {
+    expectedPrice: sizeCngn === null ? null : entryPrice,
     feeUsd,
     liquidation,
     needsPrice,
+    notionalUsd,
     requiredMargin,
     shortfall,
     sizeCngn,
+    slippage: entry.slippage,
   };
 }
 
@@ -413,7 +433,9 @@ function buttonTone(inputs: ButtonInputs): "buy" | "sell" | "neutral" {
  */
 export function PerpOrderFormPanel({
   account = null,
+  asks = [],
   availableMargin = null,
+  bids = [],
   hasPosition = false,
   hasWallet = false,
   isPreparingAccount = false,
@@ -431,6 +453,9 @@ export function PerpOrderFormPanel({
   hasPosition?: boolean;
   /** The perp account's margin, by asset: what "Available to trade" is made of. */
   account?: PerpAccountMargin | null;
+  /** The resting book, from the touch outward, that a market order of the ticket's size would walk. */
+  asks?: OrderBookLevel[];
+  bids?: OrderBookLevel[];
   /** The perp account's initial-margin surplus, USD; null before an account exists or is read. */
   availableMargin?: number | null;
   hasWallet?: boolean;
@@ -452,6 +477,7 @@ export function PerpOrderFormPanel({
   const [limitPrice, setLimitPrice] = useState("");
   const [leverage, setLeverage] = useState(1);
   const [reduceOnly, setReduceOnly] = useState(false);
+  const [maxSlippage, setMaxSlippage] = useState(PERP_DEFAULT_MAX_SLIPPAGE);
   /** Wraps a field setter so every edit also tells the host. */
   function edited<T>(set: (value: T) => void) {
     return (value: T) => {
@@ -475,8 +501,20 @@ export function PerpOrderFormPanel({
     setLeverage(next);
     fields.onLeverage(next);
   }
-  const { feeUsd, liquidation, needsPrice, requiredMargin, shortfall, sizeCngn } = deriveTicket({
+  const {
+    expectedPrice,
+    feeUsd,
+    liquidation,
+    needsPrice,
+    notionalUsd,
+    requiredMargin,
+    shortfall,
+    sizeCngn,
+    slippage,
+  } = deriveTicket({
+    asks,
     availableMargin,
+    bids,
     limitPrice,
     margin,
     orderType,
@@ -524,6 +562,7 @@ export function PerpOrderFormPanel({
     if (canSubmit) {
       onSubmit({
         limitPrice,
+        maxSlippage,
         orderType,
         reduceOnly: reduceOnly && hasPosition,
         side,
@@ -541,20 +580,46 @@ export function PerpOrderFormPanel({
         <>
           <div className="space-y-0.5">
             <SummaryRow
-              label="Est. liq. price"
+              label="Est. Liquidation Price"
               tooltip={liquidationTooltip(state)}
-              value={formatPrice(liquidation)}
+              value={formatDollarPrice(liquidation)}
             />
             <SummaryRow
-              label="Funding"
-              tooltip="Hourly, from this side's point of view: what it pays or receives at the current rate"
-              value={describeFunding(state, side)}
+              label="Expected Price"
+              tooltip={
+                orderType === "Limit"
+                  ? "A limit order trades at its limit or better"
+                  : "Where a market order of this size is expected to fill, walked through the resting book"
+              }
+              value={formatDollarPrice(expectedPrice)}
             />
-            <SummaryRow label="Fee" value={feeUsd === null ? "—" : `${USD.format(feeUsd)} USDC`} />
             <SummaryRow
-              label="Expires"
-              tooltip="An order that does not fill rests this long, then leaves the book on its own"
-              value={`${SPOT_ORDER_LIFETIME_LABEL} after signing`}
+              label="Order Value"
+              tooltip="The size in cNGN valued at the expected price"
+              value={formatUsd(notionalUsd)}
+            />
+            <SummaryRow
+              label="Margin Required"
+              tooltip="Initial margin on the order's value at the SRM's rate, plus the fee"
+              value={formatUsd(requiredMargin)}
+            />
+            {orderType === "Limit" ? (
+              <SummaryRow
+                label="Slippage"
+                tooltip="A limit order fills at its limit or better, so there is no slippage to allow for"
+                value="—"
+              />
+            ) : (
+              <SlippageRow
+                estimate={slippage}
+                max={maxSlippage}
+                onMaxChange={edited(setMaxSlippage)}
+              />
+            )}
+            <SummaryRow
+              label="Fees"
+              tooltip="The venue's taker fee, charged in USDC on the order's value"
+              value={describeFee(takerFeeBps, feeUsd)}
             />
           </div>
 

@@ -26,6 +26,7 @@ import {
   describeOrderRejection,
   getPerpCollateralWithdrawableAsset,
   getPerpWithdrawableAsset,
+  PERP_DEFAULT_MAX_SLIPPAGE,
   perpOrderUiSide,
   perpSideLabel,
 } from "@/lib/perp-market";
@@ -119,11 +120,11 @@ function toPriceString(price: number) {
 
 /**
  * The signed limit and, for a market order, the price a USDC-denominated size is converted at, in
- * USDC per cNGN. A market order crosses the touch the trader is looking at, with the same slippage
- * room as spot's; a limit order is sized at its own limit.
+ * USDC per cNGN. A market order crosses the touch the trader is looking at, with the slippage
+ * room the ticket set (spot's 0.5% unless edited); a limit order is sized at its own limit.
  */
 function resolvePerpOrderPrice(
-  request: Pick<PerpOrderRequest, "limitPrice" | "orderType">,
+  request: Pick<PerpOrderRequest, "limitPrice" | "maxSlippage" | "orderType">,
   uiSide: "buy" | "sell",
   touch: { bestAsk: number | null; bestBid: number | null; price: number | null }
 ): { uiPrice: string; sizingPrice: number } | { error: string } {
@@ -134,7 +135,12 @@ function resolvePerpOrderPrice(
     }
     return { sizingPrice: limit, uiPrice: request.limitPrice };
   }
-  const marketable = getMarketableLimitPrice(uiSide, touch.bestAsk, touch.bestBid);
+  const marketable = getMarketableLimitPrice(
+    uiSide,
+    touch.bestAsk,
+    touch.bestBid,
+    request.maxSlippage
+  );
   if (marketable === null) {
     return { error: "No opposing perp liquidity to cross. Use a limit order." };
   }
@@ -455,7 +461,11 @@ function buildCloseRequest(
     };
   }
   const uiSide = position.uiSide === "long" ? "sell" : "buy";
-  const resolved = resolvePerpOrderPrice({ limitPrice: "", orderType: "Market" }, uiSide, touch);
+  const resolved = resolvePerpOrderPrice(
+    { limitPrice: "", maxSlippage: PERP_DEFAULT_MAX_SLIPPAGE, orderType: "Market" },
+    uiSide,
+    touch
+  );
   if ("error" in resolved) {
     return resolved;
   }
@@ -1044,7 +1054,9 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
           <div className="order-first flex min-h-[420px] flex-col gap-3 md:order-0 md:col-start-2 md:row-span-3 md:row-start-1 md:min-h-0 md:gap-2 md:overflow-y-auto lg:col-start-3 lg:row-span-2 lg:row-start-1">
             <PerpOrderFormPanel
               account={perpAccount.account}
+              asks={asks}
               availableMargin={perpAccount.account?.initialMarginSurplus ?? null}
+              bids={bids}
               hasPosition={perpAccount.positions.length > 0}
               hasWallet={primaryWallet !== null}
               isPreparingAccount={account.isLoading || (isSignedIn && !walletsReady)}
