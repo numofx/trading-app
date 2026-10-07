@@ -215,6 +215,9 @@ export function PerpLayoutFixture() {
               <button className={FIXTURE_ROW_BUTTON} type="button">
                 Withdraw
               </button>
+              <button className={FIXTURE_ROW_BUTTON} type="button">
+                Swap
+              </button>
             </span>
           )}
           selectedTab="balances"

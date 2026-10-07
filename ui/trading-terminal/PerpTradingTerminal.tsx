@@ -67,6 +67,7 @@ import { get24hStats, getVenueLastPrice } from "@/lib/ticker-stats";
 import type { ActivityTab, ActivityView } from "@/lib/trading.types";
 import type { WithdrawableAsset } from "@/lib/withdrawable-assets";
 import { SmartImage } from "@/ui/SmartImage";
+import { SmartLink } from "@/ui/SmartLink";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import type { AccountSummaryRow } from "@/ui/trading-terminal/order-form/AccountSummary";
 import { AccountSummary } from "@/ui/trading-terminal/order-form/AccountSummary";
@@ -521,9 +522,12 @@ const ROW_BUTTON_CLASSES =
  * transaction on a trade. Each is the one action the row is for.
  */
 /**
- * Deposit and Withdraw at the end of each Balances row. The row order is the ledger's (cash, then
- * each collateral asset held), so a held row's index is its withdraw row; an asset listed but not
- * held can only be deposited.
+ * Deposit, Withdraw and Swap at the end of each Balances row. The row order is the ledger's (cash,
+ * then each collateral asset held), so a held row's index is its withdraw row; an asset listed
+ * but not held can only be deposited. Swap opens the spot cNGN-USDC market, the venue's one way
+ * to exchange the two. Since the unified-account cutover (2026-10-04) spot trades on the perp
+ * stack from this same account, so a spot fill settles straight into these balances: the USDC is
+ * the account's cash and the cNGN its collateral.
  */
 function buildBalanceRowAction(
   account: PerpAccountMargin | null,
@@ -541,6 +545,13 @@ function buildBalanceRowAction(
           Withdraw
         </button>
       ) : null}
+      <SmartLink
+        className={ROW_BUTTON_CLASSES}
+        href="/"
+        title="Trade cNGN for USDC, or back, on the spot market. Spot and the perp share this account, so the swap settles straight into these balances."
+      >
+        Swap
+      </SmartLink>
     </span>
   );
 }
