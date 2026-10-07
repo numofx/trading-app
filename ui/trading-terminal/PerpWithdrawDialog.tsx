@@ -107,7 +107,7 @@ export function PerpWithdrawDialog({
                   </label>
                   {balanceUnits === null ? null : (
                     <button
-                      className="cursor-pointer text-[11px] text-panel-text underline decoration-dotted underline-offset-4 hover:text-panel-text-active"
+                      className="cursor-pointer text-[11px] text-panel-text hover:text-panel-text-active"
                       onClick={() => {
                         withdraw.clearInputError();
                         setAmount(formatWithdrawable(balanceUnits));

@@ -113,8 +113,7 @@ export function TradingActivityPanel({
                           cell.startsWith("-") && "text-sell",
                           row.tones?.[cellIndex] === "positive" && "font-medium text-buy",
                           row.tones?.[cellIndex] === "negative" && "font-medium text-sell",
-                          row.titles?.[cellIndex] !== undefined &&
-                            "cursor-help underline decoration-dotted underline-offset-4"
+                          row.titles?.[cellIndex] !== undefined && "cursor-help"
                         )}
                         key={`${cell}-${cellIndex}`}
                         title={row.titles?.[cellIndex]}

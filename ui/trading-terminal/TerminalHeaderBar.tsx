@@ -46,7 +46,7 @@ function HeaderMetric({
   label: string;
   /** A muted line under the value: the same figure read another way. */
   secondary?: string;
-  /** A hint on the label, dotted-underlined like the ticket's. */
+  /** A hint on the label, shown on hover like the ticket's. */
   tooltip?: string;
 }) {
   return (
@@ -54,7 +54,7 @@ function HeaderMetric({
       <span
         className={cn(
           "whitespace-nowrap text-[9px] text-panel-text-muted",
-          tooltip && "cursor-help underline decoration-dotted underline-offset-4"
+          tooltip && "cursor-help"
         )}
         title={tooltip}
       >
