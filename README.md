@@ -24,8 +24,9 @@ about it from `markets-service`, with no env of its own:
   Until it does, `/trade/cngn-perp` renders its not-live state: empty panels and a ticket that
   cannot submit.
 - Orders are signed exactly as entered (USDC per cNGN, cNGN contracts, a long is the on-chain long)
-  for the perp's module and asset. A trader's perp margin is a separate account under the perp
-  SRM, opened by the first "Deposit margin"; it is not the spot account. "Withdraw" on the Balances
+  for the perp's module and asset. A trader's perp margin is their one trading account under the
+  perp SRM, opened by the first deposit; since the unified-account cutover (2026-10-04) it is also
+  the spot account, so spot fills and perp margin share one balance. "Withdraw" on the Balances
   tab signs a WithdrawalModule action for the perp's CashAsset, like a spot withdrawal, and the
   venue pays USDC to the wallet; cash backing an open position is refused by the venue's
   simulation. "Close" on a position row sends a market order on the opposite side sized in the

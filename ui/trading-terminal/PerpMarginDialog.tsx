@@ -31,10 +31,11 @@ function getCngnCollateral(stack: PerpStack): PerpCollateralAsset | null {
 
 /**
  * Deposits perp margin: USDC into the perp's cash (a CashAsset over real USDC), or cNGN into the
- * perp's own cNGN escrow when the venue credits it. The perp runs on its own stack, so its margin
- * is a separate account under the perp SRM, not the spot account. The first deposit opens that
- * account; later ones top it up. Runs on the same deposit state machine as spot, with the perp's
- * addresses.
+ * perp's cNGN escrow when the venue credits it. Since the unified-account cutover (2026-10-04)
+ * spot trades on the perp's stack, so this is the wallet's one trading account under the perp SRM:
+ * the same account spot settles into, and margin deposited here is also the spot balance. The
+ * first deposit opens it; later ones top it up. Runs on the same deposit state machine as spot,
+ * with the perp's addresses.
  */
 export function PerpMarginDialog({
   onDeposited,
@@ -106,7 +107,7 @@ export function PerpMarginDialog({
           </div>
 
           <p className="text-[12px] text-panel-text-muted leading-snug">
-            Perp margin is held in its own account, separate from your spot balance.
+            Spot and perp share this account: margin you deposit here is also your spot balance.
             {subaccountId === null ? " Your first deposit opens it." : ` Account #${subaccountId}.`}
           </p>
 
