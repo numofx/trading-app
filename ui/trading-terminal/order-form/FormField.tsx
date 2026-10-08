@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { FieldLabel } from "@/ui/trading-terminal/order-form/FieldLabel";
 
 /**
- * A ticket input in its own rounded box: the label top-left (with any explanation as its tooltip),
+ * A ticket input in its own flat, square box, as the perp's size card is: the label top-left (with any explanation as its tooltip),
  * the unit or unit selector on the right, the value underneath. Keeping the label inside the box
  * buys back a row of height per field, which is what puts the submit button above the fold on a
  * 667px screen.
@@ -27,7 +27,7 @@ export function FormField({
   value: string;
 }) {
   return (
-    <div className="rounded-lg bg-input-bg px-3 py-1.5 ring-1 ring-panel-border focus-within:ring-panel-text-muted">
+    <div className="border border-panel-border px-3 py-1.5 focus-within:border-panel-text-muted">
       <div className="flex items-center justify-between gap-2">
         <FieldLabel htmlFor={id} tooltip={tooltip}>
           {label}
