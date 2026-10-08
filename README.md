@@ -12,7 +12,7 @@ slugs live in `lib/market-routes.ts`; `/` and `/perp` redirect onto them (307 fo
 another casing is redirected to lowercase by `proxy.ts` with its query string, and an unknown slug
 is a 404 from the segment's layout. Both markets are shown exactly as the engine trades them: cNGN is the base and USDC the
 quote, prices are USDC per cNGN (about 0.00073, to seven decimals, with ₦ per USDC as a secondary
-line in the header and under the ticket's price field), sizes are cNGN, a buy or long is a buy of
+line under the ticket's limit-price field), sizes are cNGN, a buy or long is a buy of
 cNGN. Since 2026-10-08 the venue identifies the markets as `cNGN-USDC` and `cNGN-PERP`; the pre-rename
 `USDCcNGN-SPOT` / `USDCcNGN-PERP` are deprecated aliases until 2027-01-06 and this app no longer
 sends them. The display names live in `lib/market-labels.ts` and nowhere else. The perp is a USDC-settled perpetual on its own stack (numofx/exchange
