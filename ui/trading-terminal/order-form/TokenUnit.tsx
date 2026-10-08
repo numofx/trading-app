@@ -44,7 +44,7 @@ export function TokenUnitSelect({
     <Menu.Root>
       <Menu.Trigger
         aria-label={label}
-        className="flex shrink-0 cursor-pointer items-center gap-1 bg-panel-bg py-0.5 pr-1 pl-1.5 font-semibold text-[12px] text-panel-text-active transition-colors hover:bg-input-hover"
+        className="flex shrink-0 cursor-pointer items-center gap-1 border border-panel-border bg-input-bg py-0.5 pr-1 pl-1.5 font-semibold text-[12px] text-panel-text-active transition-colors hover:bg-input-hover"
       >
         <SmartImage<string>
           alt={selected}
