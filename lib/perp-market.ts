@@ -838,10 +838,12 @@ function signedPercent(value: number, digits: number) {
 
 /** Open interest in USDC, compact; a venue with none open reads zero, not a dash. */
 function formatOpenInterest(state: PerpState | null) {
-  if (state === null) {
-    return "—";
-  }
-  const compact = formatCompactUsd(state.openInterestUsd);
+  return state === null ? "—" : formatOpenInterestUsd(state.openInterestUsd);
+}
+
+/** Open interest as a compact dollar figure; a venue with none open reads $0.00, not a dash. */
+function formatOpenInterestUsd(openInterestUsd: number) {
+  const compact = formatCompactUsd(openInterestUsd);
   return compact === "—" ? "$0.00" : compact;
 }
 
@@ -850,6 +852,47 @@ function toneOf(value: number | null): PerpHeaderMetric["tone"] {
     return null;
   }
   return value > 0 ? "up" : "down";
+}
+
+/**
+ * The same seven figures from the market selector's row, for the header to show while the perp's
+ * panels are still loading after a switch. Only what the overview carries: the change (a percent,
+ * measured the way the selector measures it), the volume, the open interest and the funding;
+ * the mark, index and absolute change are dashes until the panels publish the live set.
+ */
+export function buildPerpOverviewMetrics(row: {
+  changePercent24h: number | null;
+  fundingRate1h: number | null;
+  openInterestUsd: number | null;
+  volume24hUsd: number | null;
+}): PerpHeaderMetric[] {
+  const live = buildPerpHeaderMetrics({
+    firstPrice: null,
+    price: null,
+    state: null,
+    volumeUsd: null,
+  });
+  const funding = row.fundingRate1h;
+  const seeded: Partial<Record<string, Pick<PerpHeaderMetric, "tone" | "value">>> = {
+    "24h Volume": { tone: null, value: formatCompactUsd(row.volume24hUsd ?? Number.NaN) },
+    "1h Funding": {
+      tone: toneOf(funding),
+      value: funding === null ? "—" : signedPercent(funding * 100, 4),
+    },
+    "24h Change": {
+      tone: toneOf(row.changePercent24h),
+      value: row.changePercent24h === null ? "—" : `(${signedPercent(row.changePercent24h, 2)})`,
+    },
+    APR: {
+      tone: toneOf(funding),
+      value: funding === null ? "—" : signedPercent(funding * HOURS_PER_YEAR * 100, 1),
+    },
+    "Open Interest": {
+      tone: null,
+      value: row.openInterestUsd === null ? "—" : formatOpenInterestUsd(row.openInterestUsd),
+    },
+  };
+  return live.map((metric) => ({ ...metric, ...seeded[metric.label] }));
 }
 
 /**
