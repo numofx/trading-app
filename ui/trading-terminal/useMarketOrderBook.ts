@@ -48,7 +48,7 @@ const EMPTY_VIEW: MarketOrderBookView = { asks: [], bids: [], status: "connectin
  * already `ok` only when the book has depth and is not crossed, and a genuinely one-sided book is
  * reported as it rests. Callers fall back to the server-rendered REST snapshot otherwise.
  *
- * The `market` identifier is a canonical symbol (e.g. `USDCcNGN-SEP16-2026`, `USDCcNGN-SPOT`) or
+ * The `market` identifier is a canonical symbol (e.g. `cNGN-USDC`, `cNGN-PERP`) or
  * the `"<asset_address>:<sub_id>"` form; the server resolves either.
  */
 export function useMarketOrderBook({

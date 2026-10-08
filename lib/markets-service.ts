@@ -11,7 +11,7 @@ export type MarketPresentation = {
   /** The cash the module quotes in, and the manager its accounts live under (unified markets). */
   quote_asset_address?: string;
   margin_manager_address?: string;
-  /** USDCcNGN-PERP's chain state; absent for spot, and for the perp when the chain was unreadable. */
+  /** cNGN-PERP's chain state; absent for spot, and for the perp when the chain was unreadable. */
   perp?: PerpStatePresentation;
   base_asset_symbol?: string;
   contract_type?: string;
@@ -191,7 +191,7 @@ export async function getLiveSpotMarket() {
   return findSpotMarket(await getMarketsServiceMarkets());
 }
 
-/** USDCcNGN-PERP, when markets-service lists it: contract_type `perpetual`, cNGN over USDC. */
+/** cNGN-PERP, when markets-service lists it: contract_type `perpetual`, cNGN over USDC. */
 export async function getLivePerpMarket() {
   return findPerpMarket(await getMarketsServiceMarkets());
 }

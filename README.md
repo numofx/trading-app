@@ -8,12 +8,13 @@ The app renders **cNGN-USDC** spot at `/` and **cNGN-PERP** at `/perp`, switched
 selector in the header. Both are shown exactly as the engine trades them: cNGN is the base and USDC the
 quote, prices are USDC per cNGN (about 0.00073, to seven decimals, with ₦ per USDC as a secondary
 line in the header and under the ticket's price field), sizes are cNGN, a buy or long is a buy of
-cNGN. The venue's internal symbols stay `USDCcNGN-SPOT` and `USDCcNGN-PERP`; only the display names
-changed. The display names live in `lib/market-labels.ts` and nowhere else. The perp is a USDC-settled perpetual on its own stack (numofx/exchange
+cNGN. Since 2026-10-08 the venue identifies the markets as `cNGN-USDC` and `cNGN-PERP`; the pre-rename
+`USDCcNGN-SPOT` / `USDCcNGN-PERP` are deprecated aliases until 2027-01-06 and this app no longer
+sends them. The display names live in `lib/market-labels.ts` and nowhere else. The perp is a USDC-settled perpetual on its own stack (numofx/exchange
 `deploy-cngn-perp-stack.s.sol`): its own CashAsset, SRM and TradeModule. The app reads everything
 about it from `markets-service`, with no env of its own:
 
-- `/v1/markets` lists `USDCcNGN-PERP` (`contract_type: perpetual`) with a `perp` object: mark, index,
+- `/v1/markets` lists `cNGN-PERP` (`contract_type: perpetual`) with a `perp` object: mark, index,
   funding, margin rates, max leverage, and the module, cash and SRM a trader signs and deposits for.
   Until it does, `/perp` renders its not-live state: empty panels and a ticket that cannot submit.
 - Orders are signed exactly as entered (USDC per cNGN, cNGN contracts, a long is the on-chain long)
@@ -94,7 +95,7 @@ The spot order-book panel streams live depth and trades from `markets-service` o
 
 - `NEXT_PUBLIC_MARKETS_WS_URL` — e.g. `wss://api.numofx.com/v1/ws` in production, `ws://127.0.0.1:8080/v1/ws` locally.
 
-The client subscribes to the public `book` and `trades` channels for the `USDCcNGN-SPOT` symbol, seeds from the `snapshot` frame, and applies `update` deltas. Both channels are unauthenticated; the only server-side gate is `WS_ALLOWED_ORIGINS` on the `markets-service` deployment, which **must include the frontend origin** or the browser handshake is rejected. When the socket is unreachable, still connecting, empty or crossed, the panel falls back to the server-rendered REST snapshot — also real venue data, just fetched at page render. A genuinely one-sided live book is shown as it rests rather than being replaced by the older snapshot. When neither source has depth, the ladder says so. That fallback is silent — there is no on-screen indicator of which source is rendering, so a stream that never goes live looks identical to a healthy one. (A "Live liquidity" badge used to signal this and was removed in `bf5688e`; its absence is what let the spot stream sit permanently in fallback, fixed in `c7c2f2e`.)
+The client subscribes to the public `book` and `trades` channels for the `cNGN-USDC` symbol, seeds from the `snapshot` frame, and applies `update` deltas. Both channels are unauthenticated; the only server-side gate is `WS_ALLOWED_ORIGINS` on the `markets-service` deployment, which **must include the frontend origin** or the browser handshake is rejected. When the socket is unreachable, still connecting, empty or crossed, the panel falls back to the server-rendered REST snapshot — also real venue data, just fetched at page render. A genuinely one-sided live book is shown as it rests rather than being replaced by the older snapshot. When neither source has depth, the ladder says so. That fallback is silent — there is no on-screen indicator of which source is rendering, so a stream that never goes live looks identical to a healthy one. (A "Live liquidity" badge used to signal this and was removed in `bf5688e`; its absence is what let the spot stream sit permanently in fallback, fixed in `c7c2f2e`.)
 
 `GET /api/strails/egress` remains as an ops diagnostic that reports the deployment's current egress IP (used when registering an IP allowlist upstream).
 
@@ -107,7 +108,7 @@ served from `GET /v1/markets` only when its env var(s) are set on the `markets-s
 
 | Market | Expiry (UTC) | Env vars on markets-service | Live today |
 | --- | --- | --- | --- |
-| `USDCcNGN-SPOT` | — | `CNGN_SPOT_ASSET_ADDRESS` | yes |
+| `cNGN-USDC` | — | `CNGN_SPOT_ASSET_ADDRESS` | yes |
 | `USDCcNGN-SEP16-2026` | 2026-09-16 14:00 | `CNGN_SEP16_2026_FUTURE_ASSET_ADDRESS` + `CNGN_SEP16_2026_FUTURE_SUB_ID` | yes |
 | `USDCcNGN-NOV30-2026` | 2026-11-30 00:00 | `CNGN_NOV30_2026_FUTURE_ASSET_ADDRESS` + `CNGN_NOV30_2026_FUTURE_SUB_ID` | no |
 | `USDCcNGN-MAY31-2027` | 2027-05-31 00:00 | `CNGN_MAY31_2027_FUTURE_ASSET_ADDRESS` + `CNGN_MAY31_2027_FUTURE_SUB_ID` | no |
@@ -129,8 +130,8 @@ overview route alike), taking the first entry whose `contract_type` is `spot` or
 
 ## Spot market status
 
-Spot is **live again**. `markets-service` serves `USDCcNGN-SPOT` (`contract_type=spot`,
-`order_entry_spec=usdc_cngn_spot_v1`) from `GET /v1/markets`, gated on `CNGN_SPOT_ASSET_ADDRESS`
+Spot is **live again**. `markets-service` serves `cNGN-USDC` (`contract_type=spot`,
+`order_entry_spec=cngn_usdc_spot_v1`) from `GET /v1/markets`, gated on `CNGN_SPOT_ASSET_ADDRESS`
 being set on that deployment. Depth, trades and candles are real, and the spot order translation
 contract below is what the engine actually expects.
 

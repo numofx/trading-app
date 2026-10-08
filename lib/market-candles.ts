@@ -58,7 +58,7 @@ export function toUiCandle(
     return null;
   }
 
-  // USDCcNGN-SPOT and USDCcNGN-PERP are shown as the engine quotes them, USDC per cNGN. Their
+  // cNGN-USDC and cNGN-PERP are shown as the engine quotes them, USDC per cNGN. Their
   // volume is the USDC that changed hands, not the cNGN count: the figure a ticker reports.
   if (marketType === "spot" || marketType === "perp") {
     if (open <= 0 || high <= 0 || low <= 0 || close <= 0) {

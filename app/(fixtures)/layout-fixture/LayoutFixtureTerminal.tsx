@@ -36,7 +36,7 @@ const DEPOSIT_AMOUNT = { cngn: 500_000, usdc: 500 };
 
 /**
  * A book with depth on both sides, so the ticket has a touch to price against and the balances can
- * actually fall short of an order. The numbers are the shape `USDCcNGN-SPOT` trades at, not a claim
+ * actually fall short of an order. The numbers are the shape `cNGN-USDC` trades at, not a claim
  * about any particular session.
  */
 const FIXTURE_MARKET: SpotMarket = {

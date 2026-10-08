@@ -1,7 +1,7 @@
 import type { SpotMarket } from "@/lib/trading.types";
 
 /**
- * USDCcNGN-PERP's live state from markets-service `/v1/markets` (`perp`), parsed. Prices are the
+ * cNGN-PERP's live state from markets-service `/v1/markets` (`perp`), parsed. Prices are the
  * engine's own orientation, USDC per cNGN, which is also what the terminal shows.
  */
 export type PerpState = {

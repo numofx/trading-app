@@ -50,7 +50,7 @@ const TRAILING_ZEROES_PATTERN = /0+$/;
 const UNSIGNED_INTEGER_PATTERN = /^\d+$/;
 
 /**
- * USDCcNGN-SPOT trades wrapped cNGN against wrapped USDC, and the UI expresses an order exactly
+ * cNGN-USDC trades wrapped cNGN against wrapped USDC, and the UI expresses an order exactly
  * as the engine takes it: side (buy/sell cNGN), price in USDC per cNGN, size in cNGN. The engine
  * rests whole cNGN (markets-service enforces an atomic amount step of "1"), so the size is floored:
  *
@@ -123,7 +123,7 @@ function getTradeModuleAddress() {
 }
 
 /**
- * The spot instrument's asset (`/v1/markets` USDCcNGN-SPOT.asset_address, always sub_id 0) when
+ * The spot instrument's asset (`/v1/markets` cNGN-USDC.asset_address, always sub_id 0) when
  * the served market is not at hand: the env, else the chain's cNGN escrow, which is the same
  * contract cNGN deposits pay into.
  */

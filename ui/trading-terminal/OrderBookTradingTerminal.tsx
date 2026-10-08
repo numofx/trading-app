@@ -499,7 +499,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
 
   return (
     <main className="flex min-h-screen flex-col bg-terminal-bg text-foreground transition-colors duration-300 md:h-dvh md:overflow-hidden">
-      <MarketDocumentTitle pair={MARKET_LABELS["USDCcNGN-SPOT"]} price={spotMarket.mark} />
+      <MarketDocumentTitle pair={MARKET_LABELS["cNGN-USDC"]} price={spotMarket.mark} />
 
       <SpotTradingTerminal
         accountCngn={toLedgerAmount(accountLegs.cngnUnits)}

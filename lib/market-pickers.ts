@@ -15,14 +15,14 @@ function isCngnOverUsdc(market: MarketIdentity) {
   return market.base_asset_symbol === "cNGN" && market.quote_asset_symbol === "USDC";
 }
 
-/** USDCcNGN-SPOT, when the venue lists it. */
+/** cNGN-USDC, when the venue lists it. */
 export function findSpotMarket<T extends MarketIdentity>(markets: readonly T[]): T | null {
   return (
     markets.find((market) => market.contract_type === "spot" && isCngnOverUsdc(market)) ?? null
   );
 }
 
-/** USDCcNGN-PERP, when the venue lists it: contract_type `perpetual`, cNGN over USDC. */
+/** cNGN-PERP, when the venue lists it: contract_type `perpetual`, cNGN over USDC. */
 export function findPerpMarket<T extends MarketIdentity>(markets: readonly T[]): T | null {
   return (
     markets.find((market) => market.contract_type === "perpetual" && isCngnOverUsdc(market)) ?? null
