@@ -15,9 +15,16 @@ const FIXTURE_WALLET = {
   meta: { icon: FIXTURE_ICON, id: "fixture", name: "Fixture Wallet" },
 } as unknown as ConnectedWallet;
 
+/** The same wallet with no logo of its own, as Privy's email wallet connects: the glyph stands in. */
+const FIXTURE_WALLET_NO_ICON = {
+  address: "0x1dcA42ab0000000000000000000000000000Ab12",
+  meta: { id: "privy", name: "Privy" },
+} as unknown as ConnectedWallet;
+
 export function WalletMenuFixture() {
   return (
-    <main className="flex min-h-screen justify-end bg-terminal-bg p-6 text-foreground">
+    <main className="flex min-h-screen items-start justify-end gap-3 bg-terminal-bg p-6 text-foreground">
+      <WalletMenu onSignOut={() => undefined} wallet={FIXTURE_WALLET_NO_ICON} />
       <WalletMenu defaultOpen onSignOut={() => undefined} wallet={FIXTURE_WALLET} />
     </main>
   );
