@@ -94,19 +94,22 @@ export function buildAssetOptions({
   accountRows,
   currencies,
   mode,
+  pauseReasonFor = getDepositPauseReason,
   walletBalances,
   withdrawableAssets,
 }: {
   accountRows: { asset: string; balance: bigint }[] | null;
   currencies: DepositCurrency[];
   mode: TransferMode;
+  /** Why a currency cannot be deposited right now, or null; the configured pauses by default. */
+  pauseReasonFor?: (currency: DepositCurrency) => string | null;
   walletBalances: DepositWalletBalances | undefined;
   withdrawableAssets: WithdrawableAsset[];
 }): AssetOption[] {
   if (mode === "deposit") {
     return currencies.map((option) => ({
       balanceLabel: getBalanceLabelFor(walletBalances, option),
-      disabledReason: getDepositPauseReason(option) === null ? undefined : "Paused",
+      disabledReason: pauseReasonFor(option) === null ? undefined : "Paused",
       iconSrc: getTokenIconSrc(option),
       id: option,
       label: option,

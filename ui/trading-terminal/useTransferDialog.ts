@@ -71,6 +71,7 @@ export function useTransferDialog({
   accountRows,
   controlledCurrency,
   controlledMode,
+  depositPauseReasons,
   fundingWallets,
   onCurrencyChange,
   onModeChange,
@@ -92,6 +93,11 @@ export function useTransferDialog({
   controlledCurrency?: DepositCurrency;
   /** Which side the dialog is on, when the opener decides (a withdraw control opens it on Withdraw). */
   controlledMode?: TransferMode;
+  /**
+   * Deposits the opener knows are closed, beyond the deployment's configured pauses: the perp
+   * passes the venue's own word on whether its cNGN collateral escrow is taking deposits.
+   */
+  depositPauseReasons?: Partial<Record<DepositCurrency, string>>;
   fundingWallets?: ConnectedWallet[];
   onCurrencyChange?: (currency: DepositCurrency) => void;
   onModeChange?: (mode: TransferMode) => void;
@@ -103,6 +109,8 @@ export function useTransferDialog({
   walletBalances?: DepositWalletBalances;
 }) {
   const depositableCurrencies = getDepositableCurrencies();
+  const pauseReasonFor = (option: DepositCurrency) =>
+    getDepositPauseReason(option) ?? depositPauseReasons?.[option] ?? null;
   const withdrawableAssets = withdrawableAssetsOverride ?? getWithdrawableAssets();
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const [uncontrolledMode, setUncontrolledMode] = useState<TransferMode>(
@@ -261,6 +269,7 @@ export function useTransferDialog({
       accountRows: accountRows ?? null,
       currencies: depositableCurrencies,
       mode,
+      pauseReasonFor,
       walletBalances,
       withdrawableAssets,
     }),
@@ -270,7 +279,7 @@ export function useTransferDialog({
     currency,
     deposit,
     depositFlowState: flowState,
-    depositPauseReason: getDepositPauseReason(currency),
+    depositPauseReason: pauseReasonFor(currency),
     handleAmountChange,
     handleFundWithBank,
     handleOpenChange,

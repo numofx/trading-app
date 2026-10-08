@@ -400,6 +400,7 @@ function DepositForm({
   onPickAsset,
   onPickWallet,
   onSubmit,
+  note,
   pauseReason,
 }: {
   account: DepositAccount;
@@ -407,6 +408,8 @@ function DepositForm({
   balanceLabel: string | null;
   currency: DepositCurrency;
   inputError: string | null;
+  /** What the opener needs a depositor of this currency to know, above the review button. */
+  note: string | null;
   onAmountChange: (amount: string) => void;
   onMax: (() => void) | null;
   onPickAsset: () => void;
@@ -431,6 +434,9 @@ function DepositForm({
         onPickAsset={onPickAsset}
         onPickWallet={onPickWallet ?? undefined}
       />
+      {note === null ? null : (
+        <p className="mt-4 text-[12px] text-panel-text-muted leading-snug">{note}</p>
+      )}
       <button
         className={cn(PRIMARY_BUTTON_CLASSES, "mt-6 w-full")}
         onClick={onSubmit}
@@ -1066,6 +1072,7 @@ function DepositSide({
   onPickAsset,
   onPickWallet,
   onReview,
+  note,
   pauseReason,
   reset,
 }: {
@@ -1083,6 +1090,7 @@ function DepositSide({
   onPickAsset: () => void;
   onPickWallet: (() => void) | null;
   onReview: (account: DepositAccount) => void;
+  note: string | null;
   pauseReason: string | null;
   reset: () => void;
 }) {
@@ -1098,6 +1106,7 @@ function DepositSide({
         balanceLabel={balanceLabel}
         currency={currency}
         inputError={inputError}
+        note={note}
         onAmountChange={onAmountChange}
         onMax={onMax}
         onPickAsset={onPickAsset}
@@ -1140,6 +1149,7 @@ function TransferSide({
   onPickWallet,
   onReview,
   onWithdraw,
+  depositNote,
   pauseReason,
   reset,
   resetWithdraw,
@@ -1147,6 +1157,7 @@ function TransferSide({
   withdrawFallback,
   withdrawFlowState,
 }: {
+  depositNote: string | null;
   account: DepositAccount | null;
   amount: string;
   approve: () => Promise<void>;
@@ -1201,6 +1212,7 @@ function TransferSide({
       deposit={deposit}
       flowState={flowState}
       inputError={inputError}
+      note={depositNote}
       onAmountChange={onAmountChange}
       onConnectWallet={onConnectWallet}
       onMax={onMax}
@@ -1277,6 +1289,8 @@ export function DepositDialog({
   account,
   accountRows,
   currency: controlledCurrency,
+  depositNotes,
+  depositPauseReasons,
   mode: controlledMode,
   fundingWallets,
   onConnectWallet,
@@ -1307,6 +1321,10 @@ export function DepositDialog({
   currency?: DepositCurrency;
   /** Deposit or Withdraw, when the opener decides; the dialog's own switch reports changes back. */
   mode?: TransferMode;
+  /** A note per currency shown on the deposit form, e.g. the perp's cNGN haircut. */
+  depositNotes?: Partial<Record<DepositCurrency, string>>;
+  /** Deposits closed beyond the deployment's configured pauses, with why. */
+  depositPauseReasons?: Partial<Record<DepositCurrency, string>>;
   /** Starts wallet login from the dialog's no-wallet step. */
   onConnectWallet?: () => void;
   /** Fires for both the asset picker and the "deposit the other asset" step. */
@@ -1348,6 +1366,7 @@ export function DepositDialog({
     accountRows,
     controlledCurrency,
     controlledMode,
+    depositPauseReasons,
     fundingWallets,
     onCurrencyChange,
     onModeChange,
@@ -1431,6 +1450,7 @@ export function DepositDialog({
               balanceLabel={dialog.balanceView.label}
               currency={dialog.currency}
               deposit={dialog.deposit}
+              depositNote={depositNotes?.[dialog.currency] ?? null}
               flowState={dialog.depositFlowState}
               inputError={dialog.inputError}
               mode={dialog.mode}

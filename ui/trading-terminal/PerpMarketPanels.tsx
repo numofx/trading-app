@@ -1,6 +1,5 @@
 "use client";
 
-import { Menu } from "@base-ui/react/menu";
 import type { ConnectedWallet } from "@privy-io/react-auth";
 import { Duration } from "effect";
 import { useRouter } from "next/navigation";
@@ -22,8 +21,6 @@ import {
   buildPerpHeaderMetrics,
   buildPerpPositionsView,
   describeOrderRejection,
-  getPerpCollateralWithdrawableAsset,
-  getPerpWithdrawableAsset,
   PERP_DEFAULT_MAX_SLIPPAGE,
   perpOrderUiSide,
   perpSideLabel,
@@ -54,32 +51,30 @@ import {
   createOrderIdempotencyKey,
 } from "@/lib/spot-order-submission";
 import { FOOTER_LINKS, SPOT_TIMEFRAME_OPTIONS } from "@/lib/spot-terminal-config";
+import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
 import { get24hStats } from "@/lib/ticker-stats";
 import type { ActivityTab, ActivityView } from "@/lib/trading.types";
-import type { WithdrawableAsset } from "@/lib/withdrawable-assets";
-import { SmartImage } from "@/ui/SmartImage";
 import { SmartLink } from "@/ui/SmartLink";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import type { AccountSummaryRow } from "@/ui/trading-terminal/order-form/AccountSummary";
 import { AccountSummary } from "@/ui/trading-terminal/order-form/AccountSummary";
-import { PerpMarginDialog } from "@/ui/trading-terminal/PerpMarginDialog";
 import type { PerpOrderRequest } from "@/ui/trading-terminal/PerpOrderFormPanel";
 import { PerpOrderFormPanel } from "@/ui/trading-terminal/PerpOrderFormPanel";
-import { PerpWithdrawDialog } from "@/ui/trading-terminal/PerpWithdrawDialog";
 import type { SpotChartTab, SpotTimeframe } from "@/ui/trading-terminal/SpotChartPanel";
 import { SpotChartPanel } from "@/ui/trading-terminal/SpotChartPanel";
 import type { SpotBookTab } from "@/ui/trading-terminal/SpotOrderBookPanel";
 import { SpotOrderBookPanel } from "@/ui/trading-terminal/SpotOrderBookPanel";
 import { TerminalGrid } from "@/ui/trading-terminal/TerminalGrid";
-import { HEADER_ACTION_CLASSES } from "@/ui/trading-terminal/TerminalHeaderBar";
 import { usePublishTerminalHeader } from "@/ui/trading-terminal/TerminalHeaderSlot";
 import { useTerminalSession } from "@/ui/trading-terminal/TerminalSession";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
+import { useAccountTransfer } from "@/ui/trading-terminal/useAccountTransfer";
 import { useLiveMarketBook } from "@/ui/trading-terminal/useLiveMarketBook";
 import { useOrderStatus } from "@/ui/trading-terminal/useOrderStatus";
 import { usePerpLiveState } from "@/ui/trading-terminal/usePerpLiveState";
 import { readPerpPositions, usePerpPositions } from "@/ui/trading-terminal/usePerpPositions";
 import { useSignedHistoryTabs } from "@/ui/trading-terminal/useSignedHistoryTabs";
+import { useSubaccountBalance } from "@/ui/trading-terminal/useSubaccountBalance";
 
 type PerpBottomTab = keyof typeof PERP_ACTIVITY_VIEWS;
 
@@ -411,38 +406,85 @@ function buildHistorySigner(primaryWallet: ConnectedWallet | null, walletsReady:
 
 /**
  * The Account panel's rows: cash, then cNGN when the SRM accepts it, at zero until it is held and
- * an em dash until the account is read. The plus opens the margin deposit, which chooses the asset.
+ * an em dash until the account is read. Each row's plus and minus open the account's one transfer
+ * dialog on that row's asset; minus only where something is held to withdraw.
  */
 function buildAccountRows(
   account: PerpAccountMargin | null,
   stack: PerpStack | null,
-  onDeposit: () => void,
-  /** Opens the withdraw dialog on a row of the account's ledger: 0 is cash, then each collateral asset held. */
-  onWithdraw: (rowIndex: number) => void
+  onDeposit: (currency: DepositCurrency) => void,
+  onWithdraw: (currency: DepositCurrency) => void
 ): AccountSummaryRow[] {
   const cngnListed = listedCollateralOf(stack).some((asset) => asset.symbol === "cNGN");
   const cngnHeld = account?.collateral.find((row) => row.symbol === "cNGN")?.balance;
-  const withdrawAction = (symbol: "USDC" | "cNGN") => {
-    const row = withdrawRowFor(account, symbol);
-    return row === null ? undefined : () => onWithdraw(row);
-  };
   const rows: AccountSummaryRow[] = [
     {
       balance: formatBalance(account?.cash ?? null, "USDC"),
-      onDeposit,
-      onWithdraw: withdrawAction("USDC"),
+      onWithdraw: account === null ? undefined : () => onWithdraw("USDC"),
       symbol: "USDC",
+      onDeposit: () => onDeposit("USDC"),
     },
   ];
   if (cngnListed) {
     rows.push({
       balance: formatBalance(account === null ? null : (cngnHeld ?? 0), "cNGN"),
-      onDeposit,
-      onWithdraw: withdrawAction("cNGN"),
+      onWithdraw: cngnHeld === undefined ? undefined : () => onWithdraw("cNGN"),
       symbol: "cNGN",
+      onDeposit: () => onDeposit("cNGN"),
     });
   }
   return rows;
+}
+
+const PERCENT = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0, style: "percent" });
+
+/** The cNGN the perp credits as margin, if the venue lists it. */
+function cngnCollateralOf(stack: PerpStack | null): PerpCollateralAsset | null {
+  return listedCollateralOf(stack).find((asset) => asset.symbol === "cNGN") ?? null;
+}
+
+/**
+ * Why cNGN cannot be deposited as perp margin right now, or nothing when it can: the venue lists
+ * it and its escrow is taking deposits. Between the SRM crediting it and the escrow opening, a
+ * deposit would revert, so the dialog does not offer it.
+ */
+function cngnMarginPause(stack: PerpStack | null): Partial<Record<DepositCurrency, string>> {
+  const cngn = cngnCollateralOf(stack);
+  if (cngn?.depositsOpen) {
+    return {};
+  }
+  return { cNGN: "The venue is not taking cNGN margin deposits right now. USDC is open." };
+}
+
+/**
+ * What a cNGN margin depositor must know before posting it: the haircut, and that the haircut is
+ * what liquidates a leveraged short as the naira strengthens.
+ */
+function cngnMarginNote(stack: PerpStack | null): Partial<Record<DepositCurrency, string>> {
+  const cngn = cngnCollateralOf(stack);
+  if (cngn === null) {
+    return {};
+  }
+  return {
+    cNGN: `cNGN is valued at the index and ${PERCENT.format(cngn.marginFactor)} of that counts as margin. A short of cNGN loses as cNGN strengthens; the cNGN you post gains then, but only that share of the gain is credited, so the haircut is what gets a leveraged short liquidated: post about as much cNGN as you short.`,
+  };
+}
+
+/** Each Balances row's asset, in the order `buildPerpBalancesView` lays the rows out. */
+function balanceRowSymbolsOf(account: PerpAccountMargin | null, stack: PerpStack | null) {
+  if (account === null) {
+    return [];
+  }
+  const held = account.collateral;
+  const unheld = listedCollateralOf(stack).filter(
+    (asset) => !held.some((row) => row.escrow.toLowerCase() === asset.escrow.toLowerCase())
+  );
+  return ["USDC", ...held.map((row) => row.symbol), ...unheld.map((asset) => asset.symbol)];
+}
+
+/** A Balances row's asset as the transfer dialog names it, or null for one it cannot move. */
+function toTransferCurrency(symbol: string | undefined): DepositCurrency | null {
+  return symbol === "USDC" || symbol === "cNGN" ? symbol : null;
 }
 
 function buildEmptyState(
@@ -513,38 +555,44 @@ const ROW_BUTTON_CLASSES =
  * transaction on a trade. Each is the one action the row is for.
  */
 /**
- * Deposit, Withdraw and Swap at the end of each Balances row. The row order is the ledger's (cash,
- * then each collateral asset held), so a held row's index is its withdraw row; an asset listed
- * but not held can only be deposited. Swap opens the spot cNGN-USDC market, the venue's one way
- * to exchange the two. Since the unified-account cutover (2026-10-04) spot trades on the perp
- * stack from this same account, so a spot fill settles straight into these balances: the USDC is
- * the account's cash and the cNGN its collateral.
+ * Deposit, Withdraw and Swap at the end of each Balances row, Deposit and Withdraw opening the
+ * account's one transfer dialog on the row's asset. The rows run cash, each collateral asset held,
+ * then each listed but not held, which can only be deposited. Swap opens the spot cNGN-USDC market,
+ * the venue's one way to exchange the two. Since the unified-account cutover (2026-10-04) spot
+ * trades on the perp stack from this same account, so a spot fill settles straight into these
+ * balances: the USDC is the account's cash and the cNGN its collateral.
  */
 function buildBalanceRowAction(
   account: PerpAccountMargin | null,
-  onDeposit: () => void,
-  onWithdraw: (ledgerRow: number) => void
+  rowSymbols: string[],
+  onDeposit: (currency: DepositCurrency) => void,
+  onWithdraw: (currency: DepositCurrency) => void
 ) {
   const heldRows = 1 + (account?.collateral.length ?? 0);
-  return (rowIndex: number) => (
-    <span className="inline-flex gap-1.5">
-      <button className={ROW_BUTTON_CLASSES} onClick={onDeposit} type="button">
-        Deposit
-      </button>
-      {rowIndex < heldRows ? (
-        <button className={ROW_BUTTON_CLASSES} onClick={() => onWithdraw(rowIndex)} type="button">
-          Withdraw
-        </button>
-      ) : null}
-      <SmartLink
-        className={ROW_BUTTON_CLASSES}
-        href={marketPath("spot")}
-        title="Trade cNGN for USDC, or back, on the spot market. Spot and the perp share this account, so the swap settles straight into these balances."
-      >
-        Swap
-      </SmartLink>
-    </span>
-  );
+  return (rowIndex: number) => {
+    const currency = toTransferCurrency(rowSymbols[rowIndex]);
+    return (
+      <span className="inline-flex gap-1.5">
+        {currency === null ? null : (
+          <button className={ROW_BUTTON_CLASSES} onClick={() => onDeposit(currency)} type="button">
+            Deposit
+          </button>
+        )}
+        {currency !== null && rowIndex < heldRows ? (
+          <button className={ROW_BUTTON_CLASSES} onClick={() => onWithdraw(currency)} type="button">
+            Withdraw
+          </button>
+        ) : null}
+        <SmartLink
+          className={ROW_BUTTON_CLASSES}
+          href={marketPath("spot")}
+          title="Trade cNGN for USDC, or back, on the spot market. Spot and the perp share this account, so the swap settles straight into these balances."
+        >
+          Swap
+        </SmartLink>
+      </span>
+    );
+  };
 }
 
 function buildRowAction(inputs: {
@@ -557,8 +605,10 @@ function buildRowAction(inputs: {
   market: PerpMarket | null;
   onCancel: (nonce: string, ownerAddress: string) => void;
   onClose: (position: PerpPosition, rowIndex: number) => void;
-  onDeposit: () => void;
-  onWithdraw: (ledgerRow: number) => void;
+  onDeposit: (currency: DepositCurrency) => void;
+  onWithdraw: (currency: DepositCurrency) => void;
+  /** Each Balances row's asset, in the view's order. */
+  balanceRowSymbols: string[];
   ownedOpenOrders: { nonce: string; ownerAddress: string }[];
   positions: PerpPosition[];
   /** The Trade History row control (the fill's transaction), undefined on every other tab. */
@@ -591,7 +641,12 @@ function buildRowAction(inputs: {
     };
   }
   if (bottomTab === "balances") {
-    return buildBalanceRowAction(inputs.account, inputs.onDeposit, inputs.onWithdraw);
+    return buildBalanceRowAction(
+      inputs.account,
+      inputs.balanceRowSymbols,
+      inputs.onDeposit,
+      inputs.onWithdraw
+    );
   }
   if (bottomTab === "positions") {
     return (rowIndex: number) => {
@@ -616,30 +671,6 @@ function buildRowAction(inputs: {
     };
   }
   return undefined;
-}
-
-/**
- * What a Margin-tab row withdraws: row 0 the perp's cash as USDC, row n the n-th collateral asset
- * through its own escrow. Null for a collateral symbol the app cannot pay out (no known token).
- */
-function withdrawTarget(
-  stack: PerpStack | null,
-  account: PerpAccountMargin | null,
-  rowIndex: number | null
-): { asset: WithdrawableAsset; balanceUnits: bigint | null } | null {
-  if (stack === null || rowIndex === null) {
-    return null;
-  }
-  if (rowIndex === 0) {
-    return { asset: getPerpWithdrawableAsset(stack), balanceUnits: account?.cashUnits ?? null };
-  }
-  const held = account?.collateral[rowIndex - 1];
-  if (held === undefined) {
-    return null;
-  }
-  const listed = stack.collateralAssets.find((candidate) => candidate.escrow === held.escrow);
-  const asset = listed === undefined ? null : getPerpCollateralWithdrawableAsset(listed);
-  return asset === null ? null : { asset, balanceUnits: held.balanceUnits };
 }
 
 type SignedOrderResponse = { body: { error?: string } | null; ok: boolean; status: number };
@@ -691,88 +722,6 @@ function usePerpBook(market: PerpMarket | null) {
   };
 }
 
-/**
- * The ledger row the withdraw dialog opens on for an asset: 0 is cash, then each collateral asset
- * the account holds, in order; null for collateral it does not hold, which has nothing to withdraw.
- */
-function withdrawRowFor(account: PerpAccountMargin | null, symbol: "USDC" | "cNGN") {
-  if (account === null) {
-    return null;
-  }
-  if (symbol === "USDC") {
-    return 0;
-  }
-  const index = account.collateral.findIndex((row) => row.symbol === symbol);
-  return index === -1 ? null : index + 1;
-}
-
-/** Why an asset cannot be withdrawn right now, for the menu item's tooltip. */
-function withdrawDisabledReason(account: PerpAccountMargin | null, symbol: string) {
-  return account === null
-    ? "Deposit margin to open your perp account"
-    : `No ${symbol} posted as margin`;
-}
-
-const WITHDRAW_OPTIONS = [
-  { icon: "/tokens/usdc.svg", symbol: "USDC" },
-  { icon: "/tokens/cngn.svg", symbol: "cNGN" },
-] as const;
-
-/**
- * The header's Withdraw: a menu over the assets the account can pay out, cash and each collateral
- * asset, so cNGN posted as margin is reachable from the header as well as from its Account row.
- * Without a wallet the button connects one instead.
- */
-function HeaderWithdrawMenu({
-  account,
-  cngnListed,
-  hasWallet,
-  onConnect,
-  onWithdraw,
-}: {
-  account: PerpAccountMargin | null;
-  cngnListed: boolean;
-  hasWallet: boolean;
-  onConnect: () => void;
-  onWithdraw: (rowIndex: number) => void;
-}) {
-  if (!hasWallet) {
-    return <HeaderActionButton onClick={onConnect}>Withdraw</HeaderActionButton>;
-  }
-  const options = WITHDRAW_OPTIONS.filter((option) => option.symbol === "USDC" || cngnListed);
-  return (
-    <Menu.Root>
-      {/* Reads exactly like spot's Withdraw button; the asset choice is in the menu it opens. */}
-      <Menu.Trigger className={HEADER_ACTION_CLASSES}>Withdraw</Menu.Trigger>
-      <Menu.Portal>
-        <Menu.Positioner align="end" sideOffset={6}>
-          <Menu.Popup className="z-50 min-w-(--anchor-width) overflow-hidden rounded-lg border border-panel-border bg-panel-bg-darker p-1 shadow-[0_20px_60px_var(--panel-shadow)] outline-none transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
-            {options.map((option) => {
-              const row = withdrawRowFor(account, option.symbol);
-              return (
-                <Menu.Item
-                  className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 font-medium text-[13px] text-panel-text-active outline-none transition-colors data-disabled:cursor-not-allowed data-highlighted:bg-input-hover data-disabled:opacity-50"
-                  disabled={row === null}
-                  key={option.symbol}
-                  onClick={() => row !== null && onWithdraw(row)}
-                  title={row === null ? withdrawDisabledReason(account, option.symbol) : undefined}
-                >
-                  <SmartImage<string>
-                    alt={option.symbol}
-                    className="size-4 animate-none rounded-full"
-                    src={option.icon}
-                  />
-                  {option.symbol}
-                </Menu.Item>
-              );
-            })}
-          </Menu.Popup>
-        </Menu.Positioner>
-      </Menu.Portal>
-    </Menu.Root>
-  );
-}
-
 /** What a fill changes on the perp: the account's positions, by side and engine size. */
 function positionsSignature(positions: PerpPosition[]) {
   return positions.map((p) => `${p.uiSide}:${p.engineSize ?? p.uiSize}`).join("|");
@@ -790,15 +739,6 @@ function perpHeaderMetrics(
     state: market?.state ?? null,
     volumeUsd,
   });
-}
-
-/** The header's Deposit margin button; Withdraw beside it is a menu over the account's assets. */
-function HeaderActionButton({ children, onClick }: { children: string; onClick: () => void }) {
-  return (
-    <button className={HEADER_ACTION_CLASSES} onClick={onClick} type="button">
-      {children}
-    </button>
-  );
 }
 
 /**
@@ -825,9 +765,6 @@ export function PerpMarketPanels({ market: renderedMarket }: { market: PerpMarke
   const [indicatorsEnabled, setIndicatorsEnabled] = useState(false);
   const [bookTab, setBookTab] = useState<SpotBookTab>("book");
   const [bottomTab, setBottomTab] = useState<PerpBottomTab>("positions");
-  const [depositOpen, setDepositOpen] = useState(false);
-  /** The Margin-tab row being withdrawn from, or null while the dialog is closed. */
-  const [withdrawRow, setWithdrawRow] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cancellingNonce, setCancellingNonce] = useState<string | null>(null);
   const [closingIndex, setClosingIndex] = useState<number | null>(null);
@@ -842,14 +779,6 @@ export function PerpMarketPanels({ market: renderedMarket }: { market: PerpMarke
     orderHistoryView: (orders) => buildPerpOrderHistoryActivityView(orders, PERP_MARKET_LABEL),
     tradeHistoryView: (fills) => buildPerpTradeHistoryActivityView(fills, PERP_MARKET_LABEL),
   });
-  /** The header's deposit control and the account rows share one path: connect first, then deposit. */
-  function openDeposit() {
-    if (primaryWallet === null) {
-      login();
-      return;
-    }
-    setDepositOpen(true);
-  }
   // The shell's account, resolved under the configured stack; the build check holds that equal to
   // the venue's perp stack. Unread while the perp is not live, as the wallet is.
   const account = {
@@ -859,7 +788,21 @@ export function PerpMarketPanels({ market: renderedMarket }: { market: PerpMarke
   };
   const perpAccount = usePerpPositions(account.subaccountId);
   const orderStatus = useOrderStatus(positionsSignature(perpAccount.positions));
-  const withdrawing = withdrawTarget(stack, perpAccount.account, withdrawRow);
+  // The account's ledger, as spot reads it: the transfer dialog's withdraw side draws its balances
+  // and Max from these rows. Same account, same escrows, since the unified-account cutover.
+  const ledger = useSubaccountBalance(account.subaccountId);
+  // The account's one Deposit / Withdraw flow, the same dialog spot opens. The perp adds only what
+  // a margin depositor must know: whether the venue is taking cNGN margin, and its haircut.
+  const transfer = useAccountTransfer({
+    accountRows: ledger.balance?.rows ?? null,
+    depositNotes: cngnMarginNote(stack),
+    depositPauseReasons: cngnMarginPause(stack),
+    onTransferred: (blockNumber) => {
+      ledger.refresh(blockNumber);
+      perpAccount.refresh();
+    },
+  });
+  const balanceRowSymbols = balanceRowSymbolsOf(perpAccount.account, stack);
 
   const { asks, bestAsk, bestBid, bids, candles, lastPrice, price, stats, trades, volumeUsd } =
     usePerpBook(market);
@@ -874,7 +817,7 @@ export function PerpMarketPanels({ market: renderedMarket }: { market: PerpMarke
       return;
     }
     if (account.subaccountId === null) {
-      setDepositOpen(true);
+      transfer.openDeposit("USDC");
       return;
     }
     const uiSide = perpOrderUiSide(request.side);
@@ -1055,23 +998,7 @@ export function PerpMarketPanels({ market: renderedMarket }: { market: PerpMarke
 
   usePublishTerminalHeader({
     changePercent24h: stats.changePercent,
-    depositControl:
-      market === null ? undefined : (
-        <div className="flex items-center gap-2">
-          <HeaderActionButton
-            onClick={() => (primaryWallet === null ? login() : setDepositOpen(true))}
-          >
-            Deposit
-          </HeaderActionButton>
-          <HeaderWithdrawMenu
-            account={perpAccount.account}
-            cngnListed={listedCollateralOf(stack).some((asset) => asset.symbol === "cNGN")}
-            hasWallet={primaryWallet !== null}
-            onConnect={login}
-            onWithdraw={setWithdrawRow}
-          />
-        </div>
-      ),
+    depositControl: market === null ? undefined : transfer.headerControl,
     high24h: stats.high,
     low24h: stats.low,
     market: "perp",
@@ -1113,8 +1040,9 @@ export function PerpMarketPanels({ market: renderedMarket }: { market: PerpMarke
               hasWallet: primaryWallet !== null,
               isSubmitting,
               market,
-              onDeposit: openDeposit,
-              onWithdraw: setWithdrawRow,
+              balanceRowSymbols,
+              onDeposit: transfer.openDeposit,
+              onWithdraw: transfer.openWithdraw,
               onCancel: (nonce, ownerAddress) => void handleCancel(nonce, ownerAddress),
               onClose: (position, rowIndex) => void handleClose(position, rowIndex),
               ownedOpenOrders,
@@ -1166,7 +1094,7 @@ export function PerpMarketPanels({ market: renderedMarket }: { market: PerpMarke
               isSubmitting={isSubmitting}
               lastAction={orderStatus.status}
               onConnect={login}
-              onDepositRequest={() => setDepositOpen(true)}
+              onDepositRequest={() => transfer.openDeposit("USDC")}
               onEdit={orderStatus.clear}
               onSubmit={market === null ? undefined : handleSubmit}
               position={perpAccount.positions[0] ?? null}
@@ -1176,36 +1104,16 @@ export function PerpMarketPanels({ market: renderedMarket }: { market: PerpMarke
             />
             {/* The perp account's holdings under the ticket, as spot's column ends. */}
             <AccountSummary
-              rows={buildAccountRows(perpAccount.account, stack, openDeposit, setWithdrawRow)}
+              rows={buildAccountRows(
+                perpAccount.account,
+                stack,
+                transfer.openDeposit,
+                transfer.openWithdraw
+              )}
             />
           </>
         }
       />
-
-      {withdrawing === null ? null : (
-        <PerpWithdrawDialog
-          asset={withdrawing.asset}
-          balanceUnits={withdrawing.balanceUnits}
-          onOpenChange={(next) => setWithdrawRow(next ? withdrawRow : null)}
-          onWithdrawn={() => perpAccount.refresh()}
-          open={withdrawRow !== null}
-          subaccountId={account.subaccountId}
-          wallet={primaryWallet}
-        />
-      )}
-      {stack === null ? null : (
-        <PerpMarginDialog
-          onDeposited={(subaccountId) => {
-            account.adoptSubaccountId(subaccountId);
-            perpAccount.refresh();
-          }}
-          onOpenChange={setDepositOpen}
-          open={depositOpen}
-          stack={stack}
-          subaccountId={account.subaccountId}
-          wallet={primaryWallet}
-        />
-      )}
     </>
   );
 }
