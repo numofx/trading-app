@@ -1,5 +1,3 @@
-
-
 /** Real-time channels exposed by markets-service `GET /v1/ws`. */
 export type MarketStreamChannel = "book" | "trades" | "orders";
 

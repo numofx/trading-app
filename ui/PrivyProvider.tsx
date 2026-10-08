@@ -25,20 +25,20 @@ export function AppPrivyProvider({
       appId={appId}
       clientId={clientId || undefined}
       config={{
+        defaultChain: appChain,
+        loginMethods: ["email", "wallet"],
+        supportedChains: [appChain],
         appearance: {
           accentColor: "#38bdf8",
           logo: "/numo_logo_white.png",
           theme: "dark",
         },
-        defaultChain: appChain,
-        supportedChains: [appChain],
         embeddedWallets: {
+          showWalletUIs: false,
           ethereum: {
             createOnLogin: "users-without-wallets",
           },
-          showWalletUIs: false,
         },
-        loginMethods: ["email", "wallet"],
       }}
     >
       {children}

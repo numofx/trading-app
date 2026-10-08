@@ -1,9 +1,8 @@
 "use client";
 
 import { Dialog } from "@base-ui/react/dialog";
-import { Duration } from "effect";
 import { Check, ChevronDown, Search, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatPrice } from "@/lib/market-formatting";
 import {
@@ -16,7 +15,6 @@ import {
   TERMINAL_MARKETS,
 } from "@/lib/market-overview";
 import type {
-  MarketOverviewResponse,
   MarketOverviewRow,
   TerminalMarketEntry,
   TerminalMarketId,
@@ -24,6 +22,7 @@ import type {
 } from "@/lib/market-overview.types";
 import { SmartImage } from "@/ui/SmartImage";
 import { SmartLink } from "@/ui/SmartLink";
+import { useMarketOverview } from "@/ui/trading-terminal/useMarketOverview";
 
 const TABS = [
   { kind: "spot", label: "Spot" },
@@ -188,66 +187,6 @@ function MarketRow({
       </span>
     </SmartLink>
   );
-}
-
-/**
- * A read is reused for this long across openings: reopening the selector within it shows the
- * same rows without another round trip, and the figures are at most this stale.
- */
-const OVERVIEW_TTL_MS = Duration.toMillis("10 seconds");
-
-let overviewCache: { readAt: number; rows: MarketOverviewRow[] } | null = null;
-
-/**
- * The selector's table from `/api/markets-overview`, read when the dialog opens and never while it
- * is closed: no read on page load and no polling. A read younger than `OVERVIEW_TTL_MS` is reused.
- * The row for the market on screen takes the header's live price and change over the read, so the
- * two never disagree while the selector is open.
- */
-function useMarketOverview(open: boolean, live: MarketOverviewRow) {
-  const [rows, setRows] = useState<MarketOverviewRow[]>(() => overviewCache?.rows ?? []);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    if (overviewCache !== null && Date.now() - overviewCache.readAt < OVERVIEW_TTL_MS) {
-      setRows(overviewCache.rows);
-      return;
-    }
-    let cancelled = false;
-    async function load() {
-      try {
-        const response = await fetch("/api/markets-overview", { cache: "no-store" });
-        if (!response.ok) {
-          return;
-        }
-        const body = (await response.json()) as MarketOverviewResponse;
-        overviewCache = { readAt: Date.now(), rows: body.rows ?? [] };
-        if (!cancelled) {
-          setRows(overviewCache.rows);
-        }
-      } catch {
-        // Keep the last read; the rows show dashes until one succeeds.
-      }
-    }
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [open]);
-
-  return (id: TerminalMarketId): MarketOverviewRow => {
-    const fetched = rows.find((row) => row.id === id) ?? emptyOverviewRow(id);
-    if (id !== live.id) {
-      return fetched;
-    }
-    return {
-      ...fetched,
-      changePercent24h: live.changePercent24h ?? fetched.changePercent24h,
-      price: live.price ?? fetched.price,
-    };
-  };
 }
 
 /**

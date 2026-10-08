@@ -1,6 +1,5 @@
 "use client";
 
-import { useLogin, usePrivy } from "@privy-io/react-auth";
 import { Duration } from "effect";
 import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
@@ -32,9 +31,9 @@ import type { TransferMode } from "@/ui/trading-terminal/DepositDialog";
 import { buildDepositAccount, DepositDialog } from "@/ui/trading-terminal/DepositDialog";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import { SpotTradingTerminal } from "@/ui/trading-terminal/SpotTradingTerminal";
-import { useCngnBalance } from "@/ui/trading-terminal/useCngnBalance";
+import { HEADER_ACTION_CLASSES } from "@/ui/trading-terminal/TerminalHeaderBar";
+import { useTerminalSession } from "@/ui/trading-terminal/TerminalSession";
 import { useOrderStatus } from "@/ui/trading-terminal/useOrderStatus";
-import { useServerRefresh } from "@/ui/trading-terminal/useServerRefresh";
 import {
   formatSubaccountCngnLabel,
   formatSubaccountUsdcLabel,
@@ -42,8 +41,6 @@ import {
   useSubaccountBalance,
 } from "@/ui/trading-terminal/useSubaccountBalance";
 import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
-import { useUsdcBalance } from "@/ui/trading-terminal/useUsdcBalance";
-import { usePrimaryWallet } from "@/ui/usePrimaryWallet";
 
 type SpotExecutionPrice = { error: string } | { price: string };
 
@@ -191,21 +188,34 @@ function balanceSignature(rows: { asset: string; balance: bigint }[] | null) {
   return rows === null ? "" : rows.map((row) => `${row.asset}:${row.balance}`).join("|");
 }
 
-/** The header's Deposit and Withdraw buttons share one look. */
-const HEADER_ACTION_CLASSES =
-  "flex h-10 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-4 font-semibold text-[14px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active disabled:cursor-not-allowed disabled:opacity-60";
-
-export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarket }) {
+/**
+ * The spot market under the shell: its panels, ticket, deposit dialog and the signing behind
+ * them. The session (wallet, trading account, wallet balances) is the shell's, so a switch to the
+ * perp and back keeps it; everything here is the market's own and remounts with it.
+ */
+export function SpotMarketPanels({ spotMarket }: { spotMarket: SpotMarket }) {
   // `null` until something actually happens — an idle placeholder would occupy
   // footer space in the order ticket without telling the trader anything.
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const router = useRouter();
 
-  const { authenticated, ready: privyReady } = usePrivy();
-  // No callbacks here: PrivyWalletButton owns the analytics side of login, and a second
-  // useLogin with its own onComplete would double-count every connection.
-  const { login } = useLogin();
-  const { primaryWallet: pinnedWallet, selectWallet, wallets, walletsReady } = usePrimaryWallet();
+  const {
+    account: {
+      adoptSubaccountId,
+      ensureTradingSubaccount,
+      isLoading: isResolvingTradingSubaccount,
+      isResolved: isTradingSubaccountResolved,
+      subaccountId: tradingSubaccountId,
+    },
+    isSignedIn,
+    login,
+    primaryWallet,
+    refreshWalletBalances,
+    selectWallet,
+    walletBalances,
+    wallets,
+    walletsReady,
+  } = useTerminalSession();
   // The header hosts the one deposit dialog; the order ticket opens it through this state.
   const [depositOpen, setDepositOpen] = useState(false);
   const [depositMode, setDepositMode] = useState<TransferMode>("deposit");
@@ -215,55 +225,17 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
     getFirstDepositableCurrency
   );
   const [resumeDepositAfterLogin, setResumeDepositAfterLogin] = useState(false);
-  // Stays false while Privy is still restoring a session, so account-scoped panels never flash for visitors.
-  const isSignedIn = privyReady && authenticated;
-  /*
-   * Deliberately gated on the session, not just `wallets[0]`.
-   *
-   * An extension can be connected to the page without Privy having issued a session — a wallet
-   * login abandoned at the signature step, or a logout that left the extension connected. Taking
-   * that wallet made the app contradict itself: the header offered "Connect Wallet" while the
-   * account strip showed real balances, the deposit dialog offered to fund the wallet's existing
-   * subaccount, and an order would have signed and submitted. `posthog.identify` never runs for
-   * that user either, so their orders land on an anonymous distinct id.
-   *
-   * The cost is one extra click for a connect-only user; the alternative is a live Buy button in
-   * front of someone who believes they are disconnected.
-   */
-  /**
-   * Which connected wallet the terminal is acting as, held steady by `usePrimaryWallet` and changed
-   * only on the deposit dialog's Transfer from screen. It moves the whole identity, not just who
-   * signs the transfer: a first deposit creates the trading account and the account belongs to the
-   * signer, so a wallet that funds must also be the wallet whose subaccount, orders and cancels this
-   * session uses. It is no longer `wallets[0]` by default — that list reorders, and a trader who had
-   * picked nothing was switched to another wallet mid-session.
-   */
-  const primaryWallet = isSignedIn ? pinnedWallet : null;
   /*
    * The ticket gates on the wallet rather than the session because a session can exist before its
    * embedded wallet does: an email login is authenticated while Privy is still provisioning one.
    */
   const hasWallet = primaryWallet !== null;
-  const {
-    adoptSubaccountId,
-    ensureTradingSubaccount,
-    isLoading: isResolvingTradingSubaccount,
-    isResolved: isTradingSubaccountResolved,
-    subaccountId: tradingSubaccountId,
-  } = useTradingSubaccount(primaryWallet?.address ?? null);
   const depositAccount = buildDepositAccount(primaryWallet, tradingSubaccountId);
   const isPreparingAccount = isPreparingTradingAccount({
     isResolvingSubaccount: isResolvingTradingSubaccount,
     isSignedIn,
     walletsReady,
   });
-  const { balance: usdcBalance, refresh: refreshUsdcBalance } = useUsdcBalance(
-    primaryWallet?.address ?? null
-  );
-  const { balance: cngnBalance, refresh: refreshCngnBalance } = useCngnBalance(
-    primaryWallet?.address ?? null
-  );
-  useServerRefresh();
   const { balance: subaccountBalance, refresh: refreshSubaccountBalance } =
     useSubaccountBalance(tradingSubaccountId);
   const orderStatus = useOrderStatus(balanceSignature(subaccountBalance?.rows ?? null));
@@ -298,8 +270,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
    * could hit an RPC node a block behind and leave the pre-transfer figures on screen.
    */
   function refreshBalancesAfter(blockNumber: bigint | null) {
-    refreshUsdcBalance(blockNumber);
-    refreshCngnBalance(blockNumber);
+    refreshWalletBalances(blockNumber);
     refreshSubaccountBalance(blockNumber);
   }
 
@@ -416,8 +387,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
       orderStatus.settle(describeOrderOutcome(outcome, size, executionPrice));
       // Read balances after the outcome, not before it: refreshing on acceptance alone showed the
       // pre-fill account and left the strip disagreeing with the trade that had just happened.
-      refreshUsdcBalance();
-      refreshCngnBalance();
+      refreshWalletBalances();
       refreshSubaccountBalance();
       // Re-runs the server render, so an order that rested shows up in the book and in Open Orders
       // instead of leaving the terminal looking exactly as it did before the trade.
@@ -498,7 +468,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
   }
 
   return (
-    <main className="flex min-h-screen flex-col bg-terminal-bg text-foreground transition-colors duration-300 md:h-dvh md:overflow-hidden">
+    <>
       <MarketDocumentTitle pair={MARKET_LABELS["cNGN-USDC"]} price={spotMarket.mark} />
 
       <SpotTradingTerminal
@@ -525,7 +495,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
               open={depositOpen}
               triggerClassName={HEADER_ACTION_CLASSES}
               triggerId="header-deposit-trigger"
-              walletBalances={{ cNGN: cngnBalance, USDC: usdcBalance }}
+              walletBalances={{ cNGN: walletBalances.cngn, USDC: walletBalances.usdc }}
             />
             <button
               className={HEADER_ACTION_CLASSES}
@@ -555,8 +525,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
               onOpenChange={setLegacyWithdrawOpen}
               onWithdrawn={(blockNumber) => {
                 refreshLegacyBalance(blockNumber);
-                refreshUsdcBalance();
-                refreshCngnBalance();
+                refreshWalletBalances();
               }}
               open={legacyWithdrawOpen}
               triggerClassName="cursor-pointer rounded-sm bg-input-bg px-2 py-1 font-medium text-[11px] text-panel-text ring-1 ring-panel-border transition-colors hover:text-panel-text-active"
@@ -585,7 +554,7 @@ export function OrderBookTradingTerminal({ spotMarket }: { spotMarket: SpotMarke
         spotMarket={spotMarket}
         walletAddress={primaryWallet?.address ?? null}
       />
-    </main>
+    </>
   );
 }
 

@@ -14,6 +14,13 @@
 
 import { execFileSync } from "node:child_process";
 
+/**
+ * What the ticket column must have left over at its fixed height, from `md` up: the ticket, the
+ * Account panel and the gap between them, and this much besides. At 0 the next row added to
+ * either panel cuts the balance summary off; 24px is a row's worth of warning.
+ */
+const MIN_COLUMN_MARGIN = 24;
+
 const urlArgIndex = process.argv.indexOf("--url");
 const BASE_URL = urlArgIndex === -1 ? "http://localhost:3111" : process.argv[urlArgIndex + 1];
 
@@ -44,6 +51,21 @@ const VIEWPORTS = [
   { ctaVisible: true, height: 959, width: 545 },
   { ctaVisible: true, height: 700, width: 1440 },
   { ctaVisible: true, height: 900, width: 1440 },
+  // The perp, signed out, on the same grid: its ticket has its own submit button. Its leverage
+  // row, side-by-side switches and merged account line are what keep it under a phone's fold.
+  ...[
+    [375, 667],
+    [410, 711],
+    [545, 959],
+    [1440, 700],
+    [1440, 900],
+  ].map(([width, height]) => ({
+    cta: "perp-submit-cta",
+    ctaVisible: true,
+    height,
+    path: "/trade/cngn-perp",
+    width,
+  })),
   {
     connected: true,
     ctaVisible: true,
@@ -65,12 +87,13 @@ const VIEWPORTS = [
 const VISIBLE_BY_ID = `const visibleById = (id) =>
     [...document.querySelectorAll("#" + CSS.escape(id))].find((el) => el.getClientRects().length > 0) ?? null;`;
 
-const PROBE = `(() => {
+/** The page probe, for the ticket whose submit button carries `ctaId`. */
+const probeScript = (ctaId) => `(() => {
   ${VISIBLE_BY_ID}
   // Matched by id, not label: the CTA reads "Deposit" signed out, "Loading account…" while the
   // subaccount resolves and "Buy cNGN" once funded. Matching on text silently found nothing from
   // 25b40bf (which relabelled the signed-out CTA) until the id landed.
-  const cta = visibleById("spot-submit-cta");
+  const cta = visibleById(${JSON.stringify(ctaId)});
   if (!cta) return JSON.stringify({ error: "no submit CTA found" });
   const rect = cta.getBoundingClientRect();
 
@@ -82,6 +105,17 @@ const PROBE = `(() => {
   const columnOverflow = ticketColumn
     ? Math.max(0, ticketColumn.scrollHeight - ticketColumn.clientHeight)
     : 0;
+  // What the column has left at its fixed height: its height less its content's, measured from
+  // its top to its last child's bottom (scrollHeight never reads below clientHeight, so it cannot
+  // say how much room a column that fits has left). Negative is the overflow above.
+  const columnMargin = ticketColumn
+    ? Math.round(
+        ticketColumn.clientHeight -
+          (ticketColumn.lastElementChild.getBoundingClientRect().bottom -
+            ticketColumn.getBoundingClientRect().top +
+            ticketColumn.scrollTop)
+      )
+    : null;
 
   const navs = [...document.querySelectorAll("nav")].filter((n) => getComputedStyle(n).display !== "none");
   const doc = document.documentElement;
@@ -123,6 +157,7 @@ const PROBE = `(() => {
     // The page must sit still at its borders rather than rubber-banding away from them.
     overscrollPinned: rootStyle.overscrollBehaviorY === "none" && rootStyle.overscrollBehaviorX === "none",
     columnOverflow,
+    columnMargin,
     ctaVisible: rect.top >= 0 && rect.bottom <= innerHeight,
     ctaVisibleAfterScroll,
     ctaBottom: Math.round(rect.bottom + scrollY),
@@ -215,22 +250,30 @@ function evaluate(script) {
   return JSON.parse(envelope.data.result);
 }
 
-function probe(width, height, path) {
+function probe(width, height, path, ctaId) {
   browser("set", "viewport", String(width), String(height));
   browser("open", `${BASE_URL}${path}`);
   browser("wait", "3500");
-  return evaluate(PROBE);
+  return evaluate(probeScript(ctaId));
 }
 
 const failures = [];
 
 for (const viewport of VIEWPORTS) {
-  const { width, height, connected = false, ctaVisible: expectCta, note, path = "/" } = viewport;
-  const label = `${width}x${height}${connected ? " funded" : ""}`;
+  const {
+    width,
+    height,
+    connected = false,
+    cta = "spot-submit-cta",
+    ctaVisible: expectCta,
+    note,
+    path = "/trade/cngn-usdc",
+  } = viewport;
+  const label = `${width}x${height} ${path}${connected ? " funded" : ""}`;
   let result;
 
   try {
-    result = probe(width, height, path);
+    result = probe(width, height, path, cta);
   } catch (error) {
     failures.push(`${label}: probe failed — ${error.message}`);
     continue;
@@ -259,7 +302,14 @@ for (const viewport of VIEWPORTS) {
       width < 768 || result.columnOverflow === 0,
       `ticket column overflows its height by ${result.columnOverflow}px — the balance summary is cut off`,
     ],
-    [result.overscrollPinned, "page can overscroll — expected overscroll-behavior: none on the root"],
+    [
+      width < 768 || result.columnMargin >= MIN_COLUMN_MARGIN,
+      `ticket column has ${result.columnMargin}px to spare, under the ${MIN_COLUMN_MARGIN}px minimum`,
+    ],
+    [
+      result.overscrollPinned,
+      "page can overscroll — expected overscroll-behavior: none on the root",
+    ],
     [result.pageHorizontalScroll === false, "page scrolls horizontally"],
     [
       result.overflowingCells.length === 0,
@@ -320,7 +370,7 @@ for (const viewport of VIEWPORTS) {
 
   const status = failed.length === 0 ? "ok  " : "FAIL";
   console.log(
-    `${status} ${label.padEnd(16)} cta=${String(result.ctaVisible).padEnd(5)} bottom=${String(result.ctaBottom).padEnd(5)} label=${String(result.ctaLabel).padEnd(14)}${note ? `  (${note})` : ""}`
+    `${status} ${label.padEnd(26)} cta=${String(result.ctaVisible).padEnd(5)} bottom=${String(result.ctaBottom).padEnd(5)} margin=${String(width < 768 ? "n/a" : result.columnMargin).padEnd(5)} label=${String(result.ctaLabel).padEnd(14)}${note ? `  (${note})` : ""}`
   );
 }
 

@@ -1,6 +1,12 @@
 @import "tailwindcss";
 
 @variant dark (&:where(.dark, .dark *));
+/*
+ * A viewport too short for the terminal's panel labels: under 760px the ticket column cannot hold
+ * the "Order form" and "Account" labels and still fit both tickets with 24px to spare, so they
+ * stand down there. Most of this app's desktop traffic is under 1000px tall; 700-760px is common.
+ */
+@custom-variant short (@media (max-height: 759px));
 
 @source "../node_modules/tw-next-image/dist";
 

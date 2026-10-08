@@ -8,7 +8,10 @@
     "@sablier/devkit/biome/ui"
   ],
   "files": {
-    "includes": ["**/*.{css,graphql,js,jsx,json,jsonc,ts,tsx}"]
+    // globals.css is excluded outright: Biome cannot parse Tailwind v4 at-rules, and `check --write`
+    // still rewrote the file, splitting `@variant dark (...)` across lines and breaking dark mode.
+    // An override that disabled the linter for it used to live here; the formatter did the damage.
+    "includes": ["**/*.{css,graphql,js,jsx,json,jsonc,ts,tsx}", "!app/globals.css"]
   },
   "linter": {
     "rules": {
@@ -25,12 +28,5 @@
       }
     }
   },
-  "overrides": [
-    {
-      "includes": ["app/globals.css"],
-      "linter": {
-        "enabled": false
-      }
-    }
-  ]
+  "overrides": []
 }

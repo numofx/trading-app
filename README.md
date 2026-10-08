@@ -4,8 +4,13 @@
 
 Renders the cNGN-USDC spot market through an orderbook UI, with off/on ramping via Busha and Coinbase APIs for instant USD/USDC and NGN/cNGN conversions. Integrated with `markets-service` for live books and trades.
 
-The app renders **cNGN-USDC** spot at `/` and **cNGN-PERP** at `/perp`, switched from the market
-selector in the header. Both are shown exactly as the engine trades them: cNGN is the base and USDC the
+The app renders **cNGN-USDC** spot at `/trade/cngn-usdc` and **cNGN-PERP** at `/trade/cngn-perp`,
+switched from the market selector in the header. One route, one shell: the `/trade` layout holds
+the header, the wallet, the trading account and the selector, and a switch replaces only the
+market's panels under it (keyed by the slug, so a ticket or a book tab never carries over). The
+slugs live in `lib/market-routes.ts`; `/` and `/perp` redirect onto them (307 for now), a slug in
+another casing is redirected to lowercase by `proxy.ts` with its query string, and an unknown slug
+is a 404 from the segment's layout. Both markets are shown exactly as the engine trades them: cNGN is the base and USDC the
 quote, prices are USDC per cNGN (about 0.00073, to seven decimals, with ₦ per USDC as a secondary
 line in the header and under the ticket's price field), sizes are cNGN, a buy or long is a buy of
 cNGN. Since 2026-10-08 the venue identifies the markets as `cNGN-USDC` and `cNGN-PERP`; the pre-rename
@@ -16,7 +21,8 @@ about it from `markets-service`, with no env of its own:
 
 - `/v1/markets` lists `cNGN-PERP` (`contract_type: perpetual`) with a `perp` object: mark, index,
   funding, margin rates, max leverage, and the module, cash and SRM a trader signs and deposits for.
-  Until it does, `/perp` renders its not-live state: empty panels and a ticket that cannot submit.
+  Until it does, `/trade/cngn-perp` renders its not-live state: empty panels and a ticket that
+  cannot submit.
 - Orders are signed exactly as entered (USDC per cNGN, cNGN contracts, a long is the on-chain long)
   for the perp's module and asset. A trader's perp margin is a separate account under the perp
   SRM, opened by the first "Deposit margin"; it is not the spot account. "Withdraw" on the Balances

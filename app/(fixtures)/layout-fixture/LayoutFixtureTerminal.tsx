@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { CandleInterval } from "@/lib/markets-service";
 import type { SpotMarket } from "@/lib/trading.types";
 import { SpotTradingTerminal } from "@/ui/trading-terminal/SpotTradingTerminal";
+import { TerminalShell } from "@/ui/trading-terminal/TerminalShell";
 
 /** The account before any fixture deposit: funded, with resting orders claiming part of it. */
 const OPENING_BALANCES = { cngn: 41_470.685_234, usdc: 31.028_472_772_594_67 };
@@ -127,7 +128,9 @@ export function LayoutFixtureTerminal() {
   const accountUsdc = OPENING_BALANCES.usdc + deposits * DEPOSIT_AMOUNT.usdc;
 
   return (
-    <main className="flex min-h-screen flex-col bg-terminal-bg text-foreground md:h-dvh md:overflow-hidden">
+    // The real shell, named spot since this route has no market segment, so the header and the
+    // grid under it are laid out exactly as `/trade/cngn-usdc` lays them out.
+    <TerminalShell market="spot">
       <SpotTradingTerminal
         accountCngn={accountCngn}
         accountUsdc={accountUsdc}
@@ -178,6 +181,6 @@ export function LayoutFixtureTerminal() {
         spotMarket={FIXTURE_MARKET}
         walletAddress={FIXTURE_WALLET}
       />
-    </main>
+    </TerminalShell>
   );
 }

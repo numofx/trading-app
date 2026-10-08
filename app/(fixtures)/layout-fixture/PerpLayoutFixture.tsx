@@ -31,35 +31,39 @@ const FIXTURE_STATE = parsePerpState({
   ui_long_funding_rate_1h: "0.0000125",
 });
 
-/** A funded perp account: USDC cash plus some cNGN posted as collateral. */
+/**
+ * A funded perp account at the widths the ticket has to hold: seven-figure USDC cash, an
+ * eight-figure cNGN collateral balance. The ticket's account line and the Account panel's rows
+ * are laid out for these, not for round test balances.
+ */
 const FIXTURE_ACCOUNT: PerpAccountMargin = {
-  cash: 250,
-  cashUnits: 250n * 10n ** 18n,
-  initialMarginSurplus: 250.35,
-  maintenanceMarginSurplus: 250.35,
+  cash: 1_234_567.89,
+  cashUnits: 1_234_567_890_000_000_000_000_000n,
+  initialMarginSurplus: 1_234_567.89,
+  maintenanceMarginSurplus: 1_234_567.89,
   collateral: [
     {
-      balance: 970.69,
-      balanceUnits: 970_690_000_000_000_000_000n,
+      balance: 98_765_432.1,
+      balanceUnits: 98_765_432_100_000_000_000_000_000n,
       escrow: "0x37c976bb000000000000000000000000000000000",
-      marginValueUsd: 0.35,
+      marginValueUsd: 35_555.55,
       symbol: "cNGN",
-      valueUsd: 0.7,
+      valueUsd: 71_111.11,
     },
   ],
 };
 
-/** A small open long, so the Position row and reduce-only have something to start from. */
+/** A seven-figure open long, well under water, so the Position line and the P&L cells are at full width. */
 const FIXTURE_POSITION: PerpPosition = {
-  engineSize: 20_000n,
-  initialMarginSurplus: 250.35,
+  engineSize: 1_234_567n,
+  initialMarginSurplus: 1_234_567.89,
   liquidationPrice: null,
-  maintenanceMarginSurplus: 250.35,
+  maintenanceMarginSurplus: 1_234_567.89,
   markPrice: FIXTURE_PRICE,
-  notionalUsd: 20_000 * FIXTURE_PRICE,
+  notionalUsd: 1_234_567 * FIXTURE_PRICE,
   uiSide: "long",
-  uiSize: 20_000,
-  unrealizedPnl: 0.12,
+  uiSize: 1_234_567,
+  unrealizedPnl: -12_345.67,
 };
 
 /** A second, opposite position: two rows is what shows whether the columns stay aligned. */

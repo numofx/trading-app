@@ -20,9 +20,10 @@ export function OrderFormShell({ children, footer }: { children: ReactNode; foot
       {/*
        * The panel label only earns its space next to sibling panels. In the stacked sub-md layout
        * this is the only form on screen, so the row is dropped there to keep the submit button
-       * within the first screenful.
+       * within the first screenful; on a short viewport (`short`, under 760px) it is dropped too,
+       * since its 37px are what the column needs to hold the whole ticket with room to spare.
        */}
-      <PanelTitle className="hidden md:block">Order form</PanelTitle>
+      <PanelTitle className="hidden md:block md:short:hidden">Order form</PanelTitle>
 
       {/* No scroller of its own: the column is the one scroll region, so a squeezed ticket scrolls
           the whole column rather than hiding fields inside an unmarked box. */}

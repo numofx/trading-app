@@ -5,18 +5,9 @@ import type { ReactNode } from "react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { buildOpenOrdersActivityView, getOwnedOpenOrders } from "@/lib/account-activity-views";
 import { formatBalance } from "@/lib/account-balance-display";
-import {
-  applyTradesToCandles,
-  applyTradesToStats,
-  CANDLE_INTERVAL_MS,
-  latestTradeId,
-  mergeTrades,
-  tradesSince,
-} from "@/lib/live-market";
 import type { CandleInterval } from "@/lib/markets-service";
 import {
   getAnchorPrice,
-  getBestPrices,
   getCommittedBalances,
   getNextExpiryMs,
   getWorkingOrders,
@@ -29,7 +20,7 @@ import {
   SPOT_TIMEFRAME_OPTIONS,
 } from "@/lib/spot-terminal-config";
 import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
-import { get24hStats, getVenueLastPrice } from "@/lib/ticker-stats";
+import { get24hStats } from "@/lib/ticker-stats";
 import type { Candle, SpotMarket } from "@/lib/trading.types";
 import type { AccountSummaryRow } from "@/ui/trading-terminal/order-form/AccountSummary";
 import { AccountSummary } from "@/ui/trading-terminal/order-form/AccountSummary";
@@ -38,14 +29,20 @@ import { SpotChartPanel } from "@/ui/trading-terminal/SpotChartPanel";
 import type { SpotBookTab } from "@/ui/trading-terminal/SpotOrderBookPanel";
 import { SpotOrderBookPanel } from "@/ui/trading-terminal/SpotOrderBookPanel";
 import { SpotOrderFormPanel } from "@/ui/trading-terminal/SpotOrderFormPanel";
-import { TerminalHeaderBar } from "@/ui/trading-terminal/TerminalHeaderBar";
+import { TerminalGrid } from "@/ui/trading-terminal/TerminalGrid";
+import { usePublishTerminalHeader } from "@/ui/trading-terminal/TerminalHeaderSlot";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
-import { useMarketOrderBook } from "@/ui/trading-terminal/useMarketOrderBook";
+import { useLiveMarketBook } from "@/ui/trading-terminal/useLiveMarketBook";
 import { useSignedHistoryTabs } from "@/ui/trading-terminal/useSignedHistoryTabs";
 
 /** The venue's symbol for this market; markets-service resolves the stream subscription from it. */
 const SPOT_MARKET_SYMBOL = "cNGN-USDC";
 
+/**
+ * The spot market's panels on the terminal's grid, under the shell's header, which it feeds its
+ * figures and the deposit control through the header slot. Presentational: the wallet, signing
+ * and the account live in `SpotMarketPanels`, so a fixture can render this with made-up figures.
+ */
 export function SpotTradingTerminal({
   candles,
   candleInterval = "1d",
@@ -77,7 +74,7 @@ export function SpotTradingTerminal({
   accountUsdc?: number | null;
   /** Connected wallet, used to pick this trader's own orders out of the public book. */
   walletAddress?: string | null;
-  /** The deposit dialog trigger, hosted in the header bar. */
+  /** The deposit dialog trigger, published to the shell's header bar. */
   depositControl?: ReactNode;
   /** The wallet's account on the retired spot stack, shown withdraw-only on the Assets tab. */
   legacy?: { accountId: string; cngnLabel: string | null; usdcLabel: string | null } | null;
@@ -137,7 +134,6 @@ export function SpotTradingTerminal({
   // accepted, not on the next successful refresh — a refresh fired right after a cancel can race
   // the venue and come back still listing the order.
   const [cancelledNonces, setCancelledNonces] = useState<ReadonlySet<string>>(() => new Set());
-  const activityPanelRef = useRef<HTMLDivElement>(null);
   const ticketColumnRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const signedHistory = useSignedHistoryTabs({
@@ -195,34 +191,22 @@ export function SpotTradingTerminal({
   }, [nextExpiryMs]);
 
   // No simulated ticking: candles are real venue OHLCV.
-
-  const spotBook = useMarketOrderBook({ market: SPOT_MARKET_SYMBOL, type: "spot" });
-  // Both sources are the venue's own depth: the stream when it is live, and the server-rendered
-  // REST snapshot while the socket is unavailable, one-sided, crossed, or still connecting. When
-  // the venue has no resting orders both are empty and the panel says so.
-  const bookBids = spotBook.isLive ? spotBook.bids : spotMarket.orderBookBids;
-  const bookAsks = spotBook.isLive ? spotBook.asks : spotMarket.orderBookAsks;
-  // The server's fills and the stream's as one tape, each fill once: a fill the trades channel
-  // delivered is the venue's own whatever the book's status, and the server's list stays while
-  // the stream is still catching up.
-  const bookTrades = mergeTrades(spotMarket.trades, spotBook.trades);
-
-  // Fills the stream has seen since the server rendered: folded into the chart's candles and the
-  // 24h figures here, on every render, so a trade on the market shows without a reload. The
-  // minute's server re-read then corrects what folding cannot, like fills leaving the window.
-  const streamedFills = tradesSince(bookTrades, latestTradeId(spotMarket.trades));
-  const liveCandles = applyTradesToCandles(
+  const {
+    asks: bookAsks,
+    bestAsk,
+    bestBid,
+    bids: bookBids,
+    candles: liveCandles,
+    lastPrice,
+    stats24h: liveStats,
+    trades: bookTrades,
+  } = useLiveMarketBook({
+    candleInterval,
     candles,
-    streamedFills,
-    CANDLE_INTERVAL_MS[candleInterval],
-    candleInterval
-  );
-  const liveStats = applyTradesToStats(spotMarket.stats24h, streamedFills);
-  const lastPrice = getVenueLastPrice(bookTrades, liveCandles, spotMarket.mark);
-  // The touch the trader is actually looking at. It drives the ticket's prefill and cost estimate
-  // and rides along on submission, so an order can never be priced off a book that is no longer
-  // on screen — the server-rendered snapshot goes stale the moment the stream moves.
-  const { bestAsk, bestBid } = getBestPrices(bookAsks, bookBids);
+    snapshot: spotMarket,
+    symbol: SPOT_MARKET_SYMBOL,
+    type: "spot",
+  });
   const anchorPrice = getAnchorPrice(bestAsk, bestBid, lastPrice);
 
   function handleSubmitOrder(args: {
@@ -274,6 +258,17 @@ export function SpotTradingTerminal({
     ticketColumnRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
+  usePublishTerminalHeader({
+    changePercent24h: changePercent,
+    depositControl,
+    high24h: high,
+    low24h: low,
+    market: "spot",
+    onPortfolioSelect: showPortfolio,
+    price: anchorPrice,
+    volume24hLabel: volumeLabel,
+  });
+
   /**
    * Cancels by `(owner_address, nonce)` — what markets-service takes — then refreshes the server
    * render so the book and this list reflect the removal rather than showing an order that is gone.
@@ -298,144 +293,97 @@ export function SpotTradingTerminal({
   }
 
   return (
-    <>
-      <TerminalHeaderBar
-        changePercent24h={changePercent}
-        depositControl={depositControl}
-        high24h={high}
-        low24h={low}
-        onPortfolioSelect={showPortfolio}
-        price={anchorPrice}
-        volume24hLabel={volumeLabel}
-      />
-
-      <div className="flex min-w-0 flex-1 flex-col gap-3 p-3 md:min-h-0 md:overflow-hidden md:px-4">
-        {/*
-         * One grid, two rows: the chart and order book take the top row, the activity panel spans the
-         * bottom row beneath them, and the ticket column runs the full height alongside both. The
-         * ticket used to be boxed into the top row's height, which cut its Amount field off mid-box
-         * on the ~700-900px viewports most of this app's desktop traffic uses.
-         *
-         * Three layouts, because one breakpoint cannot serve a 700px window and a 1600px one:
-         *
-         *   <768px   one column, ticket first — a phone.
-         *   768px+   two columns: chart over book on the left, ticket beside them. The page
-         *            scrolls rather than being pinned to the viewport; at this width three panels
-         *            stacked into a fixed height leaves each one a sliver.
-         *   1024px+  the fixed-height terminal: chart | book | ticket, activity spanning beneath.
-         *
-         * Gated at `xl` alone, the whole terminal stacked on any window under 1280px — a browser
-         * window a little under half a 27" screen got a single column with the ticket on top,
-         * while the venues it is compared against still had their columns. The two fixed columns
-         * and gutters cost 646px, so 1024px still leaves the chart ~378px; below that the second
-         * column has to give way, which is what the 768px layout is for.
-         *
-         * The bottom row takes 3/10 rather than 2/10: at 2/10 the activity panel was a ~144px sliver
-         * whose own empty state ran past its bottom edge, so it read as a strip of tab labels rather
-         * than a panel holding anything.
-         */}
-        <div className="grid grid-cols-1 gap-3 md:min-h-0 md:flex-1 md:grid-cols-[minmax(0,1fr)_300px] md:grid-rows-[minmax(0,5fr)_minmax(0,5fr)_minmax(0,3fr)] md:overflow-hidden lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_270px_320px] lg:grid-rows-[minmax(0,7fr)_minmax(0,3fr)] lg:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_300px_340px]">
-          <div className="md:col-start-1 md:row-start-1 md:min-h-0 md:overflow-hidden lg:row-start-1">
-            <SpotChartPanel
-              asks={bookAsks}
-              bids={bookBids}
-              candles={liveCandles}
-              chartTab={chartTab}
-              indicatorsEnabled={indicatorsEnabled}
-              onChartTabChange={setChartTab}
-              onIndicatorsToggle={() => setIndicatorsEnabled((current) => !current)}
-              onTimeframeChange={setTimeframe}
-              onToolSelect={setSelectedTool}
-              selectedTimeframe={timeframe}
-              selectedTool={selectedTool}
-              timeframes={SPOT_TIMEFRAME_OPTIONS}
-            />
-          </div>
-
-          <div className="md:col-start-1 md:row-start-2 md:min-h-0 md:overflow-hidden lg:col-start-2 lg:row-start-1">
-            <SpotOrderBookPanel
-              asks={bookAsks}
-              bids={bookBids}
-              lastPrice={lastPrice}
-              onTabChange={setBookTab}
-              tab={bookTab}
-              trades={bookTrades}
-            />
-          </div>
-
-          {/*
-           * `order-first` below the grid breakpoint only: in the stacked single column the ticket
-           * would sit below the chart and order book, putting the submit button ~2.5 screens down
-           * the document. The lg grid places columns explicitly, so order resets there.
-           *
-           * The ticket shares the column with the balance summary beneath it. The ticket only ever
-           * reports the leg the selected side spends, so the summary is where both legs of the
-           * account are readable at once while an order is being written; the header carries the
-           * same two figures for the widths where this column is not on screen at all.
-           */}
-          <div
-            className="order-first flex min-h-[420px] flex-col gap-3 md:order-0 md:col-start-2 md:row-span-3 md:row-start-1 md:min-h-0 md:gap-2 md:overflow-y-auto lg:col-start-3 lg:row-span-2 lg:row-start-1"
-            ref={ticketColumnRef}
-          >
-            <SpotOrderFormPanel
-              anchorPrice={anchorPrice}
-              asks={bookAsks}
-              availableCngn={spendableCngn}
-              availableUsdc={spendableUsdc}
-              bestAsk={bestAsk}
-              bestBid={bestBid}
-              bids={bookBids}
-              hasWallet={hasWallet}
-              isPreparingAccount={isPreparingAccount}
-              isSubmitting={isSubmitting}
-              lastAction={lastAction}
-              onDepositRequest={onDepositRequest}
-              onEdit={onFormEdit}
-              onSubmitOrder={handleSubmitOrder}
-              ownOpenOrders={ownedOpenOrders}
-              takerFeeBps={spotMarket.takerFeeBps}
-            />
-            {/* Both legs of the account, in the order the ticket spends them, then any retired account's. */}
-            <AccountSummary
-              rows={buildAccountRows({
-                accountCngn,
-                accountUsdc,
-                hasWallet,
-                legacy,
-                legacyControl,
-                onDepositRequest,
-                onWithdrawRequest,
-              })}
-            />
-          </div>
-
-          <div
-            className="min-h-[200px] md:col-start-1 md:row-start-3 md:min-h-0 lg:col-span-2 lg:col-start-1 lg:row-start-2"
-            ref={activityPanelRef}
-          >
-            <TradingActivityPanel
-              activityView={activityView}
-              emptyState={signedHistory.emptyState}
-              footerLinks={FOOTER_LINKS}
-              isSignedIn={isSignedIn}
-              onTabSelect={setBottomTab}
-              rowAction={buildSpotRowAction({
-                bottomTab,
-                cancellingNonce,
-                handleCancelOrder,
-                ownedOpenOrders,
-                tradeHistoryRowAction: signedHistory.rowAction,
-              })}
-              selectedTab={bottomTab}
-              tabs={SPOT_BOTTOM_TABS}
-            />
-            {cancelError === null ? null : (
-              <p className="px-4 pt-1 text-[11px] text-sell">{cancelError}</p>
-            )}
-          </div>
-        </div>
-      </div>
-    </>
+    <TerminalGrid
+      activity={
+        <>
+          <TradingActivityPanel
+            activityView={activityView}
+            emptyState={signedHistory.emptyState}
+            footerLinks={FOOTER_LINKS}
+            isSignedIn={isSignedIn}
+            onTabSelect={setBottomTab}
+            rowAction={buildSpotRowAction({
+              bottomTab,
+              cancellingNonce,
+              handleCancelOrder,
+              ownedOpenOrders,
+              tradeHistoryRowAction: signedHistory.rowAction,
+            })}
+            selectedTab={bottomTab}
+            tabs={SPOT_BOTTOM_TABS}
+          />
+          {cancelError === null ? null : (
+            <p className="px-4 pt-1 text-[11px] text-sell">{cancelError}</p>
+          )}
+        </>
+      }
+      book={
+        <SpotOrderBookPanel
+          asks={bookAsks}
+          bids={bookBids}
+          lastPrice={lastPrice}
+          onTabChange={setBookTab}
+          tab={bookTab}
+          trades={bookTrades}
+        />
+      }
+      chart={
+        <SpotChartPanel
+          asks={bookAsks}
+          bids={bookBids}
+          candles={liveCandles}
+          chartTab={chartTab}
+          indicatorsEnabled={indicatorsEnabled}
+          onChartTabChange={setChartTab}
+          onIndicatorsToggle={() => setIndicatorsEnabled((current) => !current)}
+          onTimeframeChange={setTimeframe}
+          onToolSelect={setSelectedTool}
+          selectedTimeframe={timeframe}
+          selectedTool={selectedTool}
+          timeframes={SPOT_TIMEFRAME_OPTIONS}
+        />
+      }
+      ticketColumn={
+        /*
+         * The ticket shares the column with the balance summary beneath it. The ticket only ever
+         * reports the leg the selected side spends, so the summary is where both legs of the
+         * account are readable at once while an order is being written.
+         */
+        <>
+          <SpotOrderFormPanel
+            anchorPrice={anchorPrice}
+            asks={bookAsks}
+            availableCngn={spendableCngn}
+            availableUsdc={spendableUsdc}
+            bestAsk={bestAsk}
+            bestBid={bestBid}
+            bids={bookBids}
+            hasWallet={hasWallet}
+            isPreparingAccount={isPreparingAccount}
+            isSubmitting={isSubmitting}
+            lastAction={lastAction}
+            onDepositRequest={onDepositRequest}
+            onEdit={onFormEdit}
+            onSubmitOrder={handleSubmitOrder}
+            ownOpenOrders={ownedOpenOrders}
+            takerFeeBps={spotMarket.takerFeeBps}
+          />
+          {/* Both legs of the account, in the order the ticket spends them, then any retired account's. */}
+          <AccountSummary
+            rows={buildAccountRows({
+              accountCngn,
+              accountUsdc,
+              hasWallet,
+              legacy,
+              legacyControl,
+              onDepositRequest,
+              onWithdrawRequest,
+            })}
+          />
+        </>
+      }
+      ticketColumnRef={ticketColumnRef}
+    />
   );
 }
 

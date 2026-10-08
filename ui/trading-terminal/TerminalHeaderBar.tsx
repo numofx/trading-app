@@ -2,13 +2,14 @@
 
 import { Moon, Sun } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatNairaPerUsdc, formatPrice } from "@/lib/market-formatting";
 import type { TerminalMarketId } from "@/lib/market-overview.types";
 import { PrivyWalletButton } from "@/ui/PrivyWalletButton";
 import { SmartImage } from "@/ui/SmartImage";
 import { MarketSelectDialog } from "@/ui/trading-terminal/MarketSelectDialog";
+import type { TerminalHeaderPublication } from "@/ui/trading-terminal/TerminalHeaderSlot";
 
 export type TerminalMarket = TerminalMarketId;
 
@@ -77,6 +78,11 @@ function HeaderMetric({
  * This replaced two stacked rounded cards — a logo/actions panel above a ticker panel — which cost
  * roughly 130px of vertical space and two card borders to say what one row says. Being full-bleed,
  * it is rendered outside the padded panel column rather than as its first child.
+ *
+ * Rendered by the shell, above the market's panels, and never remounted by a market switch. The
+ * figures and the Deposit and Withdraw controls are the market's own, published by its panels
+ * (`usePublishTerminalHeader`); until the selected market's panels have published, the metrics
+ * show a skeleton and the action cluster holds the wallet alone.
  */
 export type HeaderMetricItem = {
   label: string;
@@ -85,43 +91,143 @@ export type HeaderMetricItem = {
   tone: "up" | "down" | null;
 };
 
+/** The header's Deposit and Withdraw buttons, and their placeholders, share one look. */
+export const HEADER_ACTION_CLASSES =
+  "flex h-10 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-4 font-semibold text-[14px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active disabled:cursor-not-allowed disabled:opacity-60";
+
+/**
+ * Stand-ins for the market's Deposit and Withdraw until its panels publish them, so the action
+ * cluster keeps its width and nothing in the header shifts on a switch. Disabled: they open
+ * nothing. A market whose panels publish no controls (the perp before it is live) keeps them.
+ */
+function HeaderActionPlaceholders() {
+  return (
+    <div aria-hidden className="flex items-center gap-2" data-placeholder="deposit-withdraw">
+      <button className={HEADER_ACTION_CLASSES} disabled tabIndex={-1} type="button">
+        Deposit
+      </button>
+      <button className={HEADER_ACTION_CLASSES} disabled tabIndex={-1} type="button">
+        Withdraw
+      </button>
+    </div>
+  );
+}
+
+/** One metric's frame while the market's panels have not published: label and value placeholders. */
+function HeaderMetricSkeleton({ className }: { className?: string }) {
+  return (
+    <div aria-hidden className={cn("flex flex-col gap-1.5", className)}>
+      <span className="h-2 w-10 animate-pulse rounded-sm bg-input-bg" />
+      <span className="h-3 w-16 animate-pulse rounded-sm bg-input-bg" />
+    </div>
+  );
+}
+
+/**
+ * The figures beside the selector: the spot set (price, volume, high, low), or the perp's own
+ * list, or placeholders until the selected market's panels publish. Hidden rather than wrapped
+ * below `lg`: the balances hold the right of the row at every width now, and between `md` and
+ * `lg` the actions need what is left more than the figures do.
+ */
+function HeaderMetrics({ publication }: { publication: TerminalHeaderPublication | null }) {
+  if (publication === null) {
+    return (
+      <div aria-busy="true" className="hidden min-w-0 items-center gap-6 overflow-hidden lg:flex">
+        <HeaderMetricSkeleton />
+        <HeaderMetricSkeleton className="hidden xl:flex" />
+        <HeaderMetricSkeleton className="hidden xl:flex" />
+        <HeaderMetricSkeleton className="hidden xl:flex" />
+      </div>
+    );
+  }
+  const { changePercent24h, metrics, price, seeded = false } = publication;
+  // Seeded figures are the selector's last read, not the market's own: shown dimmed, and busy,
+  // until the panels publish the live set.
+  const provisional = seeded ? { "aria-busy": true, "data-seeded": true } : {};
+  if (metrics === undefined) {
+    return (
+      <div
+        className={cn(
+          "hidden min-w-0 items-center gap-6 overflow-hidden lg:flex",
+          seeded && "opacity-50"
+        )}
+        {...provisional}
+      >
+        <HeaderMetric label="Price" secondary={formatNairaPerUsdc(price)}>
+          {formatPrice(price)}
+          <span className={cn("text-[10px]", getChangeClassName(changePercent24h))}>
+            {formatChangePercent(changePercent24h)}
+          </span>
+        </HeaderMetric>
+        {/*
+         * Volume stands down below `xl` for the same reason the extremes stand down below `2xl`:
+         * measured at 1024px, Price, volume and a claim-noted balance pair overrun the row by
+         * ~40px, and the metrics box is the one that gives — clipping "24H volume 1" mid-figure.
+         * Price is the figure worth keeping at every width the metrics show at all.
+         */}
+        <HeaderMetric className="hidden xl:flex" label="24H volume">
+          {publication.volume24hLabel}
+        </HeaderMetric>
+        {/*
+         * The extremes stood down below `2xl` to pay for the account balance pair that used to sit
+         * beside the deposit control — roughly 150px, more once a claim note was on it. That pair
+         * now lives in the balance summary under the order ticket, so they come back up alongside
+         * the volume metric. Gated on width alone, never on the wallet: tying header structure to
+         * `hasWallet` rearranged the row at the moment of connecting, which reads as a glitch.
+         */}
+        <HeaderMetric className="hidden xl:flex" label="24H high">
+          {formatPrice(publication.high24h)}
+        </HeaderMetric>
+        <HeaderMetric className="hidden xl:flex" label="24H low">
+          {formatPrice(publication.low24h)}
+        </HeaderMetric>
+      </div>
+    );
+  }
+  return (
+    /*
+     * As many figures as the width holds, whole: the row wraps, and the wrap is clipped to one
+     * row's height with a gap tall enough that nothing of a second row shows. Breakpoints
+     * could not say how many fit, since the wallet button's width is not knowable in advance.
+     */
+    <div
+      className={cn(
+        "hidden max-h-9 min-w-0 flex-wrap content-start gap-x-4 gap-y-10 overflow-hidden lg:flex",
+        seeded && "opacity-50"
+      )}
+      {...provisional}
+    >
+      {metrics.map((metric) => (
+        <HeaderMetric
+          className="shrink-0"
+          key={metric.label}
+          label={metric.label}
+          tooltip={metric.tooltip}
+        >
+          <span
+            className={cn(
+              metric.tone === "up" && "text-bid-text",
+              metric.tone === "down" && "text-ask-text"
+            )}
+          >
+            {metric.value}
+          </span>
+        </HeaderMetric>
+      ))}
+    </div>
+  );
+}
+
 export function TerminalHeaderBar({
-  changePercent24h,
-  depositControl,
-  high24h,
-  low24h,
-  market = "spot",
-  metrics,
-  onPortfolioSelect,
-  price,
-  volume24hLabel,
+  market,
+  publication,
 }: {
-  changePercent24h: number | null;
-  depositControl?: ReactNode;
-  /** Extremes over the same window as the volume; null when nothing traded in it. */
-  high24h: number | null;
-  low24h: number | null;
-  /** Which terminal is showing; the selector's pill and check follow it. */
-  market?: TerminalMarket;
-  /**
-   * Figures to show instead of the spot set (price, volume, high, low): the perp's mark, index,
-   * change, volume, open interest and funding. From `lg` as many show as the width holds, in
-   * order, whole; the actions keep the row and the figures stand down, rather than the wallet
-   * button wrapping under the rest.
-   */
-  metrics?: HeaderMetricItem[];
-  /** Fired by the connected wallet menu's Portfolio item. */
-  onPortfolioSelect?: () => void;
-  /**
-   * What the market is worth here now: the book's mid, else its one resting side, else the last
-   * trade. NOT the last trade alone — on a quiet venue that print can be days old and sit outside
-   * the current spread. On 2026-09-16 the header read a trade two days old that sat outside every
-   * resting order, and the order ticket, which prices off the same anchor the order book centres
-   * on, was seeded off it. In USDC per cNGN.
-   */
-  price: number | null;
-  volume24hLabel: string;
+  /** Which market the selector shows: the route's, whatever the panels have published. */
+  market: TerminalMarket;
+  /** The selected market's figures and controls, or null until its panels publish them. */
+  publication: TerminalHeaderPublication | null;
 }) {
+  const price = publication?.price ?? null;
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
@@ -158,7 +264,11 @@ export function TerminalHeaderBar({
       {/* The only rule in the bar: everything right of it belongs to the market, not the app. */}
       <div className="w-px shrink-0 self-stretch bg-panel-border" />
 
-      <MarketSelectDialog changePercent24h={changePercent24h} market={market} price={price} />
+      <MarketSelectDialog
+        changePercent24h={publication?.changePercent24h ?? null}
+        market={market}
+        price={price}
+      />
 
       {/*
        * Spacing separates the metrics, not rules — the one divider above marks the app/market
@@ -171,63 +281,7 @@ export function TerminalHeaderBar({
        * balance cluster to its right, the values would otherwise paint straight over it rather
        * than clip.
        */}
-      {metrics === undefined ? (
-        <div className="hidden min-w-0 items-center gap-6 overflow-hidden lg:flex">
-          <HeaderMetric label="Price" secondary={formatNairaPerUsdc(price)}>
-            {formatPrice(price)}
-            <span className={cn("text-[10px]", getChangeClassName(changePercent24h))}>
-              {formatChangePercent(changePercent24h)}
-            </span>
-          </HeaderMetric>
-          {/*
-           * Volume stands down below `xl` for the same reason the extremes stand down below `2xl`:
-           * measured at 1024px, Price, volume and a claim-noted balance pair overrun the row by
-           * ~40px, and the metrics box is the one that gives — clipping "24H volume 1" mid-figure.
-           * Price is the figure worth keeping at every width the metrics show at all.
-           */}
-          <HeaderMetric className="hidden xl:flex" label="24H volume">
-            {volume24hLabel}
-          </HeaderMetric>
-          {/*
-           * The extremes stood down below `2xl` to pay for the account balance pair that used to sit
-           * beside the deposit control — roughly 150px, more once a claim note was on it. That pair
-           * now lives in the balance summary under the order ticket, so they come back up alongside
-           * the volume metric. Gated on width alone, never on the wallet: tying header structure to
-           * `hasWallet` rearranged the row at the moment of connecting, which reads as a glitch.
-           */}
-          <HeaderMetric className="hidden xl:flex" label="24H high">
-            {formatPrice(high24h)}
-          </HeaderMetric>
-          <HeaderMetric className="hidden xl:flex" label="24H low">
-            {formatPrice(low24h)}
-          </HeaderMetric>
-        </div>
-      ) : (
-        /*
-         * As many figures as the width holds, whole: the row wraps, and the wrap is clipped to one
-         * row's height with a gap tall enough that nothing of a second row shows. Breakpoints
-         * could not say how many fit, since the wallet button's width is not knowable in advance.
-         */
-        <div className="hidden max-h-9 min-w-0 flex-wrap content-start gap-x-4 gap-y-10 overflow-hidden lg:flex">
-          {metrics.map((metric) => (
-            <HeaderMetric
-              className="shrink-0"
-              key={metric.label}
-              label={metric.label}
-              tooltip={metric.tooltip}
-            >
-              <span
-                className={cn(
-                  metric.tone === "up" && "text-bid-text",
-                  metric.tone === "down" && "text-ask-text"
-                )}
-              >
-                {metric.value}
-              </span>
-            </HeaderMetric>
-          ))}
-        </div>
-      )}
+      <HeaderMetrics publication={publication} />
 
       {/*
        * Below `lg` the cluster may wrap inside itself, as the header around it does on a phone.
@@ -236,7 +290,12 @@ export function TerminalHeaderBar({
        * the others. The metrics beside it are what give way, since they clip rather than paint over.
        */}
       <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-2 lg:shrink-0 lg:flex-nowrap">
-        {depositControl}
+        {/* Keyed by market: a control published by one market never keeps its state under another. */}
+        {publication?.depositControl == null ? (
+          <HeaderActionPlaceholders />
+        ) : (
+          <Fragment key={publication.market}>{publication.depositControl}</Fragment>
+        )}
         <button
           aria-label="Toggle theme"
           className="flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full border border-panel-border bg-input-bg text-panel-text-active transition-all duration-300 hover:bg-input-hover"
@@ -245,7 +304,7 @@ export function TerminalHeaderBar({
         >
           {theme === "light" ? <Moon className="size-5" /> : <Sun className="size-5" />}
         </button>
-        <PrivyWalletButton onPortfolioSelect={onPortfolioSelect} />
+        <PrivyWalletButton onPortfolioSelect={publication?.onPortfolioSelect} />
       </div>
     </header>
   );

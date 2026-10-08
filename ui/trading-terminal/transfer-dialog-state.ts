@@ -181,7 +181,7 @@ export function getLedgerBalanceLabel(
  *
  * That case needs the selection to move the app's whole trading identity, not just who signs:
  * the first deposit creates the account, and the account belongs to the signer. See
- * `OrderBookTradingTerminal`, which resolves the subaccount from the selected wallet for exactly
+ * `SpotMarketPanels`, which resolves the subaccount from the selected wallet for exactly
  * this reason.
  */
 export function canPickFundingWallet(account: DepositAccount | null, wallets: ConnectedWallet[]) {
