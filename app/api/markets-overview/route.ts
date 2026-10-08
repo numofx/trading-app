@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { buildOverviewRow, emptyOverviewRow } from "@/lib/market-overview";
 import type { MarketOverviewResponse, TerminalMarketId } from "@/lib/market-overview.types";
+import { findPerpMarket, findSpotMarket } from "@/lib/market-pickers";
 import type { MarketPresentation } from "@/lib/markets-service";
 import { getMarketBook, getMarketsServiceUrl, getMarketTrades } from "@/lib/markets-service";
 import { parsePerpState } from "@/lib/perp-market";
@@ -27,22 +28,14 @@ export async function GET() {
     markets = [];
   }
 
-  const spot = markets.find(
-    (market) =>
-      market.contract_type === "spot" &&
-      market.base_asset_symbol === "USDC" &&
-      market.quote_asset_symbol === "cNGN"
-  );
-  const perp = markets.find(
-    (market) =>
-      market.contract_type === "perpetual" &&
-      market.base_asset_symbol === "USDC" &&
-      market.quote_asset_symbol === "cNGN"
-  );
+  // The same pickers the terminals use, so the selector can never look for a market under an
+  // orientation the venue no longer reports and show dashes for one it is serving.
+  const spot = findSpotMarket(markets);
+  const perp = findPerpMarket(markets);
 
   const [spotRow, perpRow] = await Promise.all([
-    readRow("spot", spot, null),
-    readRow("perp", perp, parsePerpState(perp?.perp)),
+    readRow("spot", spot ?? undefined, null),
+    readRow("perp", perp ?? undefined, parsePerpState(perp?.perp)),
   ]);
 
   return NextResponse.json({ rows: [spotRow, perpRow] } satisfies MarketOverviewResponse, {

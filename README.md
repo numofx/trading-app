@@ -121,9 +121,10 @@ not appear, so an empty `[]` means none of the pairs are configured on the backe
 > registry — it dated from the standalone `markets-service` repo and was never updated when the
 > service moved into `numofx/exchange`, so it sent readers looking for env vars matching nothing.
 
-The frontend picks its one market out of that list with `getLiveSpotMarket` (`lib/markets-service.ts`),
-taking the first entry whose `contract_type` is `spot`, `base_asset_symbol` is `USDC` and
-`quote_asset_symbol` is `cNGN`. The futures rows are ignored — the futures filter
+The frontend picks its markets out of that list with `findSpotMarket` and `findPerpMarket`
+(`lib/market-pickers.ts`, used by `getLiveSpotMarket`, `getLivePerpMarket` and the selector's
+overview route alike), taking the first entry whose `contract_type` is `spot` or `perpetual`,
+`base_asset_symbol` is `cNGN` and `quote_asset_symbol` is `USDC`. The futures rows are ignored — the futures filter
 (`getLiveDeliverableFXFutures`) was deleted along with the futures UI.
 
 ## Spot market status

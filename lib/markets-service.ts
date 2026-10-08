@@ -1,6 +1,7 @@
 import "server-only";
 
 import { Duration } from "effect";
+import { findPerpMarket, findSpotMarket } from "@/lib/market-pickers";
 import type { PerpStatePresentation } from "@/lib/perp-market";
 
 export type MarketPresentation = {
@@ -187,32 +188,12 @@ export async function getMarketsServiceMarkets() {
 }
 
 export async function getLiveSpotMarket() {
-  const markets = await getMarketsServiceMarkets();
-
-  return (
-    markets.find((market) => {
-      return (
-        market.contract_type === "spot" &&
-        market.base_asset_symbol === "cNGN" &&
-        market.quote_asset_symbol === "USDC"
-      );
-    }) ?? null
-  );
+  return findSpotMarket(await getMarketsServiceMarkets());
 }
 
 /** USDCcNGN-PERP, when markets-service lists it: contract_type `perpetual`, cNGN over USDC. */
 export async function getLivePerpMarket() {
-  const markets = await getMarketsServiceMarkets();
-
-  return (
-    markets.find((market) => {
-      return (
-        market.contract_type === "perpetual" &&
-        market.base_asset_symbol === "cNGN" &&
-        market.quote_asset_symbol === "USDC"
-      );
-    }) ?? null
-  );
+  return findPerpMarket(await getMarketsServiceMarkets());
 }
 
 export async function getMarketBook(assetAddress: string, subId: string) {
