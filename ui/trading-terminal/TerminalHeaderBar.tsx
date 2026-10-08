@@ -4,7 +4,7 @@ import { Moon, Sun } from "lucide-react";
 import type { ReactNode } from "react";
 import { Fragment, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
-import { formatDollarPrice, formatPrice } from "@/lib/market-formatting";
+import { formatDollarPrice } from "@/lib/market-formatting";
 import type { TerminalMarketId } from "@/lib/market-overview.types";
 import { PrivyWalletButton } from "@/ui/PrivyWalletButton";
 import { SmartImage } from "@/ui/SmartImage";
@@ -185,10 +185,10 @@ function HeaderMetrics({ publication }: { publication: TerminalHeaderPublication
          * `hasWallet` rearranged the row at the moment of connecting, which reads as a glitch.
          */}
         <HeaderMetric className="hidden xl:flex" label="24h High">
-          {formatPrice(publication.high24h)}
+          {formatDollarPrice(publication.high24h)}
         </HeaderMetric>
         <HeaderMetric className="hidden xl:flex" label="24h Low">
-          {formatPrice(publication.low24h)}
+          {formatDollarPrice(publication.low24h)}
         </HeaderMetric>
       </div>
     );
