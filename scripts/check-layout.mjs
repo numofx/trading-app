@@ -225,7 +225,14 @@ function probe(width, height, path) {
 const failures = [];
 
 for (const viewport of VIEWPORTS) {
-  const { width, height, connected = false, ctaVisible: expectCta, note, path = "/" } = viewport;
+  const {
+    width,
+    height,
+    connected = false,
+    ctaVisible: expectCta,
+    note,
+    path = "/trade/cngn-usdc",
+  } = viewport;
   const label = `${width}x${height}${connected ? " funded" : ""}`;
   let result;
 
@@ -259,7 +266,10 @@ for (const viewport of VIEWPORTS) {
       width < 768 || result.columnOverflow === 0,
       `ticket column overflows its height by ${result.columnOverflow}px — the balance summary is cut off`,
     ],
-    [result.overscrollPinned, "page can overscroll — expected overscroll-behavior: none on the root"],
+    [
+      result.overscrollPinned,
+      "page can overscroll — expected overscroll-behavior: none on the root",
+    ],
     [result.pageHorizontalScroll === false, "page scrolls horizontally"],
     [
       result.overflowingCells.length === 0,
