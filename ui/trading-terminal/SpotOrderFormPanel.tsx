@@ -553,12 +553,12 @@ function MarketDepthNote({
 function FeeRow({ ceiling, charged }: { ceiling: number; charged: number | null }) {
   return charged === null ? (
     <SummaryRow
-      label="Fee"
+      label="Fees"
       tooltip="The venue did not report its fee schedule; this is the most the order is signed to pay"
       value={`Up to ${formatUsdcAmount(ceiling)}`}
     />
   ) : (
-    <SummaryRow label="Fee" value={formatUsdcAmount(charged)} />
+    <SummaryRow label="Fees" value={formatUsdcAmount(charged)} />
   );
 }
 
@@ -895,7 +895,7 @@ export function SpotOrderFormPanel({
            * well cost the Size field its rows on a 700px screen.
            */}
           <div className="space-y-0.5">
-            <SummaryRow emphasis label="Total" value={totalLabel} />
+            <SummaryRow emphasis label="Order Value" value={totalLabel} />
             <FeeRow ceiling={takerFee} charged={feeFromVenue} />
             <MarketFillRows averagePrice={averagePrice} isMarket={isMarket} />
           </div>
