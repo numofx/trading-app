@@ -41,7 +41,10 @@ node scripts/check-layout.mjs      # against the dev server on :3111; `just chec
 
 Drives agent-browser through the signed-out spot and perp routes at phone and desktop sizes and
 the funded fixture, asserting the submit button clears the fold, nothing covers it, no grid cell
-overflows and the page does not scroll sideways. Needs `next dev`: the fixture 404s in production.
+overflows, the page does not scroll sideways and, from `md` up, the ticket column has at least
+24px to spare under the Account panel (`MIN_COLUMN_MARGIN`). Needs `next dev`: the fixture 404s
+in production. `/layout-fixture/perp` carries seven-figure balances and a seven-figure position
+under water, for eyeballing the perp ticket's wrapped account line and summary at 375px.
 
 ## Drive
 

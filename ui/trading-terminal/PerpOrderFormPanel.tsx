@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeftRight, ArrowRight } from "lucide-react";
+import { ArrowLeftRight, ArrowRight, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatDollarPrice, formatNairaPerUsdc, formatPrice } from "@/lib/market-formatting";
@@ -23,7 +23,6 @@ import { TOKEN_ICONS } from "@/lib/token-icons";
 import type { OrderBookLevel } from "@/lib/trading.types";
 import { SmartImage } from "@/ui/SmartImage";
 import { OrderTypeTabs } from "@/ui/trading-terminal/OrderTypeTabs";
-import { AvailableRow } from "@/ui/trading-terminal/order-form/AvailableRow";
 import { CheckboxRow } from "@/ui/trading-terminal/order-form/CheckboxRow";
 import { FieldLabel } from "@/ui/trading-terminal/order-form/FieldLabel";
 import { FormField } from "@/ui/trading-terminal/order-form/FormField";
@@ -180,7 +179,7 @@ function OrderSizeCard({
   const sliderValue = sliderDisabled ? 0 : Math.min(sizeCngn ?? 0, sliderMax);
   const fillPercent = (sliderValue / sliderMax) * 100;
   return (
-    <div className="space-y-3 border border-panel-border px-3 pt-2.5 pb-3 focus-within:border-panel-text-muted">
+    <div className="space-y-2 border border-panel-border px-3 py-2 focus-within:border-panel-text-muted">
       <div className="flex items-start justify-between gap-3">
         <div className="flex shrink-0 flex-col items-start gap-2 pt-0.5">
           <FieldLabel htmlFor="perp-size" tooltip={tooltip}>
@@ -272,30 +271,77 @@ function signTone(value: number) {
 }
 
 /** The position now and after this order, in cNGN, each coloured by its side. */
-function PositionRow({ current, next }: { current: number; next: number }) {
+function PositionFigure({ current, next }: { current: number; next: number }) {
+  if (current === 0 && next === 0) {
+    return <span className="text-panel-text">—</span>;
+  }
   return (
-    <div className="flex items-center justify-between gap-2 text-[12px]">
-      <FieldLabel tooltip="Your cNGN position now, and what it becomes if this order fills in full. A long is positive.">
-        Position
-      </FieldLabel>
-      {current === 0 && next === 0 ? (
-        <span className="text-panel-text">—</span>
-      ) : (
-        <span className="flex items-center gap-1 tabular-nums">
-          <span className={signTone(current)}>{formatCngnAmount(Math.abs(current))}</span>
-          <ArrowRight aria-hidden className="size-3 text-panel-text-muted" />
-          <span className={signTone(next)}>{formatCngnAmount(Math.abs(next))} cNGN</span>
+    <span className="flex items-center gap-1 tabular-nums">
+      <span className={signTone(current)}>{formatCngnAmount(Math.abs(current))}</span>
+      <ArrowRight aria-hidden className="size-3 text-panel-text-muted" />
+      <span className={signTone(next)}>{formatCngnAmount(Math.abs(next))} cNGN</span>
+    </span>
+  );
+}
+
+/**
+ * The account's headroom and its position on one line: each is a label and a figure that never
+ * breaks inside itself, and the pair wraps onto two lines when seven-figure values need the
+ * room, rather than overlapping or clipping. Usually one line, which is the row this saves.
+ */
+function AccountRow({
+  availableMargin,
+  marginSources,
+  onDepositRequest,
+  positionChange,
+}: {
+  availableMargin: number | null;
+  marginSources: string | null;
+  onDepositRequest?: () => void;
+  positionChange: { current: number; next: number };
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-[12px]">
+      <span className="flex items-center gap-1.5 whitespace-nowrap">
+        {/* The account's initial-margin headroom; what it is made of sits in the tooltip. */}
+        <FieldLabel
+          tooltip={[
+            "Cross-margin: everything in your perp account backs every position. USDC counts in full, cNGN at its index value times its margin factor. Profit and loss settle in USDC.",
+            marginSources,
+          ]
+            .filter((part) => part !== null)
+            .join(" ")}
+        >
+          Available to Trade
+        </FieldLabel>
+        <span className="font-medium text-panel-text tabular-nums">
+          {availableMargin === null ? "—" : formatUsd(Math.max(0, availableMargin))}
         </span>
-      )}
+        <button
+          aria-label="Deposit margin"
+          className="flex size-4 cursor-pointer items-center justify-center rounded-full bg-input-bg text-[12px] text-panel-text-muted leading-none ring-1 ring-panel-border transition-colors hover:text-panel-text-active"
+          onClick={onDepositRequest}
+          type="button"
+        >
+          +
+        </button>
+      </span>
+      <span className="flex items-center gap-1.5 whitespace-nowrap">
+        <FieldLabel tooltip="Your cNGN position now, and what it becomes if this order fills in full. A long is positive.">
+          Position
+        </FieldLabel>
+        <PositionFigure current={positionChange.current} next={positionChange.next} />
+      </span>
     </div>
   );
 }
 
 /**
- * The account's leverage once this order fills, against the SRM's ceiling. Red at or past the
- * ceiling: the venue would refuse the order, and the Deposit remedy on the button says so.
+ * The account's leverage once this order fills, against the SRM's ceiling. Past the ceiling the
+ * venue would refuse the order, and the Deposit remedy on the button says so: the figure turns
+ * red and is marked "Above max" with a warning sign, so the state does not rest on colour alone.
  */
-function PositionLeverageCard({
+function PositionLeverageRow({
   leverage,
   state,
 }: {
@@ -306,7 +352,7 @@ function PositionLeverageCard({
   const tone =
     leverage === null || leverage === 0 ? "text-panel-text-muted" : "text-panel-text-active";
   return (
-    <div className="flex items-center justify-between gap-2 border border-panel-border px-3 py-2.5">
+    <div className="flex items-center justify-between gap-2 text-[12px]">
       <FieldLabel
         tooltip={`Your whole account's leverage after this order: the position's value at the ticket's price over the margin the SRM credits you (USDC in full, cNGN at its factor). The SRM opens up to ${state === null ? "its ceiling" : formatLeverage(state.maxLeverage)}; it margins the account together, so there is no per-position leverage to set.`}
       >
@@ -314,10 +360,16 @@ function PositionLeverageCard({
       </FieldLabel>
       <span
         className={cn(
-          "font-semibold text-[15px] tabular-nums",
+          "flex items-center gap-1.5 font-semibold tabular-nums",
           overCeiling ? "text-ask-text" : tone
         )}
       >
+        {overCeiling ? (
+          <span className="flex items-center gap-1 font-medium text-[11px]">
+            <TriangleAlert aria-hidden className="size-3.5" />
+            Above max
+          </span>
+        ) : null}
         {leverage === null ? "—" : formatLeverage(leverage)}
       </span>
     </div>
@@ -776,26 +828,17 @@ export function PerpOrderFormPanel({
       />
 
       {/*
-       * One rhythm below the tabs: the two account rows sit close as a pair, and everything after
-       * them (price, size, leverage, switches) is a block set the same distance from its neighbours.
+       * One rhythm below the tabs: the account line, then the price, size, leverage and switches,
+       * each a block set the same distance from its neighbours. Set to fit the ticket under a
+       * phone's fold and in a 700px-tall window beside the Account panel, with room to spare.
        */}
-      <div className="space-y-2.5 pt-1 pb-0.5">
-        <div className="space-y-1.5">
-          {/* The account's initial-margin headroom; what it is made of sits in the tooltip. */}
-          <AvailableRow
-            depositLabel="Deposit margin"
-            label="Available to Trade"
-            onDeposit={onDepositRequest}
-            tooltip={[
-              "Cross-margin: everything in your perp account backs every position. USDC counts in full, cNGN at its index value times its margin factor. Profit and loss settle in USDC.",
-              marginSources,
-            ]
-              .filter((part) => part !== null)
-              .join(" ")}
-            value={availableMargin === null ? "—" : formatUsd(Math.max(0, availableMargin))}
-          />
-          <PositionRow current={positionChange.current} next={positionChange.next} />
-        </div>
+      <div className="space-y-2 pt-1 pb-0.5">
+        <AccountRow
+          availableMargin={availableMargin}
+          marginSources={marginSources}
+          onDepositRequest={onDepositRequest}
+          positionChange={positionChange}
+        />
 
         {orderType === "Limit" ? (
           <div className="space-y-1">
@@ -833,9 +876,10 @@ export function PerpOrderFormPanel({
           tooltip={sizeTooltip(sizeUnit, ticketPrice)}
           unit={sizeUnit}
         />
-        <PositionLeverageCard leverage={positionLeverage} state={state} />
+        <PositionLeverageRow leverage={positionLeverage} state={state} />
 
-        <div className="space-y-2.5 px-0.5 pt-0.5">
+        {/* The two switches side by side: one row, each half a 44px thumb target on a phone. */}
+        <div className="grid grid-cols-2 gap-x-2 px-0.5">
           {/*
            * Without a position there is nothing to reduce and the venue would refuse the order, so
            * the switch is shown disabled and says why rather than letting a trader arm it.
@@ -861,9 +905,9 @@ export function PerpOrderFormPanel({
             checked={false}
             disabled
             id="perp-tp-sl"
-            label="Take Profit / Stop Loss"
+            label="TP / SL"
             onChange={() => undefined}
-            tooltip="Not available yet: the venue takes market and limit orders only, with no trigger orders to attach a take profit or stop loss to"
+            tooltip="Take profit / stop loss. Not available yet: the venue takes market and limit orders only, with no trigger orders to attach a take profit or stop loss to"
           />
         </div>
       </div>

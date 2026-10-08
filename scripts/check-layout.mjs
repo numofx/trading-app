@@ -14,6 +14,13 @@
 
 import { execFileSync } from "node:child_process";
 
+/**
+ * What the ticket column must have left over at its fixed height, from `md` up: the ticket, the
+ * Account panel and the gap between them, and this much besides. At 0 the next row added to
+ * either panel cuts the balance summary off; 24px is a row's worth of warning.
+ */
+const MIN_COLUMN_MARGIN = 24;
+
 const urlArgIndex = process.argv.indexOf("--url");
 const BASE_URL = urlArgIndex === -1 ? "http://localhost:3111" : process.argv[urlArgIndex + 1];
 
@@ -44,38 +51,21 @@ const VIEWPORTS = [
   { ctaVisible: true, height: 959, width: 545 },
   { ctaVisible: true, height: 700, width: 1440 },
   { ctaVisible: true, height: 900, width: 1440 },
-  // The perp, signed out, on the same grid: its ticket has its own submit button. Three accepted
-  // gaps, measured identically on the pre-/trade deployment (2026-10-08) when the perp first
-  // joined the probe: the leverage and size cards and the reduce-only and TP/SL rows make the
-  // ticket ~45px taller than spot's, so its CTA sits at 713px on a phone, and at 1440x700 the
-  // ticket column overflows its fixed height by 114px. Tighten these when the ticket shrinks.
-  {
-    cta: "perp-submit-cta",
-    ctaVisible: false,
-    height: 667,
-    note: "perp ticket runs ~45px under the fold — pre-existing, see above",
-    path: "/trade/cngn-perp",
-    width: 375,
-  },
-  {
-    cta: "perp-submit-cta",
-    ctaVisible: false,
-    height: 711,
-    note: "perp ticket runs ~2px under the fold — pre-existing, see above",
-    path: "/trade/cngn-perp",
-    width: 410,
-  },
-  { cta: "perp-submit-cta", ctaVisible: true, height: 959, path: "/trade/cngn-perp", width: 545 },
-  {
-    acceptedColumnOverflow: 114,
+  // The perp, signed out, on the same grid: its ticket has its own submit button. Its leverage
+  // row, side-by-side switches and merged account line are what keep it under a phone's fold.
+  ...[
+    [375, 667],
+    [410, 711],
+    [545, 959],
+    [1440, 700],
+    [1440, 900],
+  ].map(([width, height]) => ({
     cta: "perp-submit-cta",
     ctaVisible: true,
-    height: 700,
-    note: "perp ticket column overflows by 114px — pre-existing, see above",
+    height,
     path: "/trade/cngn-perp",
-    width: 1440,
-  },
-  { cta: "perp-submit-cta", ctaVisible: true, height: 900, path: "/trade/cngn-perp", width: 1440 },
+    width,
+  })),
   {
     connected: true,
     ctaVisible: true,
@@ -115,6 +105,17 @@ const probeScript = (ctaId) => `(() => {
   const columnOverflow = ticketColumn
     ? Math.max(0, ticketColumn.scrollHeight - ticketColumn.clientHeight)
     : 0;
+  // What the column has left at its fixed height: its height less its content's, measured from
+  // its top to its last child's bottom (scrollHeight never reads below clientHeight, so it cannot
+  // say how much room a column that fits has left). Negative is the overflow above.
+  const columnMargin = ticketColumn
+    ? Math.round(
+        ticketColumn.clientHeight -
+          (ticketColumn.lastElementChild.getBoundingClientRect().bottom -
+            ticketColumn.getBoundingClientRect().top +
+            ticketColumn.scrollTop)
+      )
+    : null;
 
   const navs = [...document.querySelectorAll("nav")].filter((n) => getComputedStyle(n).display !== "none");
   const doc = document.documentElement;
@@ -156,6 +157,7 @@ const probeScript = (ctaId) => `(() => {
     // The page must sit still at its borders rather than rubber-banding away from them.
     overscrollPinned: rootStyle.overscrollBehaviorY === "none" && rootStyle.overscrollBehaviorX === "none",
     columnOverflow,
+    columnMargin,
     ctaVisible: rect.top >= 0 && rect.bottom <= innerHeight,
     ctaVisibleAfterScroll,
     ctaBottom: Math.round(rect.bottom + scrollY),
@@ -261,7 +263,6 @@ for (const viewport of VIEWPORTS) {
   const {
     width,
     height,
-    acceptedColumnOverflow = 0,
     connected = false,
     cta = "spot-submit-cta",
     ctaVisible: expectCta,
@@ -298,8 +299,12 @@ for (const viewport of VIEWPORTS) {
     // Below `md` the ticket column is not a scroller — the page itself scrolls — so the invariant
     // only holds where the column has a fixed height of its own.
     [
-      width < 768 || result.columnOverflow <= acceptedColumnOverflow,
+      width < 768 || result.columnOverflow === 0,
       `ticket column overflows its height by ${result.columnOverflow}px — the balance summary is cut off`,
+    ],
+    [
+      width < 768 || result.columnMargin >= MIN_COLUMN_MARGIN,
+      `ticket column has ${result.columnMargin}px to spare, under the ${MIN_COLUMN_MARGIN}px minimum`,
     ],
     [
       result.overscrollPinned,
@@ -365,7 +370,7 @@ for (const viewport of VIEWPORTS) {
 
   const status = failed.length === 0 ? "ok  " : "FAIL";
   console.log(
-    `${status} ${label.padEnd(16)} cta=${String(result.ctaVisible).padEnd(5)} bottom=${String(result.ctaBottom).padEnd(5)} label=${String(result.ctaLabel).padEnd(14)}${note ? `  (${note})` : ""}`
+    `${status} ${label.padEnd(26)} cta=${String(result.ctaVisible).padEnd(5)} bottom=${String(result.ctaBottom).padEnd(5)} margin=${String(width < 768 ? "n/a" : result.columnMargin).padEnd(5)} label=${String(result.ctaLabel).padEnd(14)}${note ? `  (${note})` : ""}`
   );
 }
 

@@ -49,8 +49,9 @@ export function AccountSummary({ rows }: { rows: readonly AccountSummaryRow[] })
     // viewport takes its height out of the ticket's scroll area rather than squeezing these rows.
     <section className="flex shrink-0 flex-col overflow-clip bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300">
       {/* Dropped in the stacked layout for the reason the ticket drops its own: below `md` this
-          column is the whole screen, and the label is only telling panels apart from siblings. */}
-      <PanelTitle className="hidden md:block">Account</PanelTitle>
+          column is the whole screen, and the label is only telling panels apart from siblings.
+          Dropped on a short viewport too, where the column needs the rows more than the label. */}
+      <PanelTitle className="hidden md:block md:short:hidden">Account</PanelTitle>
 
       {/* Rows get a real line height rather than being packed: this is a readout a trader checks
           at a glance, and at the ticket's field density it read as a footnote. No rule between

@@ -3,7 +3,13 @@
 import { Check } from "lucide-react";
 import { cn } from "@/lib/cn";
 
-/** A labelled checkbox on one line, box first, with a tooltip for what it does or why it is off. */
+/**
+ * A labelled checkbox on one line, box first, with a tooltip for what it does or why it is off.
+ *
+ * Below `md` the label is 44px tall for the thumb, pulled in by negative margins so the row it
+ * sits in keeps its line height: the hit area reaches 13px above and below the text, into
+ * spacing and non-interactive neighbours, never into another control.
+ */
 export function CheckboxRow({
   checked,
   disabled = false,
@@ -22,7 +28,7 @@ export function CheckboxRow({
   return (
     <label
       className={cn(
-        "flex w-full items-center gap-2.5 text-[12px]",
+        "-my-[13px] flex min-h-11 w-full items-center gap-2.5 text-[12px] md:my-0 md:min-h-0",
         disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
       )}
       htmlFor={id}
