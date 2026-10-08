@@ -1,4 +1,4 @@
-import type { ReactNode, Ref } from "react";
+import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 /*
@@ -47,23 +47,19 @@ export function TerminalGrid({
   book,
   chart,
   ticketColumn,
-  ticketColumnRef,
 }: {
   activity: ReactNode;
   book: ReactNode;
   chart: ReactNode;
   /** The ticket and, under it, the account summary; the column scrolls on its own below `lg`. */
   ticketColumn: ReactNode;
-  ticketColumnRef?: Ref<HTMLDivElement>;
 }) {
   return (
     <div className={FRAME_CLASS}>
       <div className={GRID_CLASS}>
         <div className={CHART_CELL}>{chart}</div>
         <div className={BOOK_CELL}>{book}</div>
-        <div className={TICKET_CELL} ref={ticketColumnRef}>
-          {ticketColumn}
-        </div>
+        <div className={TICKET_CELL}>{ticketColumn}</div>
         <div className={ACTIVITY_CELL}>{activity}</div>
       </div>
     </div>

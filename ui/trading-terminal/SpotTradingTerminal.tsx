@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { buildOpenOrdersActivityView, getOwnedOpenOrders } from "@/lib/account-activity-views";
 import { formatBalance } from "@/lib/account-balance-display";
 import type { CandleInterval } from "@/lib/markets-service";
@@ -134,7 +134,6 @@ export function SpotTradingTerminal({
   // accepted, not on the next successful refresh — a refresh fired right after a cancel can race
   // the venue and come back still listing the order.
   const [cancelledNonces, setCancelledNonces] = useState<ReadonlySet<string>>(() => new Set());
-  const ticketColumnRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const signedHistory = useSignedHistoryTabs({
     bottomTab,
@@ -249,22 +248,12 @@ export function SpotTradingTerminal({
 
   const activityView = buildActivityView();
 
-  /**
-   * The wallet menu's Portfolio item. There is no separate portfolio route — the account's holdings
-   * live in the Account panel under the ticket, so this brings that column into view, which
-   * matters on the short viewports most of this app's traffic uses.
-   */
-  function showPortfolio() {
-    ticketColumnRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }
-
   usePublishTerminalHeader({
     changePercent24h: changePercent,
     depositControl,
     high24h: high,
     low24h: low,
     market: "spot",
-    onPortfolioSelect: showPortfolio,
     price: anchorPrice,
     volume24hLabel: volumeLabel,
   });
@@ -382,7 +371,6 @@ export function SpotTradingTerminal({
           />
         </>
       }
-      ticketColumnRef={ticketColumnRef}
     />
   );
 }
