@@ -488,8 +488,13 @@ function NairaPerUsdcLine({ isMarket, price }: { isMarket: boolean; price: numbe
   return <p className="text-[11px] text-panel-text-muted">{formatNairaPerUsdc(price)}</p>;
 }
 
-/** What a market order fills at, and the room it is signed with. A limit ticket has neither. */
-function MarketFillRows({
+/**
+ * Where a market order is expected to fill, walked through the resting depth rather than quoted
+ * off the touch: on a thin book the two are not the same number, and this is the one the trader is
+ * charged. Leads the summary, above the order's value, as the perp ticket's does. A limit ticket
+ * has no row: its price is the one the trader typed.
+ */
+function ExpectedPriceRow({
   averagePrice,
   isMarket,
 }: {
@@ -499,42 +504,24 @@ function MarketFillRows({
   if (!isMarket) {
     return null;
   }
-
   return (
-    <>
-      {/*
-       * What the order fills at, walked through the resting depth rather than quoted off the
-       * touch — on a thin book the two are not the same number, and the average is the one the
-       * trader is charged.
-       */}
-      <SummaryRow label="Average price" value={formatPrice(averagePrice)} />
-      {/*
-       * Not a cost: the room the order has to still cross if the quote moves between signing and
-       * settlement. The fill itself lands at the maker's price, which `Average price` above quotes.
-       */}
-      <SummaryRow label="Slippage" value={`<${(SPOT_MARKET_SLIPPAGE * 100).toFixed(1)}%`} />
-    </>
+    <SummaryRow
+      label="Expected Price"
+      tooltip="Where a market order of this size is expected to fill, walked through the resting book"
+      value={formatPrice(averagePrice)}
+    />
   );
 }
 
 /**
- * How long an order that does not fill stays on the book: a limit ticket's most surprising term,
- * since it leaves the book on its own and nothing else on screen would say so. A market order
- * crosses on submission, so for it the lifetime only applies to a remainder the book could not
- * cover; the row says so in its tooltip rather than disappearing.
+ * Not a cost: the room a market order has to still cross if the quote moves between signing and
+ * settlement. The fill itself lands at the maker's price, which Expected Price quotes.
  */
-function OrderLifetimeRow({ isMarket }: { isMarket: boolean }) {
-  return (
-    <SummaryRow
-      label="Expires"
-      tooltip={
-        isMarket
-          ? "A market order crosses on submission; only a remainder the book could not cover rests this long"
-          : undefined
-      }
-      value={`${SPOT_ORDER_LIFETIME_LABEL} after signing`}
-    />
-  );
+function SlippageRow({ isMarket }: { isMarket: boolean }) {
+  if (!isMarket) {
+    return null;
+  }
+  return <SummaryRow label="Slippage" value={`<${(SPOT_MARKET_SLIPPAGE * 100).toFixed(1)}%`} />;
 }
 
 /**
@@ -565,28 +552,20 @@ function MarketDepthNote({
 }
 
 /**
- * The two fee figures, and the trader needs both.
- *
- * `charged` is what the venue takes: its own published schedule, served by /v1/markets, so this
- * app never carries a second copy of the rate to disagree with. Null means the service reported no
- * schedule — the fee is then UNKNOWN, not zero, and the row is omitted rather than printing a
- * confident "0.00 USDC" that a market which does charge would make wrong by the whole fee.
- *
- * `ceiling` is the worstFee the order is signed with: the most that can be charged before
- * TradeModule reverts TM_FeeTooHigh. It is a bound, never a quote — an order that partly fills, or
- * rests and never takes, is charged less. It stays on screen next to the charge because it is the
- * number that decides whether the order can fill at all: a ceiling below the schedule reverts.
+ * The fee, on one row. `charged` is what the venue takes, from its own schedule on /v1/markets.
+ * When the service reports no schedule the fee is unknown, not zero, so the row falls back to
+ * `ceiling`, the most the order is signed to pay, as "Up to …" rather than printing a confident
+ * zero. The ceiling and the order's lifetime are still stated in the confirmation before signing.
  */
-function FeeRows({ ceiling, charged }: { ceiling: number; charged: number | null }) {
-  return (
-    <>
-      {charged === null ? null : <SummaryRow label="Fee" value={formatUsdcAmount(charged)} />}
-      <SummaryRow
-        label="Max fee"
-        tooltip="The most the order is signed to pay: a bound the venue reverts above, never a quote. An order that partly fills, or rests and never takes, is charged less."
-        value={formatUsdcAmount(ceiling)}
-      />
-    </>
+function FeeRow({ ceiling, charged }: { ceiling: number; charged: number | null }) {
+  return charged === null ? (
+    <SummaryRow
+      label="Fees"
+      tooltip="The venue did not report its fee schedule; this is the most the order is signed to pay"
+      value={`Up to ${formatUsdcAmount(ceiling)}`}
+    />
+  ) : (
+    <SummaryRow label="Fees" value={formatUsdcAmount(charged)} />
   );
 }
 
@@ -923,10 +902,10 @@ export function SpotOrderFormPanel({
            * well cost the Size field its rows on a 700px screen.
            */}
           <div className="space-y-0.5">
-            <SummaryRow emphasis label="Total" value={totalLabel} />
-            <FeeRows ceiling={takerFee} charged={feeFromVenue} />
-            <MarketFillRows averagePrice={averagePrice} isMarket={isMarket} />
-            <OrderLifetimeRow isMarket={isMarket} />
+            <ExpectedPriceRow averagePrice={averagePrice} isMarket={isMarket} />
+            <SummaryRow emphasis label="Order Value" value={totalLabel} />
+            <FeeRow ceiling={takerFee} charged={feeFromVenue} />
+            <SlippageRow isMarket={isMarket} />
           </div>
 
           <MarketDepthNote fill={fill} hasShortfall={shortfallCurrency !== null} />
