@@ -33,7 +33,7 @@ const ICON_ITEM_CLASSNAME =
 
 /** The shared pill shape, so the connected menu trigger and the connect button stay identical. */
 const WALLET_PILL_CLASSNAME =
-  "inline-flex h-10 cursor-pointer items-center gap-2 rounded-sm bg-[#9BDBF8] px-4 font-medium text-[#111111] text-[14px] outline-none ring-1 ring-black/10 transition-colors hover:bg-[#9BDBF8]/90";
+  "inline-flex h-8 cursor-pointer items-center gap-2 rounded-sm bg-[#9BDBF8] px-3 font-medium text-[#111111] text-[13px] outline-none ring-1 ring-black/10 transition-colors hover:bg-[#9BDBF8]/90";
 
 export function PrivyWalletButton() {
   const privyAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID?.trim();
@@ -42,7 +42,7 @@ export function PrivyWalletButton() {
     return (
       <button
         aria-disabled="true"
-        className="inline-flex h-10 items-center gap-2 rounded-sm bg-white px-4 font-medium text-[#111111] text-[14px] ring-1 ring-black/10"
+        className="inline-flex h-8 items-center gap-2 rounded-sm bg-white px-3 font-medium text-[#111111] text-[13px] ring-1 ring-black/10"
         title="Set NEXT_PUBLIC_PRIVY_APP_ID to enable wallet login"
         type="button"
       >
