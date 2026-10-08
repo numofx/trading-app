@@ -1,8 +1,8 @@
 "use client";
 
 import { Dialog } from "@base-ui/react/dialog";
-import { Check, ChevronDown, Search, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { Check, ChevronDown, X } from "lucide-react";
+import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatPrice } from "@/lib/market-formatting";
 import {
@@ -190,8 +190,8 @@ function MarketRow({
 }
 
 /**
- * The header's market pill and the "Select a market" dialog it opens: a search box, a Spot/Perp
- * tab row and a table of the markets under the active tab with the venue's figures. Choosing a
+ * The header's market pill and the market dialog it opens: a Spot/Perp tab row with the close
+ * control, and a table of the markets under the active tab with the venue's figures. Choosing a
  * row navigates to that market's route. Escape, the backdrop and the X all close it; the body
  * does not scroll behind it. Below `md` it rises as a bottom sheet rather than a centred card.
  */
@@ -207,22 +207,19 @@ export function MarketSelectDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<TerminalMarketKind>(getTerminalMarket(market).kind);
-  const [query, setQuery] = useState("");
-  const searchRef = useRef<HTMLInputElement>(null);
   const rowFor = useMarketOverview(open, {
     ...emptyOverviewRow(market),
     changePercent24h,
     price,
   });
   const selected = getTerminalMarket(market);
-  const entries = filterTerminalMarkets(TERMINAL_MARKETS, kind, query);
+  const entries = filterTerminalMarkets(TERMINAL_MARKETS, kind, "");
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
     if (next) {
-      // Each opening lands on the tab of the market on screen, with a clean search box.
+      // Each opening lands on the tab of the market on screen.
       setKind(selected.kind);
-      setQuery("");
     }
   }
 
@@ -244,49 +241,15 @@ export function MarketSelectDialog({
 
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/60 transition-opacity data-ending-style:opacity-0 data-starting-style:opacity-0" />
-        <Dialog.Popup
-          className="md:-translate-1/2 fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] flex-col rounded-t-lg bg-dialog-bg text-foreground outline-none ring-1 ring-panel-ring transition-all data-ending-style:opacity-0 data-starting-style:opacity-0 max-md:data-ending-style:translate-y-4 max-md:data-starting-style:translate-y-4 md:inset-x-auto md:top-1/2 md:bottom-auto md:left-1/2 md:max-h-[min(80dvh,620px)] md:w-[min(92vw,760px)] md:rounded-lg md:data-ending-style:scale-95 md:data-starting-style:scale-95"
-          initialFocus={searchRef}
-        >
-          <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-4">
-            <Dialog.Title className="font-semibold text-[18px] text-panel-text-active">
-              Select a market
-            </Dialog.Title>
-            <Dialog.Close
-              aria-label="Close"
-              className={cn(
-                "flex size-8 cursor-pointer items-center justify-center text-panel-text-muted transition-colors hover:bg-input-hover hover:text-panel-text-active",
-                RADIUS
-              )}
-            >
-              <X className="size-4" />
-            </Dialog.Close>
-          </div>
+        <Dialog.Popup className="md:-translate-1/2 fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] flex-col rounded-t-lg bg-dialog-bg text-foreground outline-none ring-1 ring-panel-ring transition-all data-ending-style:opacity-0 data-starting-style:opacity-0 max-md:data-ending-style:translate-y-4 max-md:data-starting-style:translate-y-4 md:inset-x-auto md:top-1/2 md:bottom-auto md:left-1/2 md:max-h-[min(80dvh,620px)] md:w-[min(92vw,760px)] md:rounded-lg md:data-ending-style:scale-95 md:data-starting-style:scale-95">
+          {/* No visible heading: the tabs and the table say what this is. Named for screen readers. */}
+          <Dialog.Title className="sr-only">Select a market</Dialog.Title>
 
-          <div className="space-y-3 px-5 pb-4">
-            <label
-              className={cn(
-                "flex h-10 items-center gap-2 border border-input-border bg-input-bg px-3 transition-colors focus-within:border-panel-text-muted",
-                RADIUS
-              )}
-            >
-              <Search aria-hidden className="size-4 shrink-0 text-panel-text-muted" />
-              <input
-                aria-label="Search markets"
-                autoComplete="off"
-                className="min-w-0 flex-1 bg-transparent text-[16px] text-panel-text-active outline-none placeholder:text-panel-text-muted md:text-[14px]"
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search markets"
-                ref={searchRef}
-                spellCheck={false}
-                type="search"
-                value={query}
-              />
-            </label>
-
+          {/* The Spot/Perp tabs lead, with the close control beside them on the same row. */}
+          <div className="flex items-center gap-3 px-5 pt-5 pb-4">
             <div
               aria-label="Market type"
-              className={cn("grid grid-cols-2 gap-1 bg-input-bg p-1", RADIUS)}
+              className={cn("grid flex-1 grid-cols-2 gap-1 bg-input-bg p-1", RADIUS)}
               role="tablist"
             >
               {TABS.map((tab) => (
@@ -308,6 +271,15 @@ export function MarketSelectDialog({
                 </button>
               ))}
             </div>
+            <Dialog.Close
+              aria-label="Close"
+              className={cn(
+                "flex size-8 shrink-0 cursor-pointer items-center justify-center text-panel-text-muted transition-colors hover:bg-input-hover hover:text-panel-text-active",
+                RADIUS
+              )}
+            >
+              <X className="size-4" />
+            </Dialog.Close>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
