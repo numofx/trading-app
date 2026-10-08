@@ -245,22 +245,21 @@ export function MarketSelectDialog({
           {/* No visible heading: the tabs and the table say what this is. Named for screen readers. */}
           <Dialog.Title className="sr-only">Select a market</Dialog.Title>
 
-          {/* The Spot/Perp tabs lead, with the close control beside them on the same row. */}
-          <div className="flex items-center gap-3 px-5 pt-5 pb-4">
-            <div
-              aria-label="Market type"
-              className={cn("grid flex-1 grid-cols-2 gap-1 bg-input-bg p-1", RADIUS)}
-              role="tablist"
-            >
+          {/*
+           * The Spot/Perp tabs in the terminal's own tab style (see PanelTabs): underlined text on
+           * one rule, left-aligned, the active tab bright, never a filled pill. The close control
+           * rides the right end of the same row.
+           */}
+          <div className="mx-5 my-3 flex items-center justify-between gap-3 border-panel-border border-b">
+            <div aria-label="Market type" className="flex gap-6" role="tablist">
               {TABS.map((tab) => (
                 <button
                   aria-selected={tab.kind === kind}
                   className={cn(
-                    "h-9 cursor-pointer font-medium text-[14px] transition-colors",
-                    RADIUS,
+                    "-mb-px cursor-pointer whitespace-nowrap border-b-2 py-3 font-medium text-[14px] transition-colors",
                     tab.kind === kind
-                      ? "bg-panel-bg-darker text-panel-text-active shadow-sm"
-                      : "text-panel-text-muted hover:text-panel-text"
+                      ? "border-panel-text-active text-panel-text-active"
+                      : "border-transparent text-panel-text-muted hover:text-panel-text"
                   )}
                   key={tab.kind}
                   onClick={() => setKind(tab.kind)}
