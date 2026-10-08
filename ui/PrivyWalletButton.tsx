@@ -55,24 +55,36 @@ export function PrivyWalletButton() {
   return <PrivyWalletButtonInner />;
 }
 
-/**
- * The connected wallet's own logo when the wallet supplies one inline (injected wallets announce a
- * data-URI icon), else a wallet glyph. A remote URL is not loaded: it would reach out to wherever
- * the wallet points, from the trading page.
- */
-function WalletMark({ wallet }: { wallet: ConnectedWallet | null }) {
+/** The connected wallet's own logo, if it supplies one inline; null to use the wallet glyph. */
+function inlineWalletIcon(wallet: ConnectedWallet | null): string | null {
   const icon = wallet?.meta?.icon;
+  // Only an inline image: a remote URL would reach out to wherever the wallet points, from the
+  // trading page. Injected wallets (Phantom, MetaMask) announce theirs as a data URI.
+  return icon?.startsWith("data:image/") ? icon : null;
+}
+
+/**
+ * The connected wallet's own logo, else the wallet glyph. `tile` sets it on the menu's square
+ * tile; bare, it sits in the pill beside the address.
+ */
+function WalletMark({ tile = false, wallet }: { tile?: boolean; wallet: ConnectedWallet | null }) {
+  const icon = inlineWalletIcon(wallet);
+  const mark =
+    icon === null ? (
+      <Wallet aria-hidden className="size-4 shrink-0" />
+    ) : (
+      <SmartImage<string>
+        alt={wallet?.meta?.name ?? "Wallet"}
+        className={cn("shrink-0 animate-none rounded-sm", tile ? "size-5" : "size-4")}
+        src={icon}
+      />
+    );
+  if (!tile) {
+    return mark;
+  }
   return (
     <span className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-input-bg text-panel-text-active">
-      {icon?.startsWith("data:image/") ? (
-        <SmartImage<string>
-          alt={wallet?.meta?.name ?? "Wallet"}
-          className="size-5 animate-none"
-          src={icon}
-        />
-      ) : (
-        <Wallet aria-hidden className="size-4" />
-      )}
+      {mark}
     </span>
   );
 }
@@ -182,7 +194,7 @@ export function WalletMenu({
   return (
     <Menu.Root defaultOpen={defaultOpen}>
       <Menu.Trigger className={WALLET_PILL_CLASSNAME}>
-        <Wallet className="size-4" />
+        <WalletMark wallet={primaryWallet} />
         <span>{walletAddress ?? "Wallet Connected"}</span>
       </Menu.Trigger>
 
@@ -194,7 +206,7 @@ export function WalletMenu({
              * one-tap sign out at the end of the row.
              */}
             <div className="flex items-center gap-2 px-1 pb-1.5">
-              <WalletMark wallet={primaryWallet} />
+              <WalletMark tile wallet={primaryWallet} />
               {explorerUrl === null ? (
                 <span className="min-w-0 flex-1 truncate font-medium text-[14px] text-panel-text-active">
                   {walletAddress}
