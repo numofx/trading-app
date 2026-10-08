@@ -488,8 +488,13 @@ function NairaPerUsdcLine({ isMarket, price }: { isMarket: boolean; price: numbe
   return <p className="text-[11px] text-panel-text-muted">{formatNairaPerUsdc(price)}</p>;
 }
 
-/** What a market order fills at, and the room it is signed with. A limit ticket has neither. */
-function MarketFillRows({
+/**
+ * Where a market order is expected to fill, walked through the resting depth rather than quoted
+ * off the touch: on a thin book the two are not the same number, and this is the one the trader is
+ * charged. Leads the summary, above the order's value, as the perp ticket's does. A limit ticket
+ * has no row: its price is the one the trader typed.
+ */
+function ExpectedPriceRow({
   averagePrice,
   isMarket,
 }: {
@@ -499,22 +504,24 @@ function MarketFillRows({
   if (!isMarket) {
     return null;
   }
-
   return (
-    <>
-      {/*
-       * What the order fills at, walked through the resting depth rather than quoted off the
-       * touch — on a thin book the two are not the same number, and the average is the one the
-       * trader is charged.
-       */}
-      <SummaryRow label="Average price" value={formatPrice(averagePrice)} />
-      {/*
-       * Not a cost: the room the order has to still cross if the quote moves between signing and
-       * settlement. The fill itself lands at the maker's price, which `Average price` above quotes.
-       */}
-      <SummaryRow label="Slippage" value={`<${(SPOT_MARKET_SLIPPAGE * 100).toFixed(1)}%`} />
-    </>
+    <SummaryRow
+      label="Expected Price"
+      tooltip="Where a market order of this size is expected to fill, walked through the resting book"
+      value={formatPrice(averagePrice)}
+    />
   );
+}
+
+/**
+ * Not a cost: the room a market order has to still cross if the quote moves between signing and
+ * settlement. The fill itself lands at the maker's price, which Expected Price quotes.
+ */
+function SlippageRow({ isMarket }: { isMarket: boolean }) {
+  if (!isMarket) {
+    return null;
+  }
+  return <SummaryRow label="Slippage" value={`<${(SPOT_MARKET_SLIPPAGE * 100).toFixed(1)}%`} />;
 }
 
 /**
@@ -895,9 +902,10 @@ export function SpotOrderFormPanel({
            * well cost the Size field its rows on a 700px screen.
            */}
           <div className="space-y-0.5">
+            <ExpectedPriceRow averagePrice={averagePrice} isMarket={isMarket} />
             <SummaryRow emphasis label="Order Value" value={totalLabel} />
             <FeeRow ceiling={takerFee} charged={feeFromVenue} />
-            <MarketFillRows averagePrice={averagePrice} isMarket={isMarket} />
+            <SlippageRow isMarket={isMarket} />
           </div>
 
           <MarketDepthNote fill={fill} hasShortfall={shortfallCurrency !== null} />
