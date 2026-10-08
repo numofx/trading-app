@@ -252,7 +252,12 @@ export function TerminalHeaderBar({
     // 64px when everything fits on one line (40px of controls inside 24px of padding), growing
     // rather than overflowing when it does not — the wallet button's address makes the right-hand
     // cluster's extent unknowable, so the row cannot be sized as if it were fixed.
-    <header className="flex min-h-16 shrink-0 flex-wrap items-center gap-3 border-panel-border border-b px-4 py-3 transition-colors duration-300 md:flex-nowrap">
+    //
+    // From `lg`, where the figures show, one fixed height for every market: spot's price carries a
+    // second line (₦ per USDC) and the perp's figures do not, so a header sized to its content was
+    // 78px on spot and 65px on the perp, and every panel under it jumped 13px on a switch. 80px
+    // holds spot's three lines inside the padding; the perp's row centres in the same height.
+    <header className="flex min-h-16 shrink-0 flex-wrap items-center gap-3 border-panel-border border-b px-4 py-3 transition-colors duration-300 md:flex-nowrap lg:h-20">
       <SmartImage<string>
         alt="Numo"
         className="h-7 w-24 shrink-0"

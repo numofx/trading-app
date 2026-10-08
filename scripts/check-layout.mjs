@@ -105,6 +105,10 @@ const probeScript = (ctaId) => `(() => {
   const columnOverflow = ticketColumn
     ? Math.max(0, ticketColumn.scrollHeight - ticketColumn.clientHeight)
     : 0;
+  const grid = ticketColumn ? ticketColumn.parentElement : null;
+  const gridTop = grid ? Math.round(grid.getBoundingClientRect().top + scrollY) : null;
+  const headerHeight = Math.round(document.querySelector("header").getBoundingClientRect().height);
+
   // What the column has left at its fixed height: its height less its content's, measured from
   // its top to its last child's bottom (scrollHeight never reads below clientHeight, so it cannot
   // say how much room a column that fits has left). Negative is the overflow above.
@@ -158,6 +162,8 @@ const probeScript = (ctaId) => `(() => {
     overscrollPinned: rootStyle.overscrollBehaviorY === "none" && rootStyle.overscrollBehaviorX === "none",
     columnOverflow,
     columnMargin,
+    gridTop,
+    headerHeight,
     ctaVisible: rect.top >= 0 && rect.bottom <= innerHeight,
     ctaVisibleAfterScroll,
     ctaBottom: Math.round(rect.bottom + scrollY),
@@ -258,6 +264,13 @@ function probe(width, height, path, ctaId) {
 }
 
 const failures = [];
+
+/**
+ * Where the panel grid starts, per viewport and route. Spot and the perp share one shell, so at a
+ * given size their panels must start at the same height: a switch that moves the grid reads as
+ * the whole terminal jumping. Compared once both markets have been probed at a size.
+ */
+const gridTops = new Map();
 
 for (const viewport of VIEWPORTS) {
   const {
@@ -363,6 +376,19 @@ for (const viewport of VIEWPORTS) {
     }
   }
 
+  if (path.startsWith("/trade/")) {
+    const size = `${width}x${height}`;
+    const seen = gridTops.get(size);
+    if (seen === undefined) {
+      gridTops.set(size, { gridTop: result.gridTop, headerHeight: result.headerHeight, path });
+    } else {
+      checks.push([
+        seen.gridTop === result.gridTop && seen.headerHeight === result.headerHeight,
+        `panels start at ${result.gridTop}px under a ${result.headerHeight}px header here but at ${seen.gridTop}px under a ${seen.headerHeight}px header on ${seen.path}: switching markets moves the terminal`,
+      ]);
+    }
+  }
+
   const failed = checks.filter(([ok]) => !ok).map(([, message]) => message);
   for (const message of failed) {
     failures.push(`${label}: ${message}`);
@@ -370,7 +396,7 @@ for (const viewport of VIEWPORTS) {
 
   const status = failed.length === 0 ? "ok  " : "FAIL";
   console.log(
-    `${status} ${label.padEnd(26)} cta=${String(result.ctaVisible).padEnd(5)} bottom=${String(result.ctaBottom).padEnd(5)} margin=${String(width < 768 ? "n/a" : result.columnMargin).padEnd(5)} label=${String(result.ctaLabel).padEnd(14)}${note ? `  (${note})` : ""}`
+    `${status} ${label.padEnd(26)} cta=${String(result.ctaVisible).padEnd(5)} bottom=${String(result.ctaBottom).padEnd(5)} margin=${String(width < 768 ? "n/a" : result.columnMargin).padEnd(5)} header=${String(result.headerHeight).padEnd(4)} label=${String(result.ctaLabel).padEnd(14)}${note ? `  (${note})` : ""}`
   );
 }
 
