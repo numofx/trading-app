@@ -4,7 +4,7 @@ import { Moon, Sun } from "lucide-react";
 import type { ReactNode } from "react";
 import { Fragment, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
-import { formatNairaPerUsdc, formatPrice } from "@/lib/market-formatting";
+import { formatDollarPrice } from "@/lib/market-formatting";
 import type { TerminalMarketId } from "@/lib/market-overview.types";
 import { PrivyWalletButton } from "@/ui/PrivyWalletButton";
 import { SmartImage } from "@/ui/SmartImage";
@@ -32,29 +32,25 @@ function formatChangePercent(value: number | null) {
 
 /**
  * One metric: a muted label over its value. Every metric is exactly these two lines tall, on both
- * markets, so every label shares one baseline and every value another across the header. A
- * `secondary` line (spot's ₦ per USDC) hangs under the value out of the flow: in the flow it
- * made spot's Price a line taller than its neighbours, and the header's centring then lifted
- * Price's label above the 24h labels beside it.
+ * markets, so every label shares one baseline and every value another across the header. Nothing
+ * goes under a value: a third line (spot's price once carried ₦ per USDC) made that metric taller
+ * than its neighbours, and the header's centring then lifted its label above theirs.
  */
 function HeaderMetric({
   children,
   className,
   label,
-  secondary,
   tooltip,
 }: {
   children: ReactNode;
   /** Lets a metric yield its place at narrower widths; merged over the display class. */
   className?: string;
   label: string;
-  /** A muted line under the value: the same figure read another way. */
-  secondary?: string;
   /** A hint on the label, shown on hover like the ticket's. */
   tooltip?: string;
 }) {
   return (
-    <div className={cn("relative flex flex-col gap-1", className)}>
+    <div className={cn("flex flex-col gap-1", className)}>
       <span
         className={cn(
           "whitespace-nowrap text-[9px] text-panel-text-muted",
@@ -71,11 +67,6 @@ function HeaderMetric({
       >
         {children}
       </span>
-      {secondary === undefined ? null : (
-        <span className="absolute top-full left-0 mt-0.5 whitespace-nowrap text-[10px] text-panel-text-muted">
-          {secondary}
-        </span>
-      )}
     </div>
   );
 }
@@ -165,15 +156,14 @@ function HeaderMetrics({ publication }: { publication: TerminalHeaderPublication
       <div
         className={cn(
           // One height for both markets' rows, metrics aligned at the top, so labels and values sit
-          // at the same heights whichever market is on screen. Clipped sideways only: the ₦ line
-          // hangs below the row.
-          "hidden h-9 min-w-0 items-start gap-6 overflow-x-clip lg:flex",
+          // at the same heights whichever market is on screen.
+          "hidden h-9 min-w-0 items-start gap-6 overflow-hidden lg:flex",
           seeded && "opacity-50"
         )}
         {...provisional}
       >
-        <HeaderMetric label="Price" secondary={formatNairaPerUsdc(price)}>
-          {formatPrice(price)}
+        <HeaderMetric label="Price">
+          {formatDollarPrice(price)}
           <span className={cn("text-[10px]", getChangeClassName(changePercent24h))}>
             {formatChangePercent(changePercent24h)}
           </span>
@@ -195,10 +185,10 @@ function HeaderMetrics({ publication }: { publication: TerminalHeaderPublication
          * `hasWallet` rearranged the row at the moment of connecting, which reads as a glitch.
          */}
         <HeaderMetric className="hidden xl:flex" label="24h High">
-          {formatPrice(publication.high24h)}
+          {formatDollarPrice(publication.high24h)}
         </HeaderMetric>
         <HeaderMetric className="hidden xl:flex" label="24h Low">
-          {formatPrice(publication.low24h)}
+          {formatDollarPrice(publication.low24h)}
         </HeaderMetric>
       </div>
     );
@@ -272,10 +262,9 @@ export function TerminalHeaderBar({
     // rather than overflowing when it does not — the wallet button's address makes the right-hand
     // cluster's extent unknowable, so the row cannot be sized as if it were fixed.
     //
-    // From `lg`, where the figures show, one fixed height for every market: spot's price carries a
-    // second line (₦ per USDC) and the perp's figures do not, so a header sized to its content was
-    // 78px on spot and 65px on the perp, and every panel under it jumped 13px on a switch. 80px
-    // holds spot's three lines inside the padding; the perp's row centres in the same height.
+    // From `lg`, where the figures show, one fixed height for every market. Sized to its content,
+    // the header once differed between markets (78px on spot, 65px on the perp) and every panel
+    // under it jumped on a switch; a fixed height keeps the grid still whatever the figures hold.
     <header className="flex min-h-16 shrink-0 flex-wrap items-center gap-3 border-panel-border border-b px-4 py-3 transition-colors duration-300 md:flex-nowrap lg:h-20">
       <SmartImage<string>
         alt="Numo"
