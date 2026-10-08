@@ -31,6 +31,7 @@ import type { TransferMode } from "@/ui/trading-terminal/DepositDialog";
 import { buildDepositAccount, DepositDialog } from "@/ui/trading-terminal/DepositDialog";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import { SpotTradingTerminal } from "@/ui/trading-terminal/SpotTradingTerminal";
+import { HEADER_ACTION_CLASSES } from "@/ui/trading-terminal/TerminalHeaderBar";
 import { useTerminalSession } from "@/ui/trading-terminal/TerminalSession";
 import { useOrderStatus } from "@/ui/trading-terminal/useOrderStatus";
 import {
@@ -186,10 +187,6 @@ function buildSpotOrderEvent(
 function balanceSignature(rows: { asset: string; balance: bigint }[] | null) {
   return rows === null ? "" : rows.map((row) => `${row.asset}:${row.balance}`).join("|");
 }
-
-/** The header's Deposit and Withdraw buttons share one look. */
-const HEADER_ACTION_CLASSES =
-  "flex h-10 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-4 font-semibold text-[14px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active disabled:cursor-not-allowed disabled:opacity-60";
 
 /**
  * The spot market under the shell: its panels, ticket, deposit dialog and the signing behind

@@ -15,4 +15,8 @@ settings.local.json
 
 # local tooling / reports (not part of the app)
 posthog-setup-report.md
-.claude/skills/
+# The verify skill is part of the repo (it documents how to drive this app); every other skill
+# is local tooling. `*` rather than `/`: a directory that is itself ignored cannot have a child
+# re-included.
+.claude/skills/*
+!.claude/skills/verify/

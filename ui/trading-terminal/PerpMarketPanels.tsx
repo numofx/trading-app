@@ -71,6 +71,7 @@ import { SpotChartPanel } from "@/ui/trading-terminal/SpotChartPanel";
 import type { SpotBookTab } from "@/ui/trading-terminal/SpotOrderBookPanel";
 import { SpotOrderBookPanel } from "@/ui/trading-terminal/SpotOrderBookPanel";
 import { TerminalGrid } from "@/ui/trading-terminal/TerminalGrid";
+import { HEADER_ACTION_CLASSES } from "@/ui/trading-terminal/TerminalHeaderBar";
 import { usePublishTerminalHeader } from "@/ui/trading-terminal/TerminalHeaderSlot";
 import { useTerminalSession } from "@/ui/trading-terminal/TerminalSession";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
@@ -704,9 +705,6 @@ function withdrawRowFor(account: PerpAccountMargin | null, symbol: "USDC" | "cNG
   const index = account.collateral.findIndex((row) => row.symbol === symbol);
   return index === -1 ? null : index + 1;
 }
-
-const HEADER_ACTION_CLASSES =
-  "flex h-10 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-4 font-semibold text-[14px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active";
 
 /** Why an asset cannot be withdrawn right now, for the menu item's tooltip. */
 function withdrawDisabledReason(account: PerpAccountMargin | null, symbol: string) {

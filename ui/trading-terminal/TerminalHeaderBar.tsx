@@ -91,6 +91,28 @@ export type HeaderMetricItem = {
   tone: "up" | "down" | null;
 };
 
+/** The header's Deposit and Withdraw buttons, and their placeholders, share one look. */
+export const HEADER_ACTION_CLASSES =
+  "flex h-10 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-4 font-semibold text-[14px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active disabled:cursor-not-allowed disabled:opacity-60";
+
+/**
+ * Stand-ins for the market's Deposit and Withdraw until its panels publish them, so the action
+ * cluster keeps its width and nothing in the header shifts on a switch. Disabled: they open
+ * nothing. A market whose panels publish no controls (the perp before it is live) keeps them.
+ */
+function HeaderActionPlaceholders() {
+  return (
+    <div aria-hidden className="flex items-center gap-2" data-placeholder="deposit-withdraw">
+      <button className={HEADER_ACTION_CLASSES} disabled tabIndex={-1} type="button">
+        Deposit
+      </button>
+      <button className={HEADER_ACTION_CLASSES} disabled tabIndex={-1} type="button">
+        Withdraw
+      </button>
+    </div>
+  );
+}
+
 /** One metric's frame while the market's panels have not published: label and value placeholders. */
 function HeaderMetricSkeleton({ className }: { className?: string }) {
   return (
@@ -118,10 +140,19 @@ function HeaderMetrics({ publication }: { publication: TerminalHeaderPublication
       </div>
     );
   }
-  const { changePercent24h, metrics, price } = publication;
+  const { changePercent24h, metrics, price, seeded = false } = publication;
+  // Seeded figures are the selector's last read, not the market's own: shown dimmed, and busy,
+  // until the panels publish the live set.
+  const provisional = seeded ? { "aria-busy": true, "data-seeded": true } : {};
   if (metrics === undefined) {
     return (
-      <div className="hidden min-w-0 items-center gap-6 overflow-hidden lg:flex">
+      <div
+        className={cn(
+          "hidden min-w-0 items-center gap-6 overflow-hidden lg:flex",
+          seeded && "opacity-50"
+        )}
+        {...provisional}
+      >
         <HeaderMetric label="Price" secondary={formatNairaPerUsdc(price)}>
           {formatPrice(price)}
           <span className={cn("text-[10px]", getChangeClassName(changePercent24h))}>
@@ -159,7 +190,13 @@ function HeaderMetrics({ publication }: { publication: TerminalHeaderPublication
      * row's height with a gap tall enough that nothing of a second row shows. Breakpoints
      * could not say how many fit, since the wallet button's width is not knowable in advance.
      */
-    <div className="hidden max-h-9 min-w-0 flex-wrap content-start gap-x-4 gap-y-10 overflow-hidden lg:flex">
+    <div
+      className={cn(
+        "hidden max-h-9 min-w-0 flex-wrap content-start gap-x-4 gap-y-10 overflow-hidden lg:flex",
+        seeded && "opacity-50"
+      )}
+      {...provisional}
+    >
       {metrics.map((metric) => (
         <HeaderMetric
           className="shrink-0"
@@ -254,7 +291,9 @@ export function TerminalHeaderBar({
        */}
       <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-2 lg:shrink-0 lg:flex-nowrap">
         {/* Keyed by market: a control published by one market never keeps its state under another. */}
-        {publication === null ? null : (
+        {publication?.depositControl == null ? (
+          <HeaderActionPlaceholders />
+        ) : (
           <Fragment key={publication.market}>{publication.depositControl}</Fragment>
         )}
         <button

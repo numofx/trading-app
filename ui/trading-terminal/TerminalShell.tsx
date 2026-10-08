@@ -76,6 +76,7 @@ function seedFromOverview(
     market,
     metrics: market === "perp" ? buildPerpOverviewMetrics(row) : undefined,
     price: row.price,
+    seeded: true,
     volume24hLabel: formatOverviewVolume(row.volume24hUsd),
   };
 }
