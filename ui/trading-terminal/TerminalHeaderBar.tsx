@@ -318,7 +318,7 @@ export function TerminalHeaderBar({
         >
           {theme === "light" ? <Moon className="size-5" /> : <Sun className="size-5" />}
         </button>
-        <PrivyWalletButton onPortfolioSelect={publication?.onPortfolioSelect} />
+        <PrivyWalletButton />
       </div>
     </header>
   );

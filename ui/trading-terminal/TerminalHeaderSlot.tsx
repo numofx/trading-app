@@ -26,8 +26,6 @@ export type TerminalHeaderPublication = {
   metrics?: HeaderMetricItem[];
   /** The market's Deposit and Withdraw controls; rendered inside the header's action cluster. */
   depositControl?: ReactNode;
-  /** Fired by the connected wallet menu's Portfolio item. */
-  onPortfolioSelect?: () => void;
   /**
    * Figures the shell seeded from the selector's last read rather than the panels' own: shown
    * dimmed, with placeholder controls, until the live publication replaces them.

@@ -1003,7 +1003,6 @@ export function PerpMarketPanels({ market: renderedMarket }: { market: PerpMarke
     low24h: stats.low,
     market: "perp",
     metrics: perpHeaderMetrics(market, price, volumeUsd),
-    onPortfolioSelect: () => setBottomTab("positions"),
     price,
     volume24hLabel: stats.volumeLabel,
   });
