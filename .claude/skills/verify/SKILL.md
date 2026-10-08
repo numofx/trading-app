@@ -33,6 +33,16 @@ selector) that stays mounted across a switch; only the market's panels are repla
 - `/layout-fixture` and `/layout-fixture/perp` — dev-only fixtures with made-up figures (404 in
   production), used by `scripts/check-layout.mjs`.
 
+## Layout probe
+
+```bash
+node scripts/check-layout.mjs      # against the dev server on :3111; `just check-layout`
+```
+
+Drives agent-browser through the signed-out spot and perp routes at phone and desktop sizes and
+the funded fixture, asserting the submit button clears the fold, nothing covers it, no grid cell
+overflows and the page does not scroll sideways. Needs `next dev`: the fixture 404s in production.
+
 ## Drive
 
 Use `agent-browser` (already installed; the next-devtools MCP `browser_eval` tool just points you
@@ -50,10 +60,30 @@ Switching markets: click the pill by its ref, then in the dialog click the `Spot
 (`[role=tab]`) and the row link (`[role=dialog] a[href="/trade/cngn-perp"]`); DOM `.click()` works
 for both of those. Ticket inputs: `#spot-amount` on spot, `#perp-size` on the perp.
 
-To check a switch keeps the shell: set a property on `document.querySelector("header")` before
-the switch and read it back after. The node persisting means the `/trade` layout, and the session
-provider above the header, never remounted. The header shows skeleton metrics (`[aria-busy]`
-inside `header`) and no Deposit/Withdraw until the new market's panels publish their figures.
+## The switch check
+
+What a market switch must hold, and how to see it:
+
+- **The shell stays mounted.** Set a property on `document.querySelector("header")` before the
+  switch and read it back after. The node persisting means the `/trade` layout, and the session
+  provider above the header, never remounted, so the wallet, trading-account and balance hooks
+  never re-ran.
+- **The header never mixes markets.** The selector pill flips with the URL. From that instant the
+  header shows only the target market's figures: first the seed from the selector's last
+  `/api/markets-overview` read (same price and change the clicked row showed; the perp's Mark and
+  Index read `—` until live), then the panels' live publication. With no recent read it shows
+  skeleton metrics (`[aria-busy]` inside `header`). Deposit/Withdraw come only from the mounted
+  panel, so they are absent until the panels publish.
+- **The ticket resets.** Type into `#spot-amount` (or `#perp-size`) before the switch; after the
+  round trip the field is back at its default and the other market's input is gone.
+
+Sample it rather than eyeballing it: from an open selector, `.click()` the target row in an
+`eval --stdin` script and read the header every 10 ms for a few seconds, keeping each sample that
+differs from the last (pill text, `[aria-busy]`, which metric labels are present, whether a
+Withdraw button exists, `main > [aria-busy]` for the grid skeleton). A mismatch is any sample
+where the pill names one market and the metric labels belong to the other. Report the gap from
+the pill flip to the first sample with figures (seeded: ~0 ms) and to the first with
+Deposit/Withdraw (live: the page's own load, 0.3–1.6 s against the live venue).
 
 ## Gotchas
 

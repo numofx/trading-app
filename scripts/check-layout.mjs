@@ -44,6 +44,38 @@ const VIEWPORTS = [
   { ctaVisible: true, height: 959, width: 545 },
   { ctaVisible: true, height: 700, width: 1440 },
   { ctaVisible: true, height: 900, width: 1440 },
+  // The perp, signed out, on the same grid: its ticket has its own submit button. Three accepted
+  // gaps, measured identically on the pre-/trade deployment (2026-10-08) when the perp first
+  // joined the probe: the leverage and size cards and the reduce-only and TP/SL rows make the
+  // ticket ~45px taller than spot's, so its CTA sits at 713px on a phone, and at 1440x700 the
+  // ticket column overflows its fixed height by 114px. Tighten these when the ticket shrinks.
+  {
+    cta: "perp-submit-cta",
+    ctaVisible: false,
+    height: 667,
+    note: "perp ticket runs ~45px under the fold — pre-existing, see above",
+    path: "/trade/cngn-perp",
+    width: 375,
+  },
+  {
+    cta: "perp-submit-cta",
+    ctaVisible: false,
+    height: 711,
+    note: "perp ticket runs ~2px under the fold — pre-existing, see above",
+    path: "/trade/cngn-perp",
+    width: 410,
+  },
+  { cta: "perp-submit-cta", ctaVisible: true, height: 959, path: "/trade/cngn-perp", width: 545 },
+  {
+    acceptedColumnOverflow: 114,
+    cta: "perp-submit-cta",
+    ctaVisible: true,
+    height: 700,
+    note: "perp ticket column overflows by 114px — pre-existing, see above",
+    path: "/trade/cngn-perp",
+    width: 1440,
+  },
+  { cta: "perp-submit-cta", ctaVisible: true, height: 900, path: "/trade/cngn-perp", width: 1440 },
   {
     connected: true,
     ctaVisible: true,
@@ -65,12 +97,13 @@ const VIEWPORTS = [
 const VISIBLE_BY_ID = `const visibleById = (id) =>
     [...document.querySelectorAll("#" + CSS.escape(id))].find((el) => el.getClientRects().length > 0) ?? null;`;
 
-const PROBE = `(() => {
+/** The page probe, for the ticket whose submit button carries `ctaId`. */
+const probeScript = (ctaId) => `(() => {
   ${VISIBLE_BY_ID}
   // Matched by id, not label: the CTA reads "Deposit" signed out, "Loading account…" while the
   // subaccount resolves and "Buy cNGN" once funded. Matching on text silently found nothing from
   // 25b40bf (which relabelled the signed-out CTA) until the id landed.
-  const cta = visibleById("spot-submit-cta");
+  const cta = visibleById(${JSON.stringify(ctaId)});
   if (!cta) return JSON.stringify({ error: "no submit CTA found" });
   const rect = cta.getBoundingClientRect();
 
@@ -215,11 +248,11 @@ function evaluate(script) {
   return JSON.parse(envelope.data.result);
 }
 
-function probe(width, height, path) {
+function probe(width, height, path, ctaId) {
   browser("set", "viewport", String(width), String(height));
   browser("open", `${BASE_URL}${path}`);
   browser("wait", "3500");
-  return evaluate(PROBE);
+  return evaluate(probeScript(ctaId));
 }
 
 const failures = [];
@@ -228,16 +261,18 @@ for (const viewport of VIEWPORTS) {
   const {
     width,
     height,
+    acceptedColumnOverflow = 0,
     connected = false,
+    cta = "spot-submit-cta",
     ctaVisible: expectCta,
     note,
     path = "/trade/cngn-usdc",
   } = viewport;
-  const label = `${width}x${height}${connected ? " funded" : ""}`;
+  const label = `${width}x${height} ${path}${connected ? " funded" : ""}`;
   let result;
 
   try {
-    result = probe(width, height, path);
+    result = probe(width, height, path, cta);
   } catch (error) {
     failures.push(`${label}: probe failed — ${error.message}`);
     continue;
@@ -263,7 +298,7 @@ for (const viewport of VIEWPORTS) {
     // Below `md` the ticket column is not a scroller — the page itself scrolls — so the invariant
     // only holds where the column has a fixed height of its own.
     [
-      width < 768 || result.columnOverflow === 0,
+      width < 768 || result.columnOverflow <= acceptedColumnOverflow,
       `ticket column overflows its height by ${result.columnOverflow}px — the balance summary is cut off`,
     ],
     [
