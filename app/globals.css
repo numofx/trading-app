@@ -53,6 +53,8 @@
 
   --ask-text: var(--sell);
   --bid-text: var(--buy);
+  /* The wallet button's blue, as text: the perp's funding figures. */
+  --accent-text: #9bdbf8;
   --ask-bg: color-mix(in srgb, var(--sell) 9%, transparent);
   --bid-bg: color-mix(in srgb, var(--buy) 9%, transparent);
   --ask-label: color-mix(in srgb, var(--sell) 70%, var(--panel-text-muted));
@@ -109,6 +111,8 @@
   --ask-text: var(--sell);
   --ask-bg: color-mix(in srgb, var(--sell) 7%, transparent);
   --bid-text: var(--buy);
+  /* The wallet blue deepened to read as text on white; #9bdbf8 itself is near-invisible there. */
+  --accent-text: #1a7fb0;
   --bid-bg: color-mix(in srgb, var(--buy) 7%, transparent);
   --ask-label: var(--sell);
   --bid-label: var(--buy);
@@ -154,6 +158,7 @@
   --color-sell: var(--sell);
   --color-ask-text: var(--ask-text);
   --color-bid-text: var(--bid-text);
+  --color-accent-text: var(--accent-text);
   --color-ask-bg: var(--ask-bg);
   --color-bid-bg: var(--bid-bg);
   --color-ask-label: var(--ask-label);
