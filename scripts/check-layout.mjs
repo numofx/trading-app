@@ -108,6 +108,15 @@ const probeScript = (ctaId) => `(() => {
   const grid = ticketColumn ? ticketColumn.parentElement : null;
   const gridTop = grid ? Math.round(grid.getBoundingClientRect().top + scrollY) : null;
   const headerHeight = Math.round(document.querySelector("header").getBoundingClientRect().height);
+  // The header's figures, from \`lg\` where they show: each label's and each value's top, to the
+  // pixel. One y per row is what reads as a common baseline (all labels share one type size, all
+  // values another). Empty below \`lg\`, where the figures are hidden.
+  const headerRow = (selector) =>
+    [...document.querySelectorAll("header " + selector)]
+      .filter((el) => el.getClientRects().length > 0)
+      .map((el) => Math.round(el.getBoundingClientRect().top));
+  const labelTops = headerRow("[data-metric-label]");
+  const valueTops = headerRow("[data-metric-value]");
 
   // What the column has left at its fixed height: its height less its content's, measured from
   // its top to its last child's bottom (scrollHeight never reads below clientHeight, so it cannot
@@ -164,6 +173,8 @@ const probeScript = (ctaId) => `(() => {
     columnMargin,
     gridTop,
     headerHeight,
+    labelTops,
+    valueTops,
     ctaVisible: rect.top >= 0 && rect.bottom <= innerHeight,
     ctaVisibleAfterScroll,
     ctaBottom: Math.round(rect.bottom + scrollY),
@@ -376,16 +387,42 @@ for (const viewport of VIEWPORTS) {
     }
   }
 
+  // Every label at one y and every value at another, within this header.
+  const spread = (tops) => (tops.length === 0 ? 0 : Math.max(...tops) - Math.min(...tops));
+  checks.push(
+    [
+      spread(result.labelTops) === 0,
+      `header labels sit at different heights: ${[...new Set(result.labelTops)].join(", ")}px`,
+    ],
+    [
+      spread(result.valueTops) === 0,
+      `header values sit at different heights: ${[...new Set(result.valueTops)].join(", ")}px`,
+    ]
+  );
+
   if (path.startsWith("/trade/")) {
     const size = `${width}x${height}`;
+    const here = {
+      gridTop: result.gridTop,
+      headerHeight: result.headerHeight,
+      labelTop: result.labelTops[0] ?? null,
+      path,
+      valueTop: result.valueTops[0] ?? null,
+    };
     const seen = gridTops.get(size);
     if (seen === undefined) {
-      gridTops.set(size, { gridTop: result.gridTop, headerHeight: result.headerHeight, path });
+      gridTops.set(size, here);
     } else {
-      checks.push([
-        seen.gridTop === result.gridTop && seen.headerHeight === result.headerHeight,
-        `panels start at ${result.gridTop}px under a ${result.headerHeight}px header here but at ${seen.gridTop}px under a ${seen.headerHeight}px header on ${seen.path}: switching markets moves the terminal`,
-      ]);
+      checks.push(
+        [
+          seen.gridTop === here.gridTop && seen.headerHeight === here.headerHeight,
+          `panels start at ${here.gridTop}px under a ${here.headerHeight}px header here but at ${seen.gridTop}px under a ${seen.headerHeight}px header on ${seen.path}: switching markets moves the terminal`,
+        ],
+        [
+          seen.labelTop === here.labelTop && seen.valueTop === here.valueTop,
+          `header labels/values sit at ${here.labelTop}/${here.valueTop}px here but ${seen.labelTop}/${seen.valueTop}px on ${seen.path}: the figures jump on a switch`,
+        ]
+      );
     }
   }
 
@@ -396,7 +433,7 @@ for (const viewport of VIEWPORTS) {
 
   const status = failed.length === 0 ? "ok  " : "FAIL";
   console.log(
-    `${status} ${label.padEnd(26)} cta=${String(result.ctaVisible).padEnd(5)} bottom=${String(result.ctaBottom).padEnd(5)} margin=${String(width < 768 ? "n/a" : result.columnMargin).padEnd(5)} header=${String(result.headerHeight).padEnd(4)} label=${String(result.ctaLabel).padEnd(14)}${note ? `  (${note})` : ""}`
+    `${status} ${label.padEnd(26)} cta=${String(result.ctaVisible).padEnd(5)} bottom=${String(result.ctaBottom).padEnd(5)} margin=${String(width < 768 ? "n/a" : result.columnMargin).padEnd(5)} header=${String(result.headerHeight).padEnd(4)} label/value y=${String(result.labelTops[0] ?? "-")}/${String(result.valueTops[0] ?? "-")} label=${String(result.ctaLabel).padEnd(14)}${note ? `  (${note})` : ""}`
   );
 }
 

@@ -31,8 +31,11 @@ function formatChangePercent(value: number | null) {
 }
 
 /**
- * One metric: a muted label over its value. Every label shares a type size and every value shares
- * another, so the two rows keep a common baseline across the group without explicit alignment.
+ * One metric: a muted label over its value. Every metric is exactly these two lines tall, on both
+ * markets, so every label shares one baseline and every value another across the header. A
+ * `secondary` line (spot's ₦ per USDC) hangs under the value out of the flow: in the flow it
+ * made spot's Price a line taller than its neighbours, and the header's centring then lifted
+ * Price's label above the 24h labels beside it.
  */
 function HeaderMetric({
   children,
@@ -51,21 +54,27 @@ function HeaderMetric({
   tooltip?: string;
 }) {
   return (
-    <div className={cn("flex flex-col gap-1", className)}>
+    <div className={cn("relative flex flex-col gap-1", className)}>
       <span
         className={cn(
           "whitespace-nowrap text-[9px] text-panel-text-muted",
           tooltip && "cursor-help"
         )}
+        data-metric-label
         title={tooltip}
       >
         {label}
       </span>
-      <span className="flex items-baseline gap-1.5 whitespace-nowrap font-medium text-[11px] text-panel-text-active">
+      <span
+        className="flex items-baseline gap-1.5 whitespace-nowrap font-medium text-[11px] text-panel-text-active"
+        data-metric-value
+      >
         {children}
       </span>
       {secondary === undefined ? null : (
-        <span className="whitespace-nowrap text-[10px] text-panel-text-muted">{secondary}</span>
+        <span className="absolute top-full left-0 mt-0.5 whitespace-nowrap text-[10px] text-panel-text-muted">
+          {secondary}
+        </span>
       )}
     </div>
   );
@@ -116,9 +125,13 @@ function HeaderActionPlaceholders() {
 /** One metric's frame while the market's panels have not published: label and value placeholders. */
 function HeaderMetricSkeleton({ className }: { className?: string }) {
   return (
-    <div aria-hidden className={cn("flex flex-col gap-1.5", className)}>
-      <span className="h-2 w-10 animate-pulse rounded-sm bg-input-bg" />
-      <span className="h-3 w-16 animate-pulse rounded-sm bg-input-bg" />
+    // The real metric's type sizes on a blank line each, so the bars sit exactly where the label
+    // and value will: no header row moves when the figures arrive.
+    <div aria-hidden className={cn("flex flex-col gap-1", className)}>
+      <span className="w-10 animate-pulse rounded-sm bg-input-bg text-[9px]">{"\u00a0"}</span>
+      <span className="w-16 animate-pulse rounded-sm bg-input-bg font-medium text-[11px]">
+        {"\u00a0"}
+      </span>
     </div>
   );
 }
@@ -132,7 +145,10 @@ function HeaderMetricSkeleton({ className }: { className?: string }) {
 function HeaderMetrics({ publication }: { publication: TerminalHeaderPublication | null }) {
   if (publication === null) {
     return (
-      <div aria-busy="true" className="hidden min-w-0 items-center gap-6 overflow-hidden lg:flex">
+      <div
+        aria-busy="true"
+        className="hidden h-9 min-w-0 items-start gap-6 overflow-hidden lg:flex"
+      >
         <HeaderMetricSkeleton />
         <HeaderMetricSkeleton className="hidden xl:flex" />
         <HeaderMetricSkeleton className="hidden xl:flex" />
@@ -148,7 +164,10 @@ function HeaderMetrics({ publication }: { publication: TerminalHeaderPublication
     return (
       <div
         className={cn(
-          "hidden min-w-0 items-center gap-6 overflow-hidden lg:flex",
+          // One height for both markets' rows, metrics aligned at the top, so labels and values sit
+          // at the same heights whichever market is on screen. Clipped sideways only: the ₦ line
+          // hangs below the row.
+          "hidden h-9 min-w-0 items-start gap-6 overflow-x-clip lg:flex",
           seeded && "opacity-50"
         )}
         {...provisional}
@@ -162,10 +181,10 @@ function HeaderMetrics({ publication }: { publication: TerminalHeaderPublication
         {/*
          * Volume stands down below `xl` for the same reason the extremes stand down below `2xl`:
          * measured at 1024px, Price, volume and a claim-noted balance pair overrun the row by
-         * ~40px, and the metrics box is the one that gives — clipping "24H volume 1" mid-figure.
+         * ~40px, and the metrics box is the one that gives — clipping "24h Volume 1" mid-figure.
          * Price is the figure worth keeping at every width the metrics show at all.
          */}
-        <HeaderMetric className="hidden xl:flex" label="24H volume">
+        <HeaderMetric className="hidden xl:flex" label="24h Volume">
           {publication.volume24hLabel}
         </HeaderMetric>
         {/*
@@ -175,10 +194,10 @@ function HeaderMetrics({ publication }: { publication: TerminalHeaderPublication
          * the volume metric. Gated on width alone, never on the wallet: tying header structure to
          * `hasWallet` rearranged the row at the moment of connecting, which reads as a glitch.
          */}
-        <HeaderMetric className="hidden xl:flex" label="24H high">
+        <HeaderMetric className="hidden xl:flex" label="24h High">
           {formatPrice(publication.high24h)}
         </HeaderMetric>
-        <HeaderMetric className="hidden xl:flex" label="24H low">
+        <HeaderMetric className="hidden xl:flex" label="24h Low">
           {formatPrice(publication.low24h)}
         </HeaderMetric>
       </div>
@@ -192,7 +211,7 @@ function HeaderMetrics({ publication }: { publication: TerminalHeaderPublication
      */
     <div
       className={cn(
-        "hidden max-h-9 min-w-0 flex-wrap content-start gap-x-4 gap-y-10 overflow-hidden lg:flex",
+        "hidden h-9 min-w-0 flex-wrap content-start items-start gap-x-4 gap-y-10 overflow-hidden lg:flex",
         seeded && "opacity-50"
       )}
       {...provisional}
