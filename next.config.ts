@@ -38,15 +38,16 @@ const nextConfig: NextConfig = {
     },
   },
   /**
-   * The routes the terminal had until 2026-10-08. Both markets now render at `/trade/<slug>`
-   * (`lib/market-routes.ts`; this file cannot import it, so `lib/market-routes.test.mjs` pins the
-   * two together). Temporary (307) until the slugs are final: a 308 is cached by browsers for
-   * good. Next carries the query string over on its own. The matcher is case-insensitive, so
-   * `/PERP` lands here too; a `/trade/<slug>` in another casing is redirected by the page.
+   * `/` opens the default market, the perp, and `/perp`, the perp's route until 2026-10-08, keeps
+   * working. Both markets render at `/trade/<slug>` (`lib/market-routes.ts`; this file cannot
+   * import it, so `lib/market-routes.test.mjs` pins the two together). Temporary (307): the
+   * default may change again, and a 308 is cached by browsers for good. Next carries the query
+   * string over on its own. The matcher is case-insensitive, so `/PERP` lands here too; a
+   * `/trade/<slug>` in another casing is redirected by `proxy.ts`.
    */
   async redirects() {
     return [
-      { destination: "/trade/cngn-usdc", permanent: false, source: "/" },
+      { destination: "/trade/cngn-perp", permanent: false, source: "/" },
       { destination: "/trade/cngn-perp", permanent: false, source: "/perp" },
     ];
   },
