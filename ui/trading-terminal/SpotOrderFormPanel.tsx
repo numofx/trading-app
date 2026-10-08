@@ -14,7 +14,6 @@ import {
   getMarketableLimitPrice,
   getMarketFill,
   getMarketSizingPrice,
-  getMaxOrderSize,
   getOrderCost,
   SPOT_MARKET_SLIPPAGE,
   toOrderSizeCngn,
@@ -23,7 +22,6 @@ import { SPOT_ORDER_LIFETIME_LABEL, SPOT_TAKER_FEE_RATE } from "@/lib/spot-order
 import type { OrderBookLevel, SpotOpenOrder } from "@/lib/trading.types";
 import { ConfirmOrderDialog } from "@/ui/trading-terminal/ConfirmOrderDialog";
 import { OrderTypeTabs } from "@/ui/trading-terminal/OrderTypeTabs";
-import { AmountSlider } from "@/ui/trading-terminal/order-form/AmountSlider";
 import { AvailableRow } from "@/ui/trading-terminal/order-form/AvailableRow";
 import { FormField } from "@/ui/trading-terminal/order-form/FormField";
 import { OrderFormShell } from "@/ui/trading-terminal/order-form/OrderFormShell";
@@ -57,12 +55,6 @@ const SIDES = [
  * signed for and what the engine rests; USDC is what a buy spends or a sell receives.
  */
 const SIZE_UNITS = ["cNGN", "USDC"] as const satisfies readonly PayCurrency[];
-
-/** Presets under the size slider: shares of what the account can fund. */
-const SIZE_PRESETS = [25, 50, 75, 100].map((percent) => ({
-  label: `${percent}%`,
-  value: percent,
-}));
 
 /** The signed ceiling as basis points, derived from the rate the order is signed with. */
 const SPOT_TAKER_FEE_BPS = Number(SPOT_TAKER_FEE_RATE) * 10_000;
@@ -242,7 +234,6 @@ function deriveOrderEconomics({
   asks,
   bids,
   sizeCngn,
-  anchorPrice,
   availableCngn,
   availableUsdc,
   bestAsk,
@@ -256,7 +247,6 @@ function deriveOrderEconomics({
   bids: OrderBookLevel[];
   /** The order size in cNGN, already converted from whichever unit the Size field is in. */
   sizeCngn: number;
-  anchorPrice: number | null;
   availableCngn: number | null;
   availableUsdc: number | null;
   bestAsk: number | null;
@@ -267,7 +257,6 @@ function deriveOrderEconomics({
   /** The venue's schedule from /v1/markets. Null when it did not report one — unknown, not free. */
   takerFeeBps: number | null;
 }) {
-  const isBuy = side === "buy";
   const crossingPrice = getCrossingPrice(side, bestAsk, bestBid);
   const hasAmount = Number.isFinite(sizeCngn);
   /*
@@ -301,20 +290,6 @@ function deriveOrderEconomics({
     signedPrice,
   });
 
-  /*
-   * The ceiling stays priced off `signedPrice`, the most a cNGN of this order can be counted at. The
-   * spend is counted at `sizingPrice`, which never exceeds it on a buy, so the slider's top notch is
-   * always affordable — even when a larger size walks the average deeper into the book.
-   */
-  const maxOrderSize = getMaxOrderSize({
-    availableCngn,
-    availableUsdc,
-    feeRate: Number(SPOT_TAKER_FEE_RATE),
-    isBuy,
-    price: signedPrice ?? anchorPrice,
-  });
-  const canSizeByPercent = maxOrderSize !== null && maxOrderSize > 0;
-
   const cost = getOrderCost(side, sizingPrice, sizeCngn);
   const availableForCost = cost?.currency === "USDC" ? availableUsdc : availableCngn;
   /*
@@ -334,20 +309,12 @@ function deriveOrderEconomics({
   return {
     // Surfaced beside the fill itself so the panel never has to reach through it.
     averagePrice: fill === null ? null : fill.averagePrice,
-    canSizeByPercent,
     crossingPrice,
     fill,
     shortfall,
     signedPrice,
     sizingPrice,
-    maxOrderSize,
     feeFromVenue: venueFee(total ?? 0, takerFeeBps),
-    // Derived from the amount rather than held separately, so typing a size moves the slider and
-    // the two can never disagree about what is being ordered.
-    sizePercent:
-      canSizeByPercent && hasAmount
-        ? Math.min(100, Math.max(0, Math.round((sizeCngn / (maxOrderSize as number)) * 100)))
-        : 0,
     takerFee: signedNotional * Number(SPOT_TAKER_FEE_RATE),
     totalLabel: total === null ? "—" : formatUsdcAmount(total),
   };
@@ -396,9 +363,8 @@ function getSpotSubmitLabel({
  * the engine rests (the signer floors a fraction anyway, so showing one would misstate the order);
  * four decimals of USDC.
  *
- * `toFixed` rounds to nearest, which at 100% can land a hair above what the account holds — and a
- * hair is enough for the ticket to call the order unaffordable. Flooring keeps the top notch of the
- * slider exactly at the affordable max.
+ * `toFixed` rounds to nearest, which can land a hair above what the account holds — and a hair is
+ * enough for the ticket to call the order unaffordable. Flooring keeps a derived size affordable.
  */
 function toAffordableSize(size: number, unit: PayCurrency) {
   if (unit === "cNGN") {
@@ -765,7 +731,7 @@ export function SpotOrderFormPanel({
    *
    * `Available` is formatted from these numbers rather than taking a label of its own — the two used
    * to arrive separately, and the label was the *balance* while the number was the spendable part,
-   * so a trader with orders resting read a figure the slider would not size to.
+   * so a trader with orders resting read a figure the order could not actually spend.
    */
   availableCngn: number | null;
   availableUsdc: number | null;
@@ -846,18 +812,14 @@ export function SpotOrderFormPanel({
   );
   const {
     averagePrice,
-    canSizeByPercent,
     fill,
-    maxOrderSize,
     shortfall,
     signedPrice,
-    sizePercent,
     sizingPrice,
     takerFee,
     feeFromVenue,
     totalLabel,
   } = deriveOrderEconomics({
-    anchorPrice,
     asks,
     availableCngn,
     availableUsdc,
@@ -886,18 +848,6 @@ export function SpotOrderFormPanel({
     venueFeeLabel: feeFromVenue === null ? null : formatUsdcAmount(feeFromVenue),
     totalLabel,
   });
-
-  function handleSizePercent(percent: number) {
-    if (!canSizeByPercent) {
-      return;
-    }
-    // The ceiling is a cNGN size; the field may be counting USDC, so the notch is written back in
-    // the unit on screen rather than dropping a cNGN figure into a USDC field.
-    const sizeAtPercent = (maxOrderSize as number) * (percent / 100);
-    const inUsdc =
-      activeUnit === "USDC" ? convertAmountToUnit(sizeAtPercent, "USDC", conversionPrice) : null;
-    setAmount(inUsdc ?? toAffordableSize(sizeAtPercent, "cNGN"));
-  }
 
   /** Switches the Size field's currency, converting what is in it to match. */
   function handleUnitSelect(nextUnit: PayCurrency) {
@@ -1084,22 +1034,6 @@ export function SpotOrderFormPanel({
       />
 
       <ConversionLine isMarket={isMarket} label={counterpartLabel} />
-
-      {/*
-       * Sizes the order as a share of what the account can fund. Inert, and visibly so, when that
-       * ceiling is unknown, rather than sliding against an invented balance.
-       */}
-      <AmountSlider
-        disabled={!canSizeByPercent}
-        label="Order size as a percentage of available balance"
-        max={100}
-        min={0}
-        onChange={edited(handleSizePercent)}
-        presets={SIZE_PRESETS}
-        step={25}
-        value={sizePercent}
-        valueText={`${sizePercent}%`}
-      />
     </OrderFormShell>
   );
 }
