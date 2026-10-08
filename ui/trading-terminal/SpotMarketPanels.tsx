@@ -3,7 +3,7 @@
 import { Duration } from "effect";
 import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { createWalletClient, custom } from "viem";
 import { getAppChain } from "@/lib/base-public-client";
 import { formatUsdcPrice } from "@/lib/market-formatting";
@@ -17,22 +17,19 @@ import {
   buildSpotOrderEnvelope,
   SPOT_ORDER_LIFETIME_LABEL,
 } from "@/lib/spot-order-submission";
-import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
 import {
   getCngnTokenAddress,
-  getFirstDepositableCurrency,
   getLegacySpotStack,
   getUsdcTokenAddress,
 } from "@/lib/subaccount-deposit-config";
 import { getAccountLegs } from "@/lib/subaccount-ledger";
 import type { SpotMarket } from "@/lib/trading.types";
 import type { WithdrawableAsset } from "@/lib/withdrawable-assets";
-import type { TransferMode } from "@/ui/trading-terminal/DepositDialog";
 import { buildDepositAccount, DepositDialog } from "@/ui/trading-terminal/DepositDialog";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import { SpotTradingTerminal } from "@/ui/trading-terminal/SpotTradingTerminal";
-import { HEADER_ACTION_CLASSES } from "@/ui/trading-terminal/TerminalHeaderBar";
 import { useTerminalSession } from "@/ui/trading-terminal/TerminalSession";
+import { useAccountTransfer } from "@/ui/trading-terminal/useAccountTransfer";
 import { useOrderStatus } from "@/ui/trading-terminal/useOrderStatus";
 import {
   formatSubaccountCngnLabel,
@@ -201,36 +198,21 @@ export function SpotMarketPanels({ spotMarket }: { spotMarket: SpotMarket }) {
 
   const {
     account: {
-      adoptSubaccountId,
       ensureTradingSubaccount,
       isLoading: isResolvingTradingSubaccount,
       isResolved: isTradingSubaccountResolved,
       subaccountId: tradingSubaccountId,
     },
     isSignedIn,
-    login,
     primaryWallet,
     refreshWalletBalances,
-    selectWallet,
-    walletBalances,
-    wallets,
     walletsReady,
   } = useTerminalSession();
-  // The header hosts the one deposit dialog; the order ticket opens it through this state.
-  const [depositOpen, setDepositOpen] = useState(false);
-  const [depositMode, setDepositMode] = useState<TransferMode>("deposit");
-  // Which asset it opens on. Held here rather than inside the dialog because the ticket names the
-  // currency when it sends the trader over — a "Deposit cNGN" button must not land on the USDC form.
-  const [depositCurrency, setDepositCurrency] = useState<DepositCurrency>(
-    getFirstDepositableCurrency
-  );
-  const [resumeDepositAfterLogin, setResumeDepositAfterLogin] = useState(false);
   /*
    * The ticket gates on the wallet rather than the session because a session can exist before its
    * embedded wallet does: an email login is authenticated while Privy is still provisioning one.
    */
   const hasWallet = primaryWallet !== null;
-  const depositAccount = buildDepositAccount(primaryWallet, tradingSubaccountId);
   const isPreparingAccount = isPreparingTradingAccount({
     isResolvingSubaccount: isResolvingTradingSubaccount,
     isSignedIn,
@@ -265,36 +247,12 @@ export function SpotMarketPanels({ spotMarket }: { spotMarket: SpotMarket }) {
     subaccountId: tradingSubaccountId,
   });
 
-  /**
-   * Re-reads every balance a transfer moves, at or past the transfer's block. Reading latest instead
-   * could hit an RPC node a block behind and leave the pre-transfer figures on screen.
-   */
-  function refreshBalancesAfter(blockNumber: bigint | null) {
-    refreshWalletBalances(blockNumber);
-    refreshSubaccountBalance(blockNumber);
-  }
-
-  function handleDeposited(depositedSubaccountId: string, blockNumber: bigint | null) {
-    adoptSubaccountId(depositedSubaccountId);
-    refreshBalancesAfter(blockNumber);
-  }
-
-  /**
-   * Base UI dialogs are modal, so Privy's login modal would render inert behind this one. The
-   * deposit dialog steps aside for the login and an effect brings it back once a wallet lands.
-   */
-  function handleConnectWallet() {
-    setDepositOpen(false);
-    setResumeDepositAfterLogin(true);
-    login();
-  }
-
-  useEffect(() => {
-    if (resumeDepositAfterLogin && primaryWallet !== null) {
-      setResumeDepositAfterLogin(false);
-      setDepositOpen(true);
-    }
-  }, [primaryWallet, resumeDepositAfterLogin]);
+  // The account's one Deposit / Withdraw flow, the same dialog the perp opens. The header hosts it;
+  // the ticket and the Account rows open it on the asset they name.
+  const transfer = useAccountTransfer({
+    accountRows: subaccountBalance?.rows ?? null,
+    onTransferred: refreshSubaccountBalance,
+  });
 
   // Candles come from the venue's own fills via markets-service; there is no
   // client-side ticking. A random walk here would overwrite real price history
@@ -475,41 +433,7 @@ export function SpotMarketPanels({ spotMarket }: { spotMarket: SpotMarket }) {
         accountCngn={toLedgerAmount(accountLegs.cngnUnits)}
         accountUsdc={toLedgerAmount(accountLegs.cashUnits)}
         candles={spotMarket.candles}
-        depositControl={
-          // Deposit opens the dialog on its own trigger; Withdraw is a second door into the same
-          // dialog, opened on its Withdraw side.
-          <div className="flex items-center gap-2">
-            <DepositDialog
-              account={depositAccount}
-              accountRows={subaccountBalance?.rows ?? null}
-              currency={depositCurrency}
-              fundingWallets={isSignedIn ? wallets : []}
-              mode={depositMode}
-              onConnectWallet={handleConnectWallet}
-              onCurrencyChange={setDepositCurrency}
-              onDeposited={handleDeposited}
-              onModeChange={setDepositMode}
-              onOpenChange={setDepositOpen}
-              onSelectFundingWallet={(wallet) => selectWallet(wallet.address)}
-              onWithdrawn={refreshBalancesAfter}
-              open={depositOpen}
-              triggerClassName={HEADER_ACTION_CLASSES}
-              triggerId="header-deposit-trigger"
-              walletBalances={{ cNGN: walletBalances.cngn, USDC: walletBalances.usdc }}
-            />
-            <button
-              className={HEADER_ACTION_CLASSES}
-              id="header-withdraw-trigger"
-              onClick={() => {
-                setDepositMode("withdraw");
-                setDepositOpen(true);
-              }}
-              type="button"
-            >
-              Withdraw
-            </button>
-          </div>
-        }
+        depositControl={transfer.headerControl}
         hasWallet={hasWallet}
         isPreparingAccount={isPreparingAccount}
         isSignedIn={isSignedIn}
@@ -536,21 +460,11 @@ export function SpotMarketPanels({ spotMarket }: { spotMarket: SpotMarket }) {
           )
         }
         onCancelOrder={handleCancelSpot}
-        onDepositRequest={(currency) => {
-          if (currency !== undefined) {
-            setDepositCurrency(currency);
-          }
-          setDepositMode("deposit");
-          setDepositOpen(true);
-        }}
+        onDepositRequest={transfer.openDeposit}
         onFormEdit={orderStatus.clear}
         onSignOrderHistory={handleSignOrderHistory}
         onSubmitOrder={handleSubmitSpot}
-        onWithdrawRequest={(currency) => {
-          setDepositCurrency(currency);
-          setDepositMode("withdraw");
-          setDepositOpen(true);
-        }}
+        onWithdrawRequest={transfer.openWithdraw}
         spotMarket={spotMarket}
         walletAddress={primaryWallet?.address ?? null}
       />
