@@ -93,7 +93,7 @@ export type HeaderMetricItem = {
 
 /** The header's Deposit and Withdraw buttons, and their placeholders, share one look. */
 export const HEADER_ACTION_CLASSES =
-  "flex h-10 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-4 font-semibold text-[14px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active disabled:cursor-not-allowed disabled:opacity-60";
+  "flex h-8 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-3 font-semibold text-[13px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active disabled:cursor-not-allowed disabled:opacity-60";
 
 /**
  * Stand-ins for the market's Deposit and Withdraw until its panels publish them, so the action
@@ -259,7 +259,7 @@ export function TerminalHeaderBar({
   };
 
   return (
-    // 64px when everything fits on one line (40px of controls inside 24px of padding), growing
+    // 64px when everything fits on one line (32px controls inside 24px of padding), growing
     // rather than overflowing when it does not — the wallet button's address makes the right-hand
     // cluster's extent unknowable, so the row cannot be sized as if it were fixed.
     //
@@ -312,11 +312,11 @@ export function TerminalHeaderBar({
         )}
         <button
           aria-label="Toggle theme"
-          className="flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full border border-panel-border bg-input-bg text-panel-text-active transition-all duration-300 hover:bg-input-hover"
+          className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full border border-panel-border bg-input-bg text-panel-text-active transition-all duration-300 hover:bg-input-hover"
           onClick={toggleTheme}
           type="button"
         >
-          {theme === "light" ? <Moon className="size-5" /> : <Sun className="size-5" />}
+          {theme === "light" ? <Moon className="size-4" /> : <Sun className="size-4" />}
         </button>
         <PrivyWalletButton />
       </div>
