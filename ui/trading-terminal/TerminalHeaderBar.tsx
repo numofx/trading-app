@@ -4,7 +4,7 @@ import { Moon, Sun } from "lucide-react";
 import type { ReactNode } from "react";
 import { Fragment, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
-import { formatPrice } from "@/lib/market-formatting";
+import { formatDollarPrice, formatPrice } from "@/lib/market-formatting";
 import type { TerminalMarketId } from "@/lib/market-overview.types";
 import { PrivyWalletButton } from "@/ui/PrivyWalletButton";
 import { SmartImage } from "@/ui/SmartImage";
@@ -163,7 +163,7 @@ function HeaderMetrics({ publication }: { publication: TerminalHeaderPublication
         {...provisional}
       >
         <HeaderMetric label="Price">
-          {formatPrice(price)}
+          {formatDollarPrice(price)}
           <span className={cn("text-[10px]", getChangeClassName(changePercent24h))}>
             {formatChangePercent(changePercent24h)}
           </span>
