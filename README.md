@@ -8,9 +8,9 @@ The app renders **cNGN-USDC** spot at `/trade/cngn-usdc` and **cNGN-PERP** at `/
 switched from the market selector in the header. One route, one shell: the `/trade` layout holds
 the header, the wallet, the trading account and the selector, and a switch replaces only the
 market's panels under it (keyed by the slug, so a ticket or a book tab never carries over). The
-slugs live in `lib/market-routes.ts`; `/` and `/perp` redirect onto them (307 for now), a slug in
-another casing is redirected to lowercase by `proxy.ts` with its query string, and an unknown slug
-is a 404 from the segment's layout. Both markets are shown exactly as the engine trades them: cNGN is the base and USDC the
+slugs live in `lib/market-routes.ts`. `/` opens the perp, the default market, and so does `/perp`
+(both 307 for now). A slug in another casing is redirected to lowercase by `proxy.ts` with its query
+string, and an unknown slug is a 404 from the segment's layout. Both markets are shown exactly as the engine trades them: cNGN is the base and USDC the
 quote, prices are USDC per cNGN (about 0.00073, to seven decimals, with ₦ per USDC as a secondary
 line under the ticket's limit-price field), sizes are cNGN, a buy or long is a buy of
 cNGN. Since 2026-10-08 the venue identifies the markets as `cNGN-USDC` and `cNGN-PERP`; the pre-rename

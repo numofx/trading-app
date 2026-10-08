@@ -6,7 +6,7 @@ import type { TerminalMarketId } from "@/lib/market-overview.types";
  * markets render under one persistent shell (header, wallet, trading account, selector); only the
  * market's own panels change with the slug.
  *
- * `next.config.ts` redirects the pre-2026-10-08 routes `/` and `/perp` onto these; it cannot
+ * `next.config.ts` redirects `/` to the default market, the perp, and `/perp` to the same; it cannot
  * import this file, so the two tables are pinned to each other by `lib/market-routes.test.mjs`.
  */
 export const MARKET_SLUGS = {

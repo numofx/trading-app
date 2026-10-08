@@ -27,8 +27,8 @@ curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' http://localhost:3111/p
 Both markets render at `/trade/<slug>` under one shell (header, wallet, trading account, market
 selector) that stays mounted across a switch; only the market's panels are replaced.
 
-- `/trade/cngn-usdc` — spot. `/` redirects here (307).
-- `/trade/cngn-perp` — the perp. `/perp` redirects here (307).
+- `/trade/cngn-perp` — the perp, the default market. `/` and `/perp` redirect here (307).
+- `/trade/cngn-usdc` — spot.
 - Another casing of a slug is redirected to lowercase by `proxy.ts`; an unknown slug is a 404.
 - `/layout-fixture` and `/layout-fixture/perp` — dev-only fixtures with made-up figures (404 in
   production), used by `scripts/check-layout.mjs`.
