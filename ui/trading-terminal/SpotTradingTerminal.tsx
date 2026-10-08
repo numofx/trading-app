@@ -44,7 +44,7 @@ import { useMarketOrderBook } from "@/ui/trading-terminal/useMarketOrderBook";
 import { useSignedHistoryTabs } from "@/ui/trading-terminal/useSignedHistoryTabs";
 
 /** The venue's symbol for this market; markets-service resolves the stream subscription from it. */
-const SPOT_MARKET_SYMBOL = "USDCcNGN-SPOT";
+const SPOT_MARKET_SYMBOL = "cNGN-USDC";
 
 export function SpotTradingTerminal({
   candles,

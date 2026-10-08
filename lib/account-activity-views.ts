@@ -20,9 +20,7 @@ const OPEN_ORDERS_SIDE_COLUMN = OPEN_ORDERS_COLUMNS.indexOf("Side");
 
 /** The instrument a row belongs to, under the terminal's one name for it. */
 function formatInstrument(row: { display_name?: string; market?: string }) {
-  return (
-    marketLabel(row.market) ?? row.display_name ?? row.market ?? MARKET_LABELS["USDCcNGN-SPOT"]
-  );
+  return marketLabel(row.market) ?? row.display_name ?? row.market ?? MARKET_LABELS["cNGN-USDC"];
 }
 
 function formatCngnSize(size: number) {

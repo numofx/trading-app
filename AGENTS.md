@@ -7,6 +7,13 @@ References:
 - **Project overview**: @README.md
 - **Dependencies**: @package.json
 
+## Market identifiers
+
+- The venue's markets are `cNGN-USDC` (spot) and `cNGN-PERP` (perp). Those are the values of `market`, `symbol` and
+  `ticker_id` everywhere, and the keys of `lib/market-labels.ts`.
+- `USDCcNGN-SPOT` and `USDCcNGN-PERP` are deprecated aliases, removed on 2027-01-06. Do not use them in new code, tests
+  or fixtures. The only place they may appear is a comment on data captured before the rename.
+
 ## Lint Rules
 
 After generating code, run these commands **in order**.

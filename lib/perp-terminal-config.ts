@@ -7,10 +7,10 @@ import { PERP_BALANCES_COLUMNS, PERP_POSITIONS_COLUMNS } from "@/lib/perp-market
 import type { ActivityTab, ActivityView } from "@/lib/trading.types";
 
 /** The perp's one display name, shared with the selector, document title, positions and history. */
-export const PERP_MARKET_LABEL = MARKET_LABELS["USDCcNGN-PERP"];
+export const PERP_MARKET_LABEL = MARKET_LABELS["cNGN-PERP"];
 
 /** The perp's stream and book symbol in markets-service. */
-export const PERP_MARKET_SYMBOL = "USDCcNGN-PERP";
+export const PERP_MARKET_SYMBOL = "cNGN-PERP";
 
 export const PERP_BOTTOM_TABS = [
   { id: "positions", label: "Positions" },
