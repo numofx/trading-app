@@ -1,4 +1,4 @@
-/** Which terminal a market renders in; each is its own route. */
+/** Which market's panels render under the shell; each has its own slug under `/trade`. */
 export type TerminalMarketId = "spot" | "perp";
 
 export type TerminalMarketKind = "spot" | "perp";

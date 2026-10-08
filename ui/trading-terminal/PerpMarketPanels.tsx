@@ -2,7 +2,6 @@
 
 import { Menu } from "@base-ui/react/menu";
 import type { ConnectedWallet } from "@privy-io/react-auth";
-import { useLogin, usePrivy } from "@privy-io/react-auth";
 import { Duration } from "effect";
 import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
@@ -17,14 +16,7 @@ import {
 } from "@/lib/account-activity-views";
 import { formatBalance } from "@/lib/account-balance-display";
 import { getAppChain } from "@/lib/base-public-client";
-import {
-  applyTradesToCandles,
-  applyTradesToStats,
-  CANDLE_INTERVAL_MS,
-  latestTradeId,
-  mergeTrades,
-  tradesSince,
-} from "@/lib/live-market";
+import { marketPath } from "@/lib/market-routes";
 import {
   buildPerpBalancesView,
   buildPerpHeaderMetrics,
@@ -51,7 +43,6 @@ import {
 } from "@/lib/perp-terminal-config";
 import {
   getAnchorPrice,
-  getBestPrices,
   getMarketableLimitPrice,
   getMarketSizingPrice,
   toOrderSizeCngn,
@@ -63,7 +54,7 @@ import {
   createOrderIdempotencyKey,
 } from "@/lib/spot-order-submission";
 import { FOOTER_LINKS, SPOT_TIMEFRAME_OPTIONS } from "@/lib/spot-terminal-config";
-import { get24hStats, getVenueLastPrice } from "@/lib/ticker-stats";
+import { get24hStats } from "@/lib/ticker-stats";
 import type { ActivityTab, ActivityView } from "@/lib/trading.types";
 import type { WithdrawableAsset } from "@/lib/withdrawable-assets";
 import { SmartImage } from "@/ui/SmartImage";
@@ -79,16 +70,15 @@ import type { SpotChartTab, SpotTimeframe } from "@/ui/trading-terminal/SpotChar
 import { SpotChartPanel } from "@/ui/trading-terminal/SpotChartPanel";
 import type { SpotBookTab } from "@/ui/trading-terminal/SpotOrderBookPanel";
 import { SpotOrderBookPanel } from "@/ui/trading-terminal/SpotOrderBookPanel";
-import { TerminalHeaderBar } from "@/ui/trading-terminal/TerminalHeaderBar";
+import { TerminalGrid } from "@/ui/trading-terminal/TerminalGrid";
+import { usePublishTerminalHeader } from "@/ui/trading-terminal/TerminalHeaderSlot";
+import { useTerminalSession } from "@/ui/trading-terminal/TerminalSession";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
-import { useMarketOrderBook } from "@/ui/trading-terminal/useMarketOrderBook";
+import { useLiveMarketBook } from "@/ui/trading-terminal/useLiveMarketBook";
 import { useOrderStatus } from "@/ui/trading-terminal/useOrderStatus";
 import { usePerpLiveState } from "@/ui/trading-terminal/usePerpLiveState";
 import { readPerpPositions, usePerpPositions } from "@/ui/trading-terminal/usePerpPositions";
-import { useServerRefresh } from "@/ui/trading-terminal/useServerRefresh";
 import { useSignedHistoryTabs } from "@/ui/trading-terminal/useSignedHistoryTabs";
-import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
-import { usePrimaryWallet } from "@/ui/usePrimaryWallet";
 
 type PerpBottomTab = keyof typeof PERP_ACTIVITY_VIEWS;
 
@@ -169,7 +159,7 @@ function resolvePerpOrderSize(request: PerpOrderRequest, sizingPrice: number): s
   return Number.isFinite(sizeCngn) && sizeCngn >= 1 ? sizeCngn.toFixed(0) : null;
 }
 
-type SigningWallet = NonNullable<ReturnType<typeof usePrimaryWallet>["primaryWallet"]>;
+type SigningWallet = ConnectedWallet;
 
 /**
  * Signs a perp order for the perp's own module and asset, then posts it. `size` is cNGN contracts
@@ -547,7 +537,7 @@ function buildBalanceRowAction(
       ) : null}
       <SmartLink
         className={ROW_BUTTON_CLASSES}
-        href="/"
+        href={marketPath("spot")}
         title="Trade cNGN for USDC, or back, on the spot market. Spot and the perp share this account, so the swap settles straight into these balances."
       >
         Swap
@@ -664,47 +654,39 @@ async function postSignedOrder(payload: object, signature: string): Promise<Sign
 }
 
 /**
- * The perp's book, trades, candles and headline price. The stream when it is live, the
- * server-rendered snapshot otherwise; both the venue's own depth. The headline price is the book's
- * touch first, then the chain's mark, so an empty book still shows where the market is.
+ * The perp's book, trades, candles and headline price, from the shared live-book hook. The
+ * headline price is the book's touch first, then the chain's mark, so an empty book still shows
+ * where the market is.
  */
 function usePerpBook(market: PerpMarket | null) {
-  const book = useMarketOrderBook({
+  const book = useLiveMarketBook({
+    candles: market?.candles ?? [],
     enabled: market !== null,
-    market: market ? PERP_MARKET_SYMBOL : null,
+    symbol: PERP_MARKET_SYMBOL,
     type: "perp",
+    snapshot: {
+      mark: market?.mark ?? null,
+      orderBookAsks: market?.orderBookAsks ?? [],
+      orderBookBids: market?.orderBookBids ?? [],
+      stats24h: market?.stats24h ?? null,
+      trades: market?.trades ?? [],
+    },
   });
-  const bids = book.isLive ? book.bids : (market?.orderBookBids ?? []);
-  const asks = book.isLive ? book.asks : (market?.orderBookAsks ?? []);
-  // The server's fills and the stream's as one tape: see SpotTradingTerminal.
-  const trades = mergeTrades(market?.trades ?? [], book.trades);
-  // Fills the stream has seen since the server rendered, folded into the candles and 24h figures
-  // on every render; the minute's server re-read corrects what folding cannot.
-  const streamedFills = tradesSince(trades, latestTradeId(market?.trades ?? []));
-  const candles = applyTradesToCandles(
-    market?.candles ?? [],
-    streamedFills,
-    CANDLE_INTERVAL_MS["1d"],
-    "1d"
-  );
-  const lastPrice = market ? getVenueLastPrice(trades, candles, market.mark) : null;
-  const { bestAsk, bestBid } = getBestPrices(asks, bids);
   const price = market
-    ? (getAnchorPrice(bestAsk, bestBid, lastPrice) ?? market.state.markPrice)
+    ? (getAnchorPrice(book.bestAsk, book.bestBid, book.lastPrice) ?? market.state.markPrice)
     : null;
-  const stats24h = applyTradesToStats(market?.stats24h ?? null, streamedFills);
-  const stats = get24hStats(stats24h, price);
+  const stats = get24hStats(book.stats24h, price);
   return {
-    asks,
-    bestAsk,
-    bestBid,
-    bids,
-    candles,
-    lastPrice,
+    asks: book.asks,
+    bestAsk: book.bestAsk,
+    bestBid: book.bestBid,
+    bids: book.bids,
+    candles: book.candles,
+    lastPrice: book.lastPrice,
     price,
     stats,
-    trades,
-    volumeUsd: stats24h?.quoteVolume ?? null,
+    trades: book.trades,
+    volumeUsd: book.stats24h?.quoteVolume ?? null,
   };
 }
 
@@ -822,23 +804,22 @@ function HeaderActionButton({ children, onClick }: { children: string; onClick: 
 }
 
 /**
- * The cNGN-USDC perpetual terminal, laid out on the spot terminal's grid so switching markets does
- * not move the panels.
+ * The cNGN-PERP market under the shell, on the same grid as spot so switching markets does not
+ * move the panels. The session (wallet, trading account) is the shell's; since the unified-account
+ * cutover the perp margins the same account spot settles into.
  *
  * `market` is null until markets-service lists the perp with its chain state and stack; the
- * terminal then renders every panel's empty state and a ticket that cannot submit. With it, the book
- * streams, the account is the wallet's own under the perp SRM (separate from its spot account),
+ * panels then render every empty state and a ticket that cannot submit. With it, the book streams,
  * orders are signed for the perp's module and asset, and positions and margin are read from chain.
  */
-export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMarket | null }) {
+export function PerpMarketPanels({ market: renderedMarket }: { market: PerpMarket | null }) {
   // The chain state the page rendered with, kept current: the ticket opens and closes with the venue.
   const market = usePerpLiveState(renderedMarket);
   const router = useRouter();
-  const { authenticated, ready } = usePrivy();
-  const { login } = useLogin();
-  const { primaryWallet: pinnedWallet, walletsReady } = usePrimaryWallet();
-  const isSignedIn = ready && authenticated;
-  const primaryWallet = isSignedIn && market !== null ? pinnedWallet : null;
+  const session = useTerminalSession();
+  const { isSignedIn, login, walletsReady } = session;
+  // No wallet while the perp is not live: nothing here can be signed for.
+  const primaryWallet = market !== null ? session.primaryWallet : null;
 
   const [chartTab, setChartTab] = useState<SpotChartTab>("price");
   const [timeframe, setTimeframe] = useState<SpotTimeframe>("D");
@@ -871,12 +852,14 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
     }
     setDepositOpen(true);
   }
-  const account = useTradingSubaccount(
-    primaryWallet?.address ?? null,
-    stack ? { depositAsset: stack.cashAddress, manager: stack.srmAddress } : undefined
-  );
+  // The shell's account, resolved under the configured stack; the build check holds that equal to
+  // the venue's perp stack. Unread while the perp is not live, as the wallet is.
+  const account = {
+    ...session.account,
+    isLoading: market !== null && session.account.isLoading,
+    subaccountId: market === null ? null : session.account.subaccountId,
+  };
   const perpAccount = usePerpPositions(account.subaccountId);
-  useServerRefresh();
   const orderStatus = useOrderStatus(positionsSignature(perpAccount.positions));
   const withdrawing = withdrawTarget(stack, perpAccount.account, withdrawRow);
 
@@ -1072,71 +1055,109 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
     }
   }
 
+  usePublishTerminalHeader({
+    changePercent24h: stats.changePercent,
+    depositControl:
+      market === null ? undefined : (
+        <div className="flex items-center gap-2">
+          <HeaderActionButton
+            onClick={() => (primaryWallet === null ? login() : setDepositOpen(true))}
+          >
+            Deposit
+          </HeaderActionButton>
+          <HeaderWithdrawMenu
+            account={perpAccount.account}
+            cngnListed={listedCollateralOf(stack).some((asset) => asset.symbol === "cNGN")}
+            hasWallet={primaryWallet !== null}
+            onConnect={login}
+            onWithdraw={setWithdrawRow}
+          />
+        </div>
+      ),
+    high24h: stats.high,
+    low24h: stats.low,
+    market: "perp",
+    metrics: perpHeaderMetrics(market, price, volumeUsd),
+    onPortfolioSelect: () => setBottomTab("positions"),
+    price,
+    volume24hLabel: stats.volumeLabel,
+  });
+
   return (
-    <main className="flex min-h-screen flex-col bg-terminal-bg text-foreground transition-colors duration-300 md:h-dvh md:overflow-hidden">
+    <>
       <MarketDocumentTitle pair={PERP_MARKET_LABEL} price={price} />
 
-      <TerminalHeaderBar
-        changePercent24h={stats.changePercent}
-        depositControl={
-          market === null ? undefined : (
-            <div className="flex items-center gap-2">
-              <HeaderActionButton
-                onClick={() => (primaryWallet === null ? login() : setDepositOpen(true))}
-              >
-                Deposit
-              </HeaderActionButton>
-              <HeaderWithdrawMenu
-                account={perpAccount.account}
-                cngnListed={listedCollateralOf(stack).some((asset) => asset.symbol === "cNGN")}
-                hasWallet={primaryWallet !== null}
-                onConnect={login}
-                onWithdraw={setWithdrawRow}
-              />
-            </div>
-          )
+      <TerminalGrid
+        activity={
+          <TradingActivityPanel
+            activityView={buildActivityView({
+              account: perpAccount.account,
+              bottomTab,
+              signedHistoryView: signedHistory.view,
+              market,
+              positions: perpAccount.positions,
+              walletAddress: primaryWallet?.address ?? null,
+            })}
+            emptyState={buildEmptyState(
+              market,
+              account.subaccountId,
+              bottomTab,
+              signedHistory.emptyState
+            )}
+            footerLinks={FOOTER_LINKS}
+            isSignedIn={isSignedIn}
+            onTabSelect={(tab) => setBottomTab(tab as PerpBottomTab)}
+            rowAction={buildRowAction({
+              account: perpAccount.account,
+              bottomTab,
+              closingIndex,
+              cancellingNonce,
+              hasWallet: primaryWallet !== null,
+              isSubmitting,
+              market,
+              onDeposit: openDeposit,
+              onWithdraw: setWithdrawRow,
+              onCancel: (nonce, ownerAddress) => void handleCancel(nonce, ownerAddress),
+              onClose: (position, rowIndex) => void handleClose(position, rowIndex),
+              ownedOpenOrders,
+              positions: perpAccount.positions,
+              tradeHistoryRowAction: signedHistory.rowAction,
+            })}
+            selectedTab={bottomTab}
+            tabs={withCounts(PERP_BOTTOM_TABS, primaryWallet !== null, {
+              "open-orders": ownedOpenOrders.length,
+              positions: perpAccount.positions.length,
+            })}
+          />
         }
-        high24h={stats.high}
-        low24h={stats.low}
-        market="perp"
-        metrics={perpHeaderMetrics(market, price, volumeUsd)}
-        onPortfolioSelect={() => setBottomTab("positions")}
-        price={price}
-        volume24hLabel={stats.volumeLabel}
-      />
-
-      <div className="flex min-w-0 flex-1 flex-col gap-3 p-3 md:min-h-0 md:overflow-hidden md:px-4">
-        {/* The spot terminal's grid, unchanged; see SpotTradingTerminal for why it is shaped so. */}
-        <div className="grid grid-cols-1 gap-3 md:min-h-0 md:flex-1 md:grid-cols-[minmax(0,1fr)_300px] md:grid-rows-[minmax(0,5fr)_minmax(0,5fr)_minmax(0,3fr)] md:overflow-hidden lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_270px_320px] lg:grid-rows-[minmax(0,7fr)_minmax(0,3fr)] lg:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_300px_340px]">
-          <div className="md:col-start-1 md:row-start-1 md:min-h-0 md:overflow-hidden lg:row-start-1">
-            <SpotChartPanel
-              asks={asks}
-              bids={bids}
-              candles={candles}
-              chartTab={chartTab}
-              indicatorsEnabled={indicatorsEnabled}
-              onChartTabChange={setChartTab}
-              onIndicatorsToggle={() => setIndicatorsEnabled((current) => !current)}
-              onTimeframeChange={setTimeframe}
-              onToolSelect={setSelectedTool}
-              selectedTimeframe={timeframe}
-              selectedTool={selectedTool}
-              timeframes={SPOT_TIMEFRAME_OPTIONS}
-            />
-          </div>
-
-          <div className="md:col-start-1 md:row-start-2 md:min-h-0 md:overflow-hidden lg:col-start-2 lg:row-start-1">
-            <SpotOrderBookPanel
-              asks={asks}
-              bids={bids}
-              lastPrice={lastPrice}
-              onTabChange={setBookTab}
-              tab={bookTab}
-              trades={trades}
-            />
-          </div>
-
-          <div className="order-first flex min-h-[420px] flex-col gap-3 md:order-0 md:col-start-2 md:row-span-3 md:row-start-1 md:min-h-0 md:gap-2 md:overflow-y-auto lg:col-start-3 lg:row-span-2 lg:row-start-1">
+        book={
+          <SpotOrderBookPanel
+            asks={asks}
+            bids={bids}
+            lastPrice={lastPrice}
+            onTabChange={setBookTab}
+            tab={bookTab}
+            trades={trades}
+          />
+        }
+        chart={
+          <SpotChartPanel
+            asks={asks}
+            bids={bids}
+            candles={candles}
+            chartTab={chartTab}
+            indicatorsEnabled={indicatorsEnabled}
+            onChartTabChange={setChartTab}
+            onIndicatorsToggle={() => setIndicatorsEnabled((current) => !current)}
+            onTimeframeChange={setTimeframe}
+            onToolSelect={setSelectedTool}
+            selectedTimeframe={timeframe}
+            selectedTool={selectedTool}
+            timeframes={SPOT_TIMEFRAME_OPTIONS}
+          />
+        }
+        ticketColumn={
+          <>
             <PerpOrderFormPanel
               account={perpAccount.account}
               asks={asks}
@@ -1159,52 +1180,9 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
             <AccountSummary
               rows={buildAccountRows(perpAccount.account, stack, openDeposit, setWithdrawRow)}
             />
-          </div>
-
-          <div className="min-h-[200px] md:col-start-1 md:row-start-3 md:min-h-0 lg:col-span-2 lg:col-start-1 lg:row-start-2">
-            <TradingActivityPanel
-              activityView={buildActivityView({
-                account: perpAccount.account,
-                bottomTab,
-                signedHistoryView: signedHistory.view,
-                market,
-                positions: perpAccount.positions,
-                walletAddress: primaryWallet?.address ?? null,
-              })}
-              emptyState={buildEmptyState(
-                market,
-                account.subaccountId,
-                bottomTab,
-                signedHistory.emptyState
-              )}
-              footerLinks={FOOTER_LINKS}
-              isSignedIn={isSignedIn}
-              onTabSelect={(tab) => setBottomTab(tab as PerpBottomTab)}
-              rowAction={buildRowAction({
-                account: perpAccount.account,
-                bottomTab,
-                closingIndex,
-                cancellingNonce,
-                hasWallet: primaryWallet !== null,
-                isSubmitting,
-                market,
-                onDeposit: openDeposit,
-                onWithdraw: setWithdrawRow,
-                onCancel: (nonce, ownerAddress) => void handleCancel(nonce, ownerAddress),
-                onClose: (position, rowIndex) => void handleClose(position, rowIndex),
-                ownedOpenOrders,
-                positions: perpAccount.positions,
-                tradeHistoryRowAction: signedHistory.rowAction,
-              })}
-              selectedTab={bottomTab}
-              tabs={withCounts(PERP_BOTTOM_TABS, primaryWallet !== null, {
-                "open-orders": ownedOpenOrders.length,
-                positions: perpAccount.positions.length,
-              })}
-            />
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {withdrawing === null ? null : (
         <PerpWithdrawDialog
@@ -1230,6 +1208,6 @@ export function PerpTradingTerminal({ market: renderedMarket }: { market: PerpMa
           wallet={primaryWallet}
         />
       )}
-    </main>
+    </>
   );
 }

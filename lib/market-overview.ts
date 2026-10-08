@@ -5,18 +5,20 @@ import type {
   TerminalMarketId,
   TerminalMarketKind,
 } from "@/lib/market-overview.types";
+import { marketPath } from "@/lib/market-routes";
 import { PERP_MARKET_LABEL } from "@/lib/perp-terminal-config";
 import { getAnchorPrice, getBestPrices } from "@/lib/spot-market";
 import { formatCompactVolume, get24hStats, getVenueLastPrice } from "@/lib/ticker-stats";
 import type { SpotMarket } from "@/lib/trading.types";
 
 /**
- * The markets the selector offers. Each is its own route, so the terminals never share state:
- * switching never carries one terminal's ticket or book into the other, and each has its own URL.
+ * The markets the selector offers, each at its own URL under `/trade`. The shell (header, wallet,
+ * trading account, selector) persists across them; the market's panels are keyed by the slug, so
+ * switching never carries one market's ticket or book into the other.
  */
 export const TERMINAL_MARKETS = [
-  { href: "/", id: "spot", kind: "spot", symbol: MARKET_LABELS["cNGN-USDC"] },
-  { href: "/perp", id: "perp", kind: "perp", symbol: PERP_MARKET_LABEL },
+  { href: marketPath("spot"), id: "spot", kind: "spot", symbol: MARKET_LABELS["cNGN-USDC"] },
+  { href: marketPath("perp"), id: "perp", kind: "perp", symbol: PERP_MARKET_LABEL },
 ] as const satisfies readonly TerminalMarketEntry[];
 
 export function getTerminalMarket(id: TerminalMarketId): TerminalMarketEntry {
