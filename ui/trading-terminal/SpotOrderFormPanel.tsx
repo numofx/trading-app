@@ -518,26 +518,6 @@ function MarketFillRows({
 }
 
 /**
- * How long an order that does not fill stays on the book: a limit ticket's most surprising term,
- * since it leaves the book on its own and nothing else on screen would say so. A market order
- * crosses on submission, so for it the lifetime only applies to a remainder the book could not
- * cover; the row says so in its tooltip rather than disappearing.
- */
-function OrderLifetimeRow({ isMarket }: { isMarket: boolean }) {
-  return (
-    <SummaryRow
-      label="Expires"
-      tooltip={
-        isMarket
-          ? "A market order crosses on submission; only a remainder the book could not cover rests this long"
-          : undefined
-      }
-      value={`${SPOT_ORDER_LIFETIME_LABEL} after signing`}
-    />
-  );
-}
-
-/**
  * A market order larger than the book: the venue fills what rests and leaves the remainder working
  * at the signed limit until it expires. Muted rather than red — it is the venue behaving normally,
  * not the order being refused.
@@ -565,28 +545,20 @@ function MarketDepthNote({
 }
 
 /**
- * The two fee figures, and the trader needs both.
- *
- * `charged` is what the venue takes: its own published schedule, served by /v1/markets, so this
- * app never carries a second copy of the rate to disagree with. Null means the service reported no
- * schedule — the fee is then UNKNOWN, not zero, and the row is omitted rather than printing a
- * confident "0.00 USDC" that a market which does charge would make wrong by the whole fee.
- *
- * `ceiling` is the worstFee the order is signed with: the most that can be charged before
- * TradeModule reverts TM_FeeTooHigh. It is a bound, never a quote — an order that partly fills, or
- * rests and never takes, is charged less. It stays on screen next to the charge because it is the
- * number that decides whether the order can fill at all: a ceiling below the schedule reverts.
+ * The fee, on one row. `charged` is what the venue takes, from its own schedule on /v1/markets.
+ * When the service reports no schedule the fee is unknown, not zero, so the row falls back to
+ * `ceiling`, the most the order is signed to pay, as "Up to …" rather than printing a confident
+ * zero. The ceiling and the order's lifetime are still stated in the confirmation before signing.
  */
-function FeeRows({ ceiling, charged }: { ceiling: number; charged: number | null }) {
-  return (
-    <>
-      {charged === null ? null : <SummaryRow label="Fee" value={formatUsdcAmount(charged)} />}
-      <SummaryRow
-        label="Max fee"
-        tooltip="The most the order is signed to pay: a bound the venue reverts above, never a quote. An order that partly fills, or rests and never takes, is charged less."
-        value={formatUsdcAmount(ceiling)}
-      />
-    </>
+function FeeRow({ ceiling, charged }: { ceiling: number; charged: number | null }) {
+  return charged === null ? (
+    <SummaryRow
+      label="Fee"
+      tooltip="The venue did not report its fee schedule; this is the most the order is signed to pay"
+      value={`Up to ${formatUsdcAmount(ceiling)}`}
+    />
+  ) : (
+    <SummaryRow label="Fee" value={formatUsdcAmount(charged)} />
   );
 }
 
@@ -924,9 +896,8 @@ export function SpotOrderFormPanel({
            */}
           <div className="space-y-0.5">
             <SummaryRow emphasis label="Total" value={totalLabel} />
-            <FeeRows ceiling={takerFee} charged={feeFromVenue} />
+            <FeeRow ceiling={takerFee} charged={feeFromVenue} />
             <MarketFillRows averagePrice={averagePrice} isMarket={isMarket} />
-            <OrderLifetimeRow isMarket={isMarket} />
           </div>
 
           <MarketDepthNote fill={fill} hasShortfall={shortfallCurrency !== null} />
