@@ -88,7 +88,7 @@ export type HeaderMetricItem = {
   label: string;
   tooltip?: string;
   value: string;
-  tone: "up" | "down" | null;
+  tone: "up" | "down" | "accent" | null;
 };
 
 /** The header's Deposit and Withdraw buttons, and their placeholders, share one look. */
@@ -216,7 +216,8 @@ function HeaderMetrics({ publication }: { publication: TerminalHeaderPublication
           <span
             className={cn(
               metric.tone === "up" && "text-bid-text",
-              metric.tone === "down" && "text-ask-text"
+              metric.tone === "down" && "text-ask-text",
+              metric.tone === "accent" && "text-accent-text"
             )}
           >
             {metric.value}

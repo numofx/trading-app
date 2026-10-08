@@ -104,7 +104,8 @@ export type PerpHeaderMetric = {
   tooltip?: string;
   value: string;
   /** Coloured like a rise or a fall; null for a neutral figure. */
-  tone: "up" | "down" | null;
+  /** Up and down colour a figure by its sign; accent is the wallet blue, for the funding figures. */
+  tone: "up" | "down" | "accent" | null;
 };
 
 /** The account's margin on the perp stack, whether or not it holds a position. */
