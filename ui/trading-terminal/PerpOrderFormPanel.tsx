@@ -19,7 +19,9 @@ import {
   TRADING_PAUSED_MESSAGE,
 } from "@/lib/perp-market";
 import type { PerpAccountMargin, PerpPosition, PerpState } from "@/lib/perp-market.types";
+import { TOKEN_ICONS } from "@/lib/token-icons";
 import type { OrderBookLevel } from "@/lib/trading.types";
+import { SmartImage } from "@/ui/SmartImage";
 import { OrderTypeTabs } from "@/ui/trading-terminal/OrderTypeTabs";
 import { AvailableRow } from "@/ui/trading-terminal/order-form/AvailableRow";
 import { CheckboxRow } from "@/ui/trading-terminal/order-form/CheckboxRow";
@@ -178,7 +180,7 @@ function OrderSizeCard({
   const sliderValue = sliderDisabled ? 0 : Math.min(sizeCngn ?? 0, sliderMax);
   const fillPercent = (sliderValue / sliderMax) * 100;
   return (
-    <div className="space-y-3 rounded-lg bg-input-bg px-3 pt-2.5 pb-3 ring-1 ring-panel-border focus-within:ring-panel-text-muted">
+    <div className="space-y-3 border border-panel-border px-3 pt-2.5 pb-3 focus-within:border-panel-text-muted">
       <div className="flex items-start justify-between gap-3">
         <div className="flex shrink-0 flex-col items-start gap-2 pt-0.5">
           <FieldLabel htmlFor="perp-size" tooltip={tooltip}>
@@ -186,7 +188,7 @@ function OrderSizeCard({
           </FieldLabel>
           <button
             aria-label={`Size in ${unit}; switch to ${unit === "cNGN" ? "USDC" : "cNGN"}`}
-            className="flex cursor-pointer items-center gap-1.5 rounded-md bg-panel-bg px-2 py-1 font-semibold text-[12px] text-panel-text-active ring-1 ring-panel-border transition-colors hover:bg-input-hover disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex cursor-pointer items-center gap-1.5 border border-panel-border bg-input-bg px-2 py-1 font-semibold text-[12px] text-panel-text-active transition-colors hover:bg-input-hover disabled:cursor-not-allowed disabled:opacity-50"
             disabled={!canToggleUnit}
             onClick={onToggleUnit}
             title={
@@ -196,6 +198,11 @@ function OrderSizeCard({
             }
             type="button"
           >
+            <SmartImage<string>
+              alt=""
+              className="size-4 animate-none rounded-full"
+              src={TOKEN_ICONS[unit]}
+            />
             {unit}
             <ArrowLeftRight aria-hidden className="size-3 text-panel-text-muted" />
           </button>
@@ -239,7 +246,7 @@ function OrderSizeCard({
           />
         </div>
         <button
-          className="shrink-0 cursor-pointer rounded-md bg-panel-bg px-2.5 py-1 font-semibold text-[11px] text-panel-text-active ring-1 ring-panel-border transition-colors hover:bg-input-hover disabled:cursor-not-allowed disabled:opacity-40"
+          className="shrink-0 cursor-pointer border border-panel-border bg-input-bg px-2.5 py-1 font-semibold text-[11px] text-panel-text-active transition-colors hover:bg-input-hover disabled:cursor-not-allowed disabled:opacity-40"
           disabled={sliderDisabled}
           onClick={() => maxCngn !== null && onSetCngn(maxCngn)}
           title={
@@ -299,7 +306,7 @@ function PositionLeverageCard({
   const tone =
     leverage === null || leverage === 0 ? "text-panel-text-muted" : "text-panel-text-active";
   return (
-    <div className="flex items-center justify-between gap-2 rounded-lg bg-input-bg px-3 py-2.5 ring-1 ring-panel-border">
+    <div className="flex items-center justify-between gap-2 border border-panel-border px-3 py-2.5">
       <FieldLabel
         tooltip={`Your whole account's leverage after this order: the position's value at the ticket's price over the margin the SRM credits you (USDC in full, cNGN at its factor). The SRM opens up to ${state === null ? "its ceiling" : formatLeverage(state.maxLeverage)}; it margins the account together, so there is no per-position leverage to set.`}
       >
