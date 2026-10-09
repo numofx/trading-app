@@ -1090,9 +1090,11 @@ export function PerpMarketPanels({ market: renderedMarket }: { market: PerpMarke
               bids={bids}
               hasWallet={primaryWallet !== null}
               isAccepted={orderStatus.isAccepted}
+              isFilled={orderStatus.isFilled}
               isPreparingAccount={account.isLoading || (isSignedIn && !walletsReady)}
               isSubmitting={isSubmitting}
-              lastAction={orderStatus.status}
+              // The button reports acceptance and the fill; the line under it is for everything else.
+              lastAction={orderStatus.isFilled ? null : orderStatus.status}
               onConnect={login}
               onDepositRequest={() => transfer.openDeposit("USDC")}
               onEdit={orderStatus.clear}

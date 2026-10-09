@@ -538,6 +538,7 @@ type ButtonInputs = {
   canSubmit: boolean;
   hasWallet: boolean;
   isAccepted: boolean;
+  isFilled: boolean;
   isLive: boolean;
   isPreparingAccount: boolean;
   isPaused: boolean;
@@ -568,6 +569,9 @@ function submitLabel(inputs: ButtonInputs) {
   if (inputs.isAccepted) {
     return "Accepted";
   }
+  if (inputs.isFilled) {
+    return "Filled";
+  }
   if (inputs.availableMargin === null || inputs.shortfall !== null) {
     return "Deposit margin";
   }
@@ -575,8 +579,8 @@ function submitLabel(inputs: ButtonInputs) {
 }
 
 function isButtonEnabled(inputs: ButtonInputs) {
-  // Until the fill shows or the ticket is edited, so the same order is not sent twice.
-  if (!inputs.isLive || inputs.isAccepted) {
+  // Until the status clears or the ticket is edited, so the same order is not sent twice.
+  if (!inputs.isLive || inputs.isAccepted || inputs.isFilled) {
     return false;
   }
   return (
@@ -620,6 +624,7 @@ export function PerpOrderFormPanel({
   bids = [],
   hasWallet = false,
   isAccepted = false,
+  isFilled = false,
   isPreparingAccount = false,
   isSubmitting = false,
   lastAction = null,
@@ -642,6 +647,8 @@ export function PerpOrderFormPanel({
   hasWallet?: boolean;
   /** The venue accepted the last order and its fill has not shown yet. */
   isAccepted?: boolean;
+  /** The last order's fill has shown; cleared after a few seconds or on any edit. */
+  isFilled?: boolean;
   isPreparingAccount?: boolean;
   isSubmitting?: boolean;
   lastAction?: string | null;
@@ -720,6 +727,7 @@ export function PerpOrderFormPanel({
     canSubmit,
     hasWallet,
     isAccepted,
+    isFilled,
     isLive,
     side,
     isPreparingAccount,

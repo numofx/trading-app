@@ -43,6 +43,8 @@ export function useOrderStatus(fillSignature: string) {
   return {
     /** An order the venue accepted whose fill has not shown yet: the button reads "Accepted". */
     isAccepted: status !== null && status.awaitedSignature !== null && !filled,
+    /** The awaited order's fill has shown: the button reads "Filled" until the status clears. */
+    isFilled: filled,
     /** Something the trader should read; null once it has been read or edited away. */
     status: filled ? "Filled" : (status?.message ?? null),
     /** A step in flight, e.g. awaiting a signature, or an acceptance to watch for the fill of. */
