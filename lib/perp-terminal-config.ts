@@ -3,6 +3,7 @@ import {
   PERP_TRADE_HISTORY_COLUMNS,
 } from "@/lib/account-activity-views";
 import { MARKET_LABELS } from "@/lib/market-labels";
+import { PERP_FUNDING_HISTORY_COLUMNS } from "@/lib/perp-funding-history";
 import { PERP_BALANCES_COLUMNS, PERP_POSITIONS_COLUMNS } from "@/lib/perp-market";
 import type { ActivityTab, ActivityView } from "@/lib/trading.types";
 
@@ -27,12 +28,8 @@ export const PERP_BOTTOM_TABS = [
  */
 export const PERP_ACTIVITY_VIEWS = {
   balances: { columns: [...PERP_BALANCES_COLUMNS], rows: [] },
-  /**
-   * Headers only, and always: the PerpAsset accrues funding continuously on chain, with no
-   * settlement moments, and markets-service publishes no per-account funding payments. Until it
-   * does, the tab says so rather than inventing a ledger.
-   */
-  "funding-history": { columns: ["Time", "Market", "Rate", "Payment", "Position"], rows: [] },
+  // Read from the PerpAsset's own events by the terminal; markets-service publishes no funding.
+  "funding-history": { columns: [...PERP_FUNDING_HISTORY_COLUMNS], rows: [] },
   // The venue keeps one order and fill history per owner across every market, labelled by
   // market; the perp's history tabs have their own columns over the same rows.
   "order-history": { columns: [...PERP_ORDER_HISTORY_COLUMNS], rows: [] },

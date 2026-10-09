@@ -16,6 +16,7 @@ import {
 import { formatBalance } from "@/lib/account-balance-display";
 import { getAppChain } from "@/lib/base-public-client";
 import { marketPath } from "@/lib/market-routes";
+import { fundingHistoryViewOf } from "@/lib/perp-funding-history";
 import {
   buildPerpBalancesView,
   buildPerpHeaderMetrics,
@@ -71,6 +72,7 @@ import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel
 import { useAccountTransfer } from "@/ui/trading-terminal/useAccountTransfer";
 import { useLiveMarketBook } from "@/ui/trading-terminal/useLiveMarketBook";
 import { useOrderStatus } from "@/ui/trading-terminal/useOrderStatus";
+import { usePerpFundingHistory } from "@/ui/trading-terminal/usePerpFundingHistory";
 import { usePerpLiveState } from "@/ui/trading-terminal/usePerpLiveState";
 import { readPerpPositions, usePerpPositions } from "@/ui/trading-terminal/usePerpPositions";
 import { useSignedHistoryTabs } from "@/ui/trading-terminal/useSignedHistoryTabs";
@@ -345,6 +347,8 @@ function withCounts(
 type ActivityInputs = {
   account: PerpAccountMargin | null;
   bottomTab: PerpBottomTab;
+  /** The account's funding, once read from chain; null until then. */
+  fundingHistoryView: ActivityView | null;
   /** The open signed history tab's rows once loaded; null on any other tab or state. */
   signedHistoryView: ActivityView | null;
   market: PerpMarket | null;
@@ -368,7 +372,7 @@ function buildActivityView(inputs: ActivityInputs): ActivityView {
     });
   }
   if (inputs.bottomTab === "funding-history") {
-    return PERP_ACTIVITY_VIEWS["funding-history"];
+    return inputs.fundingHistoryView ?? PERP_ACTIVITY_VIEWS["funding-history"];
   }
   if (inputs.bottomTab === "order-history" || inputs.bottomTab === "trade-history") {
     return perpActivityView(
@@ -497,12 +501,6 @@ function buildEmptyState(
   if (signedHistoryEmptyState !== undefined) {
     return signedHistoryEmptyState;
   }
-  if (bottomTab === "funding-history") {
-    return {
-      body: "Funding accrues continuously on chain at the rate in the header; there is no settlement to list. The venue does not yet publish funding payments per account.",
-      title: "No funding history",
-    };
-  }
   if (market === null) {
     return {
       body: "Perp trading isn't live yet.",
@@ -519,7 +517,22 @@ function buildEmptyState(
   if (bottomTab === "positions") {
     return { body: "Positions you open will appear here.", title: "No positions" };
   }
+  if (bottomTab === "funding-history") {
+    return {
+      body: "Funding accrues on an open position at the rate in the header and is booked to the account each time it trades or settles.",
+      title: "No funding history",
+    };
+  }
   return undefined;
+}
+
+/** The open position in whole cNGN as the PerpAsset holds it: positive long, 0 with none. */
+function signedEngineSize(positions: PerpPosition[]) {
+  const position = positions[0];
+  if (position?.engineSize == null) {
+    return 0n;
+  }
+  return position.uiSide === "long" ? position.engineSize : -position.engineSize;
 }
 
 /**
@@ -787,6 +800,12 @@ export function PerpMarketPanels({ market: renderedMarket }: { market: PerpMarke
     subaccountId: market === null ? null : session.account.subaccountId,
   };
   const perpAccount = usePerpPositions(account.subaccountId);
+  const funding = usePerpFundingHistory({
+    enabled: bottomTab === "funding-history",
+    perp: market === null ? null : market.stack.assetAddress,
+    size: signedEngineSize(perpAccount.positions),
+    subaccountId: account.subaccountId,
+  });
   const orderStatus = useOrderStatus(positionsSignature(perpAccount.positions));
   // The account's ledger, as spot reads it: the transfer dialog's withdraw side draws its balances
   // and Max from these rows. Same account, same escrows, since the unified-account cutover.
@@ -1018,6 +1037,7 @@ export function PerpMarketPanels({ market: renderedMarket }: { market: PerpMarke
             activityView={buildActivityView({
               account: perpAccount.account,
               bottomTab,
+              fundingHistoryView: fundingHistoryViewOf(funding, PERP_MARKET_LABEL),
               signedHistoryView: signedHistory.view,
               market,
               positions: perpAccount.positions,

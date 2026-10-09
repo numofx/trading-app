@@ -841,6 +841,11 @@ function formatChange(change: number, changePercent: number) {
   return `${signedPrice(change)} (${percent})`;
 }
 
+/** An hourly funding rate, given as a fraction, as the header prints it: "-0.0017%". */
+export function formatPerpRate(rate: number) {
+  return signedPercent(rate * 100, 4);
+}
+
 function signedPercent(value: number, digits: number) {
   return `${value < 0 ? "-" : "+"}${Math.abs(value).toFixed(digits)}%`;
 }
