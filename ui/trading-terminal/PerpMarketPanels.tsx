@@ -707,7 +707,7 @@ function usePerpBook(market: PerpMarket | null) {
   const price = market
     ? (getAnchorPrice(book.bestAsk, book.bestBid, book.lastPrice) ?? market.state.markPrice)
     : null;
-  const stats = get24hStats(book.stats24h, price);
+  const stats = get24hStats(book.stats24h, book.lastPrice);
   return {
     asks: book.asks,
     bestAsk: book.bestAsk,

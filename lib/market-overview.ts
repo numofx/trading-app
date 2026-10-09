@@ -40,7 +40,7 @@ export function emptyOverviewRow(id: TerminalMarketId): MarketOverviewRow {
 /**
  * The selector's figures for one market, derived exactly as that market's own header derives
  * them: the price is the book's mid (else one side, else the last trade), the change is measured
- * from the window's first trade to that price, and the volume is the window's USDC notional.
+ * from the window's first trade to the last, and the volume is the window's USDC notional.
  * `markPrice` is the perp's fallback when nothing rests and nothing traded; spot has none.
  */
 export function buildOverviewRow(
@@ -55,7 +55,7 @@ export function buildOverviewRow(
   const lastPrice = getVenueLastPrice(market.trades, market.candles, market.mark);
   const { bestAsk, bestBid } = getBestPrices(market.orderBookAsks, market.orderBookBids);
   const price = getAnchorPrice(bestAsk, bestBid, lastPrice) ?? perp?.markPrice ?? null;
-  const { changePercent } = get24hStats(market.stats24h, price);
+  const { changePercent } = get24hStats(market.stats24h, lastPrice);
   return {
     changePercent24h: changePercent,
     fundingRate1h: perp?.uiLongFundingRate1h ?? null,

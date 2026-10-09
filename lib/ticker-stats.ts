@@ -64,9 +64,12 @@ export function getVenueLastPrice(trades: TradePrint[], candles: Candle[], mark:
  * still inside the window — at 2026-09-14 00:13Z, six trades from the previous 7.5 hours all read
  * "—". The venue computes its window from the fills themselves, so it holds at any hour.
  *
- * Change is measured to the live last price, so a trade streamed after the page rendered still
- * moves it. High, low and volume are as of the render. With no stats, or nothing traded in the
- * window, each figure is blank rather than guessed; the last price is reported separately.
+ * Change is measured from the window's first trade to the live last trade, as the venue measures
+ * it, so a trade streamed after the page rendered still moves it. Not to the header's price: that
+ * is the book's mid, and on 2026-10-09 a buy that lifted three asks to 0.0007392 (+0.30%) read
+ * -0.20% beside a mid of 0.0007356 that the maker had re-quoted below the window's first trade.
+ * High, low and volume are as of the render. With no stats, or nothing traded in the window, each
+ * figure is blank rather than guessed.
  */
 export function get24hStats(stats: Stats24h | null, lastPrice: number | null) {
   const firstPrice = stats?.firstPrice ?? null;
