@@ -730,12 +730,12 @@ function positionsSignature(positions: PerpPosition[]) {
 /** The header's figures for the perp on screen, or dashes while it is not live. */
 function perpHeaderMetrics(
   market: PerpMarket | null,
-  price: number | null,
+  lastPrice: number | null,
   volumeUsd: number | null
 ) {
   return buildPerpHeaderMetrics({
     firstPrice: market?.stats24h?.firstPrice ?? null,
-    price,
+    lastPrice,
     state: market?.state ?? null,
     volumeUsd,
   });
@@ -1003,7 +1003,7 @@ export function PerpMarketPanels({ market: renderedMarket }: { market: PerpMarke
     low24h: stats.low,
     market: "perp",
     maxLeverage: market?.state.maxLeverage ?? null,
-    metrics: perpHeaderMetrics(market, price, volumeUsd),
+    metrics: perpHeaderMetrics(market, lastPrice, volumeUsd),
     price,
     volume24hLabel: stats.volumeLabel,
   });

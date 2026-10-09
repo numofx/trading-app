@@ -876,7 +876,7 @@ export function buildPerpOverviewMetrics(row: {
 }): PerpHeaderMetric[] {
   const live = buildPerpHeaderMetrics({
     firstPrice: null,
-    price: null,
+    lastPrice: null,
     state: null,
     volumeUsd: null,
   });
@@ -905,7 +905,7 @@ export function buildPerpOverviewMetrics(row: {
 
 /**
  * The perp header's figures, in the order a perp trader reads them: mark and index from the chain,
- * the day's move against the live price, volume, open interest, the hourly funding rate and that
+ * the day's move to the last trade, volume, open interest, the hourly funding rate and that
  * rate annualised. Every figure is the venue's own; a missing one is a dash. There is no market
  * cap: a stablecoin FX perp has no supply to value. There is no funding countdown either: the PerpAsset contract
  * accrues funding continuously (`aggregatedFunding += rate × elapsed / 1 hour` on every touch),
@@ -913,19 +913,22 @@ export function buildPerpOverviewMetrics(row: {
  */
 export function buildPerpHeaderMetrics({
   firstPrice,
-  price,
+  lastPrice,
   state,
   volumeUsd,
 }: {
   /** The 24h window's first trade, which the change is measured from. */
   firstPrice: number | null;
-  /** The live price the change is measured to: the book's mid, else the mark. */
-  price: number | null;
+  /**
+   * The live last trade the change is measured to, as the venue measures it. Not the book's mid:
+   * a mid the maker re-quotes after a fill can sit on the other side of the window's first trade.
+   */
+  lastPrice: number | null;
   state: PerpState | null;
   /** The 24h window's quote volume in USDC; null when nothing traded or the window is unknown. */
   volumeUsd: number | null;
 }): PerpHeaderMetric[] {
-  const change = firstPrice !== null && price !== null ? price - firstPrice : null;
+  const change = firstPrice !== null && lastPrice !== null ? lastPrice - firstPrice : null;
   const changePercent =
     change !== null && firstPrice !== null && firstPrice > 0 ? (change / firstPrice) * 100 : null;
   const funding = state?.uiLongFundingRate1h ?? null;
