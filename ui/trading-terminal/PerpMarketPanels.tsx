@@ -1002,6 +1002,7 @@ export function PerpMarketPanels({ market: renderedMarket }: { market: PerpMarke
     high24h: stats.high,
     low24h: stats.low,
     market: "perp",
+    maxLeverage: market?.state.maxLeverage ?? null,
     metrics: perpHeaderMetrics(market, price, volumeUsd),
     price,
     volume24hLabel: stats.volumeLabel,

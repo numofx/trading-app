@@ -22,6 +22,8 @@ export type TerminalHeaderPublication = {
    */
   price: number | null;
   volume24hLabel: string;
+  /** The venue's leverage ceiling, shown beside the selector; absent on spot. */
+  maxLeverage?: number | null;
   /** Figures to show instead of the spot set: the perp's mark, index, funding and the rest. */
   metrics?: HeaderMetricItem[];
   /** The market's Deposit and Withdraw controls; rendered inside the header's action cluster. */

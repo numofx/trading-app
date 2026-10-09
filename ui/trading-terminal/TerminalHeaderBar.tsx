@@ -6,6 +6,7 @@ import { Fragment, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatDollarPrice } from "@/lib/market-formatting";
 import type { TerminalMarketId } from "@/lib/market-overview.types";
+import { formatLeverage } from "@/lib/perp-market";
 import { PrivyWalletButton } from "@/ui/PrivyWalletButton";
 import { SmartImage } from "@/ui/SmartImage";
 import { MarketSelectDialog } from "@/ui/trading-terminal/MarketSelectDialog";
@@ -283,6 +284,15 @@ export function TerminalHeaderBar({
         market={market}
         price={price}
       />
+
+      {publication?.maxLeverage == null ? null : (
+        <span
+          className="shrink-0 rounded-lg bg-panel-text/20 px-2 py-1 font-medium text-panel-text-active text-sm leading-none"
+          title="The most leverage the venue opens a position at"
+        >
+          {formatLeverage(publication.maxLeverage)}
+        </span>
+      )}
 
       {/*
        * Spacing separates the metrics, not rules — the one divider above marks the app/market
