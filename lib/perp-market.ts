@@ -832,6 +832,15 @@ function signedPrice(value: number) {
   return `${value < 0 ? "-" : "+"}${formatPrice(Math.abs(value), PRICE_DECIMALS)}`;
 }
 
+/** The move and its percentage; the percentage alone when the move prints as zero ("-0.0000000"). */
+function formatChange(change: number, changePercent: number) {
+  const percent = signedPercent(changePercent, 2);
+  if (Number(Math.abs(change).toFixed(PRICE_DECIMALS)) === 0) {
+    return percent;
+  }
+  return `${signedPrice(change)} (${percent})`;
+}
+
 function signedPercent(value: number, digits: number) {
   return `${value < 0 ? "-" : "+"}${Math.abs(value).toFixed(digits)}%`;
 }
@@ -948,10 +957,7 @@ export function buildPerpHeaderMetrics({
     {
       label: "24h Change",
       tone: toneOf(change),
-      value:
-        change === null || changePercent === null
-          ? "—"
-          : `${signedPrice(change)} (${signedPercent(changePercent, 2)})`,
+      value: change === null || changePercent === null ? "—" : formatChange(change, changePercent),
     },
     { label: "24h Volume", tone: null, value: formatCompactUsd(volumeUsd ?? Number.NaN) },
     {
