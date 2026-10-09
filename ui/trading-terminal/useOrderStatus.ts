@@ -7,7 +7,8 @@ const SETTLED_CLEAR_MS = Duration.toMillis("5 seconds");
 const FALLBACK_CLEAR_MS = Duration.toMillis("30 seconds");
 
 type Status = {
-  message: string;
+  /** Null for an acceptance the submit button reports itself, with no line under it. */
+  message: string | null;
   /** What the account looked like when the order was accepted; a change means it filled. */
   awaitedSignature: string | null;
   /** A terminal message (filled, rejected): cleared sooner than one still waiting on the venue. */
@@ -40,10 +41,12 @@ export function useOrderStatus(fillSignature: string) {
   }, [status, settled]);
 
   return {
+    /** An order the venue accepted whose fill has not shown yet: the button reads "Accepted". */
+    isAccepted: status !== null && status.awaitedSignature !== null && !filled,
     /** Something the trader should read; null once it has been read or edited away. */
     status: filled ? "Filled" : (status?.message ?? null),
     /** A step in flight, e.g. awaiting a signature, or an acceptance to watch for the fill of. */
-    announce(message: string, options: { awaitFill?: boolean } = {}) {
+    announce(message: string | null, options: { awaitFill?: boolean } = {}) {
       setStatus({
         awaitedSignature: options.awaitFill ? fillSignature : null,
         message,

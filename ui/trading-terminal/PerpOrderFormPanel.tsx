@@ -537,6 +537,7 @@ type ButtonInputs = {
   availableMargin: number | null;
   canSubmit: boolean;
   hasWallet: boolean;
+  isAccepted: boolean;
   isLive: boolean;
   isPreparingAccount: boolean;
   isPaused: boolean;
@@ -564,6 +565,9 @@ function submitLabel(inputs: ButtonInputs) {
   if (inputs.isSubmitting) {
     return "Submitting…";
   }
+  if (inputs.isAccepted) {
+    return "Accepted";
+  }
   if (inputs.availableMargin === null || inputs.shortfall !== null) {
     return "Deposit margin";
   }
@@ -571,7 +575,8 @@ function submitLabel(inputs: ButtonInputs) {
 }
 
 function isButtonEnabled(inputs: ButtonInputs) {
-  if (!inputs.isLive) {
+  // Until the fill shows or the ticket is edited, so the same order is not sent twice.
+  if (!inputs.isLive || inputs.isAccepted) {
     return false;
   }
   return (
@@ -614,6 +619,7 @@ export function PerpOrderFormPanel({
   availableMargin = null,
   bids = [],
   hasWallet = false,
+  isAccepted = false,
   isPreparingAccount = false,
   isSubmitting = false,
   lastAction = null,
@@ -634,6 +640,8 @@ export function PerpOrderFormPanel({
   /** The perp account's initial-margin surplus, USD; null before an account exists or is read. */
   availableMargin?: number | null;
   hasWallet?: boolean;
+  /** The venue accepted the last order and its fill has not shown yet. */
+  isAccepted?: boolean;
   isPreparingAccount?: boolean;
   isSubmitting?: boolean;
   lastAction?: string | null;
@@ -711,6 +719,7 @@ export function PerpOrderFormPanel({
     availableMargin,
     canSubmit,
     hasWallet,
+    isAccepted,
     isLive,
     side,
     isPreparingAccount,

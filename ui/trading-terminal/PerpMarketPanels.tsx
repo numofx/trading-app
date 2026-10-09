@@ -866,7 +866,7 @@ export function PerpMarketPanels({ market: renderedMarket }: { market: PerpMarke
       orderStatus.announce(
         request.reduceOnly
           ? "Reduce-only order accepted. The venue clamps it to your position; it fills or is cancelled once matched."
-          : "Order accepted. Positions update once it fills.",
+          : null,
         { awaitFill: true }
       );
       perpAccount.refresh();
@@ -1089,6 +1089,7 @@ export function PerpMarketPanels({ market: renderedMarket }: { market: PerpMarke
               availableMargin={perpAccount.account?.initialMarginSurplus ?? null}
               bids={bids}
               hasWallet={primaryWallet !== null}
+              isAccepted={orderStatus.isAccepted}
               isPreparingAccount={account.isLoading || (isSignedIn && !walletsReady)}
               isSubmitting={isSubmitting}
               lastAction={orderStatus.status}
