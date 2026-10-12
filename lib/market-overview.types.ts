@@ -1,7 +1,8 @@
 /** Which market's panels render under the shell; each has its own slug under `/trade`. */
 export type TerminalMarketId = "spot" | "perp";
 
-export type TerminalMarketKind = "spot" | "perp";
+/** The selector's tabs. Futures is behind `NEXT_PUBLIC_FUTURES_TAB` and lists nothing until the venue serves a future. */
+export type TerminalMarketKind = "spot" | "perp" | "futures";
 
 /** A market the selector offers: its route, display symbol and which tab it lists under. */
 export type TerminalMarketEntry = {

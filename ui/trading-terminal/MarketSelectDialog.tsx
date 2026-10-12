@@ -12,6 +12,7 @@ import {
   formatOpenInterest,
   formatOverviewVolume,
   getTerminalMarket,
+  isFuturesTabEnabled,
   TERMINAL_MARKETS,
 } from "@/lib/market-overview";
 import type {
@@ -27,6 +28,7 @@ import { useMarketOverview } from "@/ui/trading-terminal/useMarketOverview";
 const TABS = [
   { kind: "spot", label: "Spot" },
   { kind: "perp", label: "Perp" },
+  { kind: "futures", label: "Futures" },
 ] as const satisfies readonly { kind: TerminalMarketKind; label: string }[];
 
 /**
@@ -35,6 +37,8 @@ const TABS = [
  * and the change and no more.
  */
 const GRID_CLASS = {
+  futures:
+    "grid-cols-[minmax(0,2.8fr)_minmax(0,1.05fr)_minmax(0,1.15fr)_1rem] md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_1rem]",
   perp: "grid-cols-[minmax(0,2.8fr)_minmax(0,1.05fr)_minmax(0,1.15fr)_1rem] md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_1rem]",
   spot: "grid-cols-[minmax(0,2.8fr)_minmax(0,1.05fr)_minmax(0,1.15fr)_1rem] md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_1rem]",
 } satisfies Record<TerminalMarketKind, string>;
@@ -190,7 +194,7 @@ function MarketRow({
 }
 
 /**
- * The header's market pill and the market dialog it opens: a Spot/Perp tab row with the close
+ * The header's market pill and the market dialog it opens: a Spot/Perp/Futures tab row with the close
  * control, and a table of the markets under the active tab with the venue's figures. Choosing a
  * row navigates to that market's route. Escape, the backdrop and the X all close it; the body
  * does not scroll behind it. Below `md` it rises as a bottom sheet rather than a centred card.
@@ -246,13 +250,13 @@ export function MarketSelectDialog({
           <Dialog.Title className="sr-only">Select a market</Dialog.Title>
 
           {/*
-           * The Spot/Perp tabs in the terminal's own tab style (see PanelTabs): underlined text on
+           * The Spot/Perp/Futures tabs in the terminal's own tab style (see PanelTabs): underlined text on
            * one rule, left-aligned, the active tab bright, never a filled pill. The close control
            * rides the right end of the same row.
            */}
           <div className="mx-5 my-3 flex items-center justify-between gap-3 border-panel-border border-b">
             <div aria-label="Market type" className="flex gap-6" role="tablist">
-              {TABS.map((tab) => (
+              {TABS.filter((tab) => tab.kind !== "futures" || isFuturesTabEnabled()).map((tab) => (
                 <button
                   aria-selected={tab.kind === kind}
                   className={cn(
@@ -284,7 +288,9 @@ export function MarketSelectDialog({
           <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
             <ColumnHeaders kind={kind} />
             {entries.length === 0 ? (
-              <p className="py-8 text-center text-[13px] text-panel-text-muted">No markets found</p>
+              <p className="py-8 text-center text-[13px] text-panel-text-muted">
+                {kind === "futures" ? "No futures markets listed yet" : "No markets found"}
+              </p>
             ) : (
               <div className="pt-1">
                 {entries.map((entry) => (

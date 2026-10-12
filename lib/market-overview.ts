@@ -21,6 +21,14 @@ export const TERMINAL_MARKETS = [
   { href: marketPath("perp"), id: "perp", kind: "perp", symbol: PERP_MARKET_LABEL },
 ] as const satisfies readonly TerminalMarketEntry[];
 
+/**
+ * Whether the selector shows its Futures tab. Off unless `NEXT_PUBLIC_FUTURES_TAB=true`: no futures
+ * market is enabled on the venue yet, so the tab stays hidden until one is.
+ */
+export function isFuturesTabEnabled() {
+  return process.env.NEXT_PUBLIC_FUTURES_TAB?.trim().toLowerCase() === "true";
+}
+
 export function getTerminalMarket(id: TerminalMarketId): TerminalMarketEntry {
   return TERMINAL_MARKETS.find((entry) => entry.id === id) ?? TERMINAL_MARKETS[0];
 }
