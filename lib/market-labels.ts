@@ -5,7 +5,9 @@
  *
  * Since 2026-10-08 the identifier is the display name: `cNGN-USDC` and `cNGN-PERP`. The venue
  * accepts the pre-rename `USDCcNGN-SPOT` / `USDCcNGN-PERP` as deprecated aliases until
- * 2027-01-06, but never emits them, so nothing here needs to know them.
+ * 2027-01-06, but never emits them, so nothing here needs to know them. A dated future is shown
+ * under the venue's own `USDC-cNGN-<DDMONYY>` symbol, which changes every series, so it is not
+ * listed here: it is quoted cNGN per USDC, the other way up.
  */
 export const MARKET_LABELS = {
   "cNGN-PERP": "cNGN-PERP",

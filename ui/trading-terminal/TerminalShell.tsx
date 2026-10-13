@@ -4,9 +4,10 @@ import { Duration } from "effect";
 import { useSelectedLayoutSegment } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect } from "react";
+import { buildFutureOverviewMetrics } from "@/lib/future-market";
 import { formatOverviewVolume } from "@/lib/market-overview";
 import type { MarketOverviewRow, TerminalMarketId } from "@/lib/market-overview.types";
-import { marketIdForSlug } from "@/lib/market-routes";
+import { resolveSegment } from "@/lib/market-routes";
 import { buildPerpOverviewMetrics } from "@/lib/perp-market";
 import { TerminalHeaderBar } from "@/ui/trading-terminal/TerminalHeaderBar";
 import type { TerminalHeaderPublication } from "@/ui/trading-terminal/TerminalHeaderSlot";
@@ -33,13 +34,15 @@ export function TerminalShell({
   market?: TerminalMarketId;
 }) {
   const segment = useSelectedLayoutSegment();
-  const market = marketOverride ?? marketIdForSlug(segment) ?? "spot";
+  const selection = resolveSegment(segment);
+  const market = marketOverride ?? selection?.id ?? "spot";
+  const futureSymbol = selection?.id === "future" ? selection.symbol : null;
 
   return (
     <TerminalHeaderSlotProvider>
       <TerminalSessionProvider>
         <main className="flex min-h-screen flex-col bg-terminal-bg text-foreground transition-colors duration-300 md:h-dvh md:overflow-hidden">
-          <ShellHeader market={market} />
+          <ShellHeader futureSymbol={futureSymbol} market={market} />
           {children}
         </main>
       </TerminalSessionProvider>
@@ -55,6 +58,14 @@ const OVERVIEW_SEED_MAX_AGE_MS = Duration.toMillis("2 minutes");
  * commit right after hydration, well inside this, so the load never fires a read of its own.
  */
 const SEED_READ_DELAY_MS = Duration.toMillis("50 millis");
+
+/** The perp's and the future's own header figures from a selector row; spot shows the default set. */
+function seededMetrics(market: TerminalMarketId, row: MarketOverviewRow) {
+  if (market === "perp") {
+    return buildPerpOverviewMetrics(row);
+  }
+  return market === "future" ? buildFutureOverviewMetrics(row, Date.now()) : undefined;
+}
 
 /**
  * The header's figures for a market whose panels have not published yet, from the selector's last
@@ -74,7 +85,7 @@ function seedFromOverview(
     high24h: null,
     low24h: null,
     market,
-    metrics: market === "perp" ? buildPerpOverviewMetrics(row) : undefined,
+    metrics: seededMetrics(market, row),
     price: row.price,
     seeded: true,
     volume24hLabel: formatOverviewVolume(row.volume24hUsd),
@@ -87,7 +98,13 @@ function seedFromOverview(
  * stale one) reads as "not published yet", and the header shows the selector's figures for the
  * selected market, or its skeleton, until the panels publish the live set.
  */
-function ShellHeader({ market }: { market: TerminalMarketId }) {
+function ShellHeader({
+  futureSymbol,
+  market,
+}: {
+  futureSymbol: string | null;
+  market: TerminalMarketId;
+}) {
   const publication = useTerminalHeaderPublication();
   const live = publication?.market === market ? publication : null;
   const cachedRow = useCachedOverviewRow(market, OVERVIEW_SEED_MAX_AGE_MS);
@@ -102,6 +119,10 @@ function ShellHeader({ market }: { market: TerminalMarketId }) {
   }, [unpublished]);
 
   return (
-    <TerminalHeaderBar market={market} publication={live ?? seedFromOverview(market, cachedRow)} />
+    <TerminalHeaderBar
+      futureSymbol={futureSymbol}
+      market={market}
+      publication={live ?? seedFromOverview(market, cachedRow)}
+    />
   );
 }

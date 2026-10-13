@@ -77,6 +77,7 @@ import { usePerpLiveState } from "@/ui/trading-terminal/usePerpLiveState";
 import { readPerpPositions, usePerpPositions } from "@/ui/trading-terminal/usePerpPositions";
 import { useSignedHistoryTabs } from "@/ui/trading-terminal/useSignedHistoryTabs";
 import { useSubaccountBalance } from "@/ui/trading-terminal/useSubaccountBalance";
+import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
 
 type PerpBottomTab = keyof typeof PERP_ACTIVITY_VIEWS;
 
@@ -460,6 +461,24 @@ function cngnMarginPause(stack: PerpStack | null): Partial<Record<DepositCurrenc
   return { cNGN: "The venue is not taking cNGN margin deposits right now. USDC is open." };
 }
 
+const WIND_DOWN_DEPOSIT_PAUSE =
+  "The perp is winding down and opens no new accounts. Spot and futures trade from your trading account.";
+
+/**
+ * Deposits the perp will not take: none into a new account while it winds down, since that account
+ * could never open a position; otherwise cNGN while its escrow is closed. A top-up to an account
+ * already holding a position stays open, so it can be kept above maintenance while it closes.
+ */
+function perpDepositPause(
+  market: PerpMarket | null,
+  subaccountId: string | null
+): Partial<Record<DepositCurrency, string>> {
+  if (market?.state.closeOnly && subaccountId === null) {
+    return { cNGN: WIND_DOWN_DEPOSIT_PAUSE, USDC: WIND_DOWN_DEPOSIT_PAUSE };
+  }
+  return cngnMarginPause(market?.stack ?? null);
+}
+
 /**
  * What a cNGN margin depositor must know before posting it: the haircut, and that the haircut is
  * what liquidates a leveraged short as the naira strengthens.
@@ -512,7 +531,12 @@ function buildEmptyState(
     return undefined;
   }
   if (subaccountId === null) {
-    return { body: "Deposit margin to open your perp account.", title: "No perp account" };
+    return market.state.closeOnly
+      ? {
+          body: "This wallet has no perp account to close or withdraw from.",
+          title: "No perp account",
+        }
+      : { body: "Deposit margin to open your perp account.", title: "No perp account" };
   }
   if (bottomTab === "positions") {
     return { body: "Positions you open will appear here.", title: "No positions" };
@@ -571,9 +595,9 @@ const ROW_BUTTON_CLASSES =
  * Deposit, Withdraw and Swap at the end of each Balances row, Deposit and Withdraw opening the
  * account's one transfer dialog on the row's asset. The rows run cash, each collateral asset held,
  * then each listed but not held, which can only be deposited. Swap opens the spot cNGN-USDC market,
- * the venue's one way to exchange the two. Since the unified-account cutover (2026-10-04) spot
- * trades on the perp stack from this same account, so a spot fill settles straight into these
- * balances: the USDC is the account's cash and the cNGN its collateral.
+ * the venue's one way to exchange the two. Spot trades from the wallet's MarginEngine account
+ * since 2026-10-13, not this one, so a swap settles there; balances left here from spot fills
+ * between 2026-10-04 and 2026-10-13 withdraw from these rows.
  */
 function buildBalanceRowAction(
   account: PerpAccountMargin | null,
@@ -599,7 +623,7 @@ function buildBalanceRowAction(
         <SmartLink
           className={ROW_BUTTON_CLASSES}
           href={marketPath("spot")}
-          title="Trade cNGN for USDC, or back, on the spot market. Spot and the perp share this account, so the swap settles straight into these balances."
+          title="Trade cNGN for USDC, or back, on the spot market. Spot settles into your trading account, not this perp account."
         >
           Swap
         </SmartLink>
@@ -735,6 +759,29 @@ function usePerpBook(market: PerpMarket | null) {
   };
 }
 
+/**
+ * The perp's own account, under its SRM, where the perp winds down: the shell's trading account
+ * lives under the MarginEngine since 2026-10-13, and the perp never moves there. `perpLookup` is the lookup itself, for
+ * the transfer dialog to adopt a new account into; `account` reads as none while the perp is not
+ * live, as the wallet does.
+ */
+function usePerpAccount(market: PerpMarket | null, walletAddress: string | null) {
+  const stack = market?.stack ?? null;
+  const perpLookup = useTradingSubaccount(
+    walletAddress,
+    stack === null ? undefined : { depositAsset: stack.cashAddress, manager: stack.srmAddress }
+  );
+  const live = market !== null;
+  return {
+    account: {
+      ...perpLookup,
+      isLoading: live && perpLookup.isLoading,
+      subaccountId: live ? perpLookup.subaccountId : null,
+    },
+    perpLookup,
+  };
+}
+
 /** What a fill changes on the perp: the account's positions, by side and engine size. */
 function positionsSignature(positions: PerpPosition[]) {
   return positions.map((p) => `${p.uiSide}:${p.engineSize ?? p.uiSize}`).join("|");
@@ -756,8 +803,9 @@ function perpHeaderMetrics(
 
 /**
  * The cNGN-PERP market under the shell, on the same grid as spot so switching markets does not
- * move the panels. The session (wallet, trading account) is the shell's; since the unified-account
- * cutover the perp margins the same account spot settles into.
+ * move the panels. The perp is winding down: close-only on its accounts under its SRM, then
+ * withdrawals. It is out of the selector, reached at `/perp`. The wallet is the shell's; the
+ * account is the perp's own, since the shell's trading account is under the MarginEngine.
  *
  * `market` is null until markets-service lists the perp with its chain state and stack; the
  * panels then render every empty state and a ticket that cannot submit. With it, the book streams,
@@ -792,13 +840,7 @@ export function PerpMarketPanels({ market: renderedMarket }: { market: PerpMarke
     orderHistoryView: (orders) => buildPerpOrderHistoryActivityView(orders, PERP_MARKET_LABEL),
     tradeHistoryView: (fills) => buildPerpTradeHistoryActivityView(fills, PERP_MARKET_LABEL),
   });
-  // The shell's account, resolved under the configured stack; the build check holds that equal to
-  // the venue's perp stack. Unread while the perp is not live, as the wallet is.
-  const account = {
-    ...session.account,
-    isLoading: market !== null && session.account.isLoading,
-    subaccountId: market === null ? null : session.account.subaccountId,
-  };
+  const { account, perpLookup } = usePerpAccount(market, primaryWallet?.address ?? null);
   const perpAccount = usePerpPositions(account.subaccountId);
   const funding = usePerpFundingHistory({
     enabled: bottomTab === "funding-history",
@@ -807,15 +849,18 @@ export function PerpMarketPanels({ market: renderedMarket }: { market: PerpMarke
     subaccountId: account.subaccountId,
   });
   const orderStatus = useOrderStatus(positionsSignature(perpAccount.positions));
-  // The account's ledger, as spot reads it: the transfer dialog's withdraw side draws its balances
-  // and Max from these rows. Same account, same escrows, since the unified-account cutover.
+  // The perp account's ledger: the transfer dialog's withdraw side draws its balances and Max from
+  // these rows. Same escrows as the trading account, a different account.
   const ledger = useSubaccountBalance(account.subaccountId);
-  // The account's one Deposit / Withdraw flow, the same dialog spot opens. The perp adds only what
-  // a margin depositor must know: whether the venue is taking cNGN margin, and its haircut.
+  // The same Deposit / Withdraw dialog spot opens, aimed at the perp's account and manager. The
+  // perp adds only what a margin depositor must know: whether the venue is taking cNGN margin, and
+  // its haircut.
   const transfer = useAccountTransfer({
+    account: perpLookup,
     accountRows: ledger.balance?.rows ?? null,
+    depositManager: stack?.srmAddress,
     depositNotes: cngnMarginNote(stack),
-    depositPauseReasons: cngnMarginPause(stack),
+    depositPauseReasons: perpDepositPause(market, account.subaccountId),
     onTransferred: (blockNumber) => {
       ledger.refresh(blockNumber);
       perpAccount.refresh();

@@ -226,6 +226,13 @@ export type OrderMarketOverride = {
   tradeModuleAddress: `0x${string}`;
   /** Prefix of the order_id, so the book and history can tell the markets apart at a glance. */
   orderIdPrefix: string;
+  /** The asset's series id; 0 for spot and the perp, the expiry for a dated future. */
+  subId?: string;
+  /**
+   * The fee ceiling per unit, 18 decimals, when it is not a share of the price: a future's fee is
+   * charged on its USDC notional per contract, whatever the cNGN-per-USDC price.
+   */
+  worstFeeUnits?: bigint;
 };
 
 /**
@@ -325,13 +332,15 @@ export function buildSpotOrderEnvelope({
   // worth the price in USDC, so the signed bound is the fee tier scaled by that per-cNGN notional.
   // Charging worstFee on every filled cNGN totals SPOT_TAKER_FEE_RATE of the USDC notional.
   const spotFeeRational = parseDecimalToRational(SPOT_TAKER_FEE_RATE);
-  const worstFeeUnits = roundRationalToScaledUnits(
-    {
-      denominator: spotFeeRational.denominator * priceRational.denominator,
-      numerator: spotFeeRational.numerator * priceRational.numerator,
-    },
-    ENGINE_DECIMALS
-  );
+  const worstFeeUnits =
+    market?.worstFeeUnits ??
+    roundRationalToScaledUnits(
+      {
+        denominator: spotFeeRational.denominator * priceRational.denominator,
+        numerator: spotFeeRational.numerator * priceRational.numerator,
+      },
+      ENGINE_DECIMALS
+    );
 
   const ownerAddress = getAddress(walletAddress);
   const matchingAddress = getMatchingAddress();
@@ -339,6 +348,10 @@ export function buildSpotOrderEnvelope({
     ? getAddress(market.tradeModuleAddress)
     : getTradeModuleAddress();
   const spotAsset = market ? getAddress(market.assetAddress) : getSpotAssetAddress();
+  const subId = market?.subId ?? "0";
+  if (!UNSIGNED_INTEGER_PATTERN.test(subId)) {
+    throw new Error("Series id must be an unsigned integer");
+  }
   const chainId = getMatchingChainId();
 
   const { nonce, orderId } = resolveOrderIdentity(idempotency, market?.orderIdPrefix);
@@ -367,7 +380,7 @@ export function buildSpotOrderEnvelope({
         isBid,
         limitPrice: enginePriceWei,
         recipientId,
-        subId: 0n,
+        subId: BigInt(subId),
         worstFee: worstFeeUnits,
       },
     ]
@@ -399,7 +412,7 @@ export function buildSpotOrderEnvelope({
       recipient_id: subaccountId,
       side: engineSide,
       signer_address: ownerAddress,
-      sub_id: "0",
+      sub_id: subId,
       subaccount_id: subaccountId,
       // Integer wei per unit — the exact value signed into the action above, in the format the
       // venue documents and the market maker sends. A decimal here was stored verbatim but could not

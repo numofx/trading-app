@@ -36,6 +36,8 @@ export type PerpStatePresentation = {
   trading_enabled?: boolean;
   /** The SRM guardian's pause: every adjustment on the perp's accounts reverts while it holds. */
   paused?: boolean;
+  /** The perp is winding down: the venue takes every order as reduce-only. */
+  close_only?: boolean;
   trade_module_address?: string;
   quote_asset_address?: string;
   margin_manager_address?: string;
@@ -123,6 +125,7 @@ export function parsePerpState(perp: PerpStatePresentation | undefined): PerpSta
     return null;
   }
   return {
+    closeOnly: perp.close_only === true,
     fundingIntervalSeconds: perp.funding_interval_seconds ?? 3600,
     indexPrice,
     initialMarginRate,

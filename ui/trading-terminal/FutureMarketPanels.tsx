@@ -1,0 +1,747 @@
+"use client";
+
+import type { ConnectedWallet } from "@privy-io/react-auth";
+import { Duration } from "effect";
+import { useRouter } from "next/navigation";
+import posthog from "posthog-js";
+import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
+import { createWalletClient, custom, isAddressEqual } from "viem";
+import {
+  buildFutureOpenOrdersActivityView,
+  buildFutureOrderHistoryActivityView,
+  buildFutureTradeHistoryActivityView,
+  getOwnedOpenOrders,
+} from "@/lib/account-activity-views";
+import { formatBalance } from "@/lib/account-balance-display";
+import { getAppChain } from "@/lib/base-public-client";
+import {
+  buildFutureBalancesView,
+  buildFutureHeaderMetrics,
+  buildFuturePositionsView,
+  describeFutureRejection,
+  FUTURE_PRICE_DECIMALS,
+  FUTURE_PRICE_GROUPS,
+  futureOrderUiSide,
+  futureWorstFeeUnits,
+  isOutsideFillBand,
+} from "@/lib/future-market";
+import type { FutureAccount, FutureMarket } from "@/lib/future-market.types";
+import { FUTURE_ACTIVITY_VIEWS, FUTURE_BOTTOM_TABS } from "@/lib/future-terminal-config";
+import { getAnchorPrice, getMarketableLimitPrice } from "@/lib/spot-market";
+import { buildCancelEnvelope, buildSpotOrderEnvelope } from "@/lib/spot-order-submission";
+import { FOOTER_LINKS, SPOT_TIMEFRAME_OPTIONS } from "@/lib/spot-terminal-config";
+import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
+import { getUsdcCngnManagerAddress } from "@/lib/subaccount-deposit-config";
+import { get24hStats } from "@/lib/ticker-stats";
+import type { ActivityTab, ActivityView } from "@/lib/trading.types";
+import type { FutureOrderRequest } from "@/ui/trading-terminal/FutureOrderFormPanel";
+import { FutureOrderFormPanel } from "@/ui/trading-terminal/FutureOrderFormPanel";
+import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
+import type { AccountSummaryRow } from "@/ui/trading-terminal/order-form/AccountSummary";
+import { AccountSummary } from "@/ui/trading-terminal/order-form/AccountSummary";
+import type { ChartUnits, SpotChartTab, SpotTimeframe } from "@/ui/trading-terminal/SpotChartPanel";
+import { SpotChartPanel } from "@/ui/trading-terminal/SpotChartPanel";
+import type { BookUnits, SpotBookTab } from "@/ui/trading-terminal/SpotOrderBookPanel";
+import { SpotOrderBookPanel } from "@/ui/trading-terminal/SpotOrderBookPanel";
+import { TerminalGrid } from "@/ui/trading-terminal/TerminalGrid";
+import { usePublishTerminalHeader } from "@/ui/trading-terminal/TerminalHeaderSlot";
+import { useTerminalSession } from "@/ui/trading-terminal/TerminalSession";
+import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
+import { useAccountTransfer } from "@/ui/trading-terminal/useAccountTransfer";
+import { useFutureAccount } from "@/ui/trading-terminal/useFutureAccount";
+import { useLiveMarketBook } from "@/ui/trading-terminal/useLiveMarketBook";
+import { useOrderStatus } from "@/ui/trading-terminal/useOrderStatus";
+import { useSignedHistoryTabs } from "@/ui/trading-terminal/useSignedHistoryTabs";
+import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
+
+type FutureBottomTab = keyof typeof FUTURE_ACTIVITY_VIEWS;
+
+const BOOK_UNITS: BookUnits = {
+  base: "Contracts",
+  price: "cNGN",
+  priceDecimals: FUTURE_PRICE_DECIMALS,
+  priceGroups: FUTURE_PRICE_GROUPS,
+  quote: null,
+};
+
+function chartUnits(symbol: string): ChartUnits {
+  return {
+    axisDecimals: FUTURE_PRICE_DECIMALS,
+    pair: symbol,
+    priceDecimals: FUTURE_PRICE_DECIMALS,
+    volumeUnit: "contracts",
+  };
+}
+
+/** How often the countdown to the last trade time re-renders. */
+const CLOCK_TICK_MS = Duration.toMillis("30 seconds");
+
+const ROW_BUTTON_CLASSES =
+  "cursor-pointer rounded-sm bg-input-bg px-2 py-1 font-medium text-[11px] text-panel-text ring-1 ring-panel-border transition-colors hover:text-panel-text-active disabled:cursor-wait disabled:opacity-60";
+
+/** The wall clock, re-read every half minute: what the countdown and the trading gate are measured against. */
+function useNow() {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), CLOCK_TICK_MS);
+    return () => window.clearInterval(timer);
+  }, []);
+  return now;
+}
+
+/** The signed limit as a decimal string; two places beyond the display, never exponent notation. */
+function toPriceString(price: number) {
+  return price.toFixed(FUTURE_PRICE_DECIMALS + 2);
+}
+
+/**
+ * The limit a market order is signed at: through the touch by the ticket's slippage, then held
+ * inside the fill band, since the venue refuses a limit beyond it and the chain a fill beyond it.
+ */
+function resolveFutureOrderPrice(
+  request: FutureOrderRequest,
+  market: FutureMarket,
+  touch: { bestAsk: number | null; bestBid: number | null }
+): { price: string } | { error: string } {
+  const band = market.state.fillBand;
+  if (band === null) {
+    return { error: "The venue cannot read the fill band right now; try again shortly." };
+  }
+  if (request.orderType === "Limit") {
+    const limit = Number(request.limitPrice.replaceAll(",", ""));
+    if (!Number.isFinite(limit) || limit <= 0) {
+      return { error: "Enter a limit price in cNGN per USDC." };
+    }
+    if (isOutsideFillBand(limit, band)) {
+      return { error: "Limit price outside the fill band shown under the field." };
+    }
+    return { price: request.limitPrice.replaceAll(",", "") };
+  }
+  const uiSide = futureOrderUiSide(request.side);
+  const marketable = getMarketableLimitPrice(
+    uiSide,
+    touch.bestAsk,
+    touch.bestBid,
+    request.maxSlippage
+  );
+  if (marketable === null) {
+    return { error: "No resting liquidity on that side. Use a limit order." };
+  }
+  const banded = Math.min(band.high, Math.max(band.low, marketable));
+  return { price: toPriceString(banded) };
+}
+
+/**
+ * Signs a future order for the series' asset and sub id on its TradeModule, with the fee ceiling
+ * per contract, then posts it. `price` is cNGN per USDC; `contracts` whole contracts.
+ */
+async function signAndPostFutureOrder({
+  contracts,
+  market,
+  onAwaitingSignature,
+  price,
+  side,
+  subaccountId,
+  wallet,
+}: {
+  contracts: number;
+  market: FutureMarket;
+  onAwaitingSignature: () => void;
+  price: string;
+  side: "buy" | "sell";
+  subaccountId: string;
+  wallet: ConnectedWallet;
+}) {
+  const appChain = getAppChain();
+  await wallet.switchChain(appChain.id);
+  const provider = await wallet.getEthereumProvider();
+  const walletClient = createWalletClient({ chain: appChain, transport: custom(provider) });
+  const envelope = buildSpotOrderEnvelope({
+    market: {
+      assetAddress: market.stack.assetAddress,
+      orderIdPrefix: "future",
+      subId: market.stack.subId,
+      tradeModuleAddress: market.stack.tradeModuleAddress,
+      worstFeeUnits: futureWorstFeeUnits(market.state.contractSizeUsdc),
+    },
+    side,
+    subaccountId,
+    uiPrice: price,
+    uiSize: String(contracts),
+    walletAddress: wallet.address,
+  });
+  onAwaitingSignature();
+  const signature = await walletClient.signTypedData({
+    account: wallet.address as `0x${string}`,
+    ...envelope.typedData,
+  });
+  const response = await fetch("/api/orders", {
+    body: JSON.stringify({ ...envelope.payload, signature }),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+  });
+  const body = (await response.json().catch(() => null)) as { error?: string } | null;
+  return { body, ok: response.ok, status: response.status };
+}
+
+/** Signs a cancel for one of the wallet's resting orders and posts it; true when the venue took it. */
+async function signAndPostCancel(wallet: ConnectedWallet, nonce: string, ownerAddress: string) {
+  const appChain = getAppChain();
+  await wallet.switchChain(appChain.id);
+  const provider = await wallet.getEthereumProvider();
+  const walletClient = createWalletClient({ chain: appChain, transport: custom(provider) });
+  const envelope = buildCancelEnvelope({ nonce, ownerAddress, signerAddress: wallet.address });
+  const signature = await walletClient.signTypedData({
+    account: wallet.address as `0x${string}`,
+    ...envelope.typedData,
+  });
+  const response = await fetch("/api/orders/cancel", {
+    body: JSON.stringify({ ...envelope.payload, signature }),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+  });
+  return response;
+}
+
+/** Signs the order-history login with personal_sign, or nothing without a wallet. */
+function buildHistorySigner(wallet: ConnectedWallet | null, walletsReady: boolean) {
+  if (wallet === null) {
+    return undefined;
+  }
+  return async (message: string) => {
+    if (!walletsReady) {
+      throw new Error("Connect a wallet to view your order history");
+    }
+    const provider = await wallet.getEthereumProvider();
+    const walletClient = createWalletClient({ chain: getAppChain(), transport: custom(provider) });
+    return walletClient.signMessage({ account: wallet.address as `0x${string}`, message });
+  };
+}
+
+function buildActivityView(inputs: {
+  account: FutureAccount | null;
+  bottomTab: FutureBottomTab;
+  market: FutureMarket | null;
+  signedHistoryView: ActivityView | null;
+  symbol: string;
+  walletAddress: string | null;
+}): ActivityView {
+  const { bottomTab, market } = inputs;
+  if (market === null) {
+    return FUTURE_ACTIVITY_VIEWS[bottomTab];
+  }
+  switch (bottomTab) {
+    case "positions":
+      return buildFuturePositionsView(inputs.account, market.state, inputs.symbol);
+    case "balances":
+      return buildFutureBalancesView(inputs.account, market.state);
+    case "open-orders":
+      return buildFutureOpenOrdersActivityView(market.openOrders, inputs.walletAddress);
+    default:
+      return inputs.signedHistoryView ?? FUTURE_ACTIVITY_VIEWS[bottomTab];
+  }
+}
+
+/**
+ * Deposit and Withdraw on each Balances row, USDC then cNGN as `buildFutureBalancesView` lays
+ * them out; Withdraw only where something is held.
+ */
+function buildBalanceRowAction(
+  account: FutureAccount | null,
+  onDeposit: (currency: DepositCurrency) => void,
+  onWithdraw: (currency: DepositCurrency) => void
+) {
+  const rows: { currency: DepositCurrency; held: bigint }[] = [
+    { currency: "USDC", held: account?.cashUnits ?? 0n },
+    { currency: "cNGN", held: account?.cngnUnits ?? 0n },
+  ];
+  return (rowIndex: number) => {
+    const row = rows[rowIndex];
+    if (row === undefined) {
+      return null;
+    }
+    return (
+      <span className="inline-flex gap-1.5">
+        <button
+          className={ROW_BUTTON_CLASSES}
+          onClick={() => onDeposit(row.currency)}
+          type="button"
+        >
+          Deposit
+        </button>
+        {row.held > 0n ? (
+          <button
+            className={ROW_BUTTON_CLASSES}
+            onClick={() => onWithdraw(row.currency)}
+            type="button"
+          >
+            Withdraw
+          </button>
+        ) : null}
+      </span>
+    );
+  };
+}
+
+function buildRowAction(inputs: {
+  account: FutureAccount | null;
+  bottomTab: FutureBottomTab;
+  cancellingNonce: string | null;
+  hasWallet: boolean;
+  isLive: boolean;
+  onCancel: (nonce: string, ownerAddress: string) => void;
+  onDeposit: (currency: DepositCurrency) => void;
+  onWithdraw: (currency: DepositCurrency) => void;
+  ownedOpenOrders: { nonce: string; ownerAddress: string }[];
+  tradeHistoryRowAction: ((rowIndex: number) => ReactNode) | undefined;
+}) {
+  if (!(inputs.isLive && inputs.hasWallet)) {
+    return undefined;
+  }
+  if (inputs.bottomTab === "trade-history") {
+    return inputs.tradeHistoryRowAction;
+  }
+  if (inputs.bottomTab === "balances") {
+    return buildBalanceRowAction(inputs.account, inputs.onDeposit, inputs.onWithdraw);
+  }
+  if (inputs.bottomTab !== "open-orders") {
+    return undefined;
+  }
+  return (rowIndex: number) => {
+    const order = inputs.ownedOpenOrders[rowIndex];
+    if (!order) {
+      return null;
+    }
+    const busy = inputs.cancellingNonce === order.nonce;
+    return (
+      <button
+        className={ROW_BUTTON_CLASSES}
+        disabled={busy}
+        onClick={() => inputs.onCancel(order.nonce, order.ownerAddress)}
+        type="button"
+      >
+        {busy ? "Cancelling…" : "Cancel"}
+      </button>
+    );
+  };
+}
+
+/** What a fill changes on the account: its position in the series. */
+function positionSignature(account: FutureAccount | null) {
+  return account === null ? "" : account.positionUnits.toString();
+}
+
+function withCounts(
+  tabs: typeof FUTURE_BOTTOM_TABS,
+  hasWallet: boolean,
+  counts: Partial<Record<FutureBottomTab, number>>
+): ActivityTab[] {
+  if (!hasWallet) {
+    return [...tabs];
+  }
+  return tabs.map((tab) => {
+    const count = counts[tab.id as FutureBottomTab];
+    return count === undefined ? tab : { ...tab, label: `${tab.label} (${count})` };
+  });
+}
+
+function buildEmptyState(
+  market: FutureMarket | null,
+  subaccountId: string | null,
+  bottomTab: FutureBottomTab,
+  signedHistoryEmptyState: { action?: ReactNode; body: string; title: string } | undefined
+) {
+  if (signedHistoryEmptyState !== undefined) {
+    return signedHistoryEmptyState;
+  }
+  if (market === null) {
+    return { body: "The future isn't listed on the venue right now.", title: "Nothing yet" };
+  }
+  if (bottomTab === "order-history" || bottomTab === "trade-history") {
+    return undefined;
+  }
+  if (subaccountId === null) {
+    return {
+      body: "Spot and the future trade from one account. Deposit USDC to open it.",
+      title: "No trading account",
+    };
+  }
+  if (bottomTab === "positions") {
+    return {
+      body: "Positions you open will appear here, with their variation margin at the hourly mark.",
+      title: "No positions",
+    };
+  }
+  return undefined;
+}
+
+/** The trading account's two holdings under the ticket, each with its Deposit and Withdraw. */
+function buildAccountRows(
+  account: FutureAccount | null,
+  onDeposit: (currency: DepositCurrency) => void,
+  onWithdraw: (currency: DepositCurrency) => void
+): AccountSummaryRow[] {
+  return [
+    {
+      balance: formatBalance(account?.cash ?? null, "USDC"),
+      onWithdraw: account === null ? undefined : () => onWithdraw("USDC"),
+      symbol: "USDC",
+      onDeposit: () => onDeposit("USDC"),
+    },
+    {
+      balance: formatBalance(account?.cngn ?? null, "cNGN"),
+      onWithdraw: (account?.cngnUnits ?? 0n) > 0n ? () => onWithdraw("cNGN") : undefined,
+      symbol: "cNGN",
+      onDeposit: () => onDeposit("cNGN"),
+    },
+  ];
+}
+
+/**
+ * The future's book, trades and candles from the shared live-book hook, its headline price (the
+ * touch, else the venue's mark) and its 24h volume as the contracts' USDC notional.
+ */
+function useFutureBook(market: FutureMarket | null, symbol: string) {
+  const book = useLiveMarketBook({
+    candles: market?.candles ?? [],
+    enabled: market !== null,
+    symbol,
+    type: "future",
+    snapshot: {
+      mark: market?.mark ?? null,
+      orderBookAsks: market?.orderBookAsks ?? [],
+      orderBookBids: market?.orderBookBids ?? [],
+      stats24h: market?.stats24h ?? null,
+      trades: market?.trades ?? [],
+    },
+  });
+  const anchor = getAnchorPrice(book.bestAsk, book.bestBid, book.lastPrice);
+  const contracts = market?.volumeContracts24h ?? null;
+  return {
+    book,
+    price: market === null ? null : (anchor ?? market.state.markPrice),
+    stats: get24hStats(book.stats24h, book.lastPrice),
+    volumeUsd:
+      market === null || contracts === null ? null : contracts * market.state.contractSizeUsdc,
+  };
+}
+
+/**
+ * Placing and cancelling future orders: each signs with the wallet, posts to the venue and reports
+ * the outcome on the ticket's status line. Without a trading account, placing opens the deposit
+ * that creates one instead.
+ */
+function useFutureOrderActions({
+  market,
+  onAccountChanged,
+  onNeedsAccount,
+  orderStatus,
+  subaccountId,
+  touch,
+  wallet,
+}: {
+  market: FutureMarket | null;
+  onAccountChanged: () => void;
+  onNeedsAccount: () => void;
+  orderStatus: ReturnType<typeof useOrderStatus>;
+  subaccountId: string | null;
+  touch: { bestAsk: number | null; bestBid: number | null };
+  wallet: ConnectedWallet | null;
+}) {
+  const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [cancellingNonce, setCancellingNonce] = useState<string | null>(null);
+
+  async function submit(request: FutureOrderRequest) {
+    if (market === null || wallet === null) {
+      return;
+    }
+    if (subaccountId === null) {
+      onNeedsAccount();
+      return;
+    }
+    const resolved = resolveFutureOrderPrice(request, market, touch);
+    if ("error" in resolved) {
+      orderStatus.announce(resolved.error);
+      return;
+    }
+    const event = {
+      contracts: request.contracts,
+      market_id: "usdc-cngn-future",
+      order_side: request.side,
+      order_type: request.orderType,
+    };
+    setIsSubmitting(true);
+    try {
+      const { body, ok, status } = await signAndPostFutureOrder({
+        contracts: request.contracts,
+        market,
+        price: resolved.price,
+        side: futureOrderUiSide(request.side),
+        onAwaitingSignature: () =>
+          orderStatus.announce(`Awaiting wallet signature for account #${subaccountId}`),
+        subaccountId,
+        wallet,
+      });
+      if (!ok) {
+        posthog.capture("order_rejected", {
+          ...event,
+          error_message: body?.error ?? null,
+          http_status: status,
+        });
+        orderStatus.settle(describeFutureRejection(body?.error, "Futures order submission failed"));
+        return;
+      }
+      posthog.capture("order_submitted", event);
+      orderStatus.announce(null, { awaitFill: true });
+      onAccountChanged();
+      router.refresh();
+    } catch (error) {
+      posthog.captureException(error, {
+        properties: { market_id: "usdc-cngn-future", order_side: request.side },
+      });
+      orderStatus.settle(
+        error instanceof Error ? error.message : "Futures order submission failed"
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function cancel(nonce: string, ownerAddress: string) {
+    if (wallet === null) {
+      return;
+    }
+    setCancellingNonce(nonce);
+    try {
+      const response = await signAndPostCancel(wallet, nonce, ownerAddress);
+      orderStatus.settle(response.ok ? "Order cancelled." : `Cancel failed (${response.status})`);
+      router.refresh();
+    } catch (error) {
+      orderStatus.settle(error instanceof Error ? error.message : "Cancel failed");
+    } finally {
+      setCancellingNonce(null);
+    }
+  }
+
+  return { cancel, cancellingNonce, isSubmitting, submit };
+}
+
+/**
+ * The wallet's one trading account, which spot shares, when the venue margins the future under
+ * the manager this bundle resolves it under (the build check holds that for spot). A venue that
+ * names another manager gets its own lookup there instead, so an order is never signed from an
+ * account that cannot hold the future.
+ */
+function useFutureTradingAccount(
+  stack: FutureMarket["stack"] | null,
+  walletAddress: string | null,
+  sessionAccount: ReturnType<typeof useTradingSubaccount>
+) {
+  const shared =
+    stack === null || isAddressEqual(stack.managerAddress, getUsdcCngnManagerAddress());
+  const ownLookup = useTradingSubaccount(
+    shared ? null : walletAddress,
+    stack === null ? undefined : { depositAsset: stack.cashAddress, manager: stack.managerAddress }
+  );
+  return { account: shared ? sessionAccount : ownLookup, shared };
+}
+
+/**
+ * One cash-settled future series under the shell, on the same grid as spot.
+ *
+ * The future trades from the wallet's one trading account, which spot shares: since 2026-10-13
+ * that account lives under the MarginEngine, the only manager whose accounts may hold the future,
+ * so spot fills, futures positions and their margin are one balance. The first deposit opens it.
+ * Its position, margin and unsettled variation margin are read from chain, since markets-service
+ * serves none of them for the future. Orders are signed for the future's asset and series on the perp's TradeModule,
+ * with the fee ceiling per contract.
+ *
+ * `market` is null while markets-service does not list the series with its state and stack; the
+ * panels then render their empty states and a ticket that cannot submit.
+ */
+export function FutureMarketPanels({
+  market,
+  symbol,
+}: {
+  market: FutureMarket | null;
+  /** The series' venue symbol, from the route: the stream, history and display name. */
+  symbol: string;
+}) {
+  const session = useTerminalSession();
+  const { isSignedIn, login, walletsReady } = session;
+  const primaryWallet = market === null ? null : session.primaryWallet;
+  const nowMs = useNow();
+
+  const [chartTab, setChartTab] = useState<SpotChartTab>("price");
+  const [timeframe, setTimeframe] = useState<SpotTimeframe>("D");
+  const [selectedTool, setSelectedTool] = useState("crosshair");
+  const [indicatorsEnabled, setIndicatorsEnabled] = useState(false);
+  const [bookTab, setBookTab] = useState<SpotBookTab>("book");
+  const [bottomTab, setBottomTab] = useState<FutureBottomTab>("positions");
+
+  const stack = market?.stack ?? null;
+  const { account, shared } = useFutureTradingAccount(
+    stack,
+    primaryWallet?.address ?? null,
+    session.account
+  );
+  const subaccountId = market === null ? null : account.subaccountId;
+  const futureAccount = useFutureAccount(subaccountId, stack);
+  const orderStatus = useOrderStatus(positionSignature(futureAccount.account));
+  const transfer = useAccountTransfer({
+    account,
+    accountRows: futureAccount.rows,
+    depositManager: shared ? undefined : stack?.managerAddress,
+    depositNotes: {
+      cNGN: "cNGN counts as margin at half its index value. Variation margin is paid from cNGN first, then USDC.",
+    },
+    onTransferred: (blockNumber) => futureAccount.refresh(blockNumber),
+  });
+
+  const signedHistory = useSignedHistoryTabs({
+    bottomTab,
+    isSignedIn,
+    market: symbol,
+    signMessage: buildHistorySigner(primaryWallet, walletsReady),
+    walletAddress: primaryWallet?.address ?? null,
+    orderHistoryView: (orders) => buildFutureOrderHistoryActivityView(orders, symbol),
+    tradeHistoryView: (fills) =>
+      buildFutureTradeHistoryActivityView(fills, symbol, market?.state.contractSizeUsdc ?? 1000),
+  });
+
+  const { book, price, stats, volumeUsd } = useFutureBook(market, symbol);
+  const ownedOpenOrders = getOwnedOpenOrders(
+    market?.openOrders ?? [],
+    primaryWallet?.address ?? null
+  );
+  const actions = useFutureOrderActions({
+    market,
+    onAccountChanged: () => futureAccount.refresh(),
+    onNeedsAccount: () => transfer.openDeposit("USDC"),
+    orderStatus,
+    subaccountId,
+    touch: { bestAsk: book.bestAsk, bestBid: book.bestBid },
+    wallet: primaryWallet,
+  });
+
+  usePublishTerminalHeader({
+    changePercent24h: stats.changePercent,
+    depositControl: market === null ? undefined : transfer.headerControl,
+    high24h: stats.high,
+    low24h: stats.low,
+    market: "future",
+    metrics: buildFutureHeaderMetrics({
+      firstPrice: market?.stats24h?.firstPrice ?? null,
+      lastPrice: book.lastPrice,
+      nowMs,
+      state: market?.state ?? null,
+      volumeUsd,
+    }),
+    price,
+    volume24hLabel: stats.volumeLabel,
+  });
+
+  return (
+    <>
+      <MarketDocumentTitle digits={FUTURE_PRICE_DECIMALS} pair={symbol} price={price} />
+
+      <TerminalGrid
+        activity={
+          <TradingActivityPanel
+            activityView={buildActivityView({
+              account: futureAccount.account,
+              bottomTab,
+              market,
+              signedHistoryView: signedHistory.view,
+              symbol,
+              walletAddress: primaryWallet?.address ?? null,
+            })}
+            emptyState={buildEmptyState(market, subaccountId, bottomTab, signedHistory.emptyState)}
+            footerLinks={FOOTER_LINKS}
+            isSignedIn={isSignedIn}
+            onTabSelect={(tab) => setBottomTab(tab as FutureBottomTab)}
+            rowAction={buildRowAction({
+              account: futureAccount.account,
+              bottomTab,
+              cancellingNonce: actions.cancellingNonce,
+              hasWallet: primaryWallet !== null,
+              isLive: market !== null,
+              onDeposit: transfer.openDeposit,
+              onWithdraw: transfer.openWithdraw,
+              onCancel: (nonce, ownerAddress) => void actions.cancel(nonce, ownerAddress),
+              ownedOpenOrders,
+              tradeHistoryRowAction: signedHistory.rowAction,
+            })}
+            selectedTab={bottomTab}
+            tabs={withCounts(FUTURE_BOTTOM_TABS, primaryWallet !== null, {
+              "open-orders": ownedOpenOrders.length,
+              positions: (futureAccount.account?.positionUnits ?? 0n) === 0n ? 0 : 1,
+            })}
+          />
+        }
+        book={
+          <SpotOrderBookPanel
+            asks={book.asks}
+            bids={book.bids}
+            lastPrice={book.lastPrice}
+            onTabChange={setBookTab}
+            tab={bookTab}
+            trades={book.trades}
+            units={BOOK_UNITS}
+          />
+        }
+        chart={
+          <SpotChartPanel
+            asks={book.asks}
+            bids={book.bids}
+            candles={book.candles}
+            chartTab={chartTab}
+            indicatorsEnabled={indicatorsEnabled}
+            onChartTabChange={setChartTab}
+            onIndicatorsToggle={() => setIndicatorsEnabled((current) => !current)}
+            onTimeframeChange={setTimeframe}
+            onToolSelect={setSelectedTool}
+            selectedTimeframe={timeframe}
+            selectedTool={selectedTool}
+            timeframes={SPOT_TIMEFRAME_OPTIONS}
+            units={chartUnits(symbol)}
+          />
+        }
+        ticketColumn={
+          <>
+            <FutureOrderFormPanel
+              account={futureAccount.account}
+              bestAsk={book.bestAsk}
+              bestBid={book.bestBid}
+              hasAccount={subaccountId !== null}
+              hasWallet={primaryWallet !== null}
+              isAccepted={orderStatus.isAccepted}
+              isFilled={orderStatus.isFilled}
+              isPreparingAccount={account.isLoading || (isSignedIn && !walletsReady)}
+              isSubmitting={actions.isSubmitting}
+              lastAction={orderStatus.isFilled ? null : orderStatus.status}
+              nowMs={nowMs}
+              onConnect={login}
+              onDepositRequest={() => transfer.openDeposit("USDC")}
+              onEdit={orderStatus.clear}
+              onSubmit={market === null ? undefined : actions.submit}
+              referencePrice={price}
+              state={market?.state ?? null}
+              takerFeeBps={market?.takerFeeBps ?? null}
+            />
+            {/* The trading account's holdings under the ticket. */}
+            <AccountSummary
+              rows={buildAccountRows(
+                futureAccount.account,
+                transfer.openDeposit,
+                transfer.openWithdraw
+              )}
+            />
+          </>
+        }
+      />
+    </>
+  );
+}

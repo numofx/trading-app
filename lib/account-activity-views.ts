@@ -446,3 +446,147 @@ export function buildTradeHistoryActivityView(
     }),
   };
 }
+
+function formatContracts(size: number) {
+  return `${size.toLocaleString("en-US", { maximumFractionDigits: 3 })}`;
+}
+
+/** A cNGN-per-USDC price, the future's quote: two decimals. */
+function formatFutureHistoryPrice(price: number) {
+  return Number.isFinite(price)
+    ? price.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 })
+    : UNKNOWN_BALANCE;
+}
+
+/** What a future order did: a buy is a Long (gains as cNGN weakens), a sell a Short. */
+function formatFutureAction(side: "buy" | "sell" | undefined) {
+  if (side === undefined) {
+    return UNKNOWN_BALANCE;
+  }
+  return side === "buy" ? "Long" : "Short";
+}
+
+/** The future's Order History columns: sizes are contracts, prices cNGN per USDC. */
+export const FUTURE_ORDER_HISTORY_COLUMNS = [
+  "Time",
+  "Market",
+  "Action",
+  "Status",
+  "Contracts",
+  "Price",
+  "Filled",
+] as const;
+
+const FUTURE_ORDER_HISTORY_ACTION_COLUMN = FUTURE_ORDER_HISTORY_COLUMNS.indexOf("Action");
+const FUTURE_ORDER_HISTORY_STATUS_COLUMN = FUTURE_ORDER_HISTORY_COLUMNS.indexOf("Status");
+
+/**
+ * The future's Order History. The venue presents the future without a UI intent: its engine
+ * side, cNGN-per-USDC limit and contract count are already the trader's own, so they are read
+ * directly. An order the venue cancelled for margin says so in its status cell.
+ */
+export function buildFutureOrderHistoryActivityView(
+  orders: OrderHistoryOrder[],
+  label: string,
+  timeZone?: string
+): ActivityView {
+  return {
+    columns: [...FUTURE_ORDER_HISTORY_COLUMNS],
+    rows: orders.map((order) => {
+      const size = Number(order.desired_amount);
+      const filled = Number(order.filled_amount);
+      const status = ORDER_STATUS_LABELS[order.status] ?? order.status;
+      const row: ActivityRow = {
+        cells: [
+          formatOrderTime(order.created_at, timeZone),
+          label,
+          formatFutureAction(order.side),
+          order.cancel_reason === "insufficient_margin" ? `${status} (margin)` : status,
+          Number.isFinite(size) ? formatContracts(size) : UNKNOWN_BALANCE,
+          formatFutureHistoryPrice(Number(order.limit_price)),
+          Number.isFinite(filled) ? formatContracts(filled) : UNKNOWN_BALANCE,
+        ],
+        tones: {
+          [FUTURE_ORDER_HISTORY_ACTION_COLUMN]: sideTone(order.side),
+          ...(order.status === "filled"
+            ? { [FUTURE_ORDER_HISTORY_STATUS_COLUMN]: "positive" as const }
+            : {}),
+        },
+      };
+      return row;
+    }),
+  };
+}
+
+/** The future's Trade History columns; the trailing column holds the fill's transaction link. */
+export const FUTURE_TRADE_HISTORY_COLUMNS = [
+  "Time",
+  "Market",
+  "Action",
+  "Contracts",
+  "Price",
+  "Notional",
+  "Fee",
+  "",
+] as const;
+
+const FUTURE_TRADE_HISTORY_ACTION_COLUMN = FUTURE_TRADE_HISTORY_COLUMNS.indexOf("Action");
+
+const FUTURE_FILL_ROLE_NOTE =
+  "M: your order rested and was hit (maker, no fee). T: your order crossed the book (taker).";
+
+/**
+ * The future's Trade History: one row per fill, its contracts at their USDC notional (contracts ×
+ * `contractSizeUsdc`, whatever the price) and the fee the venue recorded. A fill moves no quote
+ * leg on chain; its profit or loss arrives as variation margin at each mark.
+ */
+export function buildFutureTradeHistoryActivityView(
+  fills: AccountFill[],
+  label: string,
+  contractSizeUsdc: number,
+  timeZone?: string
+): ActivityView {
+  return {
+    columns: [...FUTURE_TRADE_HISTORY_COLUMNS],
+    rows: fills.map((fill) => {
+      const size = Number(fill.size);
+      const fee = fill.fee === undefined ? Number.NaN : Number(fill.fee);
+      return {
+        titles: { [FUTURE_TRADE_HISTORY_ACTION_COLUMN]: FUTURE_FILL_ROLE_NOTE },
+        tones: { [FUTURE_TRADE_HISTORY_ACTION_COLUMN]: sideTone(fill.side) },
+        badges: {
+          [FUTURE_TRADE_HISTORY_ACTION_COLUMN]: [{ label: fill.liquidity === "maker" ? "M" : "T" }],
+        },
+        cells: [
+          formatOrderTime(fill.created_at, timeZone),
+          label,
+          formatFutureAction(fill.side),
+          Number.isFinite(size) ? formatContracts(size) : UNKNOWN_BALANCE,
+          formatFutureHistoryPrice(Number(fill.price)),
+          Number.isFinite(size) ? formatDollars(size * contractSizeUsdc, 2) : UNKNOWN_BALANCE,
+          Number.isFinite(fee) ? formatDollars(fee, 6) : UNKNOWN_BALANCE,
+        ],
+      };
+    }),
+  };
+}
+
+/** The future's Open Orders: sides as Long and Short, prices cNGN per USDC, sizes in contracts. */
+export function buildFutureOpenOrdersActivityView(
+  openOrders: SpotOpenOrder[],
+  walletAddress: string | null
+): ActivityView {
+  const owned = getOwnedOpenOrders(openOrders, walletAddress);
+  return {
+    columns: ["Side", "Price", "Contracts", "Filled", ""],
+    rows: owned.map((order) => ({
+      tones: { 0: sideTone(order.side) },
+      cells: [
+        formatFutureAction(order.side),
+        formatFutureHistoryPrice(order.price),
+        formatContracts(order.size),
+        formatContracts(order.filled),
+      ],
+    })),
+  };
+}

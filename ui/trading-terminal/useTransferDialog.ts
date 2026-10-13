@@ -5,6 +5,7 @@ import posthog from "posthog-js";
 import { useState } from "react";
 import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
 import {
+  getDepositAddresses,
   getDepositableCurrencies,
   getDepositPauseReason,
   getFirstDepositableCurrency,
@@ -71,6 +72,7 @@ export function useTransferDialog({
   accountRows,
   controlledCurrency,
   controlledMode,
+  depositManager,
   depositPauseReasons,
   fundingWallets,
   onCurrencyChange,
@@ -98,6 +100,11 @@ export function useTransferDialog({
    * passes the venue's own word on whether its cNGN collateral escrow is taking deposits.
    */
   depositPauseReasons?: Partial<Record<DepositCurrency, string>>;
+  /**
+   * The manager a first deposit opens the account under, when it is not the configured SRM: the
+   * future's MarginEngine. A top-up goes to the account named, whatever its manager.
+   */
+  depositManager?: `0x${string}`;
   fundingWallets?: ConnectedWallet[];
   onCurrencyChange?: (currency: DepositCurrency) => void;
   onModeChange?: (mode: TransferMode) => void;
@@ -186,7 +193,15 @@ export function useTransferDialog({
       is_new_account: depositAccount.subaccountId === null,
       subaccount_id: depositAccount.subaccountId,
     });
-    void startDeposit(depositAccount.wallet, amount, depositAccount.subaccountId, currency);
+    void startDeposit(
+      depositAccount.wallet,
+      amount,
+      depositAccount.subaccountId,
+      currency,
+      depositManager === undefined
+        ? undefined
+        : { ...getDepositAddresses(currency), manager: depositManager }
+    );
   }
 
   /** Sends the account's own balance back out to the wallet that is currently selected. */

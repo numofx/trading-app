@@ -386,11 +386,21 @@ const EMPTY_SPOT_MARKET: SpotMarket = {
  *
  * Orders without both an owner and a nonce are dropped rather than listed: a row that cannot be
  * cancelled is worse than no row, since the only reason to show it is to act on it.
+ *
+ * `engineFields` is for a market the venue presents with no `ui_intent` because its engine fields
+ * are already the trader's (the future: side, cNGN-per-USDC price and contracts as signed).
  */
-export function collectOpenOrders(book: BookResponse | null): SpotOpenOrder[] {
+export function collectOpenOrders(
+  book: BookResponse | null,
+  { engineFields = false }: { engineFields?: boolean } = {}
+): SpotOpenOrder[] {
   return [...(book?.bids ?? []), ...(book?.asks ?? [])]
     .map((order) => {
-      const intent = order.spot_contract?.ui_intent;
+      const intent =
+        order.spot_contract?.ui_intent ??
+        (engineFields
+          ? { price: order.limit_price, side: order.side, size: order.desired_amount }
+          : undefined);
       if (intent === undefined) {
         // Every field below would otherwise be an engine value wearing a UI label: the price
         // rendered as ₦0.0007 instead of ₦1,374, the size as 1,374 USDC instead of 1. The old
@@ -558,7 +568,10 @@ export function presentStats24h(stats: LiveSpotRuntime["stats24h"]): Stats24h | 
  * every panel renders its empty state. Substituting invented depth here is worse than an empty
  * book — a trader cannot tell the difference, and the prices would be ones nothing can fill at.
  */
-export function buildSpotMarket(liveSpot: LiveSpotRuntime | null): SpotMarket {
+export function buildSpotMarket(
+  liveSpot: LiveSpotRuntime | null,
+  options: { engineFieldOrders?: boolean } = {}
+): SpotMarket {
   if (!liveSpot) {
     return EMPTY_SPOT_MARKET;
   }
@@ -571,7 +584,7 @@ export function buildSpotMarket(liveSpot: LiveSpotRuntime | null): SpotMarket {
   return {
     candles: liveSpot.candles ?? [],
     mark: deriveMarkFromBook(orderBookAsks, orderBookBids) ?? trades[0]?.price ?? null,
-    openOrders: collectOpenOrders(liveSpot.book),
+    openOrders: collectOpenOrders(liveSpot.book, { engineFields: options.engineFieldOrders }),
     orderBookAsks,
     orderBookBids,
     // Taken from the venue rather than assumed: every order is signed under it.

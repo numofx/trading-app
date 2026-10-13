@@ -1,7 +1,13 @@
 import "server-only";
 
 import { Duration } from "effect";
-import { findPerpMarket, findSpotMarket } from "@/lib/market-pickers";
+import type { FutureStatePresentation } from "@/lib/future-market.types";
+import {
+  findFrontMonthFuture,
+  findFutureBySymbol,
+  findPerpMarket,
+  findSpotMarket,
+} from "@/lib/market-pickers";
 import type { PerpStatePresentation } from "@/lib/perp-market";
 
 export type MarketPresentation = {
@@ -13,6 +19,11 @@ export type MarketPresentation = {
   margin_manager_address?: string;
   /** cNGN-PERP's chain state; absent for spot, and for the perp when the chain was unreadable. */
   perp?: PerpStatePresentation;
+  /** The dated future's state; absent on every other market. */
+  future?: FutureStatePresentation;
+  /** The prices a fill on the future may carry, cNGN per USDC; absent while the band is unreadable. */
+  fill_band_low?: string;
+  fill_band_high?: string;
   base_asset_symbol?: string;
   contract_type?: string;
   display_label?: string;
@@ -194,6 +205,26 @@ export async function getLiveSpotMarket() {
 /** cNGN-PERP, when markets-service lists it: contract_type `perpetual`, cNGN over USDC. */
 export async function getLivePerpMarket() {
   return findPerpMarket(await getMarketsServiceMarkets());
+}
+
+/**
+ * The future series `symbol`, when markets-service lists it. Read uncached: its band, mark and
+ * trading gate move by the hour, and a ticket signing against a minute-old band would be refused.
+ */
+export async function getLiveFutureMarket(symbol: string) {
+  const response = await fetch(`${getMarketsServiceUrl()}/v1/markets`, {
+    cache: "no-store",
+    headers: { accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(`markets-service returned ${response.status}`);
+  }
+  return findFutureBySymbol((await response.json()) as MarketPresentation[], symbol);
+}
+
+/** The front-month future (the nearest unexpired series), from the minute-cached market list. */
+export async function getFrontMonthFuture() {
+  return findFrontMonthFuture(await getMarketsServiceMarkets(), Date.now());
 }
 
 export async function getMarketBook(assetAddress: string, subId: string) {

@@ -16,11 +16,20 @@ function formatPairForTitle(pair: string) {
  * Keeps the tab title on the live price: "↓ 0.0007335 cNGN-USDC | Numo". The price carries no
  * currency sign — it is USDC per cNGN, and the pair label beside it says so.
  */
-export function MarketDocumentTitle({ pair, price }: { pair: string; price: number | null }) {
+export function MarketDocumentTitle({
+  digits,
+  pair,
+  price,
+}: {
+  /** Decimals the price is shown to; the USDC-per-cNGN precision unless the market says otherwise. */
+  digits?: number;
+  pair: string;
+  price: number | null;
+}) {
   const prevPriceRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const formatted = price === null ? "--" : formatPrice(price);
+    const formatted = price === null ? "--" : formatPrice(price, digits);
 
     let prefix = "";
 
@@ -52,7 +61,7 @@ export function MarketDocumentTitle({ pair, price }: { pair: string; price: numb
     observer.observe(document.head, { childList: true, subtree: true });
 
     return () => observer.disconnect();
-  }, [pair, price]);
+  }, [digits, pair, price]);
 
   return null;
 }

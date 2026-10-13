@@ -21,16 +21,24 @@ import type { DepositAddresses, DepositCurrency } from "@/lib/subaccount-deposit
  * every deposit and order would have been built against contracts that do not exist.
  *
  * Mainnet is the unified stack spot and the perp share since the cutover on 2026-10-04, each
- * entry read back from `GET /v1/markets` and the Base 8453 chain:
+ * entry read back from `GET /v1/markets` and the Base 8453 chain. Since the MarginEngine cutover
+ * (2026-10-13) the trading account spot and the future share lives under the engine; the perp is
+ * winding down on its SRM, close-only and then withdrawals, and never moves to the engine:
  * - `matching` emits the `DepositedSubAccount` / `ModuleAllowed` events this app decodes, and is
  *   the contract the venue's own trades are submitted to.
  * - `subaccountCreator` answers to `createAndDepositSubAccount(address,uint256,address)` and
  *   points back at that same matching and subaccounts pair.
- * - `manager` is the perp StandardManager (SRM): the one manager every trading account is resolved
- *   and created under, for spot and the perp alike. The two it replaced can never trade again:
- *   DeliverableFXManager `0xcE01…4d49` (settlement reverts `MW_UnknownManager`) and the spot SRM
- *   `0x3195…E49b` of 2026-09-10 to 2026-10-04 (its module is disallowed), and SubAccounts has no
- *   way to change an account's manager, so those balances leave by withdrawal only.
+ * - `manager` is the MarginEngine `0xA19E…0758`: the manager the wallet's one trading account is
+ *   resolved and created under, for spot and the future. Only engine accounts may hold the
+ *   future, and the engine credits the same cash and cNGN escrow spot settles into.
+ * - `perpManager` is the perp StandardManager (SRM) `0xDE04…35D4`, where the perp winds down: the
+ *   perp terminal (reached only at `/perp`) resolves its account under it, to close positions and
+ *   withdraw. It was every account's manager from 2026-10-04 to 2026-10-13, so a wallet's spot balances from then sit
+ *   in that account and leave from the perp's Balances tab. The two before it can never trade
+ *   again: DeliverableFXManager `0xcE01…4d49` (settlement reverts `MW_UnknownManager`) and the
+ *   spot SRM `0x3195…E49b` of 2026-09-10 to 2026-10-04 (its module is disallowed), and
+ *   SubAccounts has no way to change an account's manager, so those balances leave by
+ *   withdrawal only.
  * - `tradeModule` is the perp TradeModule, the only module Matching allows and the one
  *   markets-service pins every order, spot or perp, to; it trades any base asset the order names.
  *   The CashAsset-quoted module `0x4481…eD1c` and the wrapped-quote module `0x1242…d071` are
@@ -165,9 +173,17 @@ export function getLegacySpotStack(): {
   };
 }
 
+/** The trading account's manager: the MarginEngine, which spot and the future share. */
 export function getUsdcCngnManagerAddress() {
   return getAddress(
     process.env.NEXT_PUBLIC_USDCCNGN_MANAGER_ADDRESS?.trim() || getMatchingStack().manager
+  );
+}
+
+/** The perp's manager, its SRM: where perp accounts close out and withdraw while it winds down. */
+export function getPerpManagerAddress() {
+  return getAddress(
+    process.env.NEXT_PUBLIC_PERP_MANAGER_ADDRESS?.trim() || getMatchingStack().perpManager
   );
 }
 

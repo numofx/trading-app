@@ -3,7 +3,7 @@
 import type { MouseEvent } from "react";
 import { useRef, useState } from "react";
 import { cn } from "@/lib/cn";
-import { formatPrice } from "@/lib/market-formatting";
+import { formatPrice, PRICE_DECIMALS } from "@/lib/market-formatting";
 import type { SPOT_TIMEFRAME_OPTIONS } from "@/lib/spot-terminal-config";
 import { CHART_TOOL_ICONS, CHART_TOOLS } from "@/lib/spot-terminal-config";
 import type { Candle, OrderBookLevel } from "@/lib/trading.types";
@@ -50,16 +50,36 @@ function buildSmaPoints(
   return points.join(" ");
 }
 
+/**
+ * How the chart labels a market: its pair, how many decimals a price takes, and what the volume is
+ * counted in. Spot and the perp share the default; the future is cNGN per USDC in contracts.
+ */
+export type ChartUnits = {
+  pair: string;
+  axisDecimals: number;
+  priceDecimals: number;
+  volumeUnit: string;
+};
+
+const SPOT_CHART_UNITS: ChartUnits = {
+  axisDecimals: 6,
+  pair: "cNGN-USDC",
+  priceDecimals: PRICE_DECIMALS,
+  volumeUnit: "USDC",
+};
+
 function CandlestickChart({
   candles,
   hoveredIndex,
   indicatorsEnabled,
   onHoverChange,
+  units,
 }: {
   candles: Candle[];
   hoveredIndex: number | null;
   indicatorsEnabled: boolean;
   onHoverChange: (index: number | null) => void;
+  units: ChartUnits;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -115,7 +135,7 @@ function CandlestickChart({
       ref={containerRef}
     >
       <svg
-        aria-label="cNGN-USDC candlestick chart"
+        aria-label={`${units.pair} candlestick chart`}
         className="size-full"
         preserveAspectRatio="none"
         role="img"
@@ -142,7 +162,7 @@ function CandlestickChart({
                 x={PLOT_RIGHT + 10}
                 y={y + 4}
               >
-                {formatPrice(price, 6)}
+                {formatPrice(price, units.axisDecimals)}
               </text>
             </g>
           );
@@ -249,7 +269,15 @@ function buildDepthSeries(levels: OrderBookLevel[]) {
   });
 }
 
-function DepthChart({ asks, bids }: { asks: OrderBookLevel[]; bids: OrderBookLevel[] }) {
+function DepthChart({
+  asks,
+  bids,
+  units,
+}: {
+  asks: OrderBookLevel[];
+  bids: OrderBookLevel[];
+  units: ChartUnits;
+}) {
   const bestBid = bids[0]?.price ?? null;
   const bestAsk = asks[0]?.price ?? null;
 
@@ -313,7 +341,7 @@ function DepthChart({ asks, bids }: { asks: OrderBookLevel[]; bids: OrderBookLev
 
   return (
     <svg
-      aria-label="cNGN-USDC market depth chart"
+      aria-label={`${units.pair} market depth chart`}
       className="size-full"
       preserveAspectRatio="none"
       role="img"
@@ -374,7 +402,7 @@ function DepthChart({ asks, bids }: { asks: OrderBookLevel[]; bids: OrderBookLev
         x={xForPrice(midPrice)}
         y={depthTop - 10}
       >
-        Mid {formatPrice(midPrice)}
+        Mid {formatPrice(midPrice, units.priceDecimals)}
       </text>
 
       <line
@@ -394,14 +422,14 @@ function DepthChart({ asks, bids }: { asks: OrderBookLevel[]; bids: OrderBookLev
           x={xForPrice(price)}
           y={TIME_LABEL_Y}
         >
-          {formatPrice(price, 6)}
+          {formatPrice(price, units.axisDecimals)}
         </text>
       ))}
     </svg>
   );
 }
 
-function OhlcReadout({ candle }: { candle: Candle | null }) {
+function OhlcReadout({ candle, units }: { candle: Candle | null; units: ChartUnits }) {
   if (!candle) {
     return null;
   }
@@ -422,7 +450,9 @@ function OhlcReadout({ candle }: { candle: Candle | null }) {
       ).map(([label, value]) => (
         <span className="flex items-center gap-1" key={label}>
           <span className="text-panel-text-muted">{label}</span>
-          <span className={cn("font-medium", valueClass)}>{formatPrice(value)}</span>
+          <span className={cn("font-medium", valueClass)}>
+            {formatPrice(value, units.priceDecimals)}
+          </span>
         </span>
       ))}
       <span className={cn("font-medium", valueClass)}>
@@ -432,7 +462,7 @@ function OhlcReadout({ candle }: { candle: Candle | null }) {
       <span className="flex items-center gap-1">
         <span className="text-panel-text-muted">Vol</span>
         <span className="font-medium text-panel-text">
-          {candle.volume.toLocaleString("en-US")} USDC
+          {candle.volume.toLocaleString("en-US")} {units.volumeUnit}
         </span>
       </span>
     </div>
@@ -452,6 +482,7 @@ export function SpotChartPanel({
   selectedTimeframe,
   selectedTool,
   timeframes,
+  units = SPOT_CHART_UNITS,
 }: {
   asks: OrderBookLevel[];
   bids: OrderBookLevel[];
@@ -465,6 +496,7 @@ export function SpotChartPanel({
   selectedTimeframe: SpotTimeframe;
   selectedTool: string;
   timeframes: readonly SpotTimeframe[];
+  units?: ChartUnits;
 }) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const readoutCandle =
@@ -517,7 +549,7 @@ export function SpotChartPanel({
 
       {chartTab === "price" ? (
         <div className="border-panel-border border-b px-3 py-1.5">
-          <OhlcReadout candle={readoutCandle} />
+          <OhlcReadout candle={readoutCandle} units={units} />
         </div>
       ) : null}
 
@@ -552,9 +584,10 @@ export function SpotChartPanel({
               hoveredIndex={hoveredIndex}
               indicatorsEnabled={indicatorsEnabled}
               onHoverChange={setHoveredIndex}
+              units={units}
             />
           ) : (
-            <DepthChart asks={asks} bids={bids} />
+            <DepthChart asks={asks} bids={bids} units={units} />
           )}
         </div>
       </div>

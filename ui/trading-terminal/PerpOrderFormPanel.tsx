@@ -450,7 +450,10 @@ function deriveTicket(inputs: TicketInputs) {
     notionalUsd !== null && inputs.state !== null
       ? notionalUsd * inputs.state.initialMarginRate + (feeUsd ?? 0)
       : null;
+  // A reduction is checked against maintenance margin, not initial: it never needs a deposit.
+  const reducing = inputs.reduceOnly && inputs.position !== null;
   const shortfall =
+    !reducing &&
     requiredMargin !== null &&
     inputs.availableMargin !== null &&
     requiredMargin > inputs.availableMargin
@@ -591,9 +594,22 @@ function isButtonEnabled(inputs: ButtonInputs) {
   );
 }
 
+/** Why Reduce Only is on, off or locked. */
+function reduceOnlyTooltip(hasPosition: boolean, closeOnly: boolean) {
+  if (closeOnly) {
+    return "The perp is winding down: the venue takes every order as reduce-only";
+  }
+  return hasPosition
+    ? "The venue clamps this order to your open position; it can never open or flip one"
+    : "Needs an open position to reduce";
+}
+
 function notLiveMessage(state: PerpState | null) {
   if (state?.paused) {
     return TRADING_PAUSED_MESSAGE;
+  }
+  if (state?.closeOnly) {
+    return "The perp is winding down: orders can only close an open position. Withdraw what is left from the Balances tab.";
   }
   if (state !== null && !state.tradingEnabled) {
     return "The market opens at launch. Prices are live; orders are not accepted yet.";
@@ -677,8 +693,12 @@ export function PerpOrderFormPanel({
     };
   }
 
-  const isLive = state?.tradingEnabled === true && onSubmit !== undefined;
   const hasPosition = position !== null;
+  // Winding down: every order is reduce-only, so with nothing to reduce there is nothing to send.
+  const closeOnly = state?.closeOnly === true;
+  const isLive =
+    state?.tradingEnabled === true && onSubmit !== undefined && (!closeOnly || hasPosition);
+  const reducing = (closeOnly || reduceOnly) && hasPosition;
   const marginSources = describePerpMarginSources(account);
   // The price in use, USDC per cNGN: the limit price when one is typed, else the price a market
   // order fills near. It values the cNGN size in USDC and so sets the margin either way.
@@ -706,7 +726,7 @@ export function PerpOrderFormPanel({
     limitPrice,
     orderType,
     position,
-    reduceOnly: reduceOnly && hasPosition,
+    reduceOnly: reducing,
     referencePrice,
     side,
     size,
@@ -755,7 +775,7 @@ export function PerpOrderFormPanel({
         limitPrice,
         maxSlippage,
         orderType,
-        reduceOnly: reduceOnly && hasPosition,
+        reduceOnly: reducing,
         side,
         size: fields.shown,
         sizeUnit,
@@ -902,16 +922,12 @@ export function PerpOrderFormPanel({
            * the switch is shown disabled and says why rather than letting a trader arm it.
            */}
           <CheckboxRow
-            checked={reduceOnly && hasPosition}
-            disabled={!hasPosition}
+            checked={reducing}
+            disabled={!hasPosition || closeOnly}
             id="perp-reduce-only"
             label="Reduce Only"
             onChange={edited(setReduceOnly)}
-            tooltip={
-              hasPosition
-                ? "The venue clamps this order to your open position; it can never open or flip one"
-                : "Needs an open position to reduce"
-            }
+            tooltip={reduceOnlyTooltip(hasPosition, closeOnly)}
           />
           {/*
            * The venue takes market and limit orders only; it has no trigger orders to attach a take

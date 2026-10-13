@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { parseFutureState } from "@/lib/future-market";
 import { buildOverviewRow, emptyOverviewRow } from "@/lib/market-overview";
 import type { MarketOverviewResponse, TerminalMarketId } from "@/lib/market-overview.types";
-import { findPerpMarket, findSpotMarket } from "@/lib/market-pickers";
+import { findFrontMonthFuture, findPerpMarket, findSpotMarket } from "@/lib/market-pickers";
 import type { MarketPresentation } from "@/lib/markets-service";
 import { getMarketBook, getMarketsServiceUrl, getMarketTrades } from "@/lib/markets-service";
 import { parsePerpState } from "@/lib/perp-market";
@@ -9,7 +10,8 @@ import { buildSpotMarket } from "@/lib/spot-market";
 
 /**
  * The market selector's table: every market the terminal offers, with the venue's own price,
- * 24h change and volume (and the perp's open interest, funding and leverage), read the same way
+ * 24h change and volume (the perp's open interest, funding and leverage; the future's last trade
+ * time), read the same way
  * each terminal's header reads them. Never cached: the selector opens on demand and shows the
  * venue as it is now. A market the venue is not serving, or one whose reads fail, keeps its row
  * with every figure null; the selector still lists it, with dashes, since the route exists.
@@ -32,21 +34,28 @@ export async function GET() {
   // orientation the venue no longer reports and show dashes for one it is serving.
   const spot = findSpotMarket(markets);
   const perp = findPerpMarket(markets);
+  // The front-month series: the one `/` opens and the selector lists.
+  const future = findFrontMonthFuture(markets, Date.now());
 
-  const [spotRow, perpRow] = await Promise.all([
+  const [spotRow, perpRow, futureRow] = await Promise.all([
     readRow("spot", spot ?? undefined, null),
     readRow("perp", perp ?? undefined, parsePerpState(perp?.perp)),
+    readRow("future", future ?? undefined, null, parseFutureState(future)),
   ]);
 
-  return NextResponse.json({ rows: [spotRow, perpRow] } satisfies MarketOverviewResponse, {
-    headers: { "cache-control": "no-store" },
-  });
+  return NextResponse.json(
+    { rows: [spotRow, perpRow, futureRow] } satisfies MarketOverviewResponse,
+    {
+      headers: { "cache-control": "no-store" },
+    }
+  );
 }
 
 async function readRow(
   id: TerminalMarketId,
   presentation: MarketPresentation | undefined,
-  perpState: ReturnType<typeof parsePerpState>
+  perpState: ReturnType<typeof parsePerpState>,
+  futureState: ReturnType<typeof parseFutureState> = null
 ) {
   if (!presentation?.asset_address) {
     return emptyOverviewRow(id);
@@ -64,5 +73,21 @@ async function readRow(
     stats24h: tradesResult.status === "fulfilled" ? tradesResult.value.stats24h : null,
     trades: tradesResult.status === "fulfilled" ? tradesResult.value.trades : [],
   });
-  return buildOverviewRow(id, market, perpState);
+  const volumeContracts = Number(
+    tradesResult.status === "fulfilled" ? tradesResult.value.stats24h?.volume : Number.NaN
+  );
+  return buildOverviewRow(
+    id,
+    market,
+    perpState,
+    futureState === null
+      ? null
+      : {
+          contractSizeUsdc: futureState.contractSizeUsdc,
+          lastTradeAtMs: futureState.lastTradeAtMs,
+          markPrice: futureState.markPrice,
+          symbol: presentation.market,
+          volumeContracts: Number.isFinite(volumeContracts) ? volumeContracts : null,
+        }
+  );
 }

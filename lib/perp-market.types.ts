@@ -26,6 +26,11 @@ export type PerpState = {
   tradingEnabled: boolean;
   /** The SRM guardian's pause: trades, deposits, withdrawals and liquidation bids all revert. */
   paused: boolean;
+  /**
+   * The perp is winding down: the venue takes every order as reduce-only, so an order can only
+   * shrink a position; what is left after that is withdrawn.
+   */
+  closeOnly: boolean;
 };
 
 /**

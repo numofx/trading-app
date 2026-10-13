@@ -10,20 +10,29 @@ import { HEADER_ACTION_CLASSES } from "@/ui/trading-terminal/TerminalHeaderBar";
 import { useTerminalSession } from "@/ui/trading-terminal/TerminalSession";
 
 /**
- * The trading account's one Deposit / Withdraw flow, the same on both markets. Since the
- * unified-account cutover (2026-10-04) spot and the perp settle into one account under one manager,
- * so there is one dialog for moving money in and out of it, wherever the trader opens it from.
+ * The trading account's one Deposit / Withdraw flow, the same dialog on every market. Spot and the
+ * future settle into one account under the MarginEngine, so they share it; the perp, winding down,
+ * passes its own account and manager (its SRM).
  *
  * Returns the header's Deposit and Withdraw controls (the dialog hangs off the Deposit trigger) and
  * the two openers every other entry point uses: the ticket's shortfall CTA, the Account rows, the
  * Balances tab. Each names the asset, so the dialog lands on the one the trader was looking at.
  */
 export function useAccountTransfer({
+  account: accountOverride,
   accountRows,
+  depositManager,
   depositNotes,
   depositPauseReasons,
   onTransferred,
 }: {
+  /**
+   * A trading account other than the session's: the future's, under the MarginEngine. Its own
+   * lookup, so a first deposit adopts the account it opens there.
+   */
+  account?: ReturnType<typeof useTerminalSession>["account"];
+  /** The manager a first deposit opens the account under, with `account`. */
+  depositManager?: `0x${string}`;
   /** The account's on-ledger rows, which the withdraw side reads its balances and Max from. */
   accountRows: { asset: string; balance: bigint }[] | null;
   /** A note per currency on the deposit form; the perp's cNGN haircut. */
@@ -41,7 +50,7 @@ export function useAccountTransfer({
   openWithdraw: (currency: DepositCurrency) => void;
 } {
   const {
-    account,
+    account: sessionAccount,
     isSignedIn,
     login,
     primaryWallet,
@@ -50,6 +59,7 @@ export function useAccountTransfer({
     walletBalances,
     wallets,
   } = useTerminalSession();
+  const account = accountOverride ?? sessionAccount;
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<TransferMode>("deposit");
   // Held here rather than inside the dialog because the opener names the currency: a "Deposit
@@ -102,6 +112,7 @@ export function useAccountTransfer({
         account={buildDepositAccount(primaryWallet, account.subaccountId)}
         accountRows={accountRows}
         currency={currency}
+        depositManager={depositManager}
         depositNotes={depositNotes}
         depositPauseReasons={depositPauseReasons}
         fundingWallets={isSignedIn ? wallets : []}

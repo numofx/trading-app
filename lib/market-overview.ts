@@ -5,32 +5,57 @@ import type {
   TerminalMarketId,
   TerminalMarketKind,
 } from "@/lib/market-overview.types";
-import { marketPath } from "@/lib/market-routes";
+import { futurePath, marketPath } from "@/lib/market-routes";
 import { PERP_MARKET_LABEL } from "@/lib/perp-terminal-config";
 import { getAnchorPrice, getBestPrices } from "@/lib/spot-market";
 import { formatCompactVolume, get24hStats, getVenueLastPrice } from "@/lib/ticker-stats";
 import type { SpotMarket } from "@/lib/trading.types";
 
-/**
- * The markets the selector offers, each at its own URL under `/trade`. The shell (header, wallet,
- * trading account, selector) persists across them; the market's panels are keyed by the slug, so
- * switching never carries one market's ticket or book into the other.
- */
-export const TERMINAL_MARKETS = [
-  { href: marketPath("spot"), id: "spot", kind: "spot", symbol: MARKET_LABELS["cNGN-USDC"] },
-  { href: marketPath("perp"), id: "perp", kind: "perp", symbol: PERP_MARKET_LABEL },
-] as const satisfies readonly TerminalMarketEntry[];
+const SPOT_ENTRY = {
+  href: marketPath("spot"),
+  id: "spot",
+  kind: "spot",
+  symbol: MARKET_LABELS["cNGN-USDC"],
+} as const satisfies TerminalMarketEntry;
 
 /**
- * Whether the selector shows its Futures tab. Off unless `NEXT_PUBLIC_FUTURES_TAB=true`: no futures
- * market is enabled on the venue yet, so the tab stays hidden until one is.
+ * The perp, which is winding down: close-only on its old accounts, then withdrawals. It is out of
+ * the selector and reachable at `/perp`; the entry names it in the header pill on its own page.
  */
-export function isFuturesTabEnabled() {
-  return process.env.NEXT_PUBLIC_FUTURES_TAB?.trim().toLowerCase() === "true";
+const PERP_ENTRY = {
+  href: marketPath("perp"),
+  id: "perp",
+  kind: "perp",
+  symbol: PERP_MARKET_LABEL,
+} as const satisfies TerminalMarketEntry;
+
+/** A future series' entry, under the venue's own symbol. */
+export function futureEntry(symbol: string): TerminalMarketEntry {
+  return { href: futurePath(symbol), id: "future", kind: "futures", symbol };
 }
 
-export function getTerminalMarket(id: TerminalMarketId): TerminalMarketEntry {
-  return TERMINAL_MARKETS.find((entry) => entry.id === id) ?? TERMINAL_MARKETS[0];
+/**
+ * The markets the selector offers, each at its own URL under `/trade`: spot, and the future series
+ * the venue lists (`futureSymbol`, null when it lists none). The shell (header, wallet, trading
+ * account, selector) persists across them; the market's panels are keyed by the slug, so switching
+ * never carries one market's ticket or book into the other.
+ */
+export function selectorMarkets(futureSymbol: string | null): TerminalMarketEntry[] {
+  return futureSymbol === null ? [SPOT_ENTRY] : [SPOT_ENTRY, futureEntry(futureSymbol)];
+}
+
+/** The entry for the market on screen; a future needs its series' symbol. */
+export function getTerminalMarket(
+  id: TerminalMarketId,
+  futureSymbol: string | null = null
+): TerminalMarketEntry {
+  if (id === "perp") {
+    return PERP_ENTRY;
+  }
+  if (id === "future" && futureSymbol !== null) {
+    return futureEntry(futureSymbol);
+  }
+  return SPOT_ENTRY;
 }
 
 /** A row with nothing served: every figure a dash. */
@@ -39,8 +64,10 @@ export function emptyOverviewRow(id: TerminalMarketId): MarketOverviewRow {
     changePercent24h: null,
     fundingRate1h: null,
     id,
+    lastTradeAtMs: null,
     openInterestUsd: null,
     price: null,
+    symbol: null,
     volume24hUsd: null,
   };
 }
@@ -50,6 +77,9 @@ export function emptyOverviewRow(id: TerminalMarketId): MarketOverviewRow {
  * them: the price is the book's mid (else one side, else the last trade), the change is measured
  * from the window's first trade to the last, and the volume is the window's USDC notional.
  * `markPrice` is the perp's fallback when nothing rests and nothing traded; spot has none.
+ *
+ * The future passes its mark and last trade time, and its volume in contracts: the venue's quote
+ * volume on it is price × contracts, not money, so the USDC notional is the contracts at their size.
  */
 export function buildOverviewRow(
   id: TerminalMarketId,
@@ -58,19 +88,31 @@ export function buildOverviewRow(
     markPrice: number;
     openInterestUsd: number;
     uiLongFundingRate1h: number;
-  } | null
+  } | null,
+  future: {
+    contractSizeUsdc: number;
+    lastTradeAtMs: number;
+    markPrice: number | null;
+    symbol: string;
+    volumeContracts: number | null;
+  } | null = null
 ): MarketOverviewRow {
   const lastPrice = getVenueLastPrice(market.trades, market.candles, market.mark);
   const { bestAsk, bestBid } = getBestPrices(market.orderBookAsks, market.orderBookBids);
-  const price = getAnchorPrice(bestAsk, bestBid, lastPrice) ?? perp?.markPrice ?? null;
+  const price =
+    getAnchorPrice(bestAsk, bestBid, lastPrice) ?? perp?.markPrice ?? future?.markPrice ?? null;
   const { changePercent } = get24hStats(market.stats24h, lastPrice);
+  const futureVolume =
+    future?.volumeContracts == null ? null : future.volumeContracts * future.contractSizeUsdc;
   return {
     changePercent24h: changePercent,
     fundingRate1h: perp?.uiLongFundingRate1h ?? null,
     id,
+    lastTradeAtMs: future?.lastTradeAtMs ?? null,
     openInterestUsd: perp?.openInterestUsd ?? null,
     price,
-    volume24hUsd: market.stats24h?.quoteVolume ?? null,
+    symbol: future?.symbol ?? null,
+    volume24hUsd: future === null ? (market.stats24h?.quoteVolume ?? null) : futureVolume,
   };
 }
 

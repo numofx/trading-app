@@ -1,5 +1,6 @@
 /**
- * Build check: the stack this bundle resolves must be the stack the venue serves spot on.
+ * Build check: the stack this bundle resolves must be the stack the venue serves spot (and the
+ * perp, for its manager) on.
  *
  * The ticket signs spot orders for the asset and module `/v1/markets` reports, but deposits,
  * account resolution, the legacy rows and the perp fall back to `NEXT_PUBLIC_*`, and those fall
@@ -42,7 +43,20 @@ const CHECKS = [
     "margin_manager_address",
     "NEXT_PUBLIC_USDCCNGN_MANAGER_ADDRESS",
     defaults.manager,
-    "margin manager (SRM)",
+    "margin manager (the MarginEngine, which spot and the future share)",
+  ],
+];
+
+/**
+ * The perp's manager is checked against the perp's own entry: it stays on its SRM until its cap
+ * under the engine is set, and the perp terminal resolves its account there.
+ */
+const PERP_CHECKS = [
+  [
+    "margin_manager_address",
+    "NEXT_PUBLIC_PERP_MANAGER_ADDRESS",
+    defaults.perpManager,
+    "perp margin manager",
   ],
 ];
 
@@ -97,9 +111,20 @@ if (!spot) {
   process.exit(0);
 }
 
+const perp = markets.find(
+  (market) =>
+    market.contract_type === "perpetual" &&
+    market.base_asset_symbol === "cNGN" &&
+    market.quote_asset_symbol === "USDC"
+);
+
 const failures = [];
-for (const [field, envName, fallback, label] of CHECKS) {
-  const served = spot[field]?.toLowerCase();
+const comparisons = [
+  ...CHECKS.map((check) => [spot, ...check]),
+  ...(perp ? PERP_CHECKS.map((check) => [perp, ...check]) : []),
+];
+for (const [market, field, envName, fallback, label] of comparisons) {
+  const served = market[field]?.toLowerCase();
   if (!served) {
     note(`venue does not report ${field}; ${label} not compared`);
     continue;

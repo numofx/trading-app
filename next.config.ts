@@ -38,18 +38,16 @@ const nextConfig: NextConfig = {
     },
   },
   /**
-   * `/` opens the default market, the perp, and `/perp`, the perp's route until 2026-10-08, keeps
-   * working. Both markets render at `/trade/<slug>` (`lib/market-routes.ts`; this file cannot
-   * import it, so `lib/market-routes.test.mjs` pins the two together). Temporary (307): the
-   * default may change again, and a 308 is cached by browsers for good. Next carries the query
+   * `/perp` opens the perp, which is winding down: it is out of the market selector, and its
+   * holders reach it here to close positions and withdraw. `/` is not here: it opens the
+   * front-month future, chosen per request (`app/route.ts`). Markets render at `/trade/<slug>`
+   * (`lib/market-routes.ts`; this file cannot import it, so `lib/market-routes.test.mjs` pins the
+   * two together). Temporary (307): a 308 is cached by browsers for good. Next carries the query
    * string over on its own. The matcher is case-insensitive, so `/PERP` lands here too; a
    * `/trade/<slug>` in another casing is redirected by `proxy.ts`.
    */
   async redirects() {
-    return [
-      { destination: "/trade/cngn-perp", permanent: false, source: "/" },
-      { destination: "/trade/cngn-perp", permanent: false, source: "/perp" },
-    ];
+    return [{ destination: "/trade/cngn-perp", permanent: false, source: "/perp" }];
   },
   async rewrites() {
     return [

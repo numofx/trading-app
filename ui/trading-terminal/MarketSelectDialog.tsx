@@ -4,6 +4,7 @@ import { Dialog } from "@base-ui/react/dialog";
 import { Check, ChevronDown, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { formatCountdown, formatFuturePrice, formatUtcStamp } from "@/lib/future-market";
 import { formatPrice } from "@/lib/market-formatting";
 import {
   emptyOverviewRow,
@@ -12,8 +13,7 @@ import {
   formatOpenInterest,
   formatOverviewVolume,
   getTerminalMarket,
-  isFuturesTabEnabled,
-  TERMINAL_MARKETS,
+  selectorMarkets,
 } from "@/lib/market-overview";
 import type {
   MarketOverviewRow,
@@ -25,11 +25,16 @@ import { SmartImage } from "@/ui/SmartImage";
 import { SmartLink } from "@/ui/SmartLink";
 import { useMarketOverview } from "@/ui/trading-terminal/useMarketOverview";
 
+/** No Perp tab: the perp is winding down and reachable only at `/perp`. */
 const TABS = [
   { kind: "spot", label: "Spot" },
-  { kind: "perp", label: "Perp" },
   { kind: "futures", label: "Futures" },
 ] as const satisfies readonly { kind: TerminalMarketKind; label: string }[];
+
+/** The tab a market lists under; the perp's page opens the selector on Spot. */
+function tabFor(kind: TerminalMarketKind): TerminalMarketKind {
+  return kind === "perp" ? "spot" : kind;
+}
 
 /**
  * Column templates per tab, ending in a fixed column for the selected-market check. The perp-only
@@ -38,7 +43,7 @@ const TABS = [
  */
 const GRID_CLASS = {
   futures:
-    "grid-cols-[minmax(0,2.8fr)_minmax(0,1.05fr)_minmax(0,1.15fr)_1rem] md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_1rem]",
+    "grid-cols-[minmax(0,2.8fr)_minmax(0,1.05fr)_minmax(0,1.15fr)_1rem] md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)_1rem]",
   perp: "grid-cols-[minmax(0,2.8fr)_minmax(0,1.05fr)_minmax(0,1.15fr)_1rem] md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_1rem]",
   spot: "grid-cols-[minmax(0,2.8fr)_minmax(0,1.05fr)_minmax(0,1.15fr)_1rem] md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_1rem]",
 } satisfies Record<TerminalMarketKind, string>;
@@ -136,6 +141,9 @@ function ColumnHeaders({ kind }: { kind: TerminalMarketKind }) {
           <span className={cn(headerClass, HIDDEN_ON_PHONE)}>1h funding</span>
         </>
       ) : null}
+      {kind === "futures" ? (
+        <span className={cn(headerClass, HIDDEN_ON_PHONE)}>Last trade in</span>
+      ) : null}
       <span aria-hidden />
     </div>
   );
@@ -153,7 +161,7 @@ function MarketRow({
   selected: boolean;
 }) {
   return (
-    // Rows are links, not state: spot and perp are separate routes, so switching never carries
+    // Rows are links, not state: every market is its own route, so switching never carries
     // one terminal's ticket or book into the other, and each has its own URL.
     <SmartLink
       aria-current={selected ? "page" : undefined}
@@ -169,7 +177,9 @@ function MarketRow({
       <span className="flex min-w-0 items-center gap-2">
         <MarketIdentity compact symbol={entry.symbol} />
       </span>
-      <span className={cn(CELL_CLASS, "text-panel-text-active")}>{formatPrice(row.price)}</span>
+      <span className={cn(CELL_CLASS, "text-panel-text-active")}>
+        {entry.kind === "futures" ? formatFuturePrice(row.price) : formatPrice(row.price)}
+      </span>
       <ChangeCell value={row.changePercent24h} />
       <span className={cn(CELL_CLASS, HIDDEN_ON_PHONE)}>
         {formatOverviewVolume(row.volume24hUsd)}
@@ -184,6 +194,18 @@ function MarketRow({
           </span>
         </>
       ) : null}
+      {entry.kind === "futures" ? (
+        <span
+          className={cn(CELL_CLASS, HIDDEN_ON_PHONE)}
+          title={
+            row.lastTradeAtMs === null
+              ? undefined
+              : `New orders close ${formatUtcStamp(row.lastTradeAtMs)}`
+          }
+        >
+          {row.lastTradeAtMs === null ? "—" : formatCountdown(row.lastTradeAtMs, Date.now())}
+        </span>
+      ) : null}
       <span className="flex justify-end">
         {selected ? (
           <Check aria-label="Selected market" className="size-4 shrink-0 text-panel-text-muted" />
@@ -194,36 +216,42 @@ function MarketRow({
 }
 
 /**
- * The header's market pill and the market dialog it opens: a Spot/Perp/Futures tab row with the close
- * control, and a table of the markets under the active tab with the venue's figures. Choosing a
- * row navigates to that market's route. Escape, the backdrop and the X all close it; the body
- * does not scroll behind it. Below `md` it rises as a bottom sheet rather than a centred card.
+ * The header's market pill and the market dialog it opens: a Spot/Futures tab row with the close
+ * control, and a table of the markets under the active tab with the venue's figures. Futures lists
+ * the front-month series the venue serves, so a roll needs no deploy. Choosing a row navigates to
+ * that market's route. Escape, the backdrop and the X all close it; the body does not scroll behind
+ * it. Below `md` it rises as a bottom sheet rather than a centred card.
  */
 export function MarketSelectDialog({
   changePercent24h,
+  futureSymbol,
   market,
   price,
 }: {
   /** The header's live figures for the market on screen. */
   changePercent24h: number | null;
+  /** The series on screen when `market` is a future, from the route; null otherwise. */
+  futureSymbol: string | null;
   market: TerminalMarketId;
   price: number | null;
 }) {
+  const selected = getTerminalMarket(market, futureSymbol);
   const [open, setOpen] = useState(false);
-  const [kind, setKind] = useState<TerminalMarketKind>(getTerminalMarket(market).kind);
+  const [kind, setKind] = useState<TerminalMarketKind>(tabFor(selected.kind));
   const rowFor = useMarketOverview(open, {
     ...emptyOverviewRow(market),
     changePercent24h,
     price,
   });
-  const selected = getTerminalMarket(market);
-  const entries = filterTerminalMarkets(TERMINAL_MARKETS, kind, "");
+  // The series to list: the one on screen, else the front-month the venue last reported.
+  const listedFuture = futureSymbol ?? rowFor("future").symbol;
+  const entries = filterTerminalMarkets(selectorMarkets(listedFuture), kind, "");
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
     if (next) {
       // Each opening lands on the tab of the market on screen.
-      setKind(selected.kind);
+      setKind(tabFor(selected.kind));
     }
   }
 
@@ -250,13 +278,13 @@ export function MarketSelectDialog({
           <Dialog.Title className="sr-only">Select a market</Dialog.Title>
 
           {/*
-           * The Spot/Perp/Futures tabs in the terminal's own tab style (see PanelTabs): underlined text on
+           * The Spot/Futures tabs in the terminal's own tab style (see PanelTabs): underlined text on
            * one rule, left-aligned, the active tab bright, never a filled pill. The close control
            * rides the right end of the same row.
            */}
           <div className="mx-5 my-3 flex items-center justify-between gap-3 border-panel-border border-b">
             <div aria-label="Market type" className="flex gap-6" role="tablist">
-              {TABS.filter((tab) => tab.kind !== "futures" || isFuturesTabEnabled()).map((tab) => (
+              {TABS.map((tab) => (
                 <button
                   aria-selected={tab.kind === kind}
                   className={cn(
@@ -289,7 +317,7 @@ export function MarketSelectDialog({
             <ColumnHeaders kind={kind} />
             {entries.length === 0 ? (
               <p className="py-8 text-center text-[13px] text-panel-text-muted">
-                {kind === "futures" ? "No futures markets listed yet" : "No markets found"}
+                {kind === "futures" ? "No futures listed right now" : "No markets found"}
               </p>
             ) : (
               <div className="pt-1">
@@ -299,7 +327,7 @@ export function MarketSelectDialog({
                     key={entry.id}
                     onSelect={() => setOpen(false)}
                     row={rowFor(entry.id)}
-                    selected={entry.id === market}
+                    selected={entry.href === selected.href}
                   />
                 ))}
               </div>

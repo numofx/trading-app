@@ -34,8 +34,9 @@ export type TerminalSession = {
   wallets: ConnectedWallet[];
   walletsReady: boolean;
   /**
-   * The wallet's one trading account. Since the unified-account cutover (2026-10-04) spot and the
-   * perp trade on one stack under one manager, so one lookup serves both markets.
+   * The wallet's one trading account, under the MarginEngine since 2026-10-13: spot and the future
+   * trade from it, so spot holdings and futures positions margin one balance. The perp, which is
+   * winding down, resolves its own account under its SRM.
    */
   account: ReturnType<typeof useTradingSubaccount>;
   /** The wallet's own USDC and cNGN, which a deposit draws on. */

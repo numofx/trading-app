@@ -1,10 +1,13 @@
 import { notFound } from "next/navigation";
 import { getAddress, isAddress } from "viem";
+import { parseFutureStack, parseFutureState } from "@/lib/future-market";
+import type { FutureMarket } from "@/lib/future-market.types";
 import { toUiCandles } from "@/lib/market-candles";
-import type { TerminalMarketId } from "@/lib/market-overview.types";
+import type { ResolvedMarket } from "@/lib/market-routes";
 import { resolveMarketSlug } from "@/lib/market-routes";
 import type { BookResponse, CandleInterval, MarketPresentation } from "@/lib/markets-service";
 import {
+  getLiveFutureMarket,
   getLivePerpMarket,
   getLiveSpotMarket,
   getMarketBook,
@@ -16,10 +19,13 @@ import type { PerpMarket } from "@/lib/perp-market.types";
 import type { LiveSpotRuntime } from "@/lib/spot-market";
 import { buildSpotMarket } from "@/lib/spot-market";
 import type { Candle } from "@/lib/trading.types";
+import { FutureMarketPanels } from "@/ui/trading-terminal/FutureMarketPanels";
 import { PerpMarketPanels } from "@/ui/trading-terminal/PerpMarketPanels";
 import { SpotMarketPanels } from "@/ui/trading-terminal/SpotMarketPanels";
 
 const CHART_CANDLE_INTERVAL: CandleInterval = "1d";
+
+type MarketDataType = "future" | "perp" | "spot";
 const CHART_CANDLE_LIMIT = 120;
 
 /**
@@ -33,7 +39,7 @@ export const dynamic = "force-dynamic";
 /** Converts served candles for the chart; a payload it cannot read renders no candles. */
 function presentCandles(
   candles: Awaited<ReturnType<typeof getMarketCandles>>,
-  type: "perp" | "spot"
+  type: MarketDataType
 ): Candle[] {
   try {
     return toUiCandles(candles, type, CHART_CANDLE_INTERVAL);
@@ -70,7 +76,7 @@ function presentOrderStack(
  * A market's book, candles and trades, read together: the page waits on the slowest, not the sum,
  * and each settles on its own, so one failing still renders the others' data.
  */
-async function readMarketData(assetAddress: string, subId: string, type: "perp" | "spot") {
+async function readMarketData(assetAddress: string, subId: string, type: MarketDataType) {
   const [bookResult, candlesResult, tradesResult] = await Promise.allSettled([
     getMarketBook(assetAddress, subId),
     getMarketCandles(assetAddress, subId, CHART_CANDLE_INTERVAL, CHART_CANDLE_LIMIT),
@@ -127,9 +133,51 @@ async function loadPerpMarket(): Promise<PerpMarket | null> {
   return { ...market, stack, state, symbol: presentation.market };
 }
 
-async function renderMarket(id: TerminalMarketId) {
-  if (id === "perp") {
+/** Contracts traded in the window, from the venue's `stats_24h.volume`; null when it served none. */
+function contractsTraded(stats24h: Awaited<ReturnType<typeof readMarketData>>["stats24h"]) {
+  const volume = Number(stats24h?.volume);
+  return Number.isFinite(volume) && volume >= 0 ? volume : null;
+}
+
+/**
+ * The live future, or null when markets-service does not list it or lists it without its state or
+ * a complete stack; the panels then render their not-live state. Its book carries no `ui_intent`:
+ * the engine's side, cNGN-per-USDC price and contracts are already the trader's.
+ */
+async function loadFutureMarket(symbol: string): Promise<FutureMarket | null> {
+  let presentation: MarketPresentation | null;
+  try {
+    presentation = await getLiveFutureMarket(symbol);
+  } catch {
+    return null;
+  }
+  const state = parseFutureState(presentation);
+  const stack = parseFutureStack(presentation);
+  if (presentation === null || state === null || stack === null) {
+    return null;
+  }
+  const data = await readMarketData(stack.assetAddress, stack.subId, "future");
+  const market = buildSpotMarket(data, { engineFieldOrders: true });
+  return {
+    ...market,
+    stack,
+    state,
+    symbol: presentation.market,
+    volumeContracts24h: contractsTraded(data.stats24h),
+  };
+}
+
+async function renderMarket(resolved: ResolvedMarket) {
+  if (resolved.id === "perp") {
     return <PerpMarketPanels market={await loadPerpMarket()} />;
+  }
+  if (resolved.id === "future") {
+    return (
+      <FutureMarketPanels
+        market={await loadFutureMarket(resolved.symbol)}
+        symbol={resolved.symbol}
+      />
+    );
   }
   return <SpotMarketPanels spotMarket={buildSpotMarket(await loadSpotMarket())} />;
 }
@@ -146,8 +194,8 @@ export default async function TradePage({ params }: { params: Promise<{ market: 
     notFound();
   }
   return (
-    <div className="contents" key={resolved.id}>
-      {await renderMarket(resolved.id)}
+    <div className="contents" key={slug}>
+      {await renderMarket(resolved)}
     </div>
   );
 }

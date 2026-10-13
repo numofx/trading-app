@@ -1,10 +1,26 @@
 import type { Route } from "next";
 import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
+import { findFutureBySymbol } from "@/lib/market-pickers";
 import { resolveMarketSlug } from "@/lib/market-routes";
+import { getMarketsServiceMarkets } from "@/lib/markets-service";
 
 /**
- * Answers for the slug before anything streams. The page below sits behind `loading.tsx`, so the
+ * Whether the venue lists the future series `symbol`. A venue it cannot read is given the benefit
+ * of the doubt: the page then renders the series' not-live state rather than a 404 for a market
+ * that may well exist.
+ */
+async function isListedFuture(symbol: string) {
+  try {
+    return findFutureBySymbol(await getMarketsServiceMarkets(), symbol) !== null;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Answers for the slug before anything streams: a future slug is a 404 unless the venue lists
+ * that series. The page below sits behind `loading.tsx`, so the
  * shell and its skeleton are flushed before the page runs, and a `notFound()` or `redirect()`
  * thrown there arrives after the headers as a 200 with a meta refresh. A layout renders ahead of
  * that boundary, so an unknown slug is a real 404 here.
@@ -29,6 +45,9 @@ export default async function MarketLayout({
   }
   if ("redirect" in resolved) {
     redirect(resolved.redirect as Route);
+  }
+  if (resolved.id === "future" && !(await isListedFuture(resolved.symbol))) {
+    notFound();
   }
   return children;
 }

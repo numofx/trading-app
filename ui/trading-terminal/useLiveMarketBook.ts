@@ -43,7 +43,7 @@ export function useLiveMarketBook({
   snapshot: Pick<SpotMarket, "mark" | "orderBookAsks" | "orderBookBids" | "stats24h" | "trades">;
   /** The venue's symbol; markets-service resolves the stream subscription from it. */
   symbol: string;
-  type: "perp" | "spot";
+  type: "future" | "perp" | "spot";
 }) {
   const stream = useMarketOrderBook({ enabled, market: enabled ? symbol : null, type });
   const bids = stream.isLive ? stream.bids : snapshot.orderBookBids;

@@ -61,6 +61,7 @@ export function usePerpLiveState(market: PerpMarket | null): PerpMarket | null {
 
 /** Sentinel for "markets-service served the perp without its block": closed, prices unknown. */
 const CLOSED_FALLBACK: PerpState = {
+  closeOnly: false,
   fundingIntervalSeconds: 3600,
   indexPrice: 0,
   initialMarginRate: 0,

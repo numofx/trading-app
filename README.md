@@ -4,13 +4,16 @@
 
 Renders the cNGN-USDC spot market through an orderbook UI, with off/on ramping via Busha and Coinbase APIs for instant USD/USDC and NGN/cNGN conversions. Integrated with `markets-service` for live books and trades.
 
-The app renders **cNGN-USDC** spot at `/trade/cngn-usdc` and **cNGN-PERP** at `/trade/cngn-perp`,
-switched from the market selector in the header. One route, one shell: the `/trade` layout holds
-the header, the wallet, the trading account and the selector, and a switch replaces only the
-market's panels under it (keyed by the slug, so a ticket or a book tab never carries over). The
-slugs live in `lib/market-routes.ts`. `/` opens the perp, the default market, and so does `/perp`
-(both 307 for now). A slug in another casing is redirected to lowercase by `proxy.ts` with its query
-string, and an unknown slug is a 404 from the segment's layout. Both markets are shown exactly as the engine trades them: cNGN is the base and USDC the
+The app renders **cNGN-USDC** spot at `/trade/cngn-usdc` and the front-month **cNGN future**
+(`USDC-cNGN-<DDMONYY>`) at its lowercased symbol, e.g. `/trade/usdc-cngn-30nov26`, switched from the
+market selector in the header. **cNGN-PERP** at `/trade/cngn-perp` is winding down: out of the
+selector, reached at `/perp` (307). One route, one shell: the `/trade` layout holds the header, the
+wallet, the trading account and the selector, and a switch replaces only the market's panels under
+it (keyed by the slug, so a ticket or a book tab never carries over). The slugs live in
+`lib/market-routes.ts`. `/` opens the front-month future, chosen per request from `/v1/markets`, or
+spot when none is listed (`app/route.ts`, 307). A slug in another casing is redirected to lowercase
+by `proxy.ts` with its query string, and an unknown slug, or a future series the venue does not
+list, is a 404 from the segment's layout. Spot and the perp are shown exactly as the engine trades them: cNGN is the base and USDC the
 quote, prices are USDC per cNGN (about 0.00073, to seven decimals, with ₦ per USDC as a secondary
 line under the ticket's limit-price field), sizes are cNGN, a buy or long is a buy of
 cNGN. Since 2026-10-08 the venue identifies the markets as `cNGN-USDC` and `cNGN-PERP`; the pre-rename
@@ -24,9 +27,12 @@ about it from `markets-service`, with no env of its own:
   Until it does, `/trade/cngn-perp` renders its not-live state: empty panels and a ticket that
   cannot submit.
 - Orders are signed exactly as entered (USDC per cNGN, cNGN contracts, a long is the on-chain long)
-  for the perp's module and asset. A trader's perp margin is their one trading account under the
-  perp SRM, opened by the first deposit; since the unified-account cutover (2026-10-04) it is also
-  the spot account, so spot fills and perp margin share one balance. "Withdraw" on the Balances
+  for the perp's module and asset. A trader's perp margin is their account under the perp SRM,
+  opened by the first deposit. From 2026-10-04 to the MarginEngine cutover it was also the spot
+  account; since then spot trades from the wallet's MarginEngine account (see "The future"
+  below). The perp is **winding down**: the venue takes every order as reduce-only
+  (`close_only`), the ticket locks to Reduce Only and opens no new perp accounts, and what is left
+  is withdrawn. It is out of the market selector, reached at `/perp`. "Withdraw" on the Balances
   tab signs a WithdrawalModule action for the perp's CashAsset, like a spot withdrawal, and the
   venue pays USDC to the wallet; cash backing an open position is refused by the venue's
   simulation. "Close" on a position row sends a market order on the opposite side sized in the
@@ -51,6 +57,35 @@ about it from `markets-service`, with no env of its own:
   ticket's own price.
 
 The earlier dated-futures terminal was removed; the perp is a new market, not a restoration of it.
+
+## The future
+
+**USDC-cNGN-30NOV26** is at `/trade/usdc-cngn-30nov26`, under the selector's Futures tab: a
+cash-settled cNGN future on the venue's MarginEngine (`0xA19E…0758`), quoted the way it trades,
+cNGN per USDC, one contract 1,000 USDC. A long gains as cNGN weakens. Everything about it is read
+from its `/v1/markets` entry (`contract_type: future`, the `future` block, `fill_band_low` /
+`fill_band_high`):
+
+- **One account for spot and the future.** Only accounts under the MarginEngine can hold the
+  future, and an account's manager is fixed when it is opened, so the wallet's trading account
+  is resolved and opened under the engine (`NEXT_PUBLIC_USDCCNGN_MANAGER_ADDRESS`, default the
+  engine). Spot settles into the same cash and cNGN escrow, so spot holdings and futures positions
+  margin one balance. The perp is winding down on its SRM and does not join; its terminal
+  resolves its own account there (`NEXT_PUBLIC_PERP_MANAGER_ADDRESS`), and balances left in that
+  account, perp margin and spot fills from 2026-10-04 on, withdraw from the perp's Balances tab.
+- **Routes follow the venue.** A series lives at its symbol lowercased
+  (`/trade/usdc-cngn-30nov26`); a slug of that shape is a 404 unless `/v1/markets` lists it. `/`
+  opens the front-month future (the nearest unexpired series, `app/route.ts`), else spot, and the
+  selector's Futures tab lists the same series, so a roll needs no deploy.
+- **Orders** are signed for the future's asset and series (`sub_id`, the expiry) on the perp's
+  TradeModule, in whole contracts, with the fee ceiling per contract (3 USDC, against the venue's
+  2.5 USDC). The ticket refuses a limit outside the fill band, and a market order is held inside
+  it. There is no reduce-only: the venue refuses it on the future.
+- **Position and margin** come from chain, every 15s: the ledger, `getMargin` at initial and
+  maintenance, `getPendingVM` and the engine's futures rates. `/v1/positions` covers the perp
+  only. There is no entry price, uPnL or liquidation price; the engine keeps none.
+- **The series closes** for new orders at its last trade time (13:00 UTC on 30 Nov) and settles at
+  14:00; the header counts down to the first.
 
 ## Runtime config
 
@@ -129,11 +164,11 @@ not appear, so an empty `[]` means none of the pairs are configured on the backe
 > registry — it dated from the standalone `markets-service` repo and was never updated when the
 > service moved into `numofx/exchange`, so it sent readers looking for env vars matching nothing.
 
-The frontend picks its markets out of that list with `findSpotMarket` and `findPerpMarket`
-(`lib/market-pickers.ts`, used by `getLiveSpotMarket`, `getLivePerpMarket` and the selector's
-overview route alike), taking the first entry whose `contract_type` is `spot` or `perpetual`,
-`base_asset_symbol` is `cNGN` and `quote_asset_symbol` is `USDC`. The futures rows are ignored — the futures filter
-(`getLiveDeliverableFXFutures`) was deleted along with the futures UI.
+The frontend picks its markets out of that list with `findSpotMarket`, `findPerpMarket` and
+`findFutureMarket` (`lib/market-pickers.ts`, used by the terminals and the selector's overview
+route alike): spot and the perp are the first entry whose `contract_type` is `spot` or `perpetual`
+with `base_asset_symbol` cNGN and `quote_asset_symbol` USDC; the future is the first `future`,
+which the venue names USDC over cNGN.
 
 ## Spot market status
 
@@ -163,10 +198,12 @@ the browser bundle: keep the Alchemy key domain-restricted, and rotate it there 
 
 ### Matching stack (Base mainnet)
 
-Since the **unified-account cutover on 2026-10-04**, spot and the perp trade on one stack: the
-perp's TradeModule, under the perp's StandardManager (SRM), quoted in the perp's CashAsset, with
-the perp's cNGN escrow as the spot asset. A wallet has one trading account for both markets, so a
-spot fill settles into the same cash and collateral the perp margins against.
+Since the **unified-account cutover on 2026-10-04**, every market trades on one stack: the
+perp's TradeModule, quoted in the perp's CashAsset, with the perp's cNGN escrow as the spot asset.
+Since the **MarginEngine cutover**, a wallet's trading account for spot and the future lives under
+the MarginEngine; the perp winds down under its StandardManager (SRM). The build check fails until `/v1/markets` reports the engine as spot's
+`margin_manager_address` (markets-service `SPOT_MARGIN_MANAGER_ADDRESS`), so the venue moves
+first; markets-service's `DEPOSIT_MANAGER_ADDRESS` should move with it.
 
 `GET /v1/markets` is the source of truth for the stack: the ticket signs spot orders for the
 `asset_address` and `trade_module_address` the venue reports, and the perp reads its whole stack
@@ -183,7 +220,8 @@ escrow and trade another. A production build also fails when the venue cannot be
 | `NEXT_PUBLIC_TRADE_MODULE_ADDRESS` | `0xDea968188598BA0E3F58A56C0fdfF338C74F699f` | the perp TradeModule — the one module both markets' trades go through; it trades any base asset the order names |
 | `NEXT_PUBLIC_WITHDRAWAL_MODULE_ADDRESS` | `0x0a10AE2f5D2482cE1e43bC309D430B8861C2b5aB` | WithdrawalModule — signed withdrawals from accounts Matching holds, submitted by the venue's executor |
 | `NEXT_PUBLIC_SUBACCOUNT_CREATOR_ADDRESS` | `0x568890A8D63Ba8a03b6eCbEedA1bD9f6ea014D5D` | periphery for `createAndDepositSubAccount` |
-| `NEXT_PUBLIC_USDCCNGN_MANAGER_ADDRESS` | `0xDE0423D0a1E15536265C9513d2e0c10DAb5835D4` | the perp SRM — the manager every trading account is resolved and created under |
+| `NEXT_PUBLIC_USDCCNGN_MANAGER_ADDRESS` | `0xA19E296021c9DF25b90D96C2A0793CC3D0800758` | the MarginEngine — the manager the trading account spot and the future share is resolved and created under |
+| `NEXT_PUBLIC_PERP_MANAGER_ADDRESS` | `0xDE0423D0a1E15536265C9513d2e0c10DAb5835D4` | the perp SRM — where perp accounts close out and withdraw during the wind-down |
 | `NEXT_PUBLIC_SUBACCOUNTS_ADDRESS` | `0x7019244E25FA416e6Ca2ed2F3cA25277aef72843` | SubAccounts ERC-721 ledger |
 | `NEXT_PUBLIC_WRAPPED_USDC_ASSET_ADDRESS` | `0xA74E49b4Ed7cb176bc02ef4D8a1A3240C9aD4272` | the perp CashAsset — the USDC deposit escrow and the module's `quoteAsset()`, holding real USDC |
 | `NEXT_PUBLIC_SPOT_ASSET_ADDRESS` / `NEXT_PUBLIC_CNGN_ASSET_ADDRESS` | `0x37c976bb5d4887a714ef19AF6B83e34fe2f37c98` | the perp cNGN escrow — the spot asset, the cNGN deposit escrow, and the collateral the SRM credits at its factor |

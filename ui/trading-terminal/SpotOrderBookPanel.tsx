@@ -23,18 +23,38 @@ import { PanelTabs } from "@/ui/trading-terminal/PanelTabs";
 
 export type SpotBookTab = "book" | "trades";
 
-/** What each ladder unit is called on screen. Base is the cNGN an order is entered in and rests as. */
-const UNIT_LABEL = { base: "cNGN", quote: "USDC" } satisfies Record<LadderUnit, string>;
+/**
+ * What the book is counted in. `base` is what an order is entered in and rests as; `quote`, when
+ * set, is the same depth restated at each level's price, offered as a toggle. `price` names the
+ * price column. Spot and the perp share the default; the future is quoted cNGN per USDC in
+ * contracts, which have no meaningful quote restatement.
+ */
+export type BookUnits = {
+  base: string;
+  quote: string | null;
+  price: string;
+  priceGroups: readonly number[];
+  /** The most decimals a price is shown to. */
+  priceDecimals: number;
+};
+
+const SPOT_BOOK_UNITS: BookUnits = {
+  base: "cNGN",
+  price: "USDC",
+  priceDecimals: PRICE_DECIMALS,
+  priceGroups: PRICE_GROUPS,
+  quote: "USDC",
+};
 
 /** Prices carry exactly the precision the ladder is grouped at: a 0.1 tick has no second decimal. */
-function getPriceDigits(tick: number) {
+function getPriceDigits(tick: number, maxDecimals: number) {
   // Floor, not round: a 5e-7 tick needs all seven places, and nothing shows more than the display precision.
-  return Math.min(PRICE_DECIMALS, Math.max(0, -Math.floor(Math.log10(tick) + 1e-9)));
+  return Math.min(maxDecimals, Math.max(0, -Math.floor(Math.log10(tick) + 1e-9)));
 }
 
 /** A grouping tick as a plain decimal — "0.0000005", never the "5e-7" that `String` prints. */
-function formatTickLabel(tick: number) {
-  return tick.toFixed(getPriceDigits(tick));
+function formatTickLabel(tick: number, maxDecimals: number) {
+  return tick.toFixed(getPriceDigits(tick, maxDecimals));
 }
 
 function LadderSelect({
@@ -156,6 +176,7 @@ function BookLadder({
   bids,
   lastPrice,
   lastSide,
+  maxDecimals,
   tick,
   unit,
 }: {
@@ -163,6 +184,7 @@ function BookLadder({
   bids: OrderBookLevel[];
   lastPrice: number | null;
   lastSide: "buy" | "sell" | null;
+  maxDecimals: number;
   tick: number;
   unit: LadderUnit;
 }) {
@@ -178,7 +200,7 @@ function BookLadder({
   const spread = bestAsk !== null && bestBid !== null ? bestAsk - bestBid : null;
   const spreadBps = getSpreadBps(bestAsk, bestBid);
   const anchorPrice = getAnchorPrice(bestAsk, bestBid, lastPrice);
-  const digits = getPriceDigits(tick);
+  const digits = getPriceDigits(tick, maxDecimals);
   // One scale for both sides: normalising each side against its own deepest row made a thin side
   // look as deep as a heavy one, which is the comparison the bars exist to make.
   const maxTotal = Math.max(getMaxLadderTotal(askRows), getMaxLadderTotal(bidRows));
@@ -239,7 +261,7 @@ function BookLadder({
             lastSide === "sell" ? "text-ask-text" : null
           )}
         >
-          {formatPrice(anchorPrice)}
+          {formatPrice(anchorPrice, maxDecimals)}
           {lastSide === "buy" ? (
             <ArrowUp aria-label="Last trade was a buy" className="size-3.5" />
           ) : null}
@@ -248,7 +270,7 @@ function BookLadder({
           ) : null}
         </span>
         <span className="text-center font-medium text-panel-text">
-          Spread{spread === null ? "" : ` ${formatPrice(spread)}`}
+          Spread{spread === null ? "" : ` ${formatPrice(spread, maxDecimals)}`}
         </span>
         <span className="text-right text-spread-percent">
           {spreadBps === null ? "—" : `${(spreadBps / 100).toFixed(3)}%`}
@@ -338,7 +360,7 @@ function TradeExplorerLink({ txHash }: { txHash: string | undefined }) {
  * The venue's fills, newest first: each row tinted by the side that took it, the price in that
  * side's colour, the size, when it happened, and a link to the settling transaction.
  */
-function TradeTape({ trades }: { trades: TradePrint[] }) {
+function TradeTape({ priceDecimals, trades }: { priceDecimals: number; trades: TradePrint[] }) {
   if (trades.length === 0) {
     return <BookEmptyState message="No trades yet" />;
   }
@@ -358,7 +380,7 @@ function TradeTape({ trades }: { trades: TradePrint[] }) {
           <span
             className={cn("font-medium", trade.side === "buy" ? "text-bid-text" : "text-ask-text")}
           >
-            {formatPrice(trade.price)}
+            {formatPrice(trade.price, priceDecimals)}
           </span>
           <span className="text-right text-panel-text">{formatLadderAmount(trade.size)}</span>
           <span className="flex items-center justify-end gap-1.5">
@@ -378,6 +400,7 @@ export function SpotOrderBookPanel({
   onTabChange,
   tab,
   trades,
+  units = SPOT_BOOK_UNITS,
 }: {
   asks: OrderBookLevel[];
   bids: OrderBookLevel[];
@@ -385,12 +408,14 @@ export function SpotOrderBookPanel({
   onTabChange: (tab: SpotBookTab) => void;
   tab: SpotBookTab;
   trades: TradePrint[];
+  units?: BookUnits;
 }) {
   // Display preferences, not market state: the ladder they shape is the same venue book either way.
-  const [tick, setTick] = useState<number>(PRICE_GROUPS[0]);
+  const [tick, setTick] = useState<number>(units.priceGroups[0]);
   const [unit, setUnit] = useState<LadderUnit>("base");
   const isBook = tab === "book";
   const lastSide = trades[0]?.side ?? null;
+  const unitLabel = unit === "quote" && units.quote !== null ? units.quote : units.base;
 
   return (
     <section className="flex h-full min-h-[380px] flex-col overflow-hidden bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 md:min-h-0">
@@ -409,22 +434,28 @@ export function SpotOrderBookPanel({
           <LadderSelect
             label="Price grouping"
             onSelect={(value) => setTick(Number(value))}
-            options={PRICE_GROUPS.map((group) => ({
-              label: formatTickLabel(group),
+            options={units.priceGroups.map((group) => ({
+              label: formatTickLabel(group, units.priceDecimals),
               value: String(group),
             }))}
             value={String(tick)}
           />
           {/* The unit is a two-way swap, so a single button flips it rather than opening a menu. */}
-          <button
-            aria-label={`Amount denomination: ${UNIT_LABEL[unit]}. Switch to ${unit === "base" ? UNIT_LABEL.quote : UNIT_LABEL.base}`}
-            className="flex cursor-pointer items-center gap-1.5 rounded-sm px-1.5 py-1 font-medium text-[12px] text-panel-text-active transition-colors hover:bg-input-hover"
-            onClick={() => setUnit((current) => (current === "base" ? "quote" : "base"))}
-            type="button"
-          >
-            {UNIT_LABEL[unit]}
-            <ArrowLeftRight aria-hidden className="size-3.5 text-panel-text-muted" />
-          </button>
+          {units.quote === null ? (
+            <span className="px-1.5 py-1 font-medium text-[12px] text-panel-text-active">
+              {units.base}
+            </span>
+          ) : (
+            <button
+              aria-label={`Amount denomination: ${unitLabel}. Switch to ${unit === "base" ? units.quote : units.base}`}
+              className="flex cursor-pointer items-center gap-1.5 rounded-sm px-1.5 py-1 font-medium text-[12px] text-panel-text-active transition-colors hover:bg-input-hover"
+              onClick={() => setUnit((current) => (current === "base" ? "quote" : "base"))}
+              type="button"
+            >
+              {unitLabel}
+              <ArrowLeftRight aria-hidden className="size-3.5 text-panel-text-muted" />
+            </button>
+          )}
         </div>
       ) : null}
 
@@ -434,9 +465,9 @@ export function SpotOrderBookPanel({
           isBook ? "grid-cols-3" : TAPE_COLUMNS
         )}
       >
-        <span>Price USDC</span>
-        <span className="text-right">{isBook ? `Size ${UNIT_LABEL[unit]}` : "Size cNGN"}</span>
-        <span className="text-right">{isBook ? `Total ${UNIT_LABEL[unit]}` : "Time"}</span>
+        <span>Price {units.price}</span>
+        <span className="text-right">{isBook ? `Size ${unitLabel}` : `Size ${units.base}`}</span>
+        <span className="text-right">{isBook ? `Total ${unitLabel}` : "Time"}</span>
       </div>
 
       {isBook ? (
@@ -445,11 +476,12 @@ export function SpotOrderBookPanel({
           bids={bids}
           lastPrice={lastPrice}
           lastSide={lastSide}
+          maxDecimals={units.priceDecimals}
           tick={tick}
           unit={unit}
         />
       ) : (
-        <TradeTape trades={trades} />
+        <TradeTape priceDecimals={units.priceDecimals} trades={trades} />
       )}
     </section>
   );

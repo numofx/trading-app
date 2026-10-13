@@ -1289,6 +1289,7 @@ export function DepositDialog({
   account,
   accountRows,
   currency: controlledCurrency,
+  depositManager,
   depositNotes,
   depositPauseReasons,
   mode: controlledMode,
@@ -1325,6 +1326,8 @@ export function DepositDialog({
   depositNotes?: Partial<Record<DepositCurrency, string>>;
   /** Deposits closed beyond the deployment's configured pauses, with why. */
   depositPauseReasons?: Partial<Record<DepositCurrency, string>>;
+  /** The manager a first deposit opens the account under; the configured SRM when omitted. */
+  depositManager?: `0x${string}`;
   /** Starts wallet login from the dialog's no-wallet step. */
   onConnectWallet?: () => void;
   /** Fires for both the asset picker and the "deposit the other asset" step. */
@@ -1366,6 +1369,7 @@ export function DepositDialog({
     accountRows,
     controlledCurrency,
     controlledMode,
+    depositManager,
     depositPauseReasons,
     fundingWallets,
     onCurrencyChange,
