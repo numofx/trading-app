@@ -178,7 +178,8 @@ function MarketRow({
         <MarketIdentity compact symbol={entry.symbol} />
       </span>
       <span className={cn(CELL_CLASS, "text-panel-text-active")}>
-        {entry.kind === "futures" ? formatFuturePrice(row.price) : formatPrice(row.price)}
+        {/* Spot and the future are quoted cNGN per USDC; the perp keeps USDC per cNGN. */}
+        {entry.kind === "perp" ? formatPrice(row.price) : formatFuturePrice(row.price)}
       </span>
       <ChangeCell value={row.changePercent24h} />
       <span className={cn(CELL_CLASS, HIDDEN_ON_PHONE)}>

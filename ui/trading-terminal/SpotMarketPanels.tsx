@@ -17,6 +17,7 @@ import {
   buildSpotOrderEnvelope,
   SPOT_ORDER_LIFETIME_LABEL,
 } from "@/lib/spot-order-submission";
+import { invertPrice, SPOT_PRICE_DECIMALS } from "@/lib/spot-orientation";
 import {
   getCngnTokenAddress,
   getLegacySpotStack,
@@ -133,7 +134,7 @@ const ORDER_SETTLE_TIMEOUT_MS = Duration.toMillis("8 seconds");
 function describeOrderOutcome(outcome: OrderOutcome | null, size: string, price: string) {
   const at = formatUsdcPrice(Number(price));
   if (outcome?.status === "filled") {
-    return `Filled ${size} cNGN. Balances updated.`;
+    return `Filled: paid or received ${size} cNGN. Balances updated.`;
   }
   if (outcome?.status === "expired") {
     return `Order expired unfilled at ${at}.`;
@@ -427,7 +428,11 @@ export function SpotMarketPanels({ spotMarket }: { spotMarket: SpotMarket }) {
 
   return (
     <>
-      <MarketDocumentTitle pair={MARKET_LABELS["cNGN-USDC"]} price={spotMarket.mark} />
+      <MarketDocumentTitle
+        digits={SPOT_PRICE_DECIMALS}
+        pair={MARKET_LABELS["cNGN-USDC"]}
+        price={invertPrice(spotMarket.mark)}
+      />
 
       <SpotTradingTerminal
         accountCngn={toLedgerAmount(accountLegs.cngnUnits)}

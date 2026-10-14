@@ -9,6 +9,7 @@ import { formatOverviewVolume } from "@/lib/market-overview";
 import type { MarketOverviewRow, TerminalMarketId } from "@/lib/market-overview.types";
 import { resolveSegment } from "@/lib/market-routes";
 import { buildPerpOverviewMetrics } from "@/lib/perp-market";
+import { buildSpotHeaderMetrics } from "@/lib/spot-orientation";
 import { TerminalHeaderBar } from "@/ui/trading-terminal/TerminalHeaderBar";
 import type { TerminalHeaderPublication } from "@/ui/trading-terminal/TerminalHeaderSlot";
 import {
@@ -59,12 +60,21 @@ const OVERVIEW_SEED_MAX_AGE_MS = Duration.toMillis("2 minutes");
  */
 const SEED_READ_DELAY_MS = Duration.toMillis("50 millis");
 
-/** The perp's and the future's own header figures from a selector row; spot shows the default set. */
+/** Each market's own header figures from a selector row (spot's row is already cNGN per USDC). */
 function seededMetrics(market: TerminalMarketId, row: MarketOverviewRow) {
   if (market === "perp") {
     return buildPerpOverviewMetrics(row);
   }
-  return market === "future" ? buildFutureOverviewMetrics(row, Date.now()) : undefined;
+  if (market === "spot") {
+    return buildSpotHeaderMetrics({
+      changePercent: row.changePercent24h,
+      high: null,
+      low: null,
+      price: row.price,
+      volumeLabel: formatOverviewVolume(row.volume24hUsd),
+    });
+  }
+  return buildFutureOverviewMetrics(row, Date.now());
 }
 
 /**

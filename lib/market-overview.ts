@@ -8,6 +8,7 @@ import type {
 import { futurePath, marketPath } from "@/lib/market-routes";
 import { PERP_MARKET_LABEL } from "@/lib/perp-terminal-config";
 import { getAnchorPrice, getBestPrices } from "@/lib/spot-market";
+import { invertPrice, toUsdcCngnStats } from "@/lib/spot-orientation";
 import { formatCompactVolume, get24hStats, getVenueLastPrice } from "@/lib/ticker-stats";
 import type { SpotMarket } from "@/lib/trading.types";
 
@@ -76,7 +77,8 @@ export function emptyOverviewRow(id: TerminalMarketId): MarketOverviewRow {
  * The selector's figures for one market, derived exactly as that market's own header derives
  * them: the price is the book's mid (else one side, else the last trade), the change is measured
  * from the window's first trade to the last, and the volume is the window's USDC notional.
- * `markPrice` is the perp's fallback when nothing rests and nothing traded; spot has none.
+ * `markPrice` is the perp's fallback when nothing rests and nothing traded; spot has none. Spot is
+ * shown USDC-cNGN, so its price and change are the venue's turned over: cNGN per USDC.
  *
  * The future passes its mark and last trade time, and its volume in contracts: the venue's quote
  * volume on it is price × contracts, not money, so the USDC notional is the contracts at their size.
@@ -99,9 +101,13 @@ export function buildOverviewRow(
 ): MarketOverviewRow {
   const lastPrice = getVenueLastPrice(market.trades, market.candles, market.mark);
   const { bestAsk, bestBid } = getBestPrices(market.orderBookAsks, market.orderBookBids);
-  const price =
+  const enginePrice =
     getAnchorPrice(bestAsk, bestBid, lastPrice) ?? perp?.markPrice ?? future?.markPrice ?? null;
-  const { changePercent } = get24hStats(market.stats24h, lastPrice);
+  const isSpot = id === "spot";
+  const price = isSpot ? invertPrice(enginePrice) : enginePrice;
+  const { changePercent } = isSpot
+    ? get24hStats(toUsdcCngnStats(market.stats24h), invertPrice(lastPrice))
+    : get24hStats(market.stats24h, lastPrice);
   const futureVolume =
     future?.volumeContracts == null ? null : future.volumeContracts * future.contractSizeUsdc;
   return {

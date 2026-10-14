@@ -8,6 +8,7 @@ import type {
   OrderHistoryStatus,
 } from "@/lib/order-history.types";
 import { sideTone } from "@/lib/side-tone";
+import { engineSide } from "@/lib/spot-orientation";
 import type { ActivityRow, ActivityView, CellBadge, SpotOpenOrder } from "@/lib/trading.types";
 
 /** Rendered when a balance is genuinely unknown — never substitute a zero or a placeholder figure. */
@@ -59,6 +60,41 @@ export function buildOpenOrdersActivityView(
   };
 }
 
+/** Prices in cNGN per USDC, spot's quote and the future's: two decimals. */
+function formatCngnPerUsdc(price: number) {
+  return Number.isFinite(price)
+    ? price.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 })
+    : UNKNOWN_BALANCE;
+}
+
+function formatUsdcSize(size: number) {
+  return Number.isFinite(size)
+    ? `${size.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 })} USDC`
+    : UNKNOWN_BALANCE;
+}
+
+/**
+ * Spot's Open Orders in the trader's terms (orders already turned over by `toUsdcCngnOrder`): a
+ * buy or sell of USDC, its price in cNGN per USDC, its size and fill in USDC. Only the wallet's own.
+ */
+export function buildSpotOpenOrdersActivityView(
+  openOrders: SpotOpenOrder[],
+  walletAddress: string | null
+): ActivityView {
+  return {
+    columns: [...OPEN_ORDERS_COLUMNS],
+    rows: getOwnedOpenOrders(openOrders, walletAddress).map((order) => ({
+      tones: { [OPEN_ORDERS_SIDE_COLUMN]: sideTone(order.side) },
+      cells: [
+        order.side === "buy" ? "Buy" : "Sell",
+        formatCngnPerUsdc(order.price),
+        formatUsdcSize(order.size),
+        formatUsdcSize(order.filled),
+      ],
+    })),
+  };
+}
+
 /** The orders a cancel control acts on, in the same order as the view's rows. */
 export function getOwnedOpenOrders(openOrders: SpotOpenOrder[], walletAddress: string | null) {
   return walletAddress === null
@@ -72,9 +108,9 @@ export function getOwnedOpenOrders(openOrders: SpotOpenOrder[], walletAddress: s
  * Columns for the Order History tab.
  *
  * No "Type": markets-service does not record whether an order was placed as limit or market — the
- * ticket signs both as limits — so the column could only be guessed. "Filled" is the cNGN that
- * traded and "Avg price" what it traded at, both from the fills, so a marketable order's slippage
- * room never reads as size.
+ * ticket signs both as limits — so the column could only be guessed. Spot is shown USDC-cNGN:
+ * "Filled" is the USDC that traded and "Avg price" what it traded at in cNGN per USDC, both from
+ * the fills, so a marketable order's slippage room never reads as size.
  */
 export const ORDER_HISTORY_COLUMNS = [
   "Time",
@@ -119,12 +155,17 @@ function formatOrderTime(createdAt: string, timeZone: string | undefined) {
 
 type IntentSide = { side: "buy" | "sell" } | undefined;
 
-/** The trader's direction, from a UI intent; a dash when there is none. A buy is a buy of cNGN. */
+/** The trader's direction, from a UI intent; a dash when there is none. On the perp a buy is a buy of cNGN. */
 function formatIntentDirection(intent: IntentSide) {
   if (intent === undefined) {
     return UNKNOWN_BALANCE;
   }
   return intent.side === "buy" ? "Buy" : "Sell";
+}
+
+/** A spot intent's side the trader's way: the engine's buy of cNGN is a sell of USDC. */
+function usdcIntent(intent: IntentSide): IntentSide {
+  return intent === undefined ? undefined : { side: engineSide(intent.side) };
 }
 
 /** The direction cell's tint keyed by its column, or nothing when there is no intent. */
@@ -151,10 +192,6 @@ function getOrderFill(order: OrderHistoryOrder) {
     return { averagePrice: null, filledCngn };
   }
   return { averagePrice: filledUsdc / filledCngn, filledCngn };
-}
-
-function formatHistoryUsdc(value: number) {
-  return `${value.toLocaleString("en-US", { maximumFractionDigits: 4 })} USDC`;
 }
 
 /**
@@ -269,21 +306,26 @@ export function buildOrderHistoryActivityView(
   return {
     columns: [...ORDER_HISTORY_COLUMNS],
     rows: orders.map((order) => {
+      // The venue's intent is the engine order; spot is shown USDC-cNGN, the other way up.
       const limit = Number(order.spot_contract?.ui_intent.price);
       const { averagePrice, filledCngn } = getOrderFill(order);
+      const intent = usdcIntent(order.spot_contract?.ui_intent);
 
       return {
         cells: [
           formatOrderTime(order.created_at, timeZone),
           formatInstrument(order),
-          formatIntentDirection(order.spot_contract?.ui_intent),
-          formatCngnSize(filledCngn),
-          formatPrice(averagePrice),
-          Number.isFinite(limit) ? formatPrice(limit) : UNKNOWN_BALANCE,
+          formatIntentDirection(intent),
+          // the USDC that traded; when the venue did not value the fill, the cNGN that did
+          averagePrice === null && filledCngn > 0
+            ? formatCngnSize(filledCngn)
+            : formatUsdcSize(filledCngn * (averagePrice ?? 0)),
+          averagePrice === null ? UNKNOWN_BALANCE : formatCngnPerUsdc(1 / averagePrice),
+          limit > 0 ? formatCngnPerUsdc(1 / limit) : UNKNOWN_BALANCE,
           ORDER_STATUS_LABELS[order.status] ?? order.status,
         ],
         tones: {
-          ...directionTones(ORDER_HISTORY_DIRECTION_COLUMN, order.spot_contract?.ui_intent),
+          ...directionTones(ORDER_HISTORY_DIRECTION_COLUMN, intent),
           ...(order.status === "filled"
             ? { [ORDER_HISTORY_STATUS_COLUMN]: "positive" as const }
             : {}),
@@ -296,8 +338,8 @@ export function buildOrderHistoryActivityView(
 /**
  * Columns for the Trade History tab: one row per fill.
  *
- * "Size" is the cNGN that changed hands and "Total" the USDC, both as the fill executed, so each row
- * reconciles against the account's balances. "Fee" is what the order paid, which is nothing for a
+ * Spot is shown USDC-cNGN: "Size" is the USDC that changed hands and "Total" the cNGN, both as the
+ * fill executed, so each row reconciles against the account's balances. "Fee" is what the order paid, which is nothing for a
  * maker. "Role" says whether the order crossed the book or rested and was hit.
  *
  * The trailing column holds the link to the fill's settling transaction on Basescan.
@@ -425,10 +467,12 @@ export function buildTradeHistoryActivityView(
   return {
     columns: [...TRADE_HISTORY_COLUMNS],
     rows: fills.map((fill) => {
-      const intent = fill.spot_contract?.ui_intent;
-      const price = Number(intent?.price);
-      const sizeCngn = Number(intent?.size ?? fill.size);
-      const totalUsdc = price * sizeCngn;
+      // The fill's intent is the engine's; shown USDC-cNGN: a buy of USDC, sized in USDC, the cNGN as its total.
+      const engineIntent = fill.spot_contract?.ui_intent;
+      const intent = usdcIntent(engineIntent);
+      const price = Number(engineIntent?.price);
+      const sizeCngn = Number(engineIntent?.size ?? fill.size);
+      const sizeUsdc = price * sizeCngn;
 
       return {
         tones: directionTones(TRADE_HISTORY_DIRECTION_COLUMN, intent),
@@ -436,9 +480,9 @@ export function buildTradeHistoryActivityView(
           formatOrderTime(fill.created_at, timeZone),
           formatInstrument(fill),
           formatIntentDirection(intent),
-          Number.isFinite(price) ? formatPrice(price) : UNKNOWN_BALANCE,
+          price > 0 ? formatCngnPerUsdc(1 / price) : UNKNOWN_BALANCE,
+          Number.isFinite(sizeUsdc) ? formatUsdcSize(sizeUsdc) : UNKNOWN_BALANCE,
           Number.isFinite(sizeCngn) ? formatCngnSize(sizeCngn) : UNKNOWN_BALANCE,
-          Number.isFinite(totalUsdc) ? formatHistoryUsdc(totalUsdc) : UNKNOWN_BALANCE,
           formatFillFee(fill.fee),
           LIQUIDITY_LABELS[fill.liquidity] ?? fill.liquidity,
         ],

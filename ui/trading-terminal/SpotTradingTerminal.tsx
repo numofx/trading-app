@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useEffectEvent, useState } from "react";
-import { buildOpenOrdersActivityView, getOwnedOpenOrders } from "@/lib/account-activity-views";
+import { buildSpotOpenOrdersActivityView, getOwnedOpenOrders } from "@/lib/account-activity-views";
 import { formatBalance } from "@/lib/account-balance-display";
 import type { CandleInterval } from "@/lib/markets-service";
 import {
@@ -13,6 +13,17 @@ import {
   getWorkingOrders,
   withoutCancelledOrders,
 } from "@/lib/spot-market";
+import {
+  buildSpotHeaderMetrics,
+  invertPrice,
+  SPOT_PRICE_DECIMALS,
+  SPOT_PRICE_GROUPS,
+  toUsdcCngnBook,
+  toUsdcCngnCandles,
+  toUsdcCngnOrder,
+  toUsdcCngnStats,
+  toUsdcCngnTrades,
+} from "@/lib/spot-orientation";
 import {
   ACTIVITY_VIEWS,
   FOOTER_LINKS,
@@ -24,9 +35,9 @@ import { get24hStats } from "@/lib/ticker-stats";
 import type { Candle, SpotMarket } from "@/lib/trading.types";
 import type { AccountSummaryRow } from "@/ui/trading-terminal/order-form/AccountSummary";
 import { AccountSummary } from "@/ui/trading-terminal/order-form/AccountSummary";
-import type { SpotChartTab, SpotTimeframe } from "@/ui/trading-terminal/SpotChartPanel";
+import type { ChartUnits, SpotChartTab, SpotTimeframe } from "@/ui/trading-terminal/SpotChartPanel";
 import { SpotChartPanel } from "@/ui/trading-terminal/SpotChartPanel";
-import type { SpotBookTab } from "@/ui/trading-terminal/SpotOrderBookPanel";
+import type { BookUnits, SpotBookTab } from "@/ui/trading-terminal/SpotOrderBookPanel";
 import { SpotOrderBookPanel } from "@/ui/trading-terminal/SpotOrderBookPanel";
 import { SpotOrderFormPanel } from "@/ui/trading-terminal/SpotOrderFormPanel";
 import { TerminalGrid } from "@/ui/trading-terminal/TerminalGrid";
@@ -37,6 +48,26 @@ import { useSignedHistoryTabs } from "@/ui/trading-terminal/useSignedHistoryTabs
 
 /** The venue's symbol for this market; markets-service resolves the stream subscription from it. */
 const SPOT_MARKET_SYMBOL = "cNGN-USDC";
+
+/**
+ * Spot shown as USDC-cNGN, the way the future is quoted: prices in cNGN per USDC, sizes in USDC
+ * (the book can switch them to cNGN). The venue serves the engine's cNGN-USDC; `spot-orientation`
+ * turns it over for every panel but the ticket, which works in the engine's terms underneath.
+ */
+const BOOK_UNITS: BookUnits = {
+  base: "USDC",
+  price: "cNGN",
+  priceDecimals: SPOT_PRICE_DECIMALS,
+  priceGroups: SPOT_PRICE_GROUPS,
+  quote: "cNGN",
+};
+
+const CHART_UNITS: ChartUnits = {
+  axisDecimals: SPOT_PRICE_DECIMALS,
+  pair: "USDC-cNGN",
+  priceDecimals: SPOT_PRICE_DECIMALS,
+  volumeUnit: "USDC",
+};
 
 /**
  * The spot market's panels on the terminal's grid, under the shell's header, which it feeds its
@@ -207,6 +238,10 @@ export function SpotTradingTerminal({
     type: "spot",
   });
   const anchorPrice = getAnchorPrice(bestAsk, bestBid, lastPrice);
+  // The panels' view, turned the trader's way up; the ticket keeps the engine's book.
+  const shown = toUsdcCngnBook({ asks: bookAsks, bids: bookBids });
+  const shownTrades = toUsdcCngnTrades(bookTrades);
+  const shownLast = invertPrice(lastPrice);
 
   function handleSubmitOrder(args: {
     side: "buy" | "sell";
@@ -216,7 +251,10 @@ export function SpotTradingTerminal({
   }) {
     onSubmitOrder({ ...args, book: { bestAsk, bestBid } });
   }
-  const { changePercent, high, low, volumeLabel } = get24hStats(liveStats, lastPrice);
+  const { changePercent, high, low, volumeLabel } = get24hStats(
+    toUsdcCngnStats(liveStats),
+    shownLast
+  );
   // Assets is the one bottom tab with a real data source today, so it's built from live balances
   // instead of the placeholder-free static views.
   // Orders leave the book when they expire and nothing announces it, so a snapshot taken while one
@@ -237,7 +275,7 @@ export function SpotTradingTerminal({
 
   function buildActivityView() {
     if (bottomTab === "open-orders") {
-      return buildOpenOrdersActivityView(workingOrders, walletAddress);
+      return buildSpotOpenOrdersActivityView(workingOrders.map(toUsdcCngnOrder), walletAddress);
     }
     return (
       signedHistory.view ??
@@ -247,13 +285,15 @@ export function SpotTradingTerminal({
 
   const activityView = buildActivityView();
 
+  const shownPrice = invertPrice(anchorPrice);
   usePublishTerminalHeader({
     changePercent24h: changePercent,
     depositControl,
     high24h: high,
     low24h: low,
     market: "spot",
-    price: anchorPrice,
+    metrics: buildSpotHeaderMetrics({ changePercent, high, low, price: shownPrice, volumeLabel }),
+    price: shownPrice,
     volume24hLabel: volumeLabel,
   });
 
@@ -307,19 +347,20 @@ export function SpotTradingTerminal({
       }
       book={
         <SpotOrderBookPanel
-          asks={bookAsks}
-          bids={bookBids}
-          lastPrice={lastPrice}
+          asks={shown.asks}
+          bids={shown.bids}
+          lastPrice={shownLast}
           onTabChange={setBookTab}
           tab={bookTab}
-          trades={bookTrades}
+          trades={shownTrades}
+          units={BOOK_UNITS}
         />
       }
       chart={
         <SpotChartPanel
-          asks={bookAsks}
-          bids={bookBids}
-          candles={liveCandles}
+          asks={shown.asks}
+          bids={shown.bids}
+          candles={toUsdcCngnCandles(liveCandles)}
           chartTab={chartTab}
           indicatorsEnabled={indicatorsEnabled}
           onChartTabChange={setChartTab}
@@ -329,6 +370,7 @@ export function SpotTradingTerminal({
           selectedTimeframe={timeframe}
           selectedTool={selectedTool}
           timeframes={SPOT_TIMEFRAME_OPTIONS}
+          units={CHART_UNITS}
         />
       }
       ticketColumn={
