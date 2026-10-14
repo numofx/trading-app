@@ -4,10 +4,12 @@ import { useState } from "react";
 import {
   estimateFutureOrder,
   formatFuturePrice,
+  futureNotionalUsdc,
   futureOrderUiSide,
+  futureOrderUnits,
   futureTradingBlock,
   isOutsideFillBand,
-  maxFutureContracts,
+  maxFutureNotional,
   toContracts,
 } from "@/lib/future-market";
 import type { FutureAccount, FutureSide, FutureState } from "@/lib/future-market.types";
@@ -34,8 +36,8 @@ export type FutureOrderRequest = {
   orderType: FutureOrderType;
   /** cNGN per USDC; the limit for a limit order, ignored for a market order (priced off the touch). */
   limitPrice: string;
-  /** Whole contracts of `contractSizeUsdc` each. */
-  contracts: number;
+  /** The size in the venue's whole units, `unitUsdc` of notional each. */
+  units: number;
   /** How far through the touch a market order is signed, as a fraction. */
   maxSlippage: number;
 };
@@ -51,24 +53,26 @@ function parsePrice(value: string) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
-const WHOLE_NUMBER_PATTERN = /^\d+$/;
+const SIZE_PATTERN = /^\d+(\.\d+)?$/;
 
-/** Whole contracts, or null for anything else: the engine rests whole contracts only. */
-function parseContracts(value: string) {
+/** The typed size, USDC of notional, or null unless it is a positive decimal. */
+function parseNotional(value: string) {
   const trimmed = value.replaceAll(",", "").trim();
-  if (!WHOLE_NUMBER_PATTERN.test(trimmed)) {
+  if (!SIZE_PATTERN.test(trimmed)) {
     return null;
   }
   const parsed = Number(trimmed);
-  return parsed >= 1 ? parsed : null;
+  return parsed > 0 ? parsed : null;
 }
 
-function formatPosition(contracts: number) {
-  if (contracts === 0) {
+const SIZE = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
+
+/** A signed notional as the position it is: "Long 10 USDC", "Flat". */
+function formatPosition(notional: number) {
+  if (Math.abs(notional) < 1e-9) {
     return "Flat";
   }
-  const size = Math.abs(contracts);
-  return `${contracts > 0 ? "Long" : "Short"} ${size} ${size === 1 ? "contract" : "contracts"}`;
+  return `${notional > 0 ? "Long" : "Short"} ${SIZE.format(Math.abs(notional))} USDC`;
 }
 
 /** Why the ticket's price cannot be signed, or null when it can. */
@@ -111,7 +115,8 @@ function deriveTicket(inputs: {
   takerFeeBps: number | null;
 }) {
   const { account, orderType, side, state, takerFeeBps } = inputs;
-  const contracts = parseContracts(inputs.size);
+  const notional = parseNotional(inputs.size);
+  const units = state === null || notional === null ? null : futureOrderUnits(notional, state);
   const typedLimit = parsePrice(inputs.limitPrice);
   const touch = side === "long" ? inputs.bestAsk : inputs.bestBid;
   const priceError = describePriceProblem({
@@ -126,17 +131,21 @@ function deriveTicket(inputs: {
       state === null
         ? "The future isn't listed on the venue right now."
         : futureTradingBlock(state, inputs.nowMs),
-    contracts,
     estimate:
-      state === null || contracts === null
+      state === null || notional === null || units === null
         ? null
-        : estimateFutureOrder({ account, contracts, side, state, takerFeeBps }),
+        : estimateFutureOrder({ account, notional, side, state, takerFeeBps }),
     expectedPrice: orderType === "Limit" ? typedLimit : (touch ?? inputs.referencePrice),
-    maxContracts: state === null ? 0 : maxFutureContracts({ account, side, state, takerFeeBps }),
-    position: account === null ? 0 : toContracts(account.positionUnits),
+    maxNotional: state === null ? 0 : maxFutureNotional({ account, side, state, takerFeeBps }),
+    notional,
+    position:
+      account === null || state === null
+        ? 0
+        : futureNotionalUsdc(toContracts(account.positionUnits), state),
     priceError,
     // An empty limit field is not yet an error worth a line; the disabled button says enough.
     shownPriceError: orderType === "Limit" && inputs.limitPrice === "" ? null : priceError,
+    units,
   };
 }
 
@@ -177,7 +186,7 @@ function TicketSummary({
         />
         <SummaryRow
           label="Notional"
-          tooltip={`Contracts × ${USD.format(contractSize)} USDC, whatever the price`}
+          tooltip={`The size in USDC, whatever the price: one contract is ${USD.format(contractSize)} USDC`}
           value={formatUsd(estimate?.notional ?? null)}
         />
         <SummaryRow
@@ -214,7 +223,7 @@ type ButtonState = { enabled: boolean; label: string; tone: "buy" | "sell" | "ne
 function resolveButton(inputs: {
   account: FutureAccount | null;
   blocked: boolean;
-  contracts: number | null;
+  notional: number | null;
   hasAccount: boolean;
   hasWallet: boolean;
   isAccepted: boolean;
@@ -255,20 +264,17 @@ function resolveButton(inputs: {
     return neutral("Deposit margin", true);
   }
   const verb = inputs.side === "long" ? "Long" : "Short";
-  const label =
-    inputs.contracts === null
-      ? verb
-      : `${verb} ${inputs.contracts} ${inputs.contracts === 1 ? "contract" : "contracts"}`;
+  const label = inputs.notional === null ? verb : `${verb} ${SIZE.format(inputs.notional)} USDC`;
   return {
-    enabled: inputs.contracts !== null && inputs.priceError === null && inputs.account !== null,
+    enabled: inputs.notional !== null && inputs.priceError === null && inputs.account !== null,
     label,
     tone: futureOrderUiSide(inputs.side),
   };
 }
 
 /**
- * The future's order ticket. Size is whole contracts of 1,000 USDC each, and the price is cNGN per
- * USDC: a long gains as cNGN weakens, a short as it strengthens. Every order must sit inside the
+ * The future's order ticket. Size is USDC of notional, in whole venue units (1 USDC; a contract is
+ * 1,000), and the price is cNGN per USDC: a long gains as cNGN weakens, a short as it strengthens. Every order must sit inside the
  * fill band around the index, which the ticket checks before signing. The engine margins the whole
  * account at its initial rate on what an order adds to the position; reducing one is
  * always allowed. Without a live series (`state` null) the form renders but cannot submit.
@@ -329,13 +335,14 @@ export function FutureOrderFormPanel({
 
   const {
     block,
-    contracts,
     estimate,
     expectedPrice,
-    maxContracts,
+    maxNotional,
+    notional,
     position,
     priceError,
     shownPriceError,
+    units,
   } = deriveTicket({
     account,
     bestAsk,
@@ -353,7 +360,7 @@ export function FutureOrderFormPanel({
   const button = resolveButton({
     account,
     blocked: block !== null || onSubmit === undefined,
-    contracts,
+    notional: units === null ? null : notional,
     hasAccount,
     hasWallet,
     isAccepted,
@@ -374,15 +381,16 @@ export function FutureOrderFormPanel({
       onDepositRequest();
       return;
     }
-    if (onSubmit === undefined || contracts === null || priceError !== null) {
+    if (onSubmit === undefined || units === null || priceError !== null) {
       return;
     }
-    onSubmit({ contracts, limitPrice, maxSlippage, orderType, side });
+    onSubmit({ limitPrice, maxSlippage, orderType, side, units });
   }
 
   const statusText = block ?? lastAction ?? shownPriceError;
   const band = state?.fillBand ?? null;
   const contractSize = state?.contractSizeUsdc ?? 1000;
+  const unitUsdc = state?.unitUsdc ?? 1;
 
   return (
     <OrderFormShell
@@ -474,11 +482,11 @@ export function FutureOrderFormPanel({
           <FormField
             adornment={
               <span className="flex items-center gap-2">
-                <span className="font-medium text-[12px] text-panel-text">Contracts</span>
+                <span className="font-medium text-[12px] text-panel-text">USDC</span>
                 <button
                   className="cursor-pointer font-medium text-[11px] text-accent-text hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={maxContracts < 1}
-                  onClick={() => edited(setSize)(String(maxContracts))}
+                  disabled={maxNotional < unitUsdc}
+                  onClick={() => edited(setSize)(String(maxNotional))}
                   type="button"
                 >
                   MAX
@@ -489,13 +497,13 @@ export function FutureOrderFormPanel({
             label="Size"
             onChange={edited(setSize)}
             placeholder="0"
-            tooltip={`Whole contracts of ${USD.format(contractSize)} USDC each`}
+            tooltip={`USDC of notional, in steps of ${SIZE.format(unitUsdc)} USDC. One contract is ${USD.format(contractSize)} USDC.`}
             value={size}
           />
           <p className="text-[11px] text-panel-text-muted tabular-nums">
-            {contracts === null && size !== ""
-              ? "Whole contracts only, at least 1."
-              : `Up to ${maxContracts} ${maxContracts === 1 ? "contract" : "contracts"} on this side`}
+            {units === null && size !== ""
+              ? `Whole steps of ${SIZE.format(unitUsdc)} USDC, at least ${SIZE.format(unitUsdc)}.`
+              : `Up to ${SIZE.format(maxNotional)} USDC on this side`}
           </p>
         </div>
       </div>

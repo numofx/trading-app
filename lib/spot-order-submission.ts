@@ -233,6 +233,11 @@ export type OrderMarketOverride = {
    * charged on its USDC notional per contract, whatever the cNGN-per-USDC price.
    */
   worstFeeUnits?: bigint;
+  /**
+   * The signed on-chain amount of one unit of size, when it is not a whole token (1e18): the
+   * future's unit is 1 USDC of notional, 0.001 contract, signed as 1e15.
+   */
+  amountScale?: bigint;
 };
 
 /**
@@ -324,7 +329,8 @@ export function buildSpotOrderEnvelope({
     throw new Error("Price is too small to represent");
   }
 
-  const engineAmountWei = engineAmountWhole * 10n ** BigInt(ENGINE_DECIMALS);
+  const engineAmountWei =
+    engineAmountWhole * (market?.amountScale ?? 10n ** BigInt(ENGINE_DECIMALS));
   const engineSide: "buy" | "sell" = side;
   const isBid = engineSide === "buy";
 

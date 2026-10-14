@@ -57,20 +57,29 @@ import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount
 
 type FutureBottomTab = keyof typeof FUTURE_ACTIVITY_VIEWS;
 
-const BOOK_UNITS: BookUnits = {
-  base: "Contracts",
-  price: "cNGN",
-  priceDecimals: FUTURE_PRICE_DECIMALS,
-  priceGroups: FUTURE_PRICE_GROUPS,
-  quote: null,
-};
+/** What the venue's amounts count: USDC of notional, or whole contracts on a venue that sizes in them. */
+function sizeUnitLabel(market: FutureMarket | null) {
+  return market !== null && market.state.unitUsdc === market.state.contractSizeUsdc
+    ? "Contracts"
+    : "USDC";
+}
 
-function chartUnits(symbol: string): ChartUnits {
+function bookUnits(market: FutureMarket | null): BookUnits {
+  return {
+    base: sizeUnitLabel(market),
+    price: "cNGN",
+    priceDecimals: FUTURE_PRICE_DECIMALS,
+    priceGroups: FUTURE_PRICE_GROUPS,
+    quote: null,
+  };
+}
+
+function chartUnits(symbol: string, market: FutureMarket | null): ChartUnits {
   return {
     axisDecimals: FUTURE_PRICE_DECIMALS,
     pair: symbol,
     priceDecimals: FUTURE_PRICE_DECIMALS,
-    volumeUnit: "contracts",
+    volumeUnit: sizeUnitLabel(market).toLowerCase(),
   };
 }
 
@@ -134,23 +143,24 @@ function resolveFutureOrderPrice(
 
 /**
  * Signs a future order for the series' asset and sub id on its TradeModule, with the fee ceiling
- * per contract, then posts it. `price` is cNGN per USDC; `contracts` whole contracts.
+ * per contract, then posts it. `price` is cNGN per USDC; `units` the venue's whole units, each
+ * signed as the market's `amountScale`.
  */
 async function signAndPostFutureOrder({
-  contracts,
   market,
   onAwaitingSignature,
   price,
   side,
   subaccountId,
+  units,
   wallet,
 }: {
-  contracts: number;
   market: FutureMarket;
   onAwaitingSignature: () => void;
   price: string;
   side: "buy" | "sell";
   subaccountId: string;
+  units: number;
   wallet: ConnectedWallet;
 }) {
   const appChain = getAppChain();
@@ -159,6 +169,7 @@ async function signAndPostFutureOrder({
   const walletClient = createWalletClient({ chain: appChain, transport: custom(provider) });
   const envelope = buildSpotOrderEnvelope({
     market: {
+      amountScale: market.state.amountScale,
       assetAddress: market.stack.assetAddress,
       orderIdPrefix: "future",
       subId: market.stack.subId,
@@ -168,7 +179,7 @@ async function signAndPostFutureOrder({
     side,
     subaccountId,
     uiPrice: price,
-    uiSize: String(contracts),
+    uiSize: String(units),
     walletAddress: wallet.address,
   });
   onAwaitingSignature();
@@ -237,7 +248,11 @@ function buildActivityView(inputs: {
     case "balances":
       return buildFutureBalancesView(inputs.account, market.state);
     case "open-orders":
-      return buildFutureOpenOrdersActivityView(market.openOrders, inputs.walletAddress);
+      return buildFutureOpenOrdersActivityView(
+        market.openOrders,
+        inputs.walletAddress,
+        market.state.unitUsdc
+      );
     default:
       return inputs.signedHistoryView ?? FUTURE_ACTIVITY_VIEWS[bottomTab];
   }
@@ -400,7 +415,7 @@ function buildAccountRows(
 
 /**
  * The future's book, trades and candles from the shared live-book hook, its headline price (the
- * touch, else the venue's mark) and its 24h volume as the contracts' USDC notional.
+ * touch, else the venue's mark) and its 24h volume as USDC of notional.
  */
 function useFutureBook(market: FutureMarket | null, symbol: string) {
   const book = useLiveMarketBook({
@@ -417,13 +432,12 @@ function useFutureBook(market: FutureMarket | null, symbol: string) {
     },
   });
   const anchor = getAnchorPrice(book.bestAsk, book.bestBid, book.lastPrice);
-  const contracts = market?.volumeContracts24h ?? null;
+  const units = market?.volumeUnits24h ?? null;
   return {
     book,
     price: market === null ? null : (anchor ?? market.state.markPrice),
     stats: get24hStats(book.stats24h, book.lastPrice),
-    volumeUsd:
-      market === null || contracts === null ? null : contracts * market.state.contractSizeUsdc,
+    volumeUsd: market === null || units === null ? null : units * market.state.unitUsdc,
   };
 }
 
@@ -467,21 +481,21 @@ function useFutureOrderActions({
       return;
     }
     const event = {
-      contracts: request.contracts,
       market_id: "usdc-cngn-future",
+      notional_usdc: request.units * market.state.unitUsdc,
       order_side: request.side,
       order_type: request.orderType,
     };
     setIsSubmitting(true);
     try {
       const { body, ok, status } = await signAndPostFutureOrder({
-        contracts: request.contracts,
         market,
         price: resolved.price,
         side: futureOrderUiSide(request.side),
         onAwaitingSignature: () =>
           orderStatus.announce(`Awaiting wallet signature for account #${subaccountId}`),
         subaccountId,
+        units: request.units,
         wallet,
       });
       if (!ok) {
@@ -606,9 +620,10 @@ export function FutureMarketPanels({
     market: symbol,
     signMessage: buildHistorySigner(primaryWallet, walletsReady),
     walletAddress: primaryWallet?.address ?? null,
-    orderHistoryView: (orders) => buildFutureOrderHistoryActivityView(orders, symbol),
+    orderHistoryView: (orders) =>
+      buildFutureOrderHistoryActivityView(orders, symbol, market?.state.unitUsdc ?? 1),
     tradeHistoryView: (fills) =>
-      buildFutureTradeHistoryActivityView(fills, symbol, market?.state.contractSizeUsdc ?? 1000),
+      buildFutureTradeHistoryActivityView(fills, symbol, market?.state.unitUsdc ?? 1),
   });
 
   const { book, price, stats, volumeUsd } = useFutureBook(market, symbol);
@@ -689,7 +704,7 @@ export function FutureMarketPanels({
             onTabChange={setBookTab}
             tab={bookTab}
             trades={book.trades}
-            units={BOOK_UNITS}
+            units={bookUnits(market)}
           />
         }
         chart={
@@ -706,7 +721,7 @@ export function FutureMarketPanels({
             selectedTimeframe={timeframe}
             selectedTool={selectedTool}
             timeframes={SPOT_TIMEFRAME_OPTIONS}
-            units={chartUnits(symbol)}
+            units={chartUnits(symbol, market)}
           />
         }
         ticketColumn={

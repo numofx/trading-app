@@ -133,8 +133,8 @@ async function loadPerpMarket(): Promise<PerpMarket | null> {
   return { ...market, stack, state, symbol: presentation.market };
 }
 
-/** Contracts traded in the window, from the venue's `stats_24h.volume`; null when it served none. */
-function contractsTraded(stats24h: Awaited<ReturnType<typeof readMarketData>>["stats24h"]) {
+/** Units traded in the window, from the venue's `stats_24h.volume`; null when it served none. */
+function unitsTraded(stats24h: Awaited<ReturnType<typeof readMarketData>>["stats24h"]) {
   const volume = Number(stats24h?.volume);
   return Number.isFinite(volume) && volume >= 0 ? volume : null;
 }
@@ -142,7 +142,7 @@ function contractsTraded(stats24h: Awaited<ReturnType<typeof readMarketData>>["s
 /**
  * The live future, or null when markets-service does not list it or lists it without its state or
  * a complete stack; the panels then render their not-live state. Its book carries no `ui_intent`:
- * the engine's side, cNGN-per-USDC price and contracts are already the trader's.
+ * the engine's side, cNGN-per-USDC price and size in the venue's units are already the trader's.
  */
 async function loadFutureMarket(symbol: string): Promise<FutureMarket | null> {
   let presentation: MarketPresentation | null;
@@ -163,7 +163,7 @@ async function loadFutureMarket(symbol: string): Promise<FutureMarket | null> {
     stack,
     state,
     symbol: presentation.market,
-    volumeContracts24h: contractsTraded(data.stats24h),
+    volumeUnits24h: unitsTraded(data.stats24h),
   };
 }
 

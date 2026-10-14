@@ -81,8 +81,10 @@ from its `/v1/markets` entry (`contract_type: future`, the `future` block, `fill
   opens the front-month future (the nearest unexpired series, `app/route.ts`), else spot, and the
   selector's Futures tab lists the same series, so a roll needs no deploy.
 - **Orders** are signed for the future's asset and series (`sub_id`, the expiry) on the perp's
-  TradeModule, in whole contracts, with the fee ceiling per contract (3 USDC, against the venue's
-  2.5 USDC). The ticket refuses a limit outside the fill band, and a market order is held inside
+  TradeModule, sized in USDC of notional: the venue's unit is 1 USDC (0.001 contract, signed as
+  its `amount_scale`, 1e15), so the smallest order is 1 USDC, as on the old SRM's perp. A venue
+  listing no `amount_scale` is read as whole contracts. The fee ceiling is per contract (3 USDC,
+  against the venue's 2.5 USDC). Book, trades and history show sizes in USDC. The ticket refuses a limit outside the fill band, and a market order is held inside
   it. There is no reduce-only: the venue refuses it on the future.
 - **Position and margin** come from chain, every 15s: the ledger, `getMargin` at initial and
   maintenance, `getPendingVM` and the engine's futures rates. `/v1/positions` covers the perp

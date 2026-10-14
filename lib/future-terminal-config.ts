@@ -16,7 +16,7 @@ export const FUTURE_BOTTOM_TABS = [
 /** Column headers for each tab before data arrives. */
 export const FUTURE_ACTIVITY_VIEWS = {
   balances: { columns: [...FUTURE_BALANCES_COLUMNS], rows: [] },
-  "open-orders": { columns: ["Side", "Price", "Contracts", "Filled"], rows: [] },
+  "open-orders": { columns: ["Side", "Price", "Size (USDC)", "Filled"], rows: [] },
   "order-history": { columns: [...FUTURE_ORDER_HISTORY_COLUMNS], rows: [] },
   positions: { columns: [...FUTURE_POSITIONS_COLUMNS], rows: [] },
   "trade-history": { columns: [...FUTURE_TRADE_HISTORY_COLUMNS], rows: [] },

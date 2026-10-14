@@ -491,8 +491,11 @@ export function buildTradeHistoryActivityView(
   };
 }
 
-function formatContracts(size: number) {
-  return `${size.toLocaleString("en-US", { maximumFractionDigits: 3 })}`;
+/** A size in the venue's units as USDC of notional, `unitUsdc` a unit. */
+function formatFutureSize(units: number, unitUsdc: number) {
+  return Number.isFinite(units)
+    ? (units * unitUsdc).toLocaleString("en-US", { maximumFractionDigits: 2 })
+    : UNKNOWN_BALANCE;
 }
 
 /** A cNGN-per-USDC price, the future's quote: two decimals. */
@@ -510,13 +513,13 @@ function formatFutureAction(side: "buy" | "sell" | undefined) {
   return side === "buy" ? "Long" : "Short";
 }
 
-/** The future's Order History columns: sizes are contracts, prices cNGN per USDC. */
+/** The future's Order History columns: sizes are USDC of notional, prices cNGN per USDC. */
 export const FUTURE_ORDER_HISTORY_COLUMNS = [
   "Time",
   "Market",
   "Action",
   "Status",
-  "Contracts",
+  "Size (USDC)",
   "Price",
   "Filled",
 ] as const;
@@ -526,12 +529,14 @@ const FUTURE_ORDER_HISTORY_STATUS_COLUMN = FUTURE_ORDER_HISTORY_COLUMNS.indexOf(
 
 /**
  * The future's Order History. The venue presents the future without a UI intent: its engine
- * side, cNGN-per-USDC limit and contract count are already the trader's own, so they are read
- * directly. An order the venue cancelled for margin says so in its status cell.
+ * side and cNGN-per-USDC limit are already the trader's own, and its size counts the venue's
+ * units, `unitUsdc` of notional each. An order the venue cancelled for margin says so in its
+ * status cell.
  */
 export function buildFutureOrderHistoryActivityView(
   orders: OrderHistoryOrder[],
   label: string,
+  unitUsdc: number,
   timeZone?: string
 ): ActivityView {
   return {
@@ -546,9 +551,9 @@ export function buildFutureOrderHistoryActivityView(
           label,
           formatFutureAction(order.side),
           order.cancel_reason === "insufficient_margin" ? `${status} (margin)` : status,
-          Number.isFinite(size) ? formatContracts(size) : UNKNOWN_BALANCE,
+          formatFutureSize(size, unitUsdc),
           formatFutureHistoryPrice(Number(order.limit_price)),
-          Number.isFinite(filled) ? formatContracts(filled) : UNKNOWN_BALANCE,
+          formatFutureSize(filled, unitUsdc),
         ],
         tones: {
           [FUTURE_ORDER_HISTORY_ACTION_COLUMN]: sideTone(order.side),
@@ -567,9 +572,8 @@ export const FUTURE_TRADE_HISTORY_COLUMNS = [
   "Time",
   "Market",
   "Action",
-  "Contracts",
+  "Size (USDC)",
   "Price",
-  "Notional",
   "Fee",
   "",
 ] as const;
@@ -580,14 +584,14 @@ const FUTURE_FILL_ROLE_NOTE =
   "M: your order rested and was hit (maker, no fee). T: your order crossed the book (taker).";
 
 /**
- * The future's Trade History: one row per fill, its contracts at their USDC notional (contracts ×
- * `contractSizeUsdc`, whatever the price) and the fee the venue recorded. A fill moves no quote
- * leg on chain; its profit or loss arrives as variation margin at each mark.
+ * The future's Trade History: one row per fill, its size as USDC of notional (the venue's units ×
+ * `unitUsdc`, whatever the price) and the fee the venue recorded. A fill moves no quote leg on
+ * chain; its profit or loss arrives as variation margin at each mark.
  */
 export function buildFutureTradeHistoryActivityView(
   fills: AccountFill[],
   label: string,
-  contractSizeUsdc: number,
+  unitUsdc: number,
   timeZone?: string
 ): ActivityView {
   return {
@@ -605,9 +609,8 @@ export function buildFutureTradeHistoryActivityView(
           formatOrderTime(fill.created_at, timeZone),
           label,
           formatFutureAction(fill.side),
-          Number.isFinite(size) ? formatContracts(size) : UNKNOWN_BALANCE,
+          formatFutureSize(size, unitUsdc),
           formatFutureHistoryPrice(Number(fill.price)),
-          Number.isFinite(size) ? formatDollars(size * contractSizeUsdc, 2) : UNKNOWN_BALANCE,
           Number.isFinite(fee) ? formatDollars(fee, 6) : UNKNOWN_BALANCE,
         ],
       };
@@ -615,21 +618,22 @@ export function buildFutureTradeHistoryActivityView(
   };
 }
 
-/** The future's Open Orders: sides as Long and Short, prices cNGN per USDC, sizes in contracts. */
+/** The future's Open Orders: sides as Long and Short, prices cNGN per USDC, sizes in USDC. */
 export function buildFutureOpenOrdersActivityView(
   openOrders: SpotOpenOrder[],
-  walletAddress: string | null
+  walletAddress: string | null,
+  unitUsdc: number
 ): ActivityView {
   const owned = getOwnedOpenOrders(openOrders, walletAddress);
   return {
-    columns: ["Side", "Price", "Contracts", "Filled", ""],
+    columns: ["Side", "Price", "Size (USDC)", "Filled", ""],
     rows: owned.map((order) => ({
       tones: { 0: sideTone(order.side) },
       cells: [
         formatFutureAction(order.side),
         formatFutureHistoryPrice(order.price),
-        formatContracts(order.size),
-        formatContracts(order.filled),
+        formatFutureSize(order.size, unitUsdc),
+        formatFutureSize(order.filled, unitUsdc),
       ],
     })),
   };

@@ -41,6 +41,14 @@ export type FutureState = {
   fillBand: { low: number; high: number } | null;
   /** One contract's notional, USDC. */
   contractSizeUsdc: number;
+  /**
+   * The venue's size unit, as USDC of notional: 1 since the venue sized the future in USDC
+   * (`amount_scale` 1e15, 0.001 contract), a whole contract before. Every amount the venue serves
+   * for the series (book, trades, orders, volume) counts these units.
+   */
+  unitUsdc: number;
+  /** One unit as the signed on-chain amount, the ledger counting 1e18 a contract. */
+  amountScale: bigint;
 };
 
 /** Where an order for the series is signed and its margin account lives. Checksummed. */
@@ -60,8 +68,8 @@ export type FutureMarket = SpotMarket & {
   symbol: string;
   state: FutureState;
   stack: FutureStack;
-  /** 24h volume in contracts, which the venue reports as `stats_24h.volume`. */
-  volumeContracts24h: number | null;
+  /** 24h volume in the venue's units (`unitUsdc` each), as it reports `stats_24h.volume`. */
+  volumeUnits24h: number | null;
 };
 
 /**

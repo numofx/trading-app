@@ -77,6 +77,8 @@ export type FuturePresentation = {
   expiry_timestamp?: number;
   fill_band_low?: string;
   fill_band_high?: string;
+  /** The signed on-chain amount of one unit of desired_amount; absent, a whole contract. */
+  amount_scale?: string;
   future?: FutureStatePresentation;
 };
 
@@ -94,8 +96,11 @@ export function parseFutureState(presentation: FuturePresentation | null): Futur
   const lastTrade = future.last_trade_time ?? expiry;
   const low = positiveDecimal(presentation?.fill_band_low);
   const high = positiveDecimal(presentation?.fill_band_high);
+  const contractSizeUsdc = positiveDecimal(future.contract_size_usdc) ?? 1000;
+  const amountScale = parseAmountScale(presentation?.amount_scale);
   return {
-    contractSizeUsdc: positiveDecimal(future.contract_size_usdc) ?? 1000,
+    amountScale,
+    contractSizeUsdc,
     expiryMs: expiry * 1000,
     fillBand: low !== null && high !== null && low < high ? { high, low } : null,
     indexPrice: positiveDecimal(future.index_price),
@@ -105,7 +110,21 @@ export function parseFutureState(presentation: FuturePresentation | null): Futur
     settled: future.settled === true,
     tradingClosedReason: future.trading_closed_reason?.trim() || null,
     tradingOpen: future.trading_open === true,
+    unitUsdc: (contractSizeUsdc * Number(amountScale / 10n ** 12n)) / 1e6,
   };
+}
+
+/** The ledger's amount for one whole contract. */
+const CONTRACT_UNITS = 10n ** 18n;
+
+/** The venue's `amount_scale`, or a whole contract when it names none (before it sized in USDC). */
+function parseAmountScale(value: string | undefined) {
+  const trimmed = value?.trim() ?? "";
+  if (!UNSIGNED_INTEGER_PATTERN.test(trimmed)) {
+    return CONTRACT_UNITS;
+  }
+  const scale = BigInt(trimmed);
+  return scale > 0n && scale <= CONTRACT_UNITS ? scale : CONTRACT_UNITS;
 }
 
 function checksummed(value: string | undefined): `0x${string}` | null {
@@ -204,36 +223,55 @@ export function futureSideLabel(side: FutureSide) {
   return side === "long" ? "Long" : "Short";
 }
 
-/** Contracts as the ledger holds them, 18 decimals, to a signed whole-contract count. */
+/** Contracts as the ledger holds them, 18 decimals, to a signed count to six decimals. */
 export function toContracts(units: bigint) {
   return Number(units / 10n ** 12n) / 1e6;
 }
 
+/** A position or order as USDC of notional: contracts × the contract size. */
+export function futureNotionalUsdc(contracts: number, state: FutureState) {
+  return contracts * state.contractSizeUsdc;
+}
+
 /**
- * What an order does to the margin the engine checks, before it is sent: the contracts it adds
- * to the account's exposure (a reduction adds none, and the engine checks it against maintenance
- * margin only), the initial margin those add, and the taker fee if it crosses.
+ * A ticket's size, USDC of notional, as the venue's whole units, or null unless it is a positive
+ * whole number of them: the venue rests whole units only (1 USDC since it sized the future in USDC).
+ */
+export function futureOrderUnits(sizeUsdc: number, state: FutureState) {
+  if (!Number.isFinite(sizeUsdc) || sizeUsdc <= 0 || state.unitUsdc <= 0) {
+    return null;
+  }
+  const units = sizeUsdc / state.unitUsdc;
+  const whole = Math.round(units);
+  return whole >= 1 && Math.abs(units - whole) < 1e-9 ? whole : null;
+}
+
+/**
+ * What an order of `notional` USDC does to the margin the engine checks, before it is sent: the
+ * exposure it adds (a reduction adds none, and the engine checks it against maintenance margin
+ * only), the initial margin that adds, and the taker fee if it crosses. `position` and `after`
+ * are USDC of notional, signed: positive long.
  */
 export function estimateFutureOrder({
   account,
-  contracts,
+  notional,
   side,
   state,
   takerFeeBps,
 }: {
   account: FutureAccount | null;
-  contracts: number;
+  notional: number;
   side: FutureSide;
   state: FutureState;
   takerFeeBps: number | null;
 }) {
-  const position = account === null ? 0 : toContracts(account.positionUnits);
-  const after = position + (side === "long" ? contracts : -contracts);
+  const position =
+    account === null ? 0 : futureNotionalUsdc(toContracts(account.positionUnits), state);
+  const after = position + (side === "long" ? notional : -notional);
   const added = Math.max(0, Math.abs(after) - Math.abs(position));
   const imRate = account?.imRate ?? null;
-  const notional = contracts * state.contractSizeUsdc;
   const fee = takerFeeBps === null ? null : (notional * takerFeeBps) / 10_000;
-  const initialMargin = imRate === null ? null : added * state.contractSizeUsdc * imRate;
+  const initialMargin = imRate === null ? null : added * imRate;
   const shortfall =
     account === null || initialMargin === null
       ? null
@@ -242,11 +280,11 @@ export function estimateFutureOrder({
 }
 
 /**
- * The most contracts the ticket offers on one side: the position it can close outright (reducing
- * is always allowed), plus what the initial margin surplus opens at the engine's rate with the
- * taker fee on top. Zero without an account or its rates.
+ * The most USDC of notional the ticket offers on one side, in whole venue units: the position it
+ * can close outright (reducing is always allowed), plus what the initial margin surplus opens at
+ * the engine's rate with the taker fee on top. Zero without an account or its rates.
  */
-export function maxFutureContracts({
+export function maxFutureNotional({
   account,
   side,
   state,
@@ -257,15 +295,14 @@ export function maxFutureContracts({
   state: FutureState;
   takerFeeBps: number | null;
 }) {
-  if (account === null) {
+  if (account === null || state.unitUsdc <= 0) {
     return 0;
   }
-  const position = toContracts(account.positionUnits);
+  const position = futureNotionalUsdc(toContracts(account.positionUnits), state);
   const closable = side === "long" ? Math.max(0, -position) : Math.max(0, position);
-  const perContract = state.contractSizeUsdc * (account.imRate + (takerFeeBps ?? 0) / 10_000);
-  const opening =
-    perContract > 0 ? Math.floor(Math.max(0, account.initialMarginSurplus) / perContract) : 0;
-  return Math.floor(closable) + opening;
+  const perUsdc = account.imRate + (takerFeeBps ?? 0) / 10_000;
+  const opening = perUsdc > 0 ? Math.max(0, account.initialMarginSurplus) / perUsdc : 0;
+  return Math.floor((closable + opening) / state.unitUsdc) * state.unitUsdc;
 }
 
 const USD_CELL = new Intl.NumberFormat("en-US", {

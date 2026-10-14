@@ -24,6 +24,8 @@ export type MarketPresentation = {
   /** The prices a fill on the future may carry, cNGN per USDC; absent while the band is unreadable. */
   fill_band_low?: string;
   fill_band_high?: string;
+  /** The signed on-chain amount of one unit of desired_amount, where the market fixes one (the future). */
+  amount_scale?: string;
   base_asset_symbol?: string;
   contract_type?: string;
   display_label?: string;
