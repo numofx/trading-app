@@ -383,12 +383,6 @@ function SlippageLine({
   );
 }
 
-/** The band's tooltip: its width around the index, and what happens outside it. */
-function bandTooltip(bandWidth: number | null) {
-  const width = bandWidth === null ? "" : ` ±${SIZE.format(bandWidth * 100)}%`;
-  return `Index${width}. Orders outside this range are rejected.`;
-}
-
 function TicketSummary({
   contractSize,
   estimate,
@@ -651,7 +645,6 @@ export function FutureOrderFormPanel({
   // what is not about the limit.
   const limitError = orderType === "Limit" ? shownPriceError : null;
   const statusText = block ?? lastAction ?? (limitError === null ? shownPriceError : null);
-  const band = state?.fillBand ?? null;
 
   return (
     <OrderFormShell
@@ -686,11 +679,6 @@ export function FutureOrderFormPanel({
       }
     >
       <SideToggle onSelect={edited(setSide)} options={SIDES} selected={side} />
-      <p className="px-0.5 text-[11px] text-panel-text-muted leading-snug">
-        {side === "long"
-          ? "Long gains if cNGN weakens (more cNGN per USDC)."
-          : "Short gains if cNGN strengthens (fewer cNGN per USDC)."}
-      </p>
 
       <OrderTypeTabs
         onSelect={edited(setOrderType)}
@@ -751,14 +739,6 @@ export function FutureOrderFormPanel({
           validSize={units !== null}
         />
         <FutureLeverageRow leverage={leverage.leverage} maxLeverage={leverage.maxLeverage} />
-        <p
-          className="px-0.5 text-[11px] text-panel-text-muted tabular-nums"
-          title={bandTooltip(state?.bandWidth ?? null)}
-        >
-          {band === null
-            ? "Price limits unavailable: orders resume once the venue reads the index."
-            : `Orders must be between ${formatFuturePrice(band.low)} and ${formatFuturePrice(band.high)}`}
-        </p>
       </div>
     </OrderFormShell>
   );
