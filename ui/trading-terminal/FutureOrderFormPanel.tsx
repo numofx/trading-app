@@ -690,11 +690,6 @@ export function FutureOrderFormPanel({
               tooltip="cNGN per USDC"
               value={limitPrice}
             />
-            <p className="text-[11px] text-panel-text-muted tabular-nums">
-              {band === null
-                ? "Fill band unavailable"
-                : `Fill band ${formatFuturePrice(band.low)} – ${formatFuturePrice(band.high)}`}
-            </p>
           </div>
         ) : null}
 
@@ -710,6 +705,14 @@ export function FutureOrderFormPanel({
           validSize={units !== null}
         />
         <FutureLeverageRow leverage={leverage.leverage} maxLeverage={leverage.maxLeverage} />
+        <p
+          className="px-0.5 text-[11px] text-panel-text-muted tabular-nums"
+          title="The fill band around the index. The venue refuses a limit outside it, and the chain a fill."
+        >
+          {band === null
+            ? "Price limits unavailable: orders resume once the venue reads the index."
+            : `Orders must be between ${formatFuturePrice(band.low)} and ${formatFuturePrice(band.high)}`}
+        </p>
       </div>
     </OrderFormShell>
   );

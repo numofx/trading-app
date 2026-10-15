@@ -30,6 +30,8 @@ export type MarketOverviewRow = {
   openInterestUsd: number | null;
   /** Hourly funding as the venue's long sees it: positive means longs pay. */
   fundingRate1h: number | null;
+  /** The future's expiry, epoch ms: when the series settles. */
+  expiryMs: number | null;
   /** The future's last trade time, epoch ms: after it the venue takes no new orders. */
   lastTradeAtMs: number | null;
   /** The future series' venue symbol, `USDC-cNGN-<DDMONYY>`; null on spot and the perp. */

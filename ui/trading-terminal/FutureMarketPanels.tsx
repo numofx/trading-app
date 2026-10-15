@@ -22,6 +22,7 @@ import {
   describeFutureRejection,
   FUTURE_PRICE_DECIMALS,
   FUTURE_PRICE_GROUPS,
+  futureMarkSource,
   futureOrderUiSide,
   futureWorstFeeUnits,
   isOutsideFillBand,
@@ -52,6 +53,7 @@ import { useTerminalSession } from "@/ui/trading-terminal/TerminalSession";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
 import { useAccountTransfer } from "@/ui/trading-terminal/useAccountTransfer";
 import { useFutureAccount } from "@/ui/trading-terminal/useFutureAccount";
+import { useFutureOpenInterest } from "@/ui/trading-terminal/useFutureOpenInterest";
 import { useLiveMarketBook } from "@/ui/trading-terminal/useLiveMarketBook";
 import { useOrderStatus } from "@/ui/trading-terminal/useOrderStatus";
 import { useSignedHistoryTabs } from "@/ui/trading-terminal/useSignedHistoryTabs";
@@ -88,6 +90,24 @@ function chartUnits(symbol: string, market: FutureMarket | null): ChartUnits {
 /** A fill's volume in the chart's unit: its size, already USDC of notional (or contracts). */
 function fillSize(trade: TradePrint) {
   return trade.size;
+}
+
+/** Each side's resting notional in USDC: the venue's sizes count `unitUsdc` each. */
+function bookDepthUsdc(
+  book: { asks: { size: number }[]; bids: { size: number }[] },
+  unitUsdc: number
+) {
+  const total = (levels: { size: number }[]) =>
+    levels.reduce((sum, level) => sum + level.size, 0) * unitUsdc;
+  return { asks: total(book.asks), bids: total(book.bids) };
+}
+
+/** How the next mark is set, from the live book; null without the market. */
+function markSourceOf(
+  market: FutureMarket | null,
+  book: { asks: { size: number }[]; bids: { size: number }[] }
+) {
+  return market === null ? null : futureMarkSource(bookDepthUsdc(book, market.state.unitUsdc));
 }
 
 /** How often the countdown to the last trade time re-renders. */
@@ -683,7 +703,7 @@ export function FutureMarketPanels({
       buildFutureTradeHistoryActivityView(fills, symbol, market?.state.unitUsdc ?? 1),
   });
 
-  const { book, price, stats, volumeUsd } = useFutureBook(market, symbol);
+  const { book, price, stats } = useFutureBook(market, symbol);
   const ownedOpenOrders = getOwnedOpenOrders(
     market?.openOrders ?? [],
     primaryWallet?.address ?? null
@@ -698,6 +718,8 @@ export function FutureMarketPanels({
     wallet: primaryWallet,
   });
 
+  const openInterestUsd = useFutureOpenInterest(market);
+
   usePublishTerminalHeader({
     changePercent24h: stats.changePercent,
     depositControl: market === null ? undefined : transfer.headerControl,
@@ -705,11 +727,10 @@ export function FutureMarketPanels({
     low24h: stats.low,
     market: "future",
     metrics: buildFutureHeaderMetrics({
-      firstPrice: market?.stats24h?.firstPrice ?? null,
-      lastPrice: book.lastPrice,
+      markSource: markSourceOf(market, book),
       nowMs,
+      openInterestUsd,
       state: market?.state ?? null,
-      volumeUsd,
     }),
     price,
     volume24hLabel: stats.volumeLabel,

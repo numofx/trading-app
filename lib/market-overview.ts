@@ -65,6 +65,7 @@ export function emptyOverviewRow(id: TerminalMarketId): MarketOverviewRow {
     changePercent24h: null,
     fundingRate1h: null,
     id,
+    expiryMs: null,
     lastTradeAtMs: null,
     openInterestUsd: null,
     price: null,
@@ -92,11 +93,13 @@ export function buildOverviewRow(
     uiLongFundingRate1h: number;
   } | null,
   future: {
-    contractSizeUsdc: number;
+    expiryMs: number;
     lastTradeAtMs: number;
     markPrice: number | null;
     symbol: string;
-    volumeContracts: number | null;
+    /** The venue's size unit as USDC of notional: what its volume counts. */
+    unitUsdc: number;
+    volumeUnits: number | null;
   } | null = null
 ): MarketOverviewRow {
   const lastPrice = getVenueLastPrice(market.trades, market.candles, market.mark);
@@ -108,12 +111,12 @@ export function buildOverviewRow(
   const { changePercent } = isSpot
     ? get24hStats(toUsdcCngnStats(market.stats24h), invertPrice(lastPrice))
     : get24hStats(market.stats24h, lastPrice);
-  const futureVolume =
-    future?.volumeContracts == null ? null : future.volumeContracts * future.contractSizeUsdc;
+  const futureVolume = future?.volumeUnits == null ? null : future.volumeUnits * future.unitUsdc;
   return {
     changePercent24h: changePercent,
     fundingRate1h: perp?.uiLongFundingRate1h ?? null,
     id,
+    expiryMs: future?.expiryMs ?? null,
     lastTradeAtMs: future?.lastTradeAtMs ?? null,
     openInterestUsd: perp?.openInterestUsd ?? null,
     price,

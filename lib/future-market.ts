@@ -447,29 +447,59 @@ function signedPercent(value: number, digits: number) {
   return `${signPrefix(value)}${Math.abs(value).toFixed(digits)}%`;
 }
 
-/** The day's move as "+1.20 (+0.09%)", or a dash without both ends of the window. */
-function formatFutureChange(firstPrice: number | null, lastPrice: number | null) {
-  if (firstPrice === null || lastPrice === null || firstPrice <= 0) {
-    return { change: null, value: "—" };
-  }
-  const change = lastPrice - firstPrice;
-  const percent = (change / firstPrice) * 100;
-  return {
-    change,
-    value: `${signPrefix(change)}${formatFuturePrice(Math.abs(change))} (${signedPercent(percent, 2)})`,
-  };
-}
-
-/** The mark's premium over the index, as a percentage of the index; null without both. */
-function basisPercent(state: FutureState | null) {
+/**
+ * The mark against the index: forward points (mark − index, cNGN per USDC) and the premium as a
+ * fraction (mark / index − 1). Null without both prices or with a non-positive index.
+ */
+export function futureBasis(state: FutureState | null) {
   const mark = state?.markPrice ?? null;
   const index = state?.indexPrice ?? null;
-  return mark !== null && index !== null ? ((mark - index) / index) * 100 : null;
+  if (mark === null || index === null || !(index > 0) || !(mark > 0)) {
+    return null;
+  }
+  return { points: mark - index, premium: mark / index - 1 };
 }
 
-function formatBand(band: FutureState["fillBand"]) {
-  return band === null ? "—" : `${formatFuturePrice(band.low)} – ${formatFuturePrice(band.high)}`;
+/**
+ * The basis annualized: (mark / index − 1) × 365 / days to expiry, the naira-dollar rate
+ * differential the future implies. Null without a basis, or once the series has expired or
+ * settled, when there are no days left to spread it over.
+ */
+export function futureBasisApr(state: FutureState | null, nowMs: number) {
+  const basis = futureBasis(state);
+  if (state === null || basis === null || state.settled) {
+    return null;
+  }
+  const days = (state.expiryMs - nowMs) / Duration.toMillis("1 day");
+  return days > 0 ? (basis.premium * 365) / days : null;
 }
+
+/**
+ * How the forward keeper sets the next hourly mark: from the futures book when each side holds
+ * `FUTURE_MARK_BOOK_DEPTH_USDC` of notional, otherwise from the index carried forward. The keeper's
+ * own threshold (perp-feeds FORWARD_MIN_BOOK_DEPTH_USDC) is the figure this mirrors.
+ */
+export const FUTURE_MARK_BOOK_DEPTH_USDC = 2000;
+
+export type FutureMarkSource = "book" | "carry";
+
+/** Which way the next mark is set, from the depth each side of the live book holds (USDC). */
+export function futureMarkSource(depthUsdc: { asks: number; bids: number }): FutureMarkSource {
+  return depthUsdc.bids >= FUTURE_MARK_BOOK_DEPTH_USDC &&
+    depthUsdc.asks >= FUTURE_MARK_BOOK_DEPTH_USDC
+    ? "book"
+    : "carry";
+}
+
+function markTooltip(source: FutureMarkSource | null) {
+  const method = `cNGN per USDC, set hourly by the forward keeper: the futures book's depth-weighted mid when each side holds ${USD_WHOLE.format(FUTURE_MARK_BOOK_DEPTH_USDC)} USDC, otherwise a model, the index carried forward at the NGN–USD rate differential. Either way it is held within 3% of that model and inside the index band. It is never the last trade. Variation margin is paid at it.`;
+  if (source === null) {
+    return method;
+  }
+  return `${method} The book ${source === "book" ? "holds that depth now, so the mark is book-derived" : "is thinner than that now, so the mark is model-derived"}.`;
+}
+
+const USD_WHOLE = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 
 function toneOf(value: number | null): PerpHeaderMetric["tone"] {
   if (value === null || value === 0) {
@@ -478,32 +508,58 @@ function toneOf(value: number | null): PerpHeaderMetric["tone"] {
   return value > 0 ? "up" : "down";
 }
 
+function formatBasis(basis: ReturnType<typeof futureBasis>) {
+  if (basis === null) {
+    return "—";
+  }
+  return `${signPrefix(basis.points)}${formatFuturePrice(Math.abs(basis.points))} (${signedPercent(basis.premium * 100, 2)})`;
+}
+
+/** Time to expiry, or what the series is once it has none left. */
+function formatExpiresIn(state: FutureState | null, nowMs: number) {
+  if (state === null) {
+    return "—";
+  }
+  if (state.settled) {
+    return "Settled";
+  }
+  return state.expiryMs <= nowMs ? "Expired" : formatCountdown(state.expiryMs, nowMs);
+}
+
 /**
- * The future's header figures: mark and index from the venue, the basis between them, the day's
- * move and volume, the band a fill must sit in, and the time left to trade. Prices are cNGN per
- * USDC; the volume is the contracts traded at their USDC notional.
+ * Open interest at its USDC notional from the asset's `totalPosition`: the sum of every account's
+ * |position| under the manager, 18 decimals a contract. That counts each contract on both its long
+ * and its short side, so open interest is half of it. It spans every series of the asset under that
+ * manager; one series is listed at a time.
+ */
+export function futureOpenInterestUsd(totalPosition: bigint, contractSizeUsdc: number) {
+  return (toContracts(totalPosition) / 2) * contractSizeUsdc;
+}
+
+/**
+ * The future's header figures, in order: mark (with how it is set), index, basis in forward points
+ * and percent, the basis annualized, open interest at its USDC notional, and the time to expiry.
+ * Prices are cNGN per USDC.
  */
 export function buildFutureHeaderMetrics({
-  firstPrice,
-  lastPrice,
+  markSource,
   nowMs,
+  openInterestUsd,
   state,
-  volumeUsd,
 }: {
-  firstPrice: number | null;
-  lastPrice: number | null;
+  /** How the next mark is set, from the live book; null while it is unknown. */
+  markSource: FutureMarkSource | null;
   nowMs: number;
+  openInterestUsd: number | null;
   state: FutureState | null;
-  volumeUsd: number | null;
 }): PerpHeaderMetric[] {
-  const change = formatFutureChange(firstPrice, lastPrice);
-  const basis = basisPercent(state);
+  const basis = futureBasis(state);
+  const apr = futureBasisApr(state, nowMs);
   return [
     {
       label: "Mark",
       tone: null,
-      tooltip:
-        "cNGN per USDC. The price variation margin is paid at: each hourly mark moves every position by Δmark × 1,000 cNGN a contract",
+      tooltip: markTooltip(markSource),
       value: formatFuturePrice(state?.markPrice ?? null),
     },
     {
@@ -515,58 +571,50 @@ export function buildFutureHeaderMetrics({
     },
     {
       label: "Basis",
-      tone: toneOf(basis),
-      tooltip: "The mark's premium over the index",
-      value: basis === null ? "—" : signedPercent(basis, 2),
+      tone: toneOf(basis?.points ?? null),
+      tooltip: "Mark − Index. Positive when the future trades above spot.",
+      value: formatBasis(basis),
     },
-    { label: "24h Change", tone: toneOf(change.change), value: change.value },
-    { label: "24h Volume", tone: null, value: formatCompactUsd(volumeUsd ?? Number.NaN) },
     {
-      label: "Fill Band",
+      label: "APR",
       tone: null,
-      tooltip:
-        "The prices a fill may carry, around the index: the chain refuses a fill outside it, and so does the venue",
-      value: formatBand(state?.fillBand ?? null),
+      tooltip: "Implied naira-dollar rate differential, annualized.",
+      value: apr === null ? "—" : signedPercent(apr * 100, 2),
     },
     {
-      label: "Last Trade In",
+      label: "Open Interest",
+      tone: null,
+      tooltip: "Contracts open, one side, at their USDC notional",
+      value: openInterestUsd === null ? "—" : formatCompactUsd(openInterestUsd),
+    },
+    {
+      label: "Expires In",
       tone: null,
       tooltip:
         state === null
           ? undefined
           : `New orders close ${formatUtcStamp(state.lastTradeAtMs)}; the series settles ${formatUtcStamp(state.expiryMs)}`,
-      value: state === null ? "—" : formatCountdown(state.lastTradeAtMs, nowMs),
+      value: formatExpiresIn(state, nowMs),
     },
   ];
 }
 
 /** The header's figures from the selector's row while the future's panels load after a switch. */
 export function buildFutureOverviewMetrics(
-  row: {
-    changePercent24h: number | null;
-    lastTradeAtMs: number | null;
-    volume24hUsd: number | null;
-  },
+  row: { expiryMs: number | null },
   nowMs: number
 ): PerpHeaderMetric[] {
   const live = buildFutureHeaderMetrics({
-    firstPrice: null,
-    lastPrice: null,
+    markSource: null,
     nowMs,
+    openInterestUsd: null,
     state: null,
-    volumeUsd: row.volume24hUsd,
   });
-  const seeded: Partial<Record<string, Pick<PerpHeaderMetric, "tone" | "value">>> = {
-    "24h Change": {
-      tone: toneOf(row.changePercent24h),
-      value: row.changePercent24h === null ? "—" : `(${signedPercent(row.changePercent24h, 2)})`,
-    },
-    "Last Trade In": {
-      tone: null,
-      value: row.lastTradeAtMs === null ? "—" : formatCountdown(row.lastTradeAtMs, nowMs),
-    },
-  };
-  return live.map((metric) => ({ ...metric, ...seeded[metric.label] }));
+  return live.map((metric) =>
+    metric.label === "Expires In" && row.expiryMs !== null
+      ? { ...metric, value: formatCountdown(row.expiryMs, nowMs) }
+      : metric
+  );
 }
 
 /** The venue's refusal of a future order in a trader's words; the venue's own text otherwise. */

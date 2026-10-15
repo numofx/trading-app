@@ -73,7 +73,7 @@ async function readRow(
     stats24h: tradesResult.status === "fulfilled" ? tradesResult.value.stats24h : null,
     trades: tradesResult.status === "fulfilled" ? tradesResult.value.trades : [],
   });
-  const volumeContracts = Number(
+  const volumeUnits = Number(
     tradesResult.status === "fulfilled" ? tradesResult.value.stats24h?.volume : Number.NaN
   );
   return buildOverviewRow(
@@ -83,11 +83,12 @@ async function readRow(
     futureState === null
       ? null
       : {
-          contractSizeUsdc: futureState.contractSizeUsdc,
+          expiryMs: futureState.expiryMs,
           lastTradeAtMs: futureState.lastTradeAtMs,
           markPrice: futureState.markPrice,
           symbol: presentation.market,
-          volumeContracts: Number.isFinite(volumeContracts) ? volumeContracts : null,
+          unitUsdc: futureState.unitUsdc,
+          volumeUnits: Number.isFinite(volumeUnits) ? volumeUnits : null,
         }
   );
 }
