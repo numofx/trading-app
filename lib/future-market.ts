@@ -347,6 +347,39 @@ export function estimateFutureFill({
   return { averagePrice: fill.averagePrice, slippage: Math.max(0, adverse / touch) };
 }
 
+/**
+ * The variation margin a fill settles at once, in cNGN to the trader: the engine marks the new
+ * position to the mark on the fill, so a long that fills above the mark (or a short below it) pays
+ * the gap times the notional, and one that fills on the better side of the mark receives it.
+ */
+export function futureFillVmCngn({
+  markPrice,
+  notional,
+  price,
+  side,
+}: {
+  markPrice: number | null;
+  notional: number;
+  price: number | null;
+  side: FutureSide;
+}) {
+  if (markPrice === null || price === null || !(notional > 0)) {
+    return null;
+  }
+  return (side === "long" ? markPrice - price : price - markPrice) * notional;
+}
+
+/** A fill's VM as the ticket and history show it: signed cNGN, with its dollar value at the mark. */
+export function formatFutureVm(vmCngn: number | null, markPrice: number | null) {
+  if (vmCngn === null || !Number.isFinite(vmCngn)) {
+    return "—";
+  }
+  const cngn = signedCngn(vmCngn);
+  return markPrice === null || !(markPrice > 0)
+    ? cngn
+    : `${cngn} (≈ ${signedUsd(vmCngn / markPrice)})`;
+}
+
 /** A USDC amount to the cent, or to four places under a cent, so a small fee never reads as free. */
 export function formatFutureUsdc(value: number | null) {
   if (value === null || !Number.isFinite(value)) {

@@ -9,7 +9,13 @@ import type {
 } from "@/lib/order-history.types";
 import { sideTone } from "@/lib/side-tone";
 import { engineSide } from "@/lib/spot-orientation";
-import type { ActivityRow, ActivityView, CellBadge, SpotOpenOrder } from "@/lib/trading.types";
+import type {
+  ActivityRow,
+  ActivityView,
+  CellBadge,
+  CellTone,
+  SpotOpenOrder,
+} from "@/lib/trading.types";
 
 /** Rendered when a balance is genuinely unknown — never substitute a zero or a placeholder figure. */
 const UNKNOWN_BALANCE = "—";
@@ -575,8 +581,39 @@ export const FUTURE_TRADE_HISTORY_COLUMNS = [
   "Size (USDC)",
   "Price",
   "Fee",
+  "VM",
   "",
 ] as const;
+
+const FUTURE_TRADE_HISTORY_VM_COLUMN = FUTURE_TRADE_HISTORY_COLUMNS.indexOf("VM");
+
+const FUTURE_FILL_VM_NOTE =
+  "Variation margin the fill settled at once, in cNGN: the gap between the fill price and the mark, times the size. USDC covers any cNGN the account lacked.";
+
+const SIGNED_CNGN = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 2,
+  minimumFractionDigits: 2,
+});
+
+/** A cNGN amount with its sign, so a VM credit and a charge read apart at a glance. */
+function formatSignedCngn(value: number) {
+  return `${signPrefix(value)}${SIGNED_CNGN.format(Math.abs(value))} cNGN`;
+}
+
+function signPrefix(value: number) {
+  if (value > 0) {
+    return "+";
+  }
+  return value < 0 ? "-" : "";
+}
+
+/** A VM credit reads positive and a charge negative; nothing, or an unknown VM, takes no tone. */
+function vmTone(value: number): CellTone | undefined {
+  if (value > 0) {
+    return "positive";
+  }
+  return value < 0 ? "negative" : undefined;
+}
 
 const FUTURE_TRADE_HISTORY_ACTION_COLUMN = FUTURE_TRADE_HISTORY_COLUMNS.indexOf("Action");
 
@@ -599,9 +636,9 @@ export function buildFutureTradeHistoryActivityView(
     rows: fills.map((fill) => {
       const size = Number(fill.size);
       const fee = fill.fee === undefined ? Number.NaN : Number(fill.fee);
+      const vm = fill.vm_cngn === undefined ? Number.NaN : Number(fill.vm_cngn);
+      const tone = vmTone(vm);
       return {
-        titles: { [FUTURE_TRADE_HISTORY_ACTION_COLUMN]: FUTURE_FILL_ROLE_NOTE },
-        tones: { [FUTURE_TRADE_HISTORY_ACTION_COLUMN]: sideTone(fill.side) },
         badges: {
           [FUTURE_TRADE_HISTORY_ACTION_COLUMN]: [{ label: fill.liquidity === "maker" ? "M" : "T" }],
         },
@@ -612,7 +649,16 @@ export function buildFutureTradeHistoryActivityView(
           formatFutureSize(size, unitUsdc),
           formatFutureHistoryPrice(Number(fill.price)),
           Number.isFinite(fee) ? formatDollars(fee, 6) : UNKNOWN_BALANCE,
+          Number.isFinite(vm) ? formatSignedCngn(vm) : UNKNOWN_BALANCE,
         ],
+        titles: {
+          [FUTURE_TRADE_HISTORY_ACTION_COLUMN]: FUTURE_FILL_ROLE_NOTE,
+          [FUTURE_TRADE_HISTORY_VM_COLUMN]: FUTURE_FILL_VM_NOTE,
+        },
+        tones: {
+          [FUTURE_TRADE_HISTORY_ACTION_COLUMN]: sideTone(fill.side),
+          ...(tone === undefined ? {} : { [FUTURE_TRADE_HISTORY_VM_COLUMN]: tone }),
+        },
       };
     }),
   };

@@ -9,6 +9,8 @@ import {
   estimateFutureOrder,
   formatFuturePrice,
   formatFutureUsdc,
+  formatFutureVm,
+  futureFillVmCngn,
   futureMaxFeeUsdc,
   futureNotionalUsdc,
   futureOrderUiSide,
@@ -421,10 +423,12 @@ function TicketSummary({
   estimate,
   expectedPrice,
   hasAccount,
+  markPrice,
   maxSlippage,
   onMaxSlippageChange,
   orderType,
   position,
+  side,
   slippage,
   takerFeeBps,
 }: {
@@ -432,10 +436,13 @@ function TicketSummary({
   estimate: ReturnType<typeof estimateFutureOrder> | null;
   expectedPrice: number | null;
   hasAccount: boolean;
+  /** The engine's last mark, cNGN per USDC: what a fill's VM is settled against. */
+  markPrice: number | null;
   maxSlippage: number;
   onMaxSlippageChange: (max: number) => void;
   orderType: FutureOrderType;
   position: number;
+  side: FutureSide;
   slippage: number | null;
   takerFeeBps: number | null;
 }) {
@@ -472,6 +479,23 @@ function TicketSummary({
             slippage={slippage}
           />
         )}
+        <SummaryRow
+          label="VM at Mark"
+          tooltip={`Settled in cNGN on the fill: the gap between the fill price and the mark (${formatFuturePrice(markPrice)}), times the size. A long filled above the mark, or a short below it, pays it; USDC covers any cNGN the account lacks.`}
+          value={
+            sized
+              ? formatFutureVm(
+                  futureFillVmCngn({
+                    markPrice,
+                    notional: estimate?.notional ?? 0,
+                    price: expectedPrice,
+                    side,
+                  }),
+                  markPrice
+                )
+              : "—"
+          }
+        />
         <SummaryRow
           label="Fees"
           tooltip="The venue's taker fee on the notional, in USDC. A resting limit that is hit pays none."
@@ -771,10 +795,12 @@ export function FutureOrderFormPanel({
             estimate={estimate}
             expectedPrice={expectedPrice}
             hasAccount={hasAccount}
+            markPrice={state?.markPrice ?? null}
             maxSlippage={maxSlippage}
             onMaxSlippageChange={edited(setMaxSlippage)}
             orderType={orderType}
             position={position}
+            side={side}
             slippage={slippage}
             takerFeeBps={takerFeeBps}
           />

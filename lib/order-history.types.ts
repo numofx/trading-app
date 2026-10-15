@@ -78,6 +78,12 @@ export type AccountFill = {
   trade_id: number;
   /** The Base transaction that settled the fill, when it was recorded. */
   tx_hash?: string;
+  /**
+   * The future only: the variation margin the fill settled at once, in cNGN to this order's account
+   * (negative when paid), the gap between the fill price and the mark times the notional. Absent on
+   * the other markets and on fills recorded before the venue kept it.
+   */
+  vm_cngn?: string;
 };
 
 export type FillsResponse = {
