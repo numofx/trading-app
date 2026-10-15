@@ -7,6 +7,7 @@ import {
   estimateFutureLeverage,
   estimateFutureOrder,
   formatFuturePrice,
+  futureMaxFeeUsdc,
   futureNotionalUsdc,
   futureOrderUiSide,
   futureOrderUnits,
@@ -17,6 +18,7 @@ import {
 } from "@/lib/future-market";
 import type { FutureAccount, FutureSide, FutureState } from "@/lib/future-market.types";
 import { formatLeverage, PERP_DEFAULT_MAX_SLIPPAGE } from "@/lib/perp-market";
+import { ConfirmOrderDialog } from "@/ui/trading-terminal/ConfirmOrderDialog";
 import { OrderTypeTabs } from "@/ui/trading-terminal/OrderTypeTabs";
 import { FieldLabel } from "@/ui/trading-terminal/order-form/FieldLabel";
 import { FormField } from "@/ui/trading-terminal/order-form/FormField";
@@ -461,6 +463,43 @@ function TicketSummary({
   );
 }
 
+/**
+ * The confirm popup's copy and rows for a futures order, in the ticket's terms: the side and its
+ * USDC size, then the price it trades at, its notional, the margin it adds, the fee charged and
+ * the most it is signed to pay, and the position it leaves.
+ */
+function buildFutureConfirmation(inputs: {
+  estimate: ReturnType<typeof estimateFutureOrder>;
+  expectedPrice: number | null;
+  orderType: FutureOrderType;
+  position: number;
+  side: FutureSide;
+  takerFeeBps: number | null;
+}) {
+  const { estimate, side } = inputs;
+  const verb = side === "long" ? "long" : "short";
+  return {
+    confirmLabel: `Confirm ${verb}`,
+    directionLabel: side === "long" ? "Long" : "Short",
+    orderSide: futureOrderUiSide(side),
+    sizeLabel: formatUsd(estimate.notional),
+    title: `Confirm ${verb}`,
+    summaryRows: [
+      {
+        label: inputs.orderType === "Limit" ? "Limit price" : "Expected price",
+        value: formatFuturePrice(inputs.expectedPrice),
+      },
+      { label: "Notional", value: formatUsd(estimate.notional) },
+      { label: "Initial margin", value: formatUsd(estimate.initialMargin) },
+      ...(inputs.takerFeeBps === null
+        ? []
+        : [{ label: "Taker fee", value: formatUsd(estimate.fee) }]),
+      { label: "Max fee", value: formatUsd(futureMaxFeeUsdc(estimate.notional)) },
+      { label: "Position after", value: formatPositionChange(inputs.position, estimate.after) },
+    ],
+  };
+}
+
 type ButtonState = { enabled: boolean; label: string; tone: "buy" | "sell" | "neutral" };
 
 function resolveButton(inputs: {
@@ -567,6 +606,8 @@ export function FutureOrderFormPanel({
   const [orderType, setOrderType] = useState<FutureOrderType>("Market");
   const [limitPrice, setLimitPrice] = useState("");
   const [maxSlippage, setMaxSlippage] = useState(PERP_DEFAULT_MAX_SLIPPAGE);
+  /** The order awaiting the confirm popup; null while it is closed. */
+  const [pending, setPending] = useState<FutureOrderRequest | null>(null);
   const contractSize = state?.contractSizeUsdc ?? 1000;
   const unitUsdc = state?.unitUsdc ?? 1;
   const ticketPrice = sizingPrice({
@@ -635,11 +676,31 @@ export function FutureOrderFormPanel({
       onDepositRequest();
       return;
     }
-    if (onSubmit === undefined || units === null || priceError !== null) {
+    if (onSubmit === undefined || units === null || priceError !== null || estimate === null) {
       return;
     }
-    onSubmit({ limitPrice, maxSlippage, orderType, side, units });
+    // Held until the trader confirms the figures; the order is the ticket's as it stands now.
+    setPending({ limitPrice, maxSlippage, orderType, side, units });
   }
+
+  function handleConfirm() {
+    if (pending !== null && onSubmit !== undefined) {
+      onSubmit(pending);
+    }
+    setPending(null);
+  }
+
+  const confirmation =
+    estimate === null
+      ? null
+      : buildFutureConfirmation({
+          estimate,
+          expectedPrice,
+          orderType,
+          position,
+          side,
+          takerFeeBps,
+        });
 
   // A typed limit outside the band is said under the field, as it is typed; the status line keeps
   // what is not about the limit.
@@ -671,6 +732,20 @@ export function FutureOrderFormPanel({
           >
             {button.label}
           </SubmitButton>
+
+          {confirmation === null ? null : (
+            <ConfirmOrderDialog
+              {...confirmation}
+              isSubmitting={isSubmitting}
+              onConfirm={handleConfirm}
+              onOpenChange={(open) => {
+                if (!open) {
+                  setPending(null);
+                }
+              }}
+              open={pending !== null}
+            />
+          )}
 
           {statusText === null ? null : (
             <p className="text-[11px] text-panel-text-muted leading-snug">{statusText}</p>

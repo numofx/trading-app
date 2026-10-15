@@ -161,6 +161,11 @@ export function futureWorstFeeUnits(contractSizeUsdc: number): bigint {
   return microUsdc * 10n ** 12n;
 }
 
+/** The most fee an order of `notional` USDC is signed to pay: the ceiling `futureWorstFeeUnits` signs. */
+export function futureMaxFeeUsdc(notional: number) {
+  return notional * FUTURE_WORST_FEE_RATE;
+}
+
 /** Why an order cannot be placed on the series now, or null when it can. */
 export function futureTradingBlock(state: FutureState, nowMs: number): string | null {
   if (state.settled) {
