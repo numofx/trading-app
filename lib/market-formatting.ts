@@ -55,3 +55,15 @@ export function formatNairaPerUsdc(price: number | null) {
   const naira = toNairaPerUsdc(price);
   return naira === null ? "—" : `${formatNaira(naira)} per USDC`;
 }
+
+const DIGIT_GROUPS = /\B(?=(\d{3})+(?!\d))/g;
+
+/**
+ * A typed figure with thousands separators in its whole part, the fraction left as typed so a
+ * trailing "." or "0" survives the keystroke: "1384" shows "1,384", "12345.5" shows "12,345.5".
+ */
+export function groupTypedDigits(value: string) {
+  const [whole, ...fraction] = value.replaceAll(",", "").split(".");
+  const grouped = (whole ?? "").replace(DIGIT_GROUPS, ",");
+  return fraction.length === 0 ? grouped : `${grouped}.${fraction.join("")}`;
+}

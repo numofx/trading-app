@@ -4,9 +4,11 @@ import { TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import {
+  estimateFutureFill,
   estimateFutureLeverage,
   estimateFutureOrder,
   formatFuturePrice,
+  formatFutureUsdc,
   futureMaxFeeUsdc,
   futureNotionalUsdc,
   futureOrderUiSide,
@@ -18,6 +20,7 @@ import {
 } from "@/lib/future-market";
 import type { FutureAccount, FutureSide, FutureState } from "@/lib/future-market.types";
 import { formatLeverage, PERP_DEFAULT_MAX_SLIPPAGE } from "@/lib/perp-market";
+import type { OrderBookLevel } from "@/lib/trading.types";
 import { ConfirmOrderDialog } from "@/ui/trading-terminal/ConfirmOrderDialog";
 import { OrderTypeTabs } from "@/ui/trading-terminal/OrderTypeTabs";
 import { FieldLabel } from "@/ui/trading-terminal/order-form/FieldLabel";
@@ -315,6 +318,8 @@ function describePriceProblem(inputs: {
  */
 function deriveTicket(inputs: {
   account: FutureAccount | null;
+  asks: OrderBookLevel[];
+  bids: OrderBookLevel[];
   bestAsk: number | null;
   bestBid: number | null;
   limitPrice: string;
@@ -346,18 +351,25 @@ function deriveTicket(inputs: {
     state === null || notional === null || units === null
       ? null
       : estimateFutureOrder({ account, notional, side, state, takerFeeBps });
+  // A market order's price is the book walked for its size, not the touch alone.
+  const fill =
+    state === null || orderType === "Limit"
+      ? { averagePrice: null, slippage: null }
+      : estimateFutureFill({ asks: inputs.asks, bids: inputs.bids, notional, side, state });
   return {
     block:
       state === null
         ? "The future isn't listed on the venue right now."
         : futureTradingBlock(state, inputs.nowMs),
     estimate,
-    expectedPrice: orderType === "Limit" ? typedLimit : (touch ?? inputs.referencePrice),
+    expectedPrice:
+      orderType === "Limit" ? typedLimit : (fill.averagePrice ?? touch ?? inputs.referencePrice),
     leverage:
       state === null
         ? { leverage: null, maxLeverage: null }
         : estimateFutureLeverage({ account, afterNotional: estimate?.after ?? position, state }),
     maxNotional: state === null ? 0 : maxFutureNotional({ account, side, state, takerFeeBps }),
+    slippage: fill.slippage,
     notional,
     position,
     priceError,
@@ -373,13 +385,16 @@ function SlippageLine({
   maxSlippage,
   onMaxSlippageChange,
   sized,
+  slippage,
 }: {
   maxSlippage: number;
   onMaxSlippageChange: (max: number) => void;
   sized: boolean;
+  /** How far past the touch the size is expected to fill, walked through the book. */
+  slippage: number | null;
 }) {
   return sized ? (
-    <SlippageRow estimate={null} max={maxSlippage} onMaxChange={onMaxSlippageChange} />
+    <SlippageRow estimate={slippage} max={maxSlippage} onMaxChange={onMaxSlippageChange} />
   ) : (
     <SummaryRow label="Slippage" value="—" />
   );
@@ -394,6 +409,7 @@ function TicketSummary({
   onMaxSlippageChange,
   orderType,
   position,
+  slippage,
   takerFeeBps,
 }: {
   contractSize: number;
@@ -404,6 +420,7 @@ function TicketSummary({
   onMaxSlippageChange: (max: number) => void;
   orderType: FutureOrderType;
   position: number;
+  slippage: number | null;
   takerFeeBps: number | null;
 }) {
   const shortfall = estimate?.shortfall ?? 0;
@@ -436,6 +453,7 @@ function TicketSummary({
             maxSlippage={maxSlippage}
             onMaxSlippageChange={onMaxSlippageChange}
             sized={sized}
+            slippage={slippage}
           />
         )}
         <SummaryRow
@@ -444,7 +462,7 @@ function TicketSummary({
           value={
             takerFeeBps === null || !sized
               ? "—"
-              : `${formatUsd(estimate?.fee ?? null)} (${takerFeeBps / 100}%)`
+              : `${formatFutureUsdc(estimate?.fee ?? null)} (${takerFeeBps / 100}%)`
           }
         />
         <SummaryRow
@@ -493,8 +511,8 @@ function buildFutureConfirmation(inputs: {
       { label: "Initial margin", value: formatUsd(estimate.initialMargin) },
       ...(inputs.takerFeeBps === null
         ? []
-        : [{ label: "Taker fee", value: formatUsd(estimate.fee) }]),
-      { label: "Max fee", value: formatUsd(futureMaxFeeUsdc(estimate.notional)) },
+        : [{ label: "Taker fee", value: formatFutureUsdc(estimate.fee) }]),
+      { label: "Max fee", value: formatFutureUsdc(futureMaxFeeUsdc(estimate.notional)) },
       { label: "Position after", value: formatPositionChange(inputs.position, estimate.after) },
     ],
   };
@@ -563,8 +581,10 @@ function resolveButton(inputs: {
  */
 export function FutureOrderFormPanel({
   account,
+  asks,
   bestAsk,
   bestBid,
+  bids,
   hasAccount,
   hasWallet,
   isAccepted,
@@ -582,8 +602,11 @@ export function FutureOrderFormPanel({
   takerFeeBps,
 }: {
   account: FutureAccount | null;
+  /** The resting book, touch first: what a market order walks for its price and slippage. */
+  asks: OrderBookLevel[];
   bestAsk: number | null;
   bestBid: number | null;
+  bids: OrderBookLevel[];
   /** The wallet has its trading account under the MarginEngine. */
   hasAccount: boolean;
   hasWallet: boolean;
@@ -637,9 +660,12 @@ export function FutureOrderFormPanel({
     position,
     priceError,
     shownPriceError,
+    slippage,
     units,
   } = deriveTicket({
     account,
+    asks,
+    bids,
     bestAsk,
     bestBid,
     limitPrice,
@@ -720,6 +746,7 @@ export function FutureOrderFormPanel({
             onMaxSlippageChange={edited(setMaxSlippage)}
             orderType={orderType}
             position={position}
+            slippage={slippage}
             takerFeeBps={takerFeeBps}
           />
 

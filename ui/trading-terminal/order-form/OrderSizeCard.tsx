@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowLeftRight } from "lucide-react";
+import { groupTypedDigits } from "@/lib/market-formatting";
 import { TOKEN_ICONS } from "@/lib/token-icons";
 import { SmartImage } from "@/ui/SmartImage";
 import { FieldLabel } from "@/ui/trading-terminal/order-form/FieldLabel";
@@ -92,9 +93,10 @@ export function OrderSizeCard({
             className="w-full bg-transparent text-right font-semibold text-[22px] text-panel-text-active tabular-nums outline-none placeholder:text-panel-text-muted"
             id={inputId}
             inputMode="decimal"
-            onChange={(event) => onInput(event.target.value.replace(/[^\d.,]/g, ""))}
+            // Shown grouped, handed on bare: the tickets parse the digits alone.
+            onChange={(event) => onInput(event.target.value.replace(/[^\d.]/g, ""))}
             placeholder="0"
-            value={shown}
+            value={groupTypedDigits(shown)}
           />
           <span className="text-[12px] text-panel-text-muted tabular-nums">{otherUnitText}</span>
         </div>

@@ -10,9 +10,10 @@ import type {
 import { formatMarketPrice } from "@/lib/market-formatting";
 import type { PerpHeaderMetric } from "@/lib/perp-market.types";
 import { sideTone } from "@/lib/side-tone";
+import { getMarketFill } from "@/lib/spot-market";
 import { formatCompactUsd } from "@/lib/ticker-stats";
 import { tokenIcon } from "@/lib/token-icons";
-import type { ActivityRow, ActivityView, CellTone } from "@/lib/trading.types";
+import type { ActivityRow, ActivityView, CellTone, OrderBookLevel } from "@/lib/trading.types";
 
 /**
  * The future is quoted in cNGN per USDC (about 1,390), so two decimals resolve well under a basis
@@ -315,6 +316,47 @@ export function estimateFutureLeverage({
 }
 
 /**
+ * A market order's fill, walked through the resting book: the average price its `notional` USDC
+ * trades at, and how far that sits past the touch (the best ask for a long, the best bid for a
+ * short) as a fraction. The book's sizes are the venue's units, `unitUsdc` of notional each, so
+ * the walk counts notional. Null figures when the size is unset or the side cannot fill it.
+ */
+export function estimateFutureFill({
+  asks,
+  bids,
+  notional,
+  side,
+  state,
+}: {
+  asks: OrderBookLevel[];
+  bids: OrderBookLevel[];
+  notional: number | null;
+  side: FutureSide;
+  state: FutureState;
+}): { averagePrice: number | null; slippage: number | null } {
+  if (notional === null || !(state.unitUsdc > 0)) {
+    return { averagePrice: null, slippage: null };
+  }
+  const uiSide = futureOrderUiSide(side);
+  const touch = (uiSide === "buy" ? asks[0]?.price : bids[0]?.price) ?? null;
+  const fill = getMarketFill(uiSide, asks, bids, notional / state.unitUsdc);
+  if (!fill.isFullyFilled || fill.averagePrice === null || touch === null || touch <= 0) {
+    return { averagePrice: fill.averagePrice, slippage: null };
+  }
+  const adverse = uiSide === "buy" ? fill.averagePrice - touch : touch - fill.averagePrice;
+  return { averagePrice: fill.averagePrice, slippage: Math.max(0, adverse / touch) };
+}
+
+/** A USDC amount to the cent, or to four places under a cent, so a small fee never reads as free. */
+export function formatFutureUsdc(value: number | null) {
+  if (value === null || !Number.isFinite(value)) {
+    return "—";
+  }
+  const digits = value !== 0 && Math.abs(value) < 0.01 ? 4 : 2;
+  return `${value.toLocaleString("en-US", { maximumFractionDigits: digits, minimumFractionDigits: digits })} USDC`;
+}
+
+/**
  * The most USDC of notional the ticket offers on one side, in whole venue units: the position it
  * can close outright (reducing is always allowed), plus what the initial margin surplus opens at
  * the engine's rate with the taker fee on top. Zero without an account or its rates.
@@ -563,6 +605,13 @@ export function futureOpenInterestUsd(totalPosition: bigint, contractSizeUsdc: n
   return (toContracts(totalPosition) / 2) * contractSizeUsdc;
 }
 
+function formatOpenInterestUsd(value: number | null) {
+  if (value === null || !Number.isFinite(value) || value < 0) {
+    return "—";
+  }
+  return value === 0 ? "$0" : formatCompactUsd(value);
+}
+
 /**
  * The future's header figures, in order: mark (with how it is set), index, basis in forward points
  * and percent, the basis annualized, open interest at its USDC notional, and the time to expiry.
@@ -612,7 +661,8 @@ export function buildFutureHeaderMetrics({
       label: "Open Interest",
       tone: null,
       tooltip: "Contracts open, one side, at their USDC notional",
-      value: openInterestUsd === null ? "—" : formatCompactUsd(openInterestUsd),
+      // Nothing open is a figure, not a gap: "$0", where an unread value is a dash.
+      value: formatOpenInterestUsd(openInterestUsd),
     },
     {
       label: "Expires In",

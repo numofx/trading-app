@@ -807,8 +807,10 @@ export function FutureMarketPanels({
           <>
             <FutureOrderFormPanel
               account={futureAccount.account}
+              asks={book.asks}
               bestAsk={book.bestAsk}
               bestBid={book.bestBid}
+              bids={book.bids}
               hasAccount={subaccountId !== null}
               hasWallet={primaryWallet !== null}
               isAccepted={orderStatus.isAccepted}
