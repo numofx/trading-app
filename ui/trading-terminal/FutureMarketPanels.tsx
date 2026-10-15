@@ -177,11 +177,13 @@ function resolveFutureOrderPrice(
 /**
  * Signs a future order for the series' asset and sub id on its TradeModule, with the fee ceiling
  * per contract, then posts it. `price` is cNGN per USDC; `units` the venue's whole units, each
- * signed as the market's `amountScale`.
+ * signed as the market's `amountScale`. A limit order is signed to the series' last trade time, so
+ * it rests until filled or cancelled; a market order keeps the day-long default.
  */
 async function signAndPostFutureOrder({
   market,
   onAwaitingSignature,
+  orderType,
   price,
   reduceOnly,
   side,
@@ -191,6 +193,7 @@ async function signAndPostFutureOrder({
 }: {
   market: FutureMarket;
   onAwaitingSignature: () => void;
+  orderType: FutureOrderRequest["orderType"];
   /** Ask the venue to hold the order to the account's position in the series. */
   reduceOnly: boolean;
   price: string;
@@ -204,6 +207,7 @@ async function signAndPostFutureOrder({
   const provider = await wallet.getEthereumProvider();
   const walletClient = createWalletClient({ chain: appChain, transport: custom(provider) });
   const envelope = buildSpotOrderEnvelope({
+    expiry: orderType === "Limit" ? Math.floor(market.state.lastTradeAtMs / 1000) : undefined,
     market: {
       amountScale: market.state.amountScale,
       assetAddress: market.stack.assetAddress,
@@ -577,6 +581,7 @@ function useFutureOrderActions({
     try {
       const { body, ok, orderId, status } = await signAndPostFutureOrder({
         market,
+        orderType: request.orderType,
         price: resolved.price,
         reduceOnly: request.reduceOnly,
         side: futureOrderUiSide(request.side),

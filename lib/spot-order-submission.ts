@@ -275,7 +275,13 @@ export function buildSpotOrderEnvelope({
   engineAmountWhole: engineAmountOverride,
   idempotency,
   reduceOnly = false,
+  expiry: expiryOverride,
 }: {
+  /**
+   * When the signature lapses, in unix seconds; omitted, {@link SPOT_ORDER_LIFETIME_SECONDS} from
+   * now. A future's limit order runs to the series' last trade time, resting until cancelled.
+   */
+  expiry?: number;
   /** Minted by the caller once per click; omitted, the envelope mints its own. */
   idempotency?: OrderIdempotencyKey;
   /**
@@ -361,7 +367,9 @@ export function buildSpotOrderEnvelope({
   const chainId = getMatchingChainId();
 
   const { nonce, orderId } = resolveOrderIdentity(idempotency, market?.orderIdPrefix);
-  const expiry = BigInt(Math.floor(Date.now() / 1000) + SPOT_ORDER_LIFETIME_SECONDS);
+  const expiry = BigInt(
+    expiryOverride ?? Math.floor(Date.now() / 1000) + SPOT_ORDER_LIFETIME_SECONDS
+  );
   const recipientId = BigInt(subaccountId);
 
   const actionData = encodeAbiParameters(
