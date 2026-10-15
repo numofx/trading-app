@@ -5,7 +5,8 @@ import type { ReactNode } from "react";
 import { useEffect, useEffectEvent, useState } from "react";
 import { buildSpotOpenOrdersActivityView, getOwnedOpenOrders } from "@/lib/account-activity-views";
 import { formatBalance } from "@/lib/account-balance-display";
-import type { CandleInterval } from "@/lib/markets-service";
+import type { ChartInterval } from "@/lib/chart-interval";
+import { CHART_INTERVALS, DEFAULT_CHART_INTERVAL } from "@/lib/chart-interval";
 import {
   getAnchorPrice,
   getCommittedBalances,
@@ -24,18 +25,13 @@ import {
   toUsdcCngnStats,
   toUsdcCngnTrades,
 } from "@/lib/spot-orientation";
-import {
-  ACTIVITY_VIEWS,
-  FOOTER_LINKS,
-  SPOT_BOTTOM_TABS,
-  SPOT_TIMEFRAME_OPTIONS,
-} from "@/lib/spot-terminal-config";
+import { ACTIVITY_VIEWS, FOOTER_LINKS, SPOT_BOTTOM_TABS } from "@/lib/spot-terminal-config";
 import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
 import { get24hStats } from "@/lib/ticker-stats";
 import type { Candle, SpotMarket } from "@/lib/trading.types";
 import type { AccountSummaryRow } from "@/ui/trading-terminal/order-form/AccountSummary";
 import { AccountSummary } from "@/ui/trading-terminal/order-form/AccountSummary";
-import type { ChartUnits, SpotChartTab, SpotTimeframe } from "@/ui/trading-terminal/SpotChartPanel";
+import type { ChartUnits, SpotChartTab } from "@/ui/trading-terminal/SpotChartPanel";
 import { SpotChartPanel } from "@/ui/trading-terminal/SpotChartPanel";
 import type { BookUnits, SpotBookTab } from "@/ui/trading-terminal/SpotOrderBookPanel";
 import { SpotOrderBookPanel } from "@/ui/trading-terminal/SpotOrderBookPanel";
@@ -43,6 +39,7 @@ import { SpotOrderFormPanel } from "@/ui/trading-terminal/SpotOrderFormPanel";
 import { TerminalGrid } from "@/ui/trading-terminal/TerminalGrid";
 import { usePublishTerminalHeader } from "@/ui/trading-terminal/TerminalHeaderSlot";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
+import { useChartInterval } from "@/ui/trading-terminal/useChartInterval";
 import { useLiveMarketBook } from "@/ui/trading-terminal/useLiveMarketBook";
 import { useSignedHistoryTabs } from "@/ui/trading-terminal/useSignedHistoryTabs";
 
@@ -76,7 +73,7 @@ const CHART_UNITS: ChartUnits = {
  */
 export function SpotTradingTerminal({
   candles,
-  candleInterval = "1d",
+  candleInterval = DEFAULT_CHART_INTERVAL,
   spotMarket,
   accountCngn = null,
   accountUsdc = null,
@@ -97,8 +94,8 @@ export function SpotTradingTerminal({
   lastAction = null,
 }: {
   candles: Candle[];
-  /** The interval `candles` are bucketed at, which streamed fills are folded in at. The page serves daily. */
-  candleInterval?: CandleInterval;
+  /** The interval `candles` are bucketed at, which streamed fills are folded in at: the URL's `?interval=`. */
+  candleInterval?: ChartInterval;
   spotMarket: SpotMarket;
   /** Subaccount balances as numbers — the ticket sizes a percentage of what the account can spend. */
   accountCngn?: number | null;
@@ -150,7 +147,7 @@ export function SpotTradingTerminal({
   lastAction?: string | null;
 }) {
   const [chartTab, setChartTab] = useState<SpotChartTab>("price");
-  const [timeframe, setTimeframe] = useState<SpotTimeframe>("D");
+  const [timeframe, setTimeframe] = useChartInterval(candleInterval);
   const [selectedTool, setSelectedTool] = useState("crosshair");
   const [indicatorsEnabled, setIndicatorsEnabled] = useState(false);
   const [bookTab, setBookTab] = useState<SpotBookTab>("book");
@@ -369,7 +366,7 @@ export function SpotTradingTerminal({
           onToolSelect={setSelectedTool}
           selectedTimeframe={timeframe}
           selectedTool={selectedTool}
-          timeframes={SPOT_TIMEFRAME_OPTIONS}
+          timeframes={CHART_INTERVALS}
           units={CHART_UNITS}
         />
       }

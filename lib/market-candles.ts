@@ -18,7 +18,10 @@ function toFiniteNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-/** UTC label matching the existing chart axis: "HH:MM" intraday, "MM-DD" daily and up. */
+/**
+ * UTC label for the chart axis: "MM-DD" daily, "MM-DD HH:MM" intraday. Buckets with no trades are
+ * absent, so intraday candles can span days on a quiet market; the date keeps the axis readable.
+ */
 export function formatCandleTimeLabel(bucketStart: string, interval: CandleInterval) {
   const date = new Date(bucketStart);
 
@@ -26,15 +29,15 @@ export function formatCandleTimeLabel(bucketStart: string, interval: CandleInter
     return bucketStart;
   }
 
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
   if (interval === "1d") {
-    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-    const day = String(date.getUTCDate()).padStart(2, "0");
     return `${month}-${day}`;
   }
 
   const hours = String(date.getUTCHours()).padStart(2, "0");
   const minutes = String(date.getUTCMinutes()).padStart(2, "0");
-  return `${hours}:${minutes}`;
+  return `${month}-${day} ${hours}:${minutes}`;
 }
 
 export function toUiCandle(

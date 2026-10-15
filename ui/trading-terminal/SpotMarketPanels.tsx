@@ -6,6 +6,7 @@ import posthog from "posthog-js";
 import { useState } from "react";
 import { createWalletClient, custom } from "viem";
 import { getAppChain } from "@/lib/base-public-client";
+import type { ChartInterval } from "@/lib/chart-interval";
 import { formatUsdcPrice } from "@/lib/market-formatting";
 import { MARKET_LABELS } from "@/lib/market-labels";
 import type { OrderOutcome } from "@/lib/order-settlement";
@@ -191,7 +192,14 @@ function balanceSignature(rows: { asset: string; balance: bigint }[] | null) {
  * them. The session (wallet, trading account, wallet balances) is the shell's, so a switch to the
  * perp and back keeps it; everything here is the market's own and remounts with it.
  */
-export function SpotMarketPanels({ spotMarket }: { spotMarket: SpotMarket }) {
+export function SpotMarketPanels({
+  candleInterval,
+  spotMarket,
+}: {
+  /** The interval the page read the candles at, from `?interval=`. */
+  candleInterval: ChartInterval;
+  spotMarket: SpotMarket;
+}) {
   // `null` until something actually happens — an idle placeholder would occupy
   // footer space in the order ticket without telling the trader anything.
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
@@ -437,6 +445,7 @@ export function SpotMarketPanels({ spotMarket }: { spotMarket: SpotMarket }) {
       <SpotTradingTerminal
         accountCngn={toLedgerAmount(accountLegs.cngnUnits)}
         accountUsdc={toLedgerAmount(accountLegs.cashUnits)}
+        candleInterval={candleInterval}
         candles={spotMarket.candles}
         depositControl={transfer.headerControl}
         hasWallet={hasWallet}

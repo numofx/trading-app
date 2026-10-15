@@ -2,7 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
-import type { CandleInterval } from "@/lib/markets-service";
+import { CHART_INTERVAL_PARAM, parseChartInterval } from "@/lib/chart-interval";
 import type { SpotMarket } from "@/lib/trading.types";
 import { SpotTradingTerminal } from "@/ui/trading-terminal/SpotTradingTerminal";
 import { TerminalShell } from "@/ui/trading-terminal/TerminalShell";
@@ -103,27 +103,11 @@ const FIXTURE_MARKET: SpotMarket = {
  *
  * Dev-only: the route that renders this 404s in production.
  */
-const CANDLE_INTERVALS = [
-  "1m",
-  "5m",
-  "15m",
-  "1h",
-  "4h",
-  "1d",
-] as const satisfies readonly CandleInterval[];
-
-function isCandleInterval(value: string | null): value is CandleInterval {
-  return CANDLE_INTERVALS.some((interval) => interval === value);
-}
-
 export function LayoutFixtureTerminal() {
   const [deposits, setDeposits] = useState(0);
-  // `?interval=1m` folds injected fills at that interval, to check candles extend within a bucket
-  // and a new one opens at the boundary; the app itself serves daily candles.
-  const requestedInterval = useSearchParams().get("interval");
-  const candleInterval: CandleInterval = isCandleInterval(requestedInterval)
-    ? requestedInterval
-    : "1d";
+  // `?interval=5m` folds injected fills at that interval, to check candles extend within a bucket
+  // and a new one opens at the boundary.
+  const candleInterval = parseChartInterval(useSearchParams().get(CHART_INTERVAL_PARAM));
   const accountCngn = OPENING_BALANCES.cngn + deposits * DEPOSIT_AMOUNT.cngn;
   const accountUsdc = OPENING_BALANCES.usdc + deposits * DEPOSIT_AMOUNT.usdc;
 

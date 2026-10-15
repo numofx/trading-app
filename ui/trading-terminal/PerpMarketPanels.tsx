@@ -15,6 +15,8 @@ import {
 } from "@/lib/account-activity-views";
 import { formatBalance } from "@/lib/account-balance-display";
 import { getAppChain } from "@/lib/base-public-client";
+import type { ChartInterval } from "@/lib/chart-interval";
+import { CHART_INTERVALS } from "@/lib/chart-interval";
 import { marketPath } from "@/lib/market-routes";
 import { fundingHistoryViewOf } from "@/lib/perp-funding-history";
 import {
@@ -51,7 +53,7 @@ import {
   buildSpotOrderEnvelope,
   createOrderIdempotencyKey,
 } from "@/lib/spot-order-submission";
-import { FOOTER_LINKS, SPOT_TIMEFRAME_OPTIONS } from "@/lib/spot-terminal-config";
+import { FOOTER_LINKS } from "@/lib/spot-terminal-config";
 import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
 import { get24hStats } from "@/lib/ticker-stats";
 import type { ActivityTab, ActivityView } from "@/lib/trading.types";
@@ -61,7 +63,7 @@ import type { AccountSummaryRow } from "@/ui/trading-terminal/order-form/Account
 import { AccountSummary } from "@/ui/trading-terminal/order-form/AccountSummary";
 import type { PerpOrderRequest } from "@/ui/trading-terminal/PerpOrderFormPanel";
 import { PerpOrderFormPanel } from "@/ui/trading-terminal/PerpOrderFormPanel";
-import type { SpotChartTab, SpotTimeframe } from "@/ui/trading-terminal/SpotChartPanel";
+import type { SpotChartTab } from "@/ui/trading-terminal/SpotChartPanel";
 import { SpotChartPanel } from "@/ui/trading-terminal/SpotChartPanel";
 import type { SpotBookTab } from "@/ui/trading-terminal/SpotOrderBookPanel";
 import { SpotOrderBookPanel } from "@/ui/trading-terminal/SpotOrderBookPanel";
@@ -70,6 +72,7 @@ import { usePublishTerminalHeader } from "@/ui/trading-terminal/TerminalHeaderSl
 import { useTerminalSession } from "@/ui/trading-terminal/TerminalSession";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
 import { useAccountTransfer } from "@/ui/trading-terminal/useAccountTransfer";
+import { useChartInterval } from "@/ui/trading-terminal/useChartInterval";
 import { useLiveMarketBook } from "@/ui/trading-terminal/useLiveMarketBook";
 import { useOrderStatus } from "@/ui/trading-terminal/useOrderStatus";
 import { usePerpFundingHistory } from "@/ui/trading-terminal/usePerpFundingHistory";
@@ -727,8 +730,9 @@ async function postSignedOrder(payload: object, signature: string): Promise<Sign
  * headline price is the book's touch first, then the chain's mark, so an empty book still shows
  * where the market is.
  */
-function usePerpBook(market: PerpMarket | null) {
+function usePerpBook(market: PerpMarket | null, candleInterval: ChartInterval) {
   const book = useLiveMarketBook({
+    candleInterval,
     candles: market?.candles ?? [],
     enabled: market !== null,
     symbol: PERP_MARKET_SYMBOL,
@@ -811,7 +815,14 @@ function perpHeaderMetrics(
  * panels then render every empty state and a ticket that cannot submit. With it, the book streams,
  * orders are signed for the perp's module and asset, and positions and margin are read from chain.
  */
-export function PerpMarketPanels({ market: renderedMarket }: { market: PerpMarket | null }) {
+export function PerpMarketPanels({
+  candleInterval,
+  market: renderedMarket,
+}: {
+  /** The interval the page read the candles at, from `?interval=`. */
+  candleInterval: ChartInterval;
+  market: PerpMarket | null;
+}) {
   // The chain state the page rendered with, kept current: the ticket opens and closes with the venue.
   const market = usePerpLiveState(renderedMarket);
   const router = useRouter();
@@ -821,7 +832,7 @@ export function PerpMarketPanels({ market: renderedMarket }: { market: PerpMarke
   const primaryWallet = market !== null ? session.primaryWallet : null;
 
   const [chartTab, setChartTab] = useState<SpotChartTab>("price");
-  const [timeframe, setTimeframe] = useState<SpotTimeframe>("D");
+  const [timeframe, setTimeframe] = useChartInterval(candleInterval);
   const [selectedTool, setSelectedTool] = useState("crosshair");
   const [indicatorsEnabled, setIndicatorsEnabled] = useState(false);
   const [bookTab, setBookTab] = useState<SpotBookTab>("book");
@@ -869,7 +880,7 @@ export function PerpMarketPanels({ market: renderedMarket }: { market: PerpMarke
   const balanceRowSymbols = balanceRowSymbolsOf(perpAccount.account, stack);
 
   const { asks, bestAsk, bestBid, bids, candles, lastPrice, price, stats, trades, volumeUsd } =
-    usePerpBook(market);
+    usePerpBook(market, candleInterval);
 
   const ownedOpenOrders = getOwnedOpenOrders(
     market?.openOrders ?? [],
@@ -1144,7 +1155,7 @@ export function PerpMarketPanels({ market: renderedMarket }: { market: PerpMarke
             onToolSelect={setSelectedTool}
             selectedTimeframe={timeframe}
             selectedTool={selectedTool}
-            timeframes={SPOT_TIMEFRAME_OPTIONS}
+            timeframes={CHART_INTERVALS}
           />
         }
         ticketColumn={

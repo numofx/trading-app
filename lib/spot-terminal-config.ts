@@ -22,20 +22,6 @@ export const SPOT_BOTTOM_TABS = [
 ] satisfies ActivityTab[];
 
 /**
- * The one interval the chart actually renders.
- *
- * Candles are fetched server-side at a fixed `1d` and there is no client-side refetch, so
- * `selectedTimeframe` only ever styled the active pill. The list used to read
- * `1m / 30m / 1h / D / W / M` with `1h` selected by default — a daily chart labelled hourly,
- * which misstates every range and volume bar on it by a factor of 24. Two of those options
- * (`30m`, `W`) are not intervals markets-service serves at all.
- *
- * Restore the full list when the interval is wired through to `getMarketCandles`, which does
- * support `1m`, `5m`, `15m`, `1h`, `4h` and `1d`.
- */
-export const SPOT_TIMEFRAME_OPTIONS = ["D"] as const;
-
-/**
  * Bottom-panel column sets, with no rows on purpose: any row here would render as a trader's own
  * order or trade when it is not. Every tab is built from live data (see `account-activity-views`);
  * these entries are only the headers shown before that data arrives.

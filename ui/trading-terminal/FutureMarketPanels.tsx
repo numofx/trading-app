@@ -15,6 +15,8 @@ import {
 } from "@/lib/account-activity-views";
 import { formatBalance } from "@/lib/account-balance-display";
 import { createBasePublicClient, getAppChain } from "@/lib/base-public-client";
+import type { ChartInterval } from "@/lib/chart-interval";
+import { CHART_INTERVALS } from "@/lib/chart-interval";
 import {
   buildFutureBalancesView,
   buildFutureHeaderMetrics,
@@ -33,7 +35,7 @@ import type { OrderOutcome } from "@/lib/order-settlement";
 import { isOrderFillKnown, pollOrderOutcome } from "@/lib/order-settlement";
 import { getAnchorPrice, getMarketableLimitPrice } from "@/lib/spot-market";
 import { buildCancelEnvelope, buildSpotOrderEnvelope } from "@/lib/spot-order-submission";
-import { FOOTER_LINKS, SPOT_TIMEFRAME_OPTIONS } from "@/lib/spot-terminal-config";
+import { FOOTER_LINKS } from "@/lib/spot-terminal-config";
 import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
 import { getUsdcCngnManagerAddress } from "@/lib/subaccount-deposit-config";
 import { get24hStats } from "@/lib/ticker-stats";
@@ -43,7 +45,7 @@ import { FutureOrderFormPanel } from "@/ui/trading-terminal/FutureOrderFormPanel
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import type { AccountSummaryRow } from "@/ui/trading-terminal/order-form/AccountSummary";
 import { AccountSummary } from "@/ui/trading-terminal/order-form/AccountSummary";
-import type { ChartUnits, SpotChartTab, SpotTimeframe } from "@/ui/trading-terminal/SpotChartPanel";
+import type { ChartUnits, SpotChartTab } from "@/ui/trading-terminal/SpotChartPanel";
 import { SpotChartPanel } from "@/ui/trading-terminal/SpotChartPanel";
 import type { BookUnits, SpotBookTab } from "@/ui/trading-terminal/SpotOrderBookPanel";
 import { SpotOrderBookPanel } from "@/ui/trading-terminal/SpotOrderBookPanel";
@@ -52,6 +54,7 @@ import { usePublishTerminalHeader } from "@/ui/trading-terminal/TerminalHeaderSl
 import { useTerminalSession } from "@/ui/trading-terminal/TerminalSession";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
 import { useAccountTransfer } from "@/ui/trading-terminal/useAccountTransfer";
+import { useChartInterval } from "@/ui/trading-terminal/useChartInterval";
 import { useFutureAccount } from "@/ui/trading-terminal/useFutureAccount";
 import { useFutureOpenInterest } from "@/ui/trading-terminal/useFutureOpenInterest";
 import { useLiveMarketBook } from "@/ui/trading-terminal/useLiveMarketBook";
@@ -479,8 +482,9 @@ function buildAccountRows(
  * The future's book, trades and candles from the shared live-book hook, its headline price (the
  * touch, else the venue's mark) and its 24h volume as USDC of notional.
  */
-function useFutureBook(market: FutureMarket | null, symbol: string) {
+function useFutureBook(market: FutureMarket | null, symbol: string, candleInterval: ChartInterval) {
   const book = useLiveMarketBook({
+    candleInterval,
     candles: market?.candles ?? [],
     enabled: market !== null,
     fillVolume: fillSize,
@@ -661,9 +665,12 @@ function useFutureTradingAccount(
  * panels then render their empty states and a ticket that cannot submit.
  */
 export function FutureMarketPanels({
+  candleInterval,
   market,
   symbol,
 }: {
+  /** The interval the page read the candles at, from `?interval=`. */
+  candleInterval: ChartInterval;
   market: FutureMarket | null;
   /** The series' venue symbol, from the route: the stream, history and display name. */
   symbol: string;
@@ -674,7 +681,7 @@ export function FutureMarketPanels({
   const nowMs = useNow();
 
   const [chartTab, setChartTab] = useState<SpotChartTab>("price");
-  const [timeframe, setTimeframe] = useState<SpotTimeframe>("D");
+  const [timeframe, setTimeframe] = useChartInterval(candleInterval);
   const [selectedTool, setSelectedTool] = useState("crosshair");
   const [indicatorsEnabled, setIndicatorsEnabled] = useState(false);
   const [bookTab, setBookTab] = useState<SpotBookTab>("book");
@@ -711,7 +718,7 @@ export function FutureMarketPanels({
       buildFutureTradeHistoryActivityView(fills, symbol, market?.state.unitUsdc ?? 1),
   });
 
-  const { book, price, stats } = useFutureBook(market, symbol);
+  const { book, price, stats } = useFutureBook(market, symbol, candleInterval);
   const ownedOpenOrders = getOwnedOpenOrders(
     market?.openOrders ?? [],
     primaryWallet?.address ?? null
@@ -806,7 +813,7 @@ export function FutureMarketPanels({
             onToolSelect={setSelectedTool}
             selectedTimeframe={timeframe}
             selectedTool={selectedTool}
-            timeframes={SPOT_TIMEFRAME_OPTIONS}
+            timeframes={CHART_INTERVALS}
             units={chartUnits(symbol, market)}
           />
         }

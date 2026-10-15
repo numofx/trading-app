@@ -2,15 +2,15 @@
 
 import type { MouseEvent } from "react";
 import { useRef, useState } from "react";
+import type { ChartInterval } from "@/lib/chart-interval";
+import { CHART_INTERVAL_LABELS } from "@/lib/chart-interval";
 import { cn } from "@/lib/cn";
 import { formatPrice, PRICE_DECIMALS } from "@/lib/market-formatting";
-import type { SPOT_TIMEFRAME_OPTIONS } from "@/lib/spot-terminal-config";
 import { CHART_TOOL_ICONS, CHART_TOOLS } from "@/lib/spot-terminal-config";
 import type { Candle, OrderBookLevel } from "@/lib/trading.types";
 import { PanelTabs } from "@/ui/trading-terminal/PanelTabs";
 
 export type SpotChartTab = "depth" | "price";
-export type SpotTimeframe = (typeof SPOT_TIMEFRAME_OPTIONS)[number];
 
 const CHART_WIDTH = 1000;
 const CHART_HEIGHT = 440;
@@ -504,11 +504,11 @@ export function SpotChartPanel({
   indicatorsEnabled: boolean;
   onChartTabChange: (tab: SpotChartTab) => void;
   onIndicatorsToggle: () => void;
-  onTimeframeChange: (timeframe: SpotTimeframe) => void;
+  onTimeframeChange: (timeframe: ChartInterval) => void;
   onToolSelect: (toolId: string) => void;
-  selectedTimeframe: SpotTimeframe;
+  selectedTimeframe: ChartInterval;
   selectedTool: string;
-  timeframes: readonly SpotTimeframe[];
+  timeframes: readonly ChartInterval[];
   units?: ChartUnits;
 }) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -540,7 +540,7 @@ export function SpotChartPanel({
                   onClick={() => onTimeframeChange(timeframe)}
                   type="button"
                 >
-                  {timeframe}
+                  {CHART_INTERVAL_LABELS[timeframe]}
                 </button>
               ))}
               <button
