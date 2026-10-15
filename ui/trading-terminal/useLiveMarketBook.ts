@@ -11,7 +11,7 @@ import {
 import type { CandleInterval } from "@/lib/markets-service";
 import { getBestPrices } from "@/lib/spot-market";
 import { getVenueLastPrice } from "@/lib/ticker-stats";
-import type { Candle, SpotMarket } from "@/lib/trading.types";
+import type { Candle, SpotMarket, TradePrint } from "@/lib/trading.types";
 import { useMarketOrderBook } from "@/ui/trading-terminal/useMarketOrderBook";
 
 /**
@@ -30,6 +30,7 @@ export function useLiveMarketBook({
   candleInterval = "1d",
   candles,
   enabled = true,
+  fillVolume,
   snapshot,
   symbol,
   type,
@@ -39,6 +40,8 @@ export function useLiveMarketBook({
   candles: Candle[];
   /** False while the market is not live: no socket, and every figure from the empty snapshot. */
   enabled?: boolean;
+  /** One streamed fill's volume in the chart's unit; by default the USDC notional of a cNGN size. */
+  fillVolume?: (trade: TradePrint) => number;
   /** The server-rendered market: the REST book, its trades, its stats and its mark. */
   snapshot: Pick<SpotMarket, "mark" | "orderBookAsks" | "orderBookBids" | "stats24h" | "trades">;
   /** The venue's symbol; markets-service resolves the stream subscription from it. */
@@ -54,7 +57,8 @@ export function useLiveMarketBook({
     candles,
     streamedFills,
     CANDLE_INTERVAL_MS[candleInterval],
-    candleInterval
+    candleInterval,
+    fillVolume
   );
   const stats24h = applyTradesToStats(snapshot.stats24h, streamedFills);
   const lastPrice = getVenueLastPrice(trades, liveCandles, snapshot.mark);

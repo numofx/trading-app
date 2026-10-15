@@ -13,6 +13,7 @@ export type OrderOutcome = {
   status?: string;
   filled_amount?: string;
   remaining_amount?: string;
+  cancel_reason?: string;
 };
 
 /**
@@ -27,8 +28,20 @@ export function isOrderSettled(outcome: OrderOutcome | null): boolean {
 }
 
 /**
- * Reads the order via `read` until it settles or `timeoutMs` elapses, waiting `intervalMs` between
- * reads. Returns the last outcome seen — settled if it got there, otherwise whatever the final read
+ * Whether the order's fill, if any, is known: it is done (filled, cancelled, expired), or it rests
+ * having filled in part. An order still active with nothing filled may yet cross on the next
+ * matcher tick, so a caller waiting for a fill keeps reading.
+ */
+export function isOrderFillKnown(outcome: OrderOutcome | null): boolean {
+  if (!isOrderSettled(outcome)) {
+    return false;
+  }
+  return outcome?.status !== "active" || Number.parseFloat(outcome.filled_amount ?? "0") > 0;
+}
+
+/**
+ * Reads the order via `read` until it settles (or meets `until`) or `timeoutMs` elapses, waiting
+ * `intervalMs` between reads. Returns the last outcome seen — settled if it got there, otherwise whatever the final read
  * returned (possibly null), so the caller can still refresh and report what little is known.
  *
  * `sleep` and `now` are injectable so the poll can be tested without real timers.
@@ -40,16 +53,18 @@ export async function pollOrderOutcome(
     timeoutMs,
     sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
     now = () => Date.now(),
+    until = isOrderSettled,
   }: {
     intervalMs: number;
     timeoutMs: number;
+    until?: (outcome: OrderOutcome | null) => boolean;
     sleep?: (ms: number) => Promise<void>;
     now?: () => number;
   }
 ): Promise<OrderOutcome | null> {
   const deadline = now() + timeoutMs;
   let outcome = await read();
-  while (!isOrderSettled(outcome) && now() < deadline) {
+  while (!until(outcome) && now() < deadline) {
     await sleep(intervalMs);
     outcome = await read();
   }

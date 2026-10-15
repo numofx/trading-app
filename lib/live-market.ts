@@ -29,6 +29,14 @@ export function tradesSince(trades: readonly TradePrint[], watermarkId: number):
 }
 
 /**
+ * A fill's volume where sizes are cNGN, as on spot and the perp: the USDC that changed hands.
+ * The future sizes in USDC already, so its candles count the size itself.
+ */
+export function quoteNotional(trade: TradePrint) {
+  return trade.size * trade.price;
+}
+
+/**
  * The server's candles with streamed fills folded in: each fill extends the candle its bucket
  * falls in, or opens a new candle when it is the first in a new interval. Pure, so it can run on
  * every render against the same server candles and the same stream without double counting.
@@ -37,7 +45,8 @@ export function applyTradesToCandles(
   candles: readonly Candle[],
   trades: readonly TradePrint[],
   intervalMs: number,
-  interval: CandleInterval
+  interval: CandleInterval,
+  fillVolume: (trade: TradePrint) => number = quoteNotional
 ): Candle[] {
   const next = [...candles];
   for (const trade of trades) {
@@ -52,7 +61,7 @@ export function applyTradesToCandles(
         close: trade.price,
         high: Math.max(last.high, trade.price),
         low: Math.min(last.low, trade.price),
-        volume: last.volume + trade.size * trade.price,
+        volume: last.volume + fillVolume(trade),
       };
       continue;
     }
@@ -68,7 +77,7 @@ export function applyTradesToCandles(
       low: trade.price,
       open: trade.price,
       time: formatCandleTimeLabel(new Date(bucketStartMs).toISOString(), interval),
-      volume: trade.size * trade.price,
+      volume: fillVolume(trade),
     });
   }
   return next;

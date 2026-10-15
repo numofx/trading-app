@@ -14,7 +14,7 @@ import {
   getOwnedOpenOrders,
 } from "@/lib/account-activity-views";
 import { formatBalance } from "@/lib/account-balance-display";
-import { getAppChain } from "@/lib/base-public-client";
+import { createBasePublicClient, getAppChain } from "@/lib/base-public-client";
 import {
   buildFutureBalancesView,
   buildFutureHeaderMetrics,
@@ -28,13 +28,15 @@ import {
 } from "@/lib/future-market";
 import type { FutureAccount, FutureMarket } from "@/lib/future-market.types";
 import { FUTURE_ACTIVITY_VIEWS, FUTURE_BOTTOM_TABS } from "@/lib/future-terminal-config";
+import type { OrderOutcome } from "@/lib/order-settlement";
+import { isOrderFillKnown, pollOrderOutcome } from "@/lib/order-settlement";
 import { getAnchorPrice, getMarketableLimitPrice } from "@/lib/spot-market";
 import { buildCancelEnvelope, buildSpotOrderEnvelope } from "@/lib/spot-order-submission";
 import { FOOTER_LINKS, SPOT_TIMEFRAME_OPTIONS } from "@/lib/spot-terminal-config";
 import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
 import { getUsdcCngnManagerAddress } from "@/lib/subaccount-deposit-config";
 import { get24hStats } from "@/lib/ticker-stats";
-import type { ActivityTab, ActivityView } from "@/lib/trading.types";
+import type { ActivityTab, ActivityView, TradePrint } from "@/lib/trading.types";
 import type { FutureOrderRequest } from "@/ui/trading-terminal/FutureOrderFormPanel";
 import { FutureOrderFormPanel } from "@/ui/trading-terminal/FutureOrderFormPanel";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
@@ -81,6 +83,11 @@ function chartUnits(symbol: string, market: FutureMarket | null): ChartUnits {
     priceDecimals: FUTURE_PRICE_DECIMALS,
     volumeUnit: sizeUnitLabel(market).toLowerCase(),
   };
+}
+
+/** A fill's volume in the chart's unit: its size, already USDC of notional (or contracts). */
+function fillSize(trade: TradePrint) {
+  return trade.size;
 }
 
 /** How often the countdown to the last trade time re-renders. */
@@ -193,7 +200,35 @@ async function signAndPostFutureOrder({
     method: "POST",
   });
   const body = (await response.json().catch(() => null)) as { error?: string } | null;
-  return { body, ok: response.ok, status: response.status };
+  return { body, ok: response.ok, orderId: envelope.payload.order_id, status: response.status };
+}
+
+const FILL_POLL_INTERVAL_MS = Duration.toMillis("1 second");
+const FILL_POLL_TIMEOUT_MS = Duration.toMillis("15 seconds");
+
+/** The order as `/api/orders/{id}` reports it; null before the matcher records it. */
+async function readFutureOrder(orderId: string): Promise<OrderOutcome | null> {
+  try {
+    const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}`, {
+      cache: "no-store",
+    });
+    return response.ok ? ((await response.json()) as OrderOutcome) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The first block that can hold a fill the venue has just recorded. The venue marks an order
+ * filled once the settlement is sent, so the account is read from the block after the latest,
+ * not from the 15-second poll, which left a filled position off screen for up to its interval.
+ */
+async function blockAfterLatest() {
+  try {
+    return (await createBasePublicClient().getBlockNumber()) + 1n;
+  } catch {
+    return null;
+  }
 }
 
 /** Signs a cancel for one of the wallet's resting orders and posts it; true when the venue took it. */
@@ -421,6 +456,7 @@ function useFutureBook(market: FutureMarket | null, symbol: string) {
   const book = useLiveMarketBook({
     candles: market?.candles ?? [],
     enabled: market !== null,
+    fillVolume: fillSize,
     symbol,
     type: "future",
     snapshot: {
@@ -456,7 +492,7 @@ function useFutureOrderActions({
   wallet,
 }: {
   market: FutureMarket | null;
-  onAccountChanged: () => void;
+  onAccountChanged: (minBlock: bigint | null) => void;
   onNeedsAccount: () => void;
   orderStatus: ReturnType<typeof useOrderStatus>;
   subaccountId: string | null;
@@ -466,6 +502,26 @@ function useFutureOrderActions({
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cancellingNonce, setCancellingNonce] = useState<string | null>(null);
+
+  /**
+   * Watches an accepted order until its fill is known, then re-reads the account at the block
+   * after the fill so the position shows at once. An order the venue ends without a fill says so.
+   */
+  async function followFill(orderId: string) {
+    const outcome = await pollOrderOutcome(() => readFutureOrder(orderId), {
+      intervalMs: FILL_POLL_INTERVAL_MS,
+      timeoutMs: FILL_POLL_TIMEOUT_MS,
+      until: isOrderFillKnown,
+    });
+    if (Number.parseFloat(outcome?.filled_amount ?? "0") > 0) {
+      onAccountChanged(await blockAfterLatest());
+    } else if (outcome?.status === "cancelled" || outcome?.status === "expired") {
+      const reason = outcome.cancel_reason
+        ? ` (${outcome.cancel_reason.replaceAll("_", " ")})`
+        : "";
+      orderStatus.settle(`Order ${outcome.status} without a fill${reason}.`);
+    }
+  }
 
   async function submit(request: FutureOrderRequest) {
     if (market === null || wallet === null) {
@@ -488,7 +544,7 @@ function useFutureOrderActions({
     };
     setIsSubmitting(true);
     try {
-      const { body, ok, status } = await signAndPostFutureOrder({
+      const { body, ok, orderId, status } = await signAndPostFutureOrder({
         market,
         price: resolved.price,
         side: futureOrderUiSide(request.side),
@@ -509,7 +565,8 @@ function useFutureOrderActions({
       }
       posthog.capture("order_submitted", event);
       orderStatus.announce(null, { awaitFill: true });
-      onAccountChanged();
+      router.refresh();
+      await followFill(orderId);
       router.refresh();
     } catch (error) {
       posthog.captureException(error, {
@@ -633,7 +690,7 @@ export function FutureMarketPanels({
   );
   const actions = useFutureOrderActions({
     market,
-    onAccountChanged: () => futureAccount.refresh(),
+    onAccountChanged: (minBlock) => futureAccount.refresh(minBlock),
     onNeedsAccount: () => transfer.openDeposit("USDC"),
     orderStatus,
     subaccountId,
