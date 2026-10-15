@@ -26,8 +26,8 @@ export type SpotBookTab = "book" | "trades";
 /**
  * What the book is counted in. `base` is what an order is entered in and rests as; `quote`, when
  * set, is the same depth restated at each level's price, offered as a toggle. `price` names the
- * price column. Spot and the perp share the default; the future is quoted cNGN per USDC in
- * contracts, which have no meaningful quote restatement.
+ * price column. Spot and the perp share the default; the future is quoted cNGN per USDC, its
+ * USDC of notional restated in cNGN (a venue sizing it in whole contracts offers no toggle).
  */
 export type BookUnits = {
   base: string;

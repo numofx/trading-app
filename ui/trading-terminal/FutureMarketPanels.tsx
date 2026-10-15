@@ -68,13 +68,15 @@ function sizeUnitLabel(market: FutureMarket | null) {
     : "USDC";
 }
 
+/** USDC of notional restates in cNGN at each level's price; whole contracts have no such restatement. */
 function bookUnits(market: FutureMarket | null): BookUnits {
+  const base = sizeUnitLabel(market);
   return {
-    base: sizeUnitLabel(market),
+    base,
     price: "cNGN",
     priceDecimals: FUTURE_PRICE_DECIMALS,
     priceGroups: FUTURE_PRICE_GROUPS,
-    quote: null,
+    quote: base === "USDC" ? "cNGN" : null,
   };
 }
 
