@@ -30,7 +30,8 @@ export function ConfirmOrderDialog({
   title,
 }: {
   confirmLabel: string;
-  description: string;
+  /** A line under the title; none when the figures say enough. */
+  description?: string;
   directionLabel: string;
   highlightedRow?: { label: string; note: string; value: string } | null;
   isSubmitting: boolean;
@@ -54,9 +55,11 @@ export function ConfirmOrderDialog({
         <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/60 transition-opacity data-ending-style:opacity-0 data-starting-style:opacity-0" />
         <Dialog.Popup className="-translate-1/2 fixed top-1/2 left-1/2 z-50 w-[min(92vw,380px)] border border-panel-border bg-dialog-bg p-5 text-foreground transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
           <Dialog.Title className="font-semibold text-[15px] text-panel-text">{title}</Dialog.Title>
-          <Dialog.Description className="mt-1 text-[12px] text-panel-text-muted">
-            {description}
-          </Dialog.Description>
+          {description === undefined ? null : (
+            <Dialog.Description className="mt-1 text-[12px] text-panel-text-muted">
+              {description}
+            </Dialog.Description>
+          )}
 
           <div className="mt-4 space-y-3">
             <div className="flex items-center justify-between gap-2 border border-panel-border px-3 py-2.5">

@@ -13,7 +13,7 @@ import {
   SPOT_MARKET_SLIPPAGE,
   toOrderSizeCngn,
 } from "@/lib/spot-market";
-import { SPOT_ORDER_LIFETIME_LABEL, SPOT_TAKER_FEE_RATE } from "@/lib/spot-order-submission";
+import { SPOT_TAKER_FEE_RATE } from "@/lib/spot-order-submission";
 import {
   engineLimitPrice,
   engineSide,
@@ -136,7 +136,6 @@ function parseAmount(value: string) {
 function buildSpotConfirmation({
   cngnLabel,
   isBuy,
-  orderType,
   takerFeeLabel,
   venueFeeLabel,
   usdcLabel,
@@ -145,7 +144,6 @@ function buildSpotConfirmation({
   cngnLabel: string;
   /** A buy of USDC. */
   isBuy: boolean;
-  orderType: SpotOrderType;
   takerFeeLabel: string;
   /** The charge the venue reported for this size, or null when it reported no schedule. */
   venueFeeLabel: string | null;
@@ -156,7 +154,6 @@ function buildSpotConfirmation({
 
   return {
     confirmLabel: `Confirm ${action}`,
-    description: `This submits a ${orderType.toLowerCase()} order for USDC-cNGN. It expires ${SPOT_ORDER_LIFETIME_LABEL} after signing if it has not filled, and once filled it cannot be reversed from this screen.`,
     directionLabel: isBuy ? "Buy USDC" : "Sell USDC",
     sizeLabel: usdcLabel,
     title: `Confirm ${action}`,
@@ -167,11 +164,9 @@ function buildSpotConfirmation({
       // charged nothing; now that it charges, leading with it would quote a number no fill hits.
       ...(venueFeeLabel === null ? [] : [{ label: "Taker fee", value: venueFeeLabel }]),
       {
-        label:
-          venueFeeLabel === null ? `Max taker fee (${SPOT_TAKER_FEE_BPS} bps)` : "Max fee (signed)",
+        label: venueFeeLabel === null ? `Max taker fee (${SPOT_TAKER_FEE_BPS} bps)` : "Max fee",
         value: takerFeeLabel,
       },
-      { label: "Expires", value: `${SPOT_ORDER_LIFETIME_LABEL} after signing` },
     ],
   };
 }
@@ -849,7 +844,6 @@ export function SpotOrderFormPanel({
   const confirmation = buildSpotConfirmation({
     cngnLabel: formatBalance(cngnLeg, "cNGN"),
     isBuy,
-    orderType,
     takerFeeLabel: formatUsdcAmount(takerFee),
     usdcLabel: totalLabel,
     venueFeeLabel: feeFromVenue === null ? null : formatUsdcAmount(feeFromVenue),
