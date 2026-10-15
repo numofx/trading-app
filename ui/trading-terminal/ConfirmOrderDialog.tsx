@@ -52,14 +52,14 @@ export function ConfirmOrderDialog({
          * over the popup, obscuring the very figures this dialog exists to show.
          */}
         <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/60 transition-opacity data-ending-style:opacity-0 data-starting-style:opacity-0" />
-        <Dialog.Popup className="-translate-1/2 fixed top-1/2 left-1/2 z-50 w-[min(92vw,380px)] rounded-[20px] bg-dialog-bg p-5 text-foreground shadow-[0_28px_90px_var(--panel-shadow)] ring-1 ring-panel-ring transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
+        <Dialog.Popup className="-translate-1/2 fixed top-1/2 left-1/2 z-50 w-[min(92vw,380px)] border border-panel-border bg-dialog-bg p-5 text-foreground transition-all data-ending-style:scale-95 data-starting-style:scale-95 data-ending-style:opacity-0 data-starting-style:opacity-0">
           <Dialog.Title className="font-semibold text-[15px] text-panel-text">{title}</Dialog.Title>
           <Dialog.Description className="mt-1 text-[12px] text-panel-text-muted">
             {description}
           </Dialog.Description>
 
           <div className="mt-4 space-y-3">
-            <div className="flex items-center justify-between gap-2 rounded-[14px] bg-input-bg px-3 py-2.5">
+            <div className="flex items-center justify-between gap-2 border border-panel-border px-3 py-2.5">
               <span className={cn("font-semibold text-[13px]", isBuy ? "text-buy" : "text-sell")}>
                 {directionLabel}
               </span>
@@ -69,7 +69,7 @@ export function ConfirmOrderDialog({
             </div>
 
             {highlightedRow ? (
-              <div className="rounded-[14px] bg-input-bg/60 px-3 py-2.5 ring-1 ring-sell/40">
+              <div className="border border-sell/40 px-3 py-2.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[11px] text-panel-text-muted">{highlightedRow.label}</span>
                   <span className="truncate text-right font-semibold text-[13px] text-sell">
@@ -80,7 +80,7 @@ export function ConfirmOrderDialog({
               </div>
             ) : null}
 
-            <div className="space-y-1.5 rounded-[14px] bg-input-bg/60 px-3 py-2.5 text-[11px]">
+            <div className="space-y-1.5 border border-panel-border px-3 py-2.5 text-[11px]">
               {summaryRows.map((row) => (
                 <div className="flex items-center justify-between gap-2" key={row.label}>
                   <span className="truncate text-panel-text-muted">{row.label}</span>
@@ -94,17 +94,17 @@ export function ConfirmOrderDialog({
 
           <div className="mt-5 grid grid-cols-2 gap-2">
             <Dialog.Close
-              className="h-11 cursor-pointer rounded-[14px] bg-input-bg font-semibold text-[13px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover"
+              className="h-11 cursor-pointer border border-panel-border bg-input-bg font-semibold text-[13px] text-panel-text transition-colors hover:bg-input-hover"
               disabled={isSubmitting}
             >
               Cancel
             </Dialog.Close>
             <button
               className={cn(
-                "h-11 cursor-pointer rounded-[14px] font-semibold text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+                "h-11 cursor-pointer font-semibold text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-60",
                 isBuy
-                  ? "bg-buy text-background ring-1 ring-buy/50 hover:bg-buy/90"
-                  : "bg-sell text-white ring-1 ring-sell/50 hover:bg-sell/90"
+                  ? "bg-buy text-background hover:bg-buy/90"
+                  : "bg-sell text-white hover:bg-sell/90"
               )}
               disabled={isSubmitting}
               onClick={onConfirm}
