@@ -39,6 +39,8 @@ export type FutureState = {
   tradingClosedReason: string | null;
   /** The band of prices a fill may carry, cNGN per USDC; null while the venue cannot read it. */
   fillBand: { low: number; high: number } | null;
+  /** The band's half-width around the index as a fraction (0.1 is ±10%); null when unserved. */
+  bandWidth: number | null;
   /** One contract's notional, USDC. */
   contractSizeUsdc: number;
   /**

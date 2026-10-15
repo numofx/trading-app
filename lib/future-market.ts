@@ -20,8 +20,11 @@ import type { ActivityRow, ActivityView, CellTone } from "@/lib/trading.types";
  */
 export const FUTURE_PRICE_DECIMALS = 2;
 
-/** The ladder's price groupings for the future, in cNGN per USDC, finest first. */
-export const FUTURE_PRICE_GROUPS = [0.01, 0.1, 1, 5] as const;
+/**
+ * The ladder's price groupings for the future, in cNGN per USDC, the default first: whole cNGN, a
+ * level per 1.00, which spreads the maker's ladder over the grid rather than a sliver of it.
+ */
+export const FUTURE_PRICE_GROUPS = [1, 0.1, 0.01] as const;
 
 /**
  * The fee ceiling signed into every future order, as a fraction of a contract's notional: the
@@ -100,6 +103,7 @@ export function parseFutureState(presentation: FuturePresentation | null): Futur
   const amountScale = parseAmountScale(presentation?.amount_scale);
   return {
     amountScale,
+    bandWidth: positiveDecimal(future.band_width),
     contractSizeUsdc,
     expiryMs: expiry * 1000,
     fillBand: low !== null && high !== null && low < high ? { high, low } : null,
@@ -336,6 +340,7 @@ const USD_CELL = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
 });
 const CONTRACTS_CELL = new Intl.NumberFormat("en-US", { maximumFractionDigits: 3 });
+const SIZE_USDC_CELL = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
 
 function signedUsd(value: number) {
   return `${signPrefix(value)}$${USD_CELL.format(Math.abs(value))}`;
@@ -355,14 +360,16 @@ function pnlTone(value: number): CellTone | undefined {
 /**
  * The Positions tab's columns. No entry price, uPnL or liquidation price: the engine keeps none
  * on chain and the venue serves none. What it does keep is the variation margin accrued since the
- * account last settled, which is the position's running profit or loss at the mark.
+ * account last settled. VM settles in cNGN at once on every fill (the gap between the fill price
+ * and the mark) and whenever the account is touched, so this is only what the hourly marks have
+ * added since: "Pending", not the position's whole profit or loss.
  */
 export const FUTURE_POSITIONS_COLUMNS = [
   "Market",
   "Size",
   "Notional",
   "Mark Price",
-  "Unsettled VM",
+  "Pending VM",
   "Initial Margin",
   "Maintenance Surplus",
   "",
@@ -387,18 +394,24 @@ export function buildFuturePositionsView(
   if (vmTone !== undefined) {
     tones[4] = vmTone;
   }
+  const contractsText = `${CONTRACTS_CELL.format(size)} ${size === 1 ? "contract" : "contracts"}`;
   const row: ActivityRow = {
     badges: { 0: [{ label: futureSideLabel(side), tone: tones[1] }] },
-    details: vmUsd === null ? undefined : { 4: `(≈ ${signedUsd(vmUsd)})` },
+    details:
+      vmUsd === null ? { 1: contractsText } : { 1: contractsText, 4: `(≈ ${signedUsd(vmUsd)})` },
     cells: [
       label,
-      `${CONTRACTS_CELL.format(size)} ${size === 1 ? "contract" : "contracts"}`,
+      `${SIZE_USDC_CELL.format(notional)} USDC`,
       `$${USD_CELL.format(notional)}`,
       formatFuturePrice(state.markPrice),
       signedCngn(account.pendingVmCngn),
       `$${USD_CELL.format(notional * account.imRate)}`,
       signedUsd(account.maintenanceMarginSurplus),
     ],
+    titles: {
+      1: `${contractsText} of ${USD_CELL.format(state.contractSizeUsdc)} USDC each`,
+      4: "Variation margin the hourly marks have accrued since the account last settled. VM settles in cNGN at once on every fill (the gap between the fill price and the mark) and whenever the account is touched, so a new position starts here at zero.",
+    },
     tones,
   };
   return { columns: [...FUTURE_POSITIONS_COLUMNS], rows: [row] };

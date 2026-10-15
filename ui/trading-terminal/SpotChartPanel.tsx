@@ -59,6 +59,11 @@ export type ChartUnits = {
   axisDecimals: number;
   priceDecimals: number;
   volumeUnit: string;
+  /**
+   * What the candles' prices are, named before the OHLC figures: the future's are its trades,
+   * which the header's mark is not, so it says "Last traded" where spot needs nothing said.
+   */
+  priceLabel?: string;
 };
 
 const SPOT_CHART_UNITS: ChartUnits = {
@@ -440,6 +445,14 @@ function OhlcReadout({ candle, units }: { candle: Candle | null; units: ChartUni
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+      {units.priceLabel === undefined ? null : (
+        <span
+          className="text-panel-text-muted"
+          title="Prices of the trades in this candle, cNGN per USDC. Not the mark: the header's mark is the keeper's hourly forward."
+        >
+          {units.priceLabel}
+        </span>
+      )}
       {(
         [
           ["O", candle.open],

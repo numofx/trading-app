@@ -52,9 +52,12 @@ function getPriceDigits(tick: number, maxDecimals: number) {
   return Math.min(maxDecimals, Math.max(0, -Math.floor(Math.log10(tick) + 1e-9)));
 }
 
-/** A grouping tick as a plain decimal — "0.0000005", never the "5e-7" that `String` prints. */
+/**
+ * A grouping tick as a plain decimal — "0.0000005", never the "5e-7" that `String` prints — and
+ * at least two places, so a coarse group reads "1.00" beside "0.10" and "0.01".
+ */
 function formatTickLabel(tick: number, maxDecimals: number) {
-  return tick.toFixed(getPriceDigits(tick, maxDecimals));
+  return tick.toFixed(Math.max(getPriceDigits(tick, maxDecimals), Math.min(2, maxDecimals)));
 }
 
 function LadderSelect({
@@ -145,17 +148,42 @@ function BookLevelRow({
 }
 
 /**
- * A price bucket with nothing resting in it, continuing the ladder past the last real level. Muted,
- * no bar, no size: it is the grid, not depth.
+ * A price bucket with nothing resting in it, continuing the ladder past the last real level. Blank:
+ * it keeps the grid's height, and shows no price, size or total, so it reads as spacing, never as a
+ * quote. A row of the same height as a level, so the ladder does not jump as levels come and go.
  */
-function BookEmptyRungRow({ digits, price }: { digits: number; price: number }) {
+function BookEmptyRungRow() {
   return (
-    <div className="mx-2 my-px grid grid-cols-3 px-2 py-1 text-[12px] text-panel-text-muted/50 tabular-nums">
-      <span>{formatMarketPrice(price, digits)}</span>
-      <span className="text-right">—</span>
-      <span className="text-right">—</span>
+    <div aria-hidden className="mx-2 my-px px-2 py-1 text-[12px]">
+      &nbsp;
     </div>
   );
+}
+
+/** Up or down from one price to the next; null when either is unknown. */
+function moveBetween(from: number | null, to: number | null): "up" | "down" | null {
+  if (from === null || to === null || from === to) {
+    return null;
+  }
+  return to > from ? "up" : "down";
+}
+
+/**
+ * Which way the price on screen last moved: up, down, or null until it has moved at all. Kept
+ * from render to render (React's "storing information from previous renders"), so a mid that sits
+ * still shows no arrow however the last trade was aggressed.
+ */
+function usePriceDirection(price: number | null) {
+  const [tracked, setTracked] = useState<{ direction: "up" | "down" | null; price: number | null }>(
+    {
+      direction: null,
+      price,
+    }
+  );
+  if (price !== tracked.price) {
+    setTracked({ direction: moveBetween(tracked.price, price) ?? tracked.direction, price });
+  }
+  return tracked.direction;
 }
 
 /**
@@ -175,7 +203,6 @@ function BookLadder({
   asks,
   bids,
   lastPrice,
-  lastSide,
   maxDecimals,
   tick,
   unit,
@@ -183,7 +210,6 @@ function BookLadder({
   asks: OrderBookLevel[];
   bids: OrderBookLevel[];
   lastPrice: number | null;
-  lastSide: "buy" | "sell" | null;
   maxDecimals: number;
   tick: number;
   unit: LadderUnit;
@@ -200,6 +226,7 @@ function BookLadder({
   const spread = bestAsk !== null && bestBid !== null ? bestAsk - bestBid : null;
   const spreadBps = getSpreadBps(bestAsk, bestBid);
   const anchorPrice = getAnchorPrice(bestAsk, bestBid, lastPrice);
+  const direction = usePriceDirection(anchorPrice);
   const digits = getPriceDigits(tick, maxDecimals);
   // One scale for both sides: normalising each side against its own deepest row made a thin side
   // look as deep as a heavy one, which is the comparison the bars exist to make.
@@ -241,7 +268,7 @@ function BookLadder({
               />
             ))}
             {askRungs.map((price) => (
-              <BookEmptyRungRow digits={digits} key={`empty-${price}`} price={price} />
+              <BookEmptyRungRow key={`empty-${price}`} />
             ))}
           </>
         )}
@@ -256,18 +283,14 @@ function BookLadder({
         <span
           className={cn(
             "flex items-center gap-1 font-semibold",
-            lastSide === null ? "text-mid-price" : null,
-            lastSide === "buy" ? "text-bid-text" : null,
-            lastSide === "sell" ? "text-ask-text" : null
+            direction === null ? "text-panel-text-muted" : null,
+            direction === "up" ? "text-bid-text" : null,
+            direction === "down" ? "text-ask-text" : null
           )}
         >
           {formatPrice(anchorPrice, maxDecimals)}
-          {lastSide === "buy" ? (
-            <ArrowUp aria-label="Last trade was a buy" className="size-3.5" />
-          ) : null}
-          {lastSide === "sell" ? (
-            <ArrowDown aria-label="Last trade was a sell" className="size-3.5" />
-          ) : null}
+          {direction === "up" ? <ArrowUp aria-label="Price rose" className="size-3.5" /> : null}
+          {direction === "down" ? <ArrowDown aria-label="Price fell" className="size-3.5" /> : null}
         </span>
         <span className="text-center font-medium text-panel-text">
           Spread{spread === null ? "" : ` ${formatPrice(spread, maxDecimals)}`}
@@ -294,7 +317,7 @@ function BookLadder({
               />
             ))}
             {bidRungs.map((price) => (
-              <BookEmptyRungRow digits={digits} key={`empty-${price}`} price={price} />
+              <BookEmptyRungRow key={`empty-${price}`} />
             ))}
           </>
         )}
@@ -414,7 +437,6 @@ export function SpotOrderBookPanel({
   const [tick, setTick] = useState<number>(units.priceGroups[0]);
   const [unit, setUnit] = useState<LadderUnit>("base");
   const isBook = tab === "book";
-  const lastSide = trades[0]?.side ?? null;
   const unitLabel = unit === "quote" && units.quote !== null ? units.quote : units.base;
 
   return (
@@ -475,7 +497,6 @@ export function SpotOrderBookPanel({
           asks={asks}
           bids={bids}
           lastPrice={lastPrice}
-          lastSide={lastSide}
           maxDecimals={units.priceDecimals}
           tick={tick}
           unit={unit}

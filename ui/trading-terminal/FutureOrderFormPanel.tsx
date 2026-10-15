@@ -80,6 +80,11 @@ function formatPosition(notional: number) {
   return `${notional > 0 ? "Long" : "Short"} ${SIZE.format(Math.abs(notional))} USDC`;
 }
 
+/** The position now and after the order: "Long 2 USDC → Long 1,002 USDC"; a dash without an order. */
+function formatPositionChange(position: number, after: number | null) {
+  return after === null ? "—" : `${formatPosition(position)} → ${formatPosition(after)}`;
+}
+
 const SIZE_UNITS = ["USDC", "cNGN"] as const;
 
 type SizeUnit = (typeof SIZE_UNITS)[number];
@@ -297,8 +302,8 @@ function describePriceProblem(inputs: {
   if (inputs.typedLimit === null) {
     return "Enter a limit price in cNGN per USDC.";
   }
-  return isOutsideFillBand(inputs.typedLimit, inputs.band)
-    ? "Outside the fill band: the venue refuses a limit beyond it."
+  return isOutsideFillBand(inputs.typedLimit, inputs.band) && inputs.band !== null
+    ? `Outside the fill band: orders must be between ${formatFuturePrice(inputs.band.low)} and ${formatFuturePrice(inputs.band.high)}.`
     : null;
 }
 
@@ -361,6 +366,29 @@ function deriveTicket(inputs: {
 }
 
 /** The figures under the ticket: price, notional, margin, slippage, fees and the position after. */
+/** The slippage line once there is an order to slip; a dash before. */
+function SlippageLine({
+  maxSlippage,
+  onMaxSlippageChange,
+  sized,
+}: {
+  maxSlippage: number;
+  onMaxSlippageChange: (max: number) => void;
+  sized: boolean;
+}) {
+  return sized ? (
+    <SlippageRow estimate={null} max={maxSlippage} onMaxChange={onMaxSlippageChange} />
+  ) : (
+    <SummaryRow label="Slippage" value="—" />
+  );
+}
+
+/** The band's tooltip: its width around the index, and what happens outside it. */
+function bandTooltip(bandWidth: number | null) {
+  const width = bandWidth === null ? "" : ` ±${SIZE.format(bandWidth * 100)}%`;
+  return `Index${width}. Orders outside this range are rejected.`;
+}
+
 function TicketSummary({
   contractSize,
   estimate,
@@ -383,6 +411,8 @@ function TicketSummary({
   takerFeeBps: number | null;
 }) {
   const shortfall = estimate?.shortfall ?? 0;
+  // No size, no order: every figure about it is a dash rather than a figure for nothing.
+  const sized = estimate !== null;
   return (
     <>
       <div className="space-y-0.5">
@@ -393,7 +423,7 @@ function TicketSummary({
               ? "A limit order trades at its limit or better"
               : "The touch a market order crosses, cNGN per USDC"
           }
-          value={formatFuturePrice(expectedPrice)}
+          value={sized ? formatFuturePrice(expectedPrice) : "—"}
         />
         <SummaryRow
           label="Notional"
@@ -406,18 +436,26 @@ function TicketSummary({
           value={formatUsd(estimate?.initialMargin ?? null)}
         />
         {orderType === "Limit" ? null : (
-          <SlippageRow estimate={null} max={maxSlippage} onMaxChange={onMaxSlippageChange} />
+          <SlippageLine
+            maxSlippage={maxSlippage}
+            onMaxSlippageChange={onMaxSlippageChange}
+            sized={sized}
+          />
         )}
         <SummaryRow
           label="Fees"
           tooltip="The venue's taker fee on the notional, in USDC. A resting limit that is hit pays none."
           value={
-            takerFeeBps === null
+            takerFeeBps === null || !sized
               ? "—"
               : `${formatUsd(estimate?.fee ?? null)} (${takerFeeBps / 100}%)`
           }
         />
-        <SummaryRow label="Position After" value={formatPosition(estimate?.after ?? position)} />
+        <SummaryRow
+          label="Position After"
+          tooltip="Your position in the series now, and once this order fills in full."
+          value={formatPositionChange(position, estimate?.after ?? null)}
+        />
       </div>
 
       {shortfall > 0 && hasAccount ? (
@@ -609,7 +647,10 @@ export function FutureOrderFormPanel({
     onSubmit({ limitPrice, maxSlippage, orderType, side, units });
   }
 
-  const statusText = block ?? lastAction ?? shownPriceError;
+  // A typed limit outside the band is said under the field, as it is typed; the status line keeps
+  // what is not about the limit.
+  const limitError = orderType === "Limit" ? shownPriceError : null;
+  const statusText = block ?? lastAction ?? (limitError === null ? shownPriceError : null);
   const band = state?.fillBand ?? null;
 
   return (
@@ -690,6 +731,11 @@ export function FutureOrderFormPanel({
               tooltip="cNGN per USDC"
               value={limitPrice}
             />
+            {limitError === null ? null : (
+              <p className="text-[11px] text-ask-text leading-snug" role="alert">
+                {limitError}
+              </p>
+            )}
           </div>
         ) : null}
 
@@ -707,7 +753,7 @@ export function FutureOrderFormPanel({
         <FutureLeverageRow leverage={leverage.leverage} maxLeverage={leverage.maxLeverage} />
         <p
           className="px-0.5 text-[11px] text-panel-text-muted tabular-nums"
-          title="The fill band around the index. The venue refuses a limit outside it, and the chain a fill."
+          title={bandTooltip(state?.bandWidth ?? null)}
         >
           {band === null
             ? "Price limits unavailable: orders resume once the venue reads the index."

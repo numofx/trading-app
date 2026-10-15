@@ -83,6 +83,7 @@ function chartUnits(symbol: string, market: FutureMarket | null): ChartUnits {
     axisDecimals: FUTURE_PRICE_DECIMALS,
     pair: symbol,
     priceDecimals: FUTURE_PRICE_DECIMALS,
+    priceLabel: "Last traded",
     volumeUnit: sizeUnitLabel(market).toLowerCase(),
   };
 }
