@@ -13,6 +13,7 @@ import {
   futureNotionalUsdc,
   futureOrderUiSide,
   futureOrderUnits,
+  futureReduceOnlyTerms,
   futureTradingBlock,
   isOutsideFillBand,
   maxFutureNotional,
@@ -23,6 +24,7 @@ import { formatLeverage, PERP_DEFAULT_MAX_SLIPPAGE } from "@/lib/perp-market";
 import type { OrderBookLevel } from "@/lib/trading.types";
 import { ConfirmOrderDialog } from "@/ui/trading-terminal/ConfirmOrderDialog";
 import { OrderTypeTabs } from "@/ui/trading-terminal/OrderTypeTabs";
+import { CheckboxRow } from "@/ui/trading-terminal/order-form/CheckboxRow";
 import { FieldLabel } from "@/ui/trading-terminal/order-form/FieldLabel";
 import { FormField } from "@/ui/trading-terminal/order-form/FormField";
 import { OrderFormShell } from "@/ui/trading-terminal/order-form/OrderFormShell";
@@ -50,6 +52,8 @@ export type FutureOrderRequest = {
   units: number;
   /** How far through the touch a market order is signed, as a fraction. */
   maxSlippage: number;
+  /** Ask the venue to hold the order to the account's position: it never opens or flips one. */
+  reduceOnly: boolean;
 };
 
 const USD = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 });
@@ -325,6 +329,7 @@ function deriveTicket(inputs: {
   limitPrice: string;
   nowMs: number;
   orderType: FutureOrderType;
+  reduceOnly: boolean;
   referencePrice: number | null;
   side: FutureSide;
   size: string;
@@ -347,10 +352,18 @@ function deriveTicket(inputs: {
     account === null || state === null
       ? 0
       : futureNotionalUsdc(toContracts(account.positionUnits), state);
+  const reduce = futureReduceOnlyTerms({
+    notional,
+    position,
+    reduceOnly: inputs.reduceOnly,
+    side,
+    unitUsdc: state?.unitUsdc ?? 1,
+  });
+  // Under Reduce Only the venue fills no more than the position: the figures are that fill's.
   const estimate =
-    state === null || notional === null || units === null
+    state === null || reduce.filled === null || units === null
       ? null
-      : estimateFutureOrder({ account, notional, side, state, takerFeeBps });
+      : estimateFutureOrder({ account, notional: reduce.filled, side, state, takerFeeBps });
   // A market order's price is the book walked for its size, not the touch alone.
   const fill =
     state === null || orderType === "Limit"
@@ -368,7 +381,10 @@ function deriveTicket(inputs: {
       state === null
         ? { leverage: null, maxLeverage: null }
         : estimateFutureLeverage({ account, afterNotional: estimate?.after ?? position, state }),
-    maxNotional: state === null ? 0 : maxFutureNotional({ account, side, state, takerFeeBps }),
+    maxNotional:
+      reduce.maxNotional ??
+      (state === null ? 0 : maxFutureNotional({ account, side, state, takerFeeBps })),
+    reduce,
     slippage: fill.slippage,
     notional,
     position,
@@ -491,6 +507,7 @@ function buildFutureConfirmation(inputs: {
   expectedPrice: number | null;
   orderType: FutureOrderType;
   position: number;
+  reducing: boolean;
   side: FutureSide;
   takerFeeBps: number | null;
 }) {
@@ -514,6 +531,7 @@ function buildFutureConfirmation(inputs: {
         : [{ label: "Taker fee", value: formatFutureUsdc(estimate.fee) }]),
       { label: "Max fee", value: formatFutureUsdc(futureMaxFeeUsdc(estimate.notional)) },
       { label: "Position after", value: formatPositionChange(inputs.position, estimate.after) },
+      ...(inputs.reducing ? [{ label: "Reduce only", value: "Yes" }] : []),
     ],
   };
 }
@@ -631,6 +649,7 @@ export function FutureOrderFormPanel({
   const [maxSlippage, setMaxSlippage] = useState(PERP_DEFAULT_MAX_SLIPPAGE);
   /** The order awaiting the confirm popup; null while it is closed. */
   const [pending, setPending] = useState<FutureOrderRequest | null>(null);
+  const [reduceOnly, setReduceOnly] = useState(false);
   const contractSize = state?.contractSizeUsdc ?? 1000;
   const unitUsdc = state?.unitUsdc ?? 1;
   const ticketPrice = sizingPrice({
@@ -659,6 +678,7 @@ export function FutureOrderFormPanel({
     notional,
     position,
     priceError,
+    reduce,
     shownPriceError,
     slippage,
     units,
@@ -671,6 +691,7 @@ export function FutureOrderFormPanel({
     limitPrice,
     nowMs,
     orderType,
+    reduceOnly,
     referencePrice,
     side,
     size: fields.sizeUsdc,
@@ -688,7 +709,8 @@ export function FutureOrderFormPanel({
     isFilled,
     isPreparingAccount,
     isSubmitting,
-    priceError,
+    // An order on the position's own side cannot be reduce-only: the venue would refuse it.
+    priceError: priceError ?? reduce.error,
     shortfall: estimate?.shortfall ?? null,
     side,
   });
@@ -702,11 +724,17 @@ export function FutureOrderFormPanel({
       onDepositRequest();
       return;
     }
-    if (onSubmit === undefined || units === null || priceError !== null || estimate === null) {
+    if (
+      onSubmit === undefined ||
+      units === null ||
+      priceError !== null ||
+      reduce.error !== null ||
+      estimate === null
+    ) {
       return;
     }
     // Held until the trader confirms the figures; the order is the ticket's as it stands now.
-    setPending({ limitPrice, maxSlippage, orderType, side, units });
+    setPending({ limitPrice, maxSlippage, orderType, reduceOnly: reduce.reducing, side, units });
   }
 
   function handleConfirm() {
@@ -724,6 +752,7 @@ export function FutureOrderFormPanel({
           expectedPrice,
           orderType,
           position,
+          reducing: reduce.reducing,
           side,
           takerFeeBps,
         });
@@ -841,6 +870,23 @@ export function FutureOrderFormPanel({
           validSize={units !== null}
         />
         <FutureLeverageRow leverage={leverage.leverage} maxLeverage={leverage.maxLeverage} />
+        <CheckboxRow
+          checked={reduce.reducing}
+          disabled={Math.abs(position) < 1e-9}
+          id="future-reduce-only"
+          label="Reduce Only"
+          onChange={edited(setReduceOnly)}
+          tooltip={
+            Math.abs(position) < 1e-9
+              ? "Needs an open position to reduce"
+              : "The venue fills this order up to your open position and cancels the rest; it can never open or flip one"
+          }
+        />
+        {reduce.error === null ? null : (
+          <p className="text-[11px] text-ask-text leading-snug" role="alert">
+            {reduce.error}
+          </p>
+        )}
       </div>
     </OrderFormShell>
   );

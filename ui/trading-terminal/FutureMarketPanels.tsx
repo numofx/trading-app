@@ -178,6 +178,7 @@ async function signAndPostFutureOrder({
   market,
   onAwaitingSignature,
   price,
+  reduceOnly,
   side,
   subaccountId,
   units,
@@ -185,6 +186,8 @@ async function signAndPostFutureOrder({
 }: {
   market: FutureMarket;
   onAwaitingSignature: () => void;
+  /** Ask the venue to hold the order to the account's position in the series. */
+  reduceOnly: boolean;
   price: string;
   side: "buy" | "sell";
   subaccountId: string;
@@ -204,6 +207,7 @@ async function signAndPostFutureOrder({
       tradeModuleAddress: market.stack.tradeModuleAddress,
       worstFeeUnits: futureWorstFeeUnits(market.state.contractSizeUsdc),
     },
+    reduceOnly,
     side,
     subaccountId,
     uiPrice: price,
@@ -568,6 +572,7 @@ function useFutureOrderActions({
       const { body, ok, orderId, status } = await signAndPostFutureOrder({
         market,
         price: resolved.price,
+        reduceOnly: request.reduceOnly,
         side: futureOrderUiSide(request.side),
         onAwaitingSignature: () =>
           orderStatus.announce(`Awaiting wallet signature for account #${subaccountId}`),

@@ -357,6 +357,35 @@ export function formatFutureUsdc(value: number | null) {
 }
 
 /**
+ * What Reduce Only means for this ticket: whether it is in force (the box is ticked and there is a
+ * position), why the order cannot go (it is on the position's own side), the size the venue would
+ * fill (no more than the position, the rest cancelled) and the most MAX offers (the position).
+ */
+export function futureReduceOnlyTerms(inputs: {
+  notional: number | null;
+  position: number;
+  reduceOnly: boolean;
+  side: FutureSide;
+  unitUsdc: number;
+}) {
+  const held = Math.abs(inputs.position);
+  const reducing = inputs.reduceOnly && held > 1e-9;
+  if (!reducing) {
+    return { error: null, filled: inputs.notional, maxNotional: null, reducing };
+  }
+  const long = inputs.position > 0;
+  const increases = (inputs.side === "long") === long;
+  return {
+    error: increases
+      ? `Reduce Only: ${long ? "Short" : "Long"} to reduce your ${long ? "long" : "short"} position.`
+      : null,
+    filled: inputs.notional === null ? null : Math.min(inputs.notional, held),
+    maxNotional: inputs.unitUsdc > 0 ? Math.floor(held / inputs.unitUsdc) * inputs.unitUsdc : 0,
+    reducing,
+  };
+}
+
+/**
  * The most USDC of notional the ticket offers on one side, in whole venue units: the position it
  * can close outright (reducing is always allowed), plus what the initial margin surplus opens at
  * the engine's rate with the taker fee on top. Zero without an account or its rates.
