@@ -36,8 +36,18 @@ export type MarketOverviewRow = {
   lastTradeAtMs: number | null;
   /** The future series' venue symbol, `USDC-cNGN-<DDMONYY>`; null on spot and the perp. */
   symbol: string | null;
+  /** The future's mark and index, cNGN per USDC, as the venue serves them. */
+  markPrice: number | null;
+  indexPrice: number | null;
+  /** Whether the future series has settled; null on spot and the perp. */
+  settled: boolean | null;
+  /** How the future's next mark is set, from its book's depth; null on spot and the perp. */
+  markSource: "book" | "carry" | null;
 };
 
 export type MarketOverviewResponse = {
+  /** Spot, the perp and the front-month future, one row each. */
   rows: MarketOverviewRow[];
+  /** Every future series the venue lists and has not expired, nearest expiry first. */
+  futures?: MarketOverviewRow[];
 };

@@ -4,7 +4,7 @@ import { Dialog } from "@base-ui/react/dialog";
 import { Check, ChevronDown, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
-import { formatCountdown, formatFuturePrice, formatUtcStamp } from "@/lib/future-market";
+import { buildFutureOverviewMetrics, formatFuturePrice } from "@/lib/future-market";
 import { formatPrice } from "@/lib/market-formatting";
 import {
   emptyOverviewRow,
@@ -13,6 +13,7 @@ import {
   formatOpenInterest,
   formatOverviewVolume,
   getTerminalMarket,
+  listedFutureSymbols,
   selectorMarkets,
 } from "@/lib/market-overview";
 import type {
@@ -43,7 +44,7 @@ function tabFor(kind: TerminalMarketKind): TerminalMarketKind {
  */
 const GRID_CLASS = {
   futures:
-    "grid-cols-[minmax(0,2.8fr)_minmax(0,1.05fr)_minmax(0,1.15fr)_1rem] md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)_1rem]",
+    "grid-cols-[minmax(0,2.8fr)_minmax(0,1fr)_minmax(0,0.9fr)] md:grid-cols-[minmax(0,2.3fr)_minmax(0,0.9fr)_minmax(0,1.35fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,0.85fr)_1rem]",
   perp: "grid-cols-[minmax(0,2.8fr)_minmax(0,1.05fr)_minmax(0,1.15fr)_1rem] md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_1rem]",
   spot: "grid-cols-[minmax(0,2.8fr)_minmax(0,1.05fr)_minmax(0,1.15fr)_1rem] md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_1rem]",
 } satisfies Record<TerminalMarketKind, string>;
@@ -104,6 +105,10 @@ function ChangeCell({ value }: { value: number | null }) {
   if (value === null || !Number.isFinite(value)) {
     return <span className={cn(CELL_CLASS, "text-panel-text-muted")}>—</span>;
   }
+  // No move is neither a rise nor a fall: grey, unsigned, no arrow.
+  if (Number(value.toFixed(2)) === 0) {
+    return <span className={cn(CELL_CLASS, "text-panel-text-muted")}>0.00%</span>;
+  }
   const negative = value < 0;
   return (
     <span
@@ -122,8 +127,48 @@ function ChangeCell({ value }: { value: number | null }) {
   );
 }
 
+/** The Futures tab's figures, in the stats bar's order. */
+const FUTURE_COLUMNS = ["Mark", "Basis", "APR", "Open Interest", "Expires In"] as const;
+
+/** What a phone's width holds beside the series name: the mark and the APR, short figures both. */
+const FUTURE_PHONE_COLUMNS = new Set<string>(["Mark", "APR"]);
+
+/** The column tooltips: the stats bar's own, from a series with nothing served. */
+const FUTURE_COLUMN_TOOLTIPS = Object.fromEntries(
+  buildFutureOverviewMetrics(emptyOverviewRow("future"), 0).map((metric) => [
+    metric.label,
+    metric.tooltip,
+  ])
+);
+
 function ColumnHeaders({ kind }: { kind: TerminalMarketKind }) {
   const headerClass = "truncate text-right text-[12px] text-panel-text-muted";
+  if (kind === "futures") {
+    return (
+      <div
+        className={cn(
+          "grid items-center gap-2 border-panel-border border-b pb-2 md:gap-3",
+          GRID_CLASS.futures
+        )}
+      >
+        <span className={cn(headerClass, "text-left")}>Market</span>
+        {FUTURE_COLUMNS.map((label) => (
+          <span
+            className={cn(
+              headerClass,
+              "cursor-help",
+              !FUTURE_PHONE_COLUMNS.has(label) && HIDDEN_ON_PHONE
+            )}
+            key={label}
+            title={FUTURE_COLUMN_TOOLTIPS[label]}
+          >
+            {label}
+          </span>
+        ))}
+        <span aria-hidden className={HIDDEN_ON_PHONE} />
+      </div>
+    );
+  }
   return (
     <div
       className={cn(
@@ -141,11 +186,71 @@ function ColumnHeaders({ kind }: { kind: TerminalMarketKind }) {
           <span className={cn(headerClass, HIDDEN_ON_PHONE)}>1h funding</span>
         </>
       ) : null}
-      {kind === "futures" ? (
-        <span className={cn(headerClass, HIDDEN_ON_PHONE)}>Last trade in</span>
-      ) : null}
       <span aria-hidden />
     </div>
+  );
+}
+
+const ZERO_FIGURE = /^[+-]?0(\.0+)?%?$/;
+
+/** A figure that reads as zero, or nothing at all: shown neutral grey, neither a rise nor a fall. */
+function isZeroOrBlank(value: string) {
+  const first = value.split(" ")[0]?.replace(/[$,]/g, "") ?? "";
+  return value === "—" || ZERO_FIGURE.test(first);
+}
+
+/** A series' figures, as the stats bar computes, words and colours them, with its tooltips. */
+function FutureCells({ row }: { row: MarketOverviewRow }) {
+  const metrics = buildFutureOverviewMetrics(row, Date.now());
+  return (
+    <>
+      {FUTURE_COLUMNS.map((label) => {
+        const metric = metrics.find((candidate) => candidate.label === label);
+        const value = metric?.value ?? "—";
+        return (
+          <span
+            className={cn(
+              CELL_CLASS,
+              !FUTURE_PHONE_COLUMNS.has(label) && HIDDEN_ON_PHONE,
+              label === "Mark" && "text-panel-text-active",
+              metric?.tone === "up" && "text-bid-text",
+              metric?.tone === "down" && "text-ask-text",
+              metric?.tone == null && isZeroOrBlank(value) && "text-panel-text-muted"
+            )}
+            key={label}
+            title={metric?.tooltip}
+          >
+            {value}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+/** Spot's and the perp's figures: price, the day's change and volume, and the perp's own. */
+function MarketCells({ entry, row }: { entry: TerminalMarketEntry; row: MarketOverviewRow }) {
+  return (
+    <>
+      <span className={cn(CELL_CLASS, "text-panel-text-active")}>
+        {/* Spot is quoted cNGN per USDC; the perp keeps USDC per cNGN. */}
+        {entry.kind === "perp" ? formatPrice(row.price) : formatFuturePrice(row.price)}
+      </span>
+      <ChangeCell value={row.changePercent24h} />
+      <span className={cn(CELL_CLASS, HIDDEN_ON_PHONE)}>
+        {formatOverviewVolume(row.volume24hUsd)}
+      </span>
+      {entry.kind === "perp" ? (
+        <>
+          <span className={cn(CELL_CLASS, HIDDEN_ON_PHONE)}>
+            {formatOpenInterest(row.openInterestUsd)}
+          </span>
+          <span className={cn(CELL_CLASS, HIDDEN_ON_PHONE)}>
+            {formatFundingRate(row.fundingRate1h)}
+          </span>
+        </>
+      ) : null}
+    </>
   );
 }
 
@@ -177,37 +282,13 @@ function MarketRow({
       <span className="flex min-w-0 items-center gap-2">
         <MarketIdentity compact symbol={entry.symbol} />
       </span>
-      <span className={cn(CELL_CLASS, "text-panel-text-active")}>
-        {/* Spot and the future are quoted cNGN per USDC; the perp keeps USDC per cNGN. */}
-        {entry.kind === "perp" ? formatPrice(row.price) : formatFuturePrice(row.price)}
-      </span>
-      <ChangeCell value={row.changePercent24h} />
-      <span className={cn(CELL_CLASS, HIDDEN_ON_PHONE)}>
-        {formatOverviewVolume(row.volume24hUsd)}
-      </span>
-      {entry.kind === "perp" ? (
-        <>
-          <span className={cn(CELL_CLASS, HIDDEN_ON_PHONE)}>
-            {formatOpenInterest(row.openInterestUsd)}
-          </span>
-          <span className={cn(CELL_CLASS, HIDDEN_ON_PHONE)}>
-            {formatFundingRate(row.fundingRate1h)}
-          </span>
-        </>
-      ) : null}
       {entry.kind === "futures" ? (
-        <span
-          className={cn(CELL_CLASS, HIDDEN_ON_PHONE)}
-          title={
-            row.lastTradeAtMs === null
-              ? undefined
-              : `New orders close ${formatUtcStamp(row.lastTradeAtMs)}`
-          }
-        >
-          {row.lastTradeAtMs === null ? "—" : formatCountdown(row.lastTradeAtMs, Date.now())}
-        </span>
-      ) : null}
-      <span className="flex justify-end">
+        <FutureCells row={row} />
+      ) : (
+        <MarketCells entry={entry} row={row} />
+      )}
+      {/* A phone's Futures row spends this column on the series name; the row's fill marks it. */}
+      <span className={cn("flex justify-end", entry.kind === "futures" && "max-md:hidden")}>
         {selected ? (
           <Check aria-label="Selected market" className="size-4 shrink-0 text-panel-text-muted" />
         ) : null}
@@ -239,14 +320,17 @@ export function MarketSelectDialog({
   const selected = getTerminalMarket(market, futureSymbol);
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<TerminalMarketKind>(tabFor(selected.kind));
-  const rowFor = useMarketOverview(open, {
+  const overview = useMarketOverview(open, {
     ...emptyOverviewRow(market),
     changePercent24h,
     price,
   });
-  // The series to list: the one on screen, else the front-month the venue last reported.
-  const listedFuture = futureSymbol ?? rowFor("future").symbol;
-  const entries = filterTerminalMarkets(selectorMarkets(listedFuture), kind, "");
+  // Every series the venue lists, nearest expiry first, and the one on screen if it is not among them.
+  const entries = filterTerminalMarkets(
+    selectorMarkets(listedFutureSymbols(overview.futures, futureSymbol)),
+    kind,
+    ""
+  );
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
@@ -325,9 +409,13 @@ export function MarketSelectDialog({
                 {entries.map((entry) => (
                   <MarketRow
                     entry={entry}
-                    key={entry.id}
+                    key={entry.href}
                     onSelect={() => setOpen(false)}
-                    row={rowFor(entry.id)}
+                    row={
+                      entry.kind === "futures"
+                        ? overview.futureRow(entry.symbol)
+                        : overview.rowFor(entry.id)
+                    }
                     selected={entry.href === selected.href}
                   />
                 ))}

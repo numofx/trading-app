@@ -117,7 +117,7 @@ function ShellHeader({
 }) {
   const publication = useTerminalHeaderPublication();
   const live = publication?.market === market ? publication : null;
-  const cachedRow = useCachedOverviewRow(market, OVERVIEW_SEED_MAX_AGE_MS);
+  const cachedRow = useCachedOverviewRow(market, OVERVIEW_SEED_MAX_AGE_MS, futureSymbol);
   const unpublished = live === null;
 
   useEffect(() => {

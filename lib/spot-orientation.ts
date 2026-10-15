@@ -163,8 +163,13 @@ export function formatSpotNairaPrice(cngnPerUsdc: number | null) {
     : `₦${formatMarketPrice(cngnPerUsdc, SPOT_PRICE_DECIMALS)}`;
 }
 
+/** A change that rounds to 0.00% is no move: neutral, unsigned. */
+function roundsToZero(changePercent: number) {
+  return Number(changePercent.toFixed(2)) === 0;
+}
+
 function changeTone(changePercent: number | null): PerpHeaderMetric["tone"] {
-  if (changePercent === null || changePercent === 0) {
+  if (changePercent === null || !Number.isFinite(changePercent) || roundsToZero(changePercent)) {
     return null;
   }
   return changePercent > 0 ? "up" : "down";
@@ -173,6 +178,9 @@ function changeTone(changePercent: number | null): PerpHeaderMetric["tone"] {
 function formatChange(changePercent: number | null) {
   if (changePercent === null || !Number.isFinite(changePercent)) {
     return "—";
+  }
+  if (roundsToZero(changePercent)) {
+    return "0.00%";
   }
   return `${changePercent > 0 ? "+" : ""}${changePercent.toFixed(2)}%`;
 }

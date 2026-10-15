@@ -451,7 +451,13 @@ function signedPercent(value: number, digits: number) {
  * The mark against the index: forward points (mark − index, cNGN per USDC) and the premium as a
  * fraction (mark / index − 1). Null without both prices or with a non-positive index.
  */
-export function futureBasis(state: FutureState | null) {
+/** What the stats bar reads of a series: the selector's rows carry the same. */
+export type FutureStatsInput = Pick<
+  FutureState,
+  "expiryMs" | "indexPrice" | "lastTradeAtMs" | "markPrice" | "settled"
+>;
+
+export function futureBasis(state: Pick<FutureState, "indexPrice" | "markPrice"> | null) {
   const mark = state?.markPrice ?? null;
   const index = state?.indexPrice ?? null;
   if (mark === null || index === null || !(index > 0) || !(mark > 0)) {
@@ -465,7 +471,10 @@ export function futureBasis(state: FutureState | null) {
  * differential the future implies. Null without a basis, or once the series has expired or
  * settled, when there are no days left to spread it over.
  */
-export function futureBasisApr(state: FutureState | null, nowMs: number) {
+export function futureBasisApr(
+  state: Pick<FutureState, "expiryMs" | "indexPrice" | "markPrice" | "settled"> | null,
+  nowMs: number
+) {
   const basis = futureBasis(state);
   if (state === null || basis === null || state.settled) {
     return null;
@@ -516,7 +525,7 @@ function formatBasis(basis: ReturnType<typeof futureBasis>) {
 }
 
 /** Time to expiry, or what the series is once it has none left. */
-function formatExpiresIn(state: FutureState | null, nowMs: number) {
+function formatExpiresIn(state: FutureStatsInput | null, nowMs: number) {
   if (state === null) {
     return "—";
   }
@@ -551,7 +560,7 @@ export function buildFutureHeaderMetrics({
   markSource: FutureMarkSource | null;
   nowMs: number;
   openInterestUsd: number | null;
-  state: FutureState | null;
+  state: FutureStatsInput | null;
 }): PerpHeaderMetric[] {
   const basis = futureBasis(state);
   const apr = futureBasisApr(state, nowMs);
@@ -599,22 +608,39 @@ export function buildFutureHeaderMetrics({
   ];
 }
 
-/** The header's figures from the selector's row while the future's panels load after a switch. */
+/**
+ * A series' stats-bar figures from its selector row: the selector's Futures tab shows them, and the
+ * header shows them while the series' panels load after a switch. The same builder as the bar, so
+ * the two never compute or word a figure differently.
+ */
 export function buildFutureOverviewMetrics(
-  row: { expiryMs: number | null },
+  row: {
+    expiryMs: number | null;
+    indexPrice: number | null;
+    lastTradeAtMs: number | null;
+    markPrice: number | null;
+    markSource: FutureMarkSource | null;
+    openInterestUsd: number | null;
+    settled: boolean | null;
+  },
   nowMs: number
 ): PerpHeaderMetric[] {
-  const live = buildFutureHeaderMetrics({
-    markSource: null,
+  const state =
+    row.expiryMs === null || row.lastTradeAtMs === null
+      ? null
+      : {
+          expiryMs: row.expiryMs,
+          indexPrice: row.indexPrice,
+          lastTradeAtMs: row.lastTradeAtMs,
+          markPrice: row.markPrice,
+          settled: row.settled ?? false,
+        };
+  return buildFutureHeaderMetrics({
+    markSource: row.markSource,
     nowMs,
-    openInterestUsd: null,
-    state: null,
+    openInterestUsd: row.openInterestUsd,
+    state,
   });
-  return live.map((metric) =>
-    metric.label === "Expires In" && row.expiryMs !== null
-      ? { ...metric, value: formatCountdown(row.expiryMs, nowMs) }
-      : metric
-  );
 }
 
 /** The venue's refusal of a future order in a trader's words; the venue's own text otherwise. */

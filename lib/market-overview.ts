@@ -37,12 +37,28 @@ export function futureEntry(symbol: string): TerminalMarketEntry {
 
 /**
  * The markets the selector offers, each at its own URL under `/trade`: spot, and the future series
- * the venue lists (`futureSymbol`, null when it lists none). The shell (header, wallet, trading
- * account, selector) persists across them; the market's panels are keyed by the slug, so switching
- * never carries one market's ticket or book into the other.
+ * the venue lists (`futureSymbols`, nearest expiry first; empty when it lists none). The shell
+ * (header, wallet, trading account, selector) persists across them; the market's panels are keyed
+ * by the slug, so switching never carries one market's ticket or book into the other.
  */
-export function selectorMarkets(futureSymbol: string | null): TerminalMarketEntry[] {
-  return futureSymbol === null ? [SPOT_ENTRY] : [SPOT_ENTRY, futureEntry(futureSymbol)];
+export function selectorMarkets(futureSymbols: readonly string[]): TerminalMarketEntry[] {
+  return [SPOT_ENTRY, ...futureSymbols.map(futureEntry)];
+}
+
+/** The series to list: the venue's, nearest expiry first, with the one on screen kept if it is missing. */
+export function listedFutureSymbols(
+  futures: readonly MarketOverviewRow[],
+  onScreen: string | null
+) {
+  const symbols = [...futures]
+    .filter((row) => row.symbol !== null)
+    .sort(
+      (left, right) =>
+        (left.expiryMs ?? Number.POSITIVE_INFINITY) - (right.expiryMs ?? Number.POSITIVE_INFINITY)
+    )
+    .map((row) => row.symbol as string);
+  const known = symbols.some((symbol) => symbol.toLowerCase() === onScreen?.toLowerCase());
+  return onScreen === null || known ? symbols : [...symbols, onScreen];
 }
 
 /** The entry for the market on screen; a future needs its series' symbol. */
@@ -66,9 +82,13 @@ export function emptyOverviewRow(id: TerminalMarketId): MarketOverviewRow {
     fundingRate1h: null,
     id,
     expiryMs: null,
+    indexPrice: null,
     lastTradeAtMs: null,
+    markPrice: null,
+    markSource: null,
     openInterestUsd: null,
     price: null,
+    settled: null,
     symbol: null,
     volume24hUsd: null,
   };
@@ -94,8 +114,12 @@ export function buildOverviewRow(
   } | null,
   future: {
     expiryMs: number;
+    indexPrice: number | null;
     lastTradeAtMs: number;
     markPrice: number | null;
+    markSource: "book" | "carry" | null;
+    openInterestUsd: number | null;
+    settled: boolean;
     symbol: string;
     /** The venue's size unit as USDC of notional: what its volume counts. */
     unitUsdc: number;
@@ -117,9 +141,13 @@ export function buildOverviewRow(
     fundingRate1h: perp?.uiLongFundingRate1h ?? null,
     id,
     expiryMs: future?.expiryMs ?? null,
+    indexPrice: future?.indexPrice ?? null,
     lastTradeAtMs: future?.lastTradeAtMs ?? null,
-    openInterestUsd: perp?.openInterestUsd ?? null,
+    markPrice: future?.markPrice ?? null,
+    markSource: future?.markSource ?? null,
+    openInterestUsd: perp?.openInterestUsd ?? future?.openInterestUsd ?? null,
     price,
+    settled: future?.settled ?? null,
     symbol: future?.symbol ?? null,
     volume24hUsd: future === null ? (market.stats24h?.quoteVolume ?? null) : futureVolume,
   };

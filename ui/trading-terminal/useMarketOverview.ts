@@ -15,7 +15,7 @@ import type {
  */
 const OVERVIEW_TTL_MS = Duration.toMillis("10 seconds");
 
-type OverviewRead = { readAt: number; rows: MarketOverviewRow[] };
+type OverviewRead = { futures: MarketOverviewRow[]; readAt: number; rows: MarketOverviewRow[] };
 
 /*
  * One store for every reader: the selector, which fetches on opening, and the shell's header,
@@ -60,7 +60,7 @@ export function loadOverview(): Promise<void> {
         return;
       }
       const body = (await response.json()) as MarketOverviewResponse;
-      overviewCache = { readAt: Date.now(), rows: body.rows ?? [] };
+      overviewCache = { futures: body.futures ?? [], readAt: Date.now(), rows: body.rows ?? [] };
       for (const listener of listeners) {
         listener();
       }
@@ -81,6 +81,7 @@ export function loadOverview(): Promise<void> {
 export function useMarketOverview(open: boolean, live: MarketOverviewRow) {
   const read = useSyncExternalStore(subscribe, readOverview, serverOverview);
   const rows = read?.rows ?? [];
+  const futures = read?.futures ?? [];
 
   useEffect(() => {
     if (open) {
@@ -88,7 +89,7 @@ export function useMarketOverview(open: boolean, live: MarketOverviewRow) {
     }
   }, [open]);
 
-  return (id: TerminalMarketId): MarketOverviewRow => {
+  function rowFor(id: TerminalMarketId): MarketOverviewRow {
     const fetched = rows.find((row) => row.id === id) ?? emptyOverviewRow(id);
     if (id !== live.id) {
       return fetched;
@@ -98,7 +99,19 @@ export function useMarketOverview(open: boolean, live: MarketOverviewRow) {
       changePercent24h: live.changePercent24h ?? fetched.changePercent24h,
       price: live.price ?? fetched.price,
     };
+  }
+
+  return {
+    /** Every future series the venue lists, nearest expiry first. */
+    futures,
+    /** A future series' row by its symbol; its figures are the venue's mark and index, not a live touch. */
+    futureRow: (symbol: string) => findFutureRow(futures, symbol) ?? emptyOverviewRow("future"),
+    rowFor,
   };
+}
+
+function findFutureRow(futures: readonly MarketOverviewRow[], symbol: string) {
+  return futures.find((row) => row.symbol?.toLowerCase() === symbol.toLowerCase()) ?? null;
 }
 
 /**
@@ -109,11 +122,16 @@ export function useMarketOverview(open: boolean, live: MarketOverviewRow) {
  */
 export function useCachedOverviewRow(
   market: TerminalMarketId,
-  maxAgeMs: number
+  maxAgeMs: number,
+  futureSymbol: string | null = null
 ): MarketOverviewRow | null {
   const read = useSyncExternalStore(subscribe, readOverview, serverOverview);
   if (read === null || Date.now() - read.readAt > maxAgeMs) {
     return null;
+  }
+  // A future seeds from its own series' row; the front-month row is another series' figures.
+  if (market === "future" && futureSymbol !== null) {
+    return findFutureRow(read.futures, futureSymbol);
   }
   return read.rows.find((row) => row.id === market) ?? null;
 }
