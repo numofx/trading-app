@@ -1,7 +1,10 @@
 "use client";
 
+import { TriangleAlert } from "lucide-react";
 import { useState } from "react";
+import { cn } from "@/lib/cn";
 import {
+  estimateFutureLeverage,
   estimateFutureOrder,
   formatFuturePrice,
   futureNotionalUsdc,
@@ -13,10 +16,12 @@ import {
   toContracts,
 } from "@/lib/future-market";
 import type { FutureAccount, FutureSide, FutureState } from "@/lib/future-market.types";
-import { PERP_DEFAULT_MAX_SLIPPAGE } from "@/lib/perp-market";
+import { formatLeverage, PERP_DEFAULT_MAX_SLIPPAGE } from "@/lib/perp-market";
 import { OrderTypeTabs } from "@/ui/trading-terminal/OrderTypeTabs";
+import { FieldLabel } from "@/ui/trading-terminal/order-form/FieldLabel";
 import { FormField } from "@/ui/trading-terminal/order-form/FormField";
 import { OrderFormShell } from "@/ui/trading-terminal/order-form/OrderFormShell";
+import { OrderSizeCard } from "@/ui/trading-terminal/order-form/OrderSizeCard";
 import { SideToggle } from "@/ui/trading-terminal/order-form/SideToggle";
 import { SlippageRow } from "@/ui/trading-terminal/order-form/SlippageRow";
 import { SubmitButton } from "@/ui/trading-terminal/order-form/SubmitButton";
@@ -75,6 +80,206 @@ function formatPosition(notional: number) {
   return `${notional > 0 ? "Long" : "Short"} ${SIZE.format(Math.abs(notional))} USDC`;
 }
 
+const SIZE_UNITS = ["USDC", "cNGN"] as const;
+
+type SizeUnit = (typeof SIZE_UNITS)[number];
+
+const CNGN = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+
+/**
+ * The ticket's size, kept in both units: USDC of notional is the figure underneath (what the order
+ * is signed in), its cNGN value follows through the ticket's price (cNGN per USDC). Typed in cNGN,
+ * the USDC size is rounded down to the venue's step, so the order never exceeds what was typed.
+ */
+function useFutureSize(price: number | null, unitUsdc: number) {
+  const [sizeUsdc, setSizeUsdc] = useState("");
+  const [sizeCngn, setSizeCngn] = useState("");
+  const [unit, setUnit] = useState<SizeUnit>("USDC");
+  const priced = price !== null && price > 0;
+
+  function cngnOf(usdc: number | null) {
+    return usdc === null || !priced ? "" : String(Math.round(usdc * price));
+  }
+
+  function onInput(value: string) {
+    if (unit === "USDC") {
+      setSizeUsdc(value);
+      setSizeCngn(cngnOf(parseNotional(value)));
+      return;
+    }
+    setSizeCngn(value);
+    const cngn = parseNotional(value);
+    const usdc =
+      cngn === null || !priced || unitUsdc <= 0
+        ? null
+        : Math.floor(cngn / price / unitUsdc) * unitUsdc;
+    setSizeUsdc(usdc === null || usdc <= 0 ? "" : String(usdc));
+  }
+
+  /** Sets the size in USDC from the slider or MAX; the cNGN view follows. */
+  function setUsdc(usdc: number) {
+    setSizeUsdc(usdc <= 0 ? "" : String(usdc));
+    setSizeCngn(cngnOf(usdc > 0 ? usdc : null));
+  }
+
+  function toggleUnit() {
+    setUnit(unit === "USDC" ? "cNGN" : "USDC");
+    setSizeCngn(cngnOf(parseNotional(sizeUsdc)));
+  }
+
+  return {
+    onInput,
+    setUsdc,
+    shown: unit === "USDC" ? sizeUsdc : sizeCngn,
+    sizeCngn,
+    sizeUsdc,
+    toggleUnit,
+    unit,
+  };
+}
+
+/** What the Size field counts, for its tooltip. */
+function sizeTooltip(unit: SizeUnit, unitUsdc: number, contractSize: number, price: number | null) {
+  const steps = `in steps of ${SIZE.format(unitUsdc)} USDC; one contract is ${USD.format(contractSize)} USDC`;
+  if (unit === "USDC") {
+    return `USDC of notional, ${steps}.`;
+  }
+  const at = price === null ? "" : ` at ${formatFuturePrice(price)} cNGN per USDC`;
+  return `The size as its cNGN value${at}. The order is signed in USDC of notional, ${steps}.`;
+}
+
+/** What MAX would set, for its tooltip. */
+function maxSizeTitle(maxNotional: number, hasAccount: boolean) {
+  return hasAccount
+    ? `${SIZE.format(maxNotional)} USDC: the most the account's margin can open on this side`
+    : "Needs an account";
+}
+
+/**
+ * The account's leverage once this order fills, against the engine's ceiling (1 / its initial
+ * rate). Past the ceiling the engine refuses the order: the figure turns red and is marked
+ * "Above max" with a warning sign, so the state does not rest on colour alone.
+ */
+function FutureLeverageRow({
+  leverage,
+  maxLeverage,
+}: {
+  leverage: number | null;
+  maxLeverage: number | null;
+}) {
+  const overCeiling = leverage !== null && maxLeverage !== null && leverage > maxLeverage + 1e-9;
+  const tone =
+    leverage === null || leverage === 0 ? "text-panel-text-muted" : "text-panel-text-active";
+  return (
+    <div className="flex items-center justify-between gap-2 px-0.5 text-[12px]">
+      <FieldLabel
+        tooltip={`Your account's leverage after this order: the position's notional over the margin the engine credits you (USDC in full, cNGN at its factor). The engine opens up to ${maxLeverage === null ? "its ceiling" : formatLeverage(maxLeverage)}; it margins the account as a whole, so there is no per-position leverage to set.`}
+      >
+        Position Leverage
+      </FieldLabel>
+      <span
+        className={cn(
+          "flex items-center gap-1.5 font-semibold tabular-nums",
+          overCeiling ? "text-ask-text" : tone
+        )}
+      >
+        {overCeiling ? (
+          <span className="flex items-center gap-1 font-medium text-[11px]">
+            <TriangleAlert aria-hidden className="size-3.5" />
+            Above max
+          </span>
+        ) : null}
+        {leverage === null ? "—" : formatLeverage(leverage)}
+        {maxLeverage === null ? null : (
+          <span className="font-normal text-panel-text-muted">/ {formatLeverage(maxLeverage)}</span>
+        )}
+      </span>
+    </div>
+  );
+}
+
+/** The price the cNGN view converts at: the typed limit, else the touch the order would cross. */
+function sizingPrice(inputs: {
+  bestAsk: number | null;
+  bestBid: number | null;
+  limitPrice: string;
+  orderType: FutureOrderType;
+  referencePrice: number | null;
+  side: FutureSide;
+}) {
+  if (inputs.orderType === "Limit") {
+    return parsePrice(inputs.limitPrice);
+  }
+  return (inputs.side === "long" ? inputs.bestAsk : inputs.bestBid) ?? inputs.referencePrice;
+}
+
+/** The size in the unit not shown, under the typed figure. */
+function otherUnitText(fields: ReturnType<typeof useFutureSize>) {
+  if (fields.unit === "USDC") {
+    return `${fields.sizeCngn === "" ? "0" : CNGN.format(Number(fields.sizeCngn))} cNGN`;
+  }
+  return `${fields.sizeUsdc === "" ? "0" : SIZE.format(Number(fields.sizeUsdc))} USDC`;
+}
+
+/** The size card, sized in USDC of notional with its cNGN value, and the step hint under it. */
+function FutureSizeField({
+  contractSize,
+  fields,
+  hasAccount,
+  maxNotional,
+  notional,
+  onEdit,
+  ticketPrice,
+  unitUsdc,
+  validSize,
+}: {
+  contractSize: number;
+  fields: ReturnType<typeof useFutureSize>;
+  hasAccount: boolean;
+  maxNotional: number;
+  notional: number | null;
+  onEdit: () => void;
+  ticketPrice: number | null;
+  unitUsdc: number;
+  validSize: boolean;
+}) {
+  return (
+    <div className="space-y-1">
+      <OrderSizeCard
+        baseUnit="USDC"
+        canToggleUnit={ticketPrice !== null && ticketPrice > 0}
+        formatBase={(value) => SIZE.format(value)}
+        inputId="future-size"
+        max={hasAccount && maxNotional >= unitUsdc ? maxNotional : null}
+        maxTitle={maxSizeTitle(maxNotional, hasAccount)}
+        onInput={(value) => {
+          onEdit();
+          fields.onInput(value);
+        }}
+        onSetBase={(value) => {
+          onEdit();
+          fields.setUsdc(value);
+        }}
+        onToggleUnit={() => {
+          onEdit();
+          fields.toggleUnit();
+        }}
+        otherUnitText={otherUnitText(fields)}
+        shown={fields.shown}
+        size={notional}
+        step={unitUsdc}
+        tooltip={sizeTooltip(fields.unit, unitUsdc, contractSize, ticketPrice)}
+        unit={fields.unit}
+      />
+      {!validSize && fields.sizeUsdc !== "" ? (
+        <p className="text-[11px] text-panel-text-muted tabular-nums">
+          Whole steps of {SIZE.format(unitUsdc)} USDC, at least {SIZE.format(unitUsdc)}.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 /** Why the ticket's price cannot be signed, or null when it can. */
 function describePriceProblem(inputs: {
   band: FutureState["fillBand"];
@@ -126,22 +331,28 @@ function deriveTicket(inputs: {
     touch,
     typedLimit,
   });
+  const position =
+    account === null || state === null
+      ? 0
+      : futureNotionalUsdc(toContracts(account.positionUnits), state);
+  const estimate =
+    state === null || notional === null || units === null
+      ? null
+      : estimateFutureOrder({ account, notional, side, state, takerFeeBps });
   return {
     block:
       state === null
         ? "The future isn't listed on the venue right now."
         : futureTradingBlock(state, inputs.nowMs),
-    estimate:
-      state === null || notional === null || units === null
-        ? null
-        : estimateFutureOrder({ account, notional, side, state, takerFeeBps }),
+    estimate,
     expectedPrice: orderType === "Limit" ? typedLimit : (touch ?? inputs.referencePrice),
+    leverage:
+      state === null
+        ? { leverage: null, maxLeverage: null }
+        : estimateFutureLeverage({ account, afterNotional: estimate?.after ?? position, state }),
     maxNotional: state === null ? 0 : maxFutureNotional({ account, side, state, takerFeeBps }),
     notional,
-    position:
-      account === null || state === null
-        ? 0
-        : futureNotionalUsdc(toContracts(account.positionUnits), state),
+    position,
     priceError,
     // An empty limit field is not yet an error worth a line; the disabled button says enough.
     shownPriceError: orderType === "Limit" && inputs.limitPrice === "" ? null : priceError,
@@ -323,8 +534,18 @@ export function FutureOrderFormPanel({
   const [side, setSide] = useState<FutureSide>("long");
   const [orderType, setOrderType] = useState<FutureOrderType>("Market");
   const [limitPrice, setLimitPrice] = useState("");
-  const [size, setSize] = useState("");
   const [maxSlippage, setMaxSlippage] = useState(PERP_DEFAULT_MAX_SLIPPAGE);
+  const contractSize = state?.contractSizeUsdc ?? 1000;
+  const unitUsdc = state?.unitUsdc ?? 1;
+  const ticketPrice = sizingPrice({
+    bestAsk,
+    bestBid,
+    limitPrice,
+    orderType,
+    referencePrice,
+    side,
+  });
+  const fields = useFutureSize(ticketPrice, unitUsdc);
 
   function edited<T>(set: (value: T) => void) {
     return (value: T) => {
@@ -337,6 +558,7 @@ export function FutureOrderFormPanel({
     block,
     estimate,
     expectedPrice,
+    leverage,
     maxNotional,
     notional,
     position,
@@ -352,7 +574,7 @@ export function FutureOrderFormPanel({
     orderType,
     referencePrice,
     side,
-    size,
+    size: fields.sizeUsdc,
     state,
     takerFeeBps,
   });
@@ -389,8 +611,6 @@ export function FutureOrderFormPanel({
 
   const statusText = block ?? lastAction ?? shownPriceError;
   const band = state?.fillBand ?? null;
-  const contractSize = state?.contractSizeUsdc ?? 1000;
-  const unitUsdc = state?.unitUsdc ?? 1;
 
   return (
     <OrderFormShell
@@ -478,34 +698,18 @@ export function FutureOrderFormPanel({
           </div>
         ) : null}
 
-        <div className="space-y-1">
-          <FormField
-            adornment={
-              <span className="flex items-center gap-2">
-                <span className="font-medium text-[12px] text-panel-text">USDC</span>
-                <button
-                  className="cursor-pointer font-medium text-[11px] text-accent-text hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={maxNotional < unitUsdc}
-                  onClick={() => edited(setSize)(String(maxNotional))}
-                  type="button"
-                >
-                  MAX
-                </button>
-              </span>
-            }
-            id="future-size"
-            label="Size"
-            onChange={edited(setSize)}
-            placeholder="0"
-            tooltip={`USDC of notional, in steps of ${SIZE.format(unitUsdc)} USDC. One contract is ${USD.format(contractSize)} USDC.`}
-            value={size}
-          />
-          <p className="text-[11px] text-panel-text-muted tabular-nums">
-            {units === null && size !== ""
-              ? `Whole steps of ${SIZE.format(unitUsdc)} USDC, at least ${SIZE.format(unitUsdc)}.`
-              : `Up to ${SIZE.format(maxNotional)} USDC on this side`}
-          </p>
-        </div>
+        <FutureSizeField
+          contractSize={contractSize}
+          fields={fields}
+          hasAccount={hasAccount}
+          maxNotional={maxNotional}
+          notional={notional}
+          onEdit={onEdit}
+          ticketPrice={ticketPrice}
+          unitUsdc={unitUsdc}
+          validSize={units !== null}
+        />
+        <FutureLeverageRow leverage={leverage.leverage} maxLeverage={leverage.maxLeverage} />
       </div>
     </OrderFormShell>
   );

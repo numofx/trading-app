@@ -280,6 +280,32 @@ export function estimateFutureOrder({
 }
 
 /**
+ * The account's leverage once an order leaves the position at `afterNotional` (USDC, signed): its
+ * size over the margin the engine credits the account, which is the initial margin surplus plus
+ * what the open position already holds at the initial rate. The engine opens up to 1 / its initial
+ * rate. There is no per-position leverage to set: the engine margins the account as a whole.
+ */
+export function estimateFutureLeverage({
+  account,
+  afterNotional,
+  state,
+}: {
+  account: FutureAccount | null;
+  afterNotional: number;
+  state: FutureState;
+}) {
+  if (account === null || !(account.imRate > 0)) {
+    return { leverage: null, maxLeverage: null };
+  }
+  const held = Math.abs(futureNotionalUsdc(toContracts(account.positionUnits), state));
+  const credited = account.initialMarginSurplus + held * account.imRate;
+  return {
+    leverage: credited > 0 ? Math.abs(afterNotional) / credited : null,
+    maxLeverage: 1 / account.imRate,
+  };
+}
+
+/**
  * The most USDC of notional the ticket offers on one side, in whole venue units: the position it
  * can close outright (reducing is always allowed), plus what the initial margin surplus opens at
  * the engine's rate with the taker fee on top. Zero without an account or its rates.
