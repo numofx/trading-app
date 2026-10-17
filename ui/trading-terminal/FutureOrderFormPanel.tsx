@@ -41,8 +41,8 @@ const ORDER_TYPES = ["Market", "Limit"] as const;
 type FutureOrderType = (typeof ORDER_TYPES)[number];
 
 const SIDES = [
-  { label: "Long", tone: "buy", value: "long" },
-  { label: "Short", tone: "sell", value: "short" },
+  { label: "Long", tone: "buy", tooltip: "Gains if the naira weakens", value: "long" },
+  { label: "Short", tone: "sell", tooltip: "Gains if the naira strengthens", value: "short" },
 ] as const;
 
 export type FutureOrderRequest = {

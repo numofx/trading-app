@@ -8,6 +8,8 @@ export type SideOption<T extends string> = {
   label: string;
   tone: SideTone;
   value: T;
+  /** What the side means in the trader's terms, shown on hover. */
+  tooltip?: string;
 };
 
 /**
@@ -38,6 +40,7 @@ export function SideToggle<T extends string>({
             )}
             key={option.value}
             onClick={() => onSelect(option.value)}
+            title={option.tooltip}
             type="button"
           >
             {option.label}
