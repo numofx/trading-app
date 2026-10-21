@@ -32,7 +32,7 @@ import type { DepositAddresses, DepositCurrency } from "@/lib/subaccount-deposit
  *   resolved and created under, for spot and the future. Only engine accounts may hold the
  *   future, and the engine credits the same cash and cNGN escrow spot settles into.
  * - `perpManager` is the perp StandardManager (SRM) `0xDE04…35D4`, where the perp winds down: the
- *   perp terminal (reached only at `/perp`) resolves its account under it, to close positions and
+ *   perp terminal (a 404 since its delisting, unless the venue lists it again) resolves its account under it, to close positions and
  *   withdraw. It was every account's manager from 2026-10-04 to 2026-10-13, so a wallet's spot balances from then sit
  *   in that account and leave from the perp's Balances tab. The two before it can never trade
  *   again: DeliverableFXManager `0xcE01…4d49` (settlement reverts `MW_UnknownManager`) and the

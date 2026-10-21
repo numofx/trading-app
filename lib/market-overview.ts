@@ -25,8 +25,8 @@ function spotEntry(id: SpotMarketId): TerminalMarketEntry {
 }
 
 /**
- * The perp, which is winding down: close-only on its old accounts, then withdrawals. It is out of
- * the selector and reachable at `/perp`; the entry names it in the header pill on its own page.
+ * The perp, delisted: out of the selector, and its page a 404 unless the venue lists it again. The
+ * entry names it in the header pill on its own page while it is listed.
  */
 const PERP_ENTRY = {
   href: marketPath("perp"),

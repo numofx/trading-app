@@ -19,7 +19,7 @@ For redirect and status-code checks use a production build, since `next dev` dif
 
 ```bash
 bun run build && MARKETS_SERVICE_URL=https://api.numofx.com na next start --port 3111
-curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' http://localhost:3111/perp
+curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' http://localhost:3111/trade/CNGN-USDC
 ```
 
 ## Routes
@@ -27,7 +27,8 @@ curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' http://localhost:3111/p
 Both markets render at `/trade/<slug>` under one shell (header, wallet, trading account, market
 selector) that stays mounted across a switch; only the market's panels are replaced.
 
-- `/trade/cngn-perp` — the perp, the default market. `/` and `/perp` redirect here (307).
+- `/` redirects (307) to the front-month future, or spot when none is listed.
+- `/trade/cngn-perp` — the perp, delisted: a 404 unless the venue lists it again. `/perp` is a 404.
 - `/trade/cngn-usdc` — spot.
 - Another casing of a slug is redirected to lowercase by `proxy.ts`; an unknown slug is a 404.
 - `/layout-fixture` and `/layout-fixture/perp` — dev-only fixtures with made-up figures (404 in
