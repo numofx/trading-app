@@ -20,6 +20,8 @@ import { parsePerpStack, parsePerpState } from "@/lib/perp-market";
 import type { PerpMarket } from "@/lib/perp-market.types";
 import type { LiveSpotRuntime } from "@/lib/spot-market";
 import { buildSpotMarket } from "@/lib/spot-market";
+import type { SpotPair } from "@/lib/spot-pairs";
+import { SPOT_PAIRS } from "@/lib/spot-pairs";
 import type { Candle } from "@/lib/trading.types";
 import { FutureMarketPanels } from "@/ui/trading-terminal/FutureMarketPanels";
 import { PerpMarketPanels } from "@/ui/trading-terminal/PerpMarketPanels";
@@ -50,7 +52,7 @@ function presentCandles(
 }
 
 /**
- * The stack `/v1/markets` serves spot on, for the ticket to sign against. Both addresses or nothing:
+ * The stack `/v1/markets` serves a spot pair on, for the ticket to sign against. Both addresses or nothing:
  * a module without its asset (or the reverse) would sign an order the venue refuses as a mismatch.
  */
 function presentOrderStack(
@@ -96,9 +98,12 @@ async function readMarketData(
   return { book, candles, stats24h, trades };
 }
 
-async function loadSpotMarket(interval: ChartInterval): Promise<LiveSpotRuntime | null> {
+async function loadSpotMarket(
+  pair: SpotPair,
+  interval: ChartInterval
+): Promise<LiveSpotRuntime | null> {
   try {
-    const spotMarket = await getLiveSpotMarket();
+    const spotMarket = await getLiveSpotMarket(pair.base);
     if (!(spotMarket?.asset_address && spotMarket.sub_id != null)) {
       return null;
     }
@@ -186,6 +191,17 @@ async function loadFutureMarket(
   };
 }
 
+/**
+ * A spot pair's panels. EURC-USDC carries no `ui_intent` echo: its engine side, USDC-per-EURC price
+ * and EURC size are already the trader's, so its open orders are read from the engine fields.
+ */
+async function renderSpotMarket(pair: SpotPair, interval: ChartInterval) {
+  const spotMarket = buildSpotMarket(await loadSpotMarket(pair, interval), {
+    engineFieldOrders: !pair.inverted,
+  });
+  return <SpotMarketPanels candleInterval={interval} pair={pair} spotMarket={spotMarket} />;
+}
+
 async function renderMarket(resolved: ResolvedMarket, interval: ChartInterval) {
   if (resolved.id === "perp") {
     return <PerpMarketPanels candleInterval={interval} market={await loadPerpMarket(interval)} />;
@@ -199,12 +215,7 @@ async function renderMarket(resolved: ResolvedMarket, interval: ChartInterval) {
       />
     );
   }
-  return (
-    <SpotMarketPanels
-      candleInterval={interval}
-      spotMarket={buildSpotMarket(await loadSpotMarket(interval))}
-    />
-  );
+  return await renderSpotMarket(SPOT_PAIRS[resolved.id], interval);
 }
 
 /**

@@ -1,6 +1,8 @@
 import {
   getCngnAssetAddress,
   getCngnTokenAddress,
+  getEurcAssetAddress,
+  getEurcTokenAddress,
   getUsdcTokenAddress,
   getWrappedUsdcAssetAddress,
 } from "@/lib/subaccount-deposit-config";
@@ -26,7 +28,8 @@ export type WithdrawableAsset = {
 
 /**
  * Everything an account can withdraw, in display order: the wrapped-USDC escrow the spot engine
- * settles in, then cNGN. The same on Base mainnet and Sepolia.
+ * settles in, then cNGN, then EURC where its escrow is configured. The same on Base mainnet and
+ * Sepolia.
  *
  * The legacy USDC CashAsset (`0x6B232A21…6fc6`), which spot settled in before 2026-09-10, is
  * deliberately not offered. Its ledger claims far exceed the USDC it holds, so a withdrawal from it
@@ -34,6 +37,8 @@ export type WithdrawableAsset = {
  * balance to go looking for. Do not add it back until that escrow can pay out.
  */
 export function getWithdrawableAssets(): WithdrawableAsset[] {
+  const eurcEscrow = getEurcAssetAddress();
+  const eurcToken = getEurcTokenAddress();
   return [
     {
       escrow: getWrappedUsdcAssetAddress(),
@@ -49,6 +54,9 @@ export function getWithdrawableAssets(): WithdrawableAsset[] {
       symbol: "cNGN",
       token: getCngnTokenAddress(),
     },
+    ...(eurcEscrow === null || eurcToken === null
+      ? []
+      : [{ escrow: eurcEscrow, id: "eurc", label: "EURC", symbol: "EURC", token: eurcToken }]),
   ];
 }
 

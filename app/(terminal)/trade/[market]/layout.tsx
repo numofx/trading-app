@@ -1,9 +1,10 @@
 import type { Route } from "next";
 import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
-import { findFutureBySymbol } from "@/lib/market-pickers";
+import { findFutureBySymbol, findSpotMarket } from "@/lib/market-pickers";
 import { resolveMarketSlug } from "@/lib/market-routes";
 import { getMarketsServiceMarkets } from "@/lib/markets-service";
+import { SPOT_PAIRS } from "@/lib/spot-pairs";
 
 /**
  * Whether the venue lists the future series `symbol`. A venue it cannot read is given the benefit
@@ -19,8 +20,20 @@ async function isListedFuture(symbol: string) {
 }
 
 /**
- * Answers for the slug before anything streams: a future slug is a 404 unless the venue lists
- * that series. The page below sits behind `loading.tsx`, so the
+ * Whether the venue lists EURC-USDC, with the same benefit of the doubt: it is listed only once its
+ * escrow is configured on markets-service, and until then its route is not a market.
+ */
+async function isListedEurcSpot() {
+  try {
+    return findSpotMarket(await getMarketsServiceMarkets(), SPOT_PAIRS.eurc.base) !== null;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Answers for the slug before anything streams: a future slug, or EURC-USDC's, is a 404 unless the
+ * venue lists that market. The page below sits behind `loading.tsx`, so the
  * shell and its skeleton are flushed before the page runs, and a `notFound()` or `redirect()`
  * thrown there arrives after the headers as a 200 with a meta refresh. A layout renders ahead of
  * that boundary, so an unknown slug is a real 404 here.
@@ -47,6 +60,9 @@ export default async function MarketLayout({
     redirect(resolved.redirect as Route);
   }
   if (resolved.id === "future" && !(await isListedFuture(resolved.symbol))) {
+    notFound();
+  }
+  if (resolved.id === "eurc" && !(await isListedEurcSpot())) {
     notFound();
   }
   return children;

@@ -11,15 +11,12 @@ import {
   getMarketSizingPrice,
   getOrderCost,
   SPOT_MARKET_SLIPPAGE,
-  toOrderSizeCngn,
+  toOrderSizeBase,
 } from "@/lib/spot-market";
 import { SPOT_TAKER_FEE_RATE } from "@/lib/spot-order-submission";
-import {
-  engineLimitPrice,
-  engineSide,
-  invertPrice,
-  SPOT_PRICE_DECIMALS,
-} from "@/lib/spot-orientation";
+import type { SpotOrientation } from "@/lib/spot-orientation";
+import { spotOrientation } from "@/lib/spot-orientation";
+import type { SpotBase, SpotPair } from "@/lib/spot-pairs";
 import type { OrderBookLevel, SpotOpenOrder } from "@/lib/trading.types";
 import { ConfirmOrderDialog } from "@/ui/trading-terminal/ConfirmOrderDialog";
 import { OrderTypeTabs } from "@/ui/trading-terminal/OrderTypeTabs";
@@ -42,7 +39,7 @@ import { TokenUnit, TokenUnitSelect } from "@/ui/trading-terminal/order-form/Tok
  * has no flag for either. Every control on this ticket changes the order that gets signed.
  */
 type SpotOrderType = "Limit" | "Market";
-type PayCurrency = "cNGN" | "USDC";
+type PayCurrency = SpotBase | "USDC";
 
 const ORDER_TYPES = ["Market", "Limit"] as const satisfies readonly SpotOrderType[];
 
@@ -52,24 +49,27 @@ const SIDES = [
 ] as const;
 
 /**
- * The units the Size field can be counted in, the market's base first: USDC is what a buy of USDC
- * receives or a sell delivers; cNGN is the other leg, and what the engine signs and rests.
+ * The units the Size field can be counted in, the displayed base first: on USDC-cNGN, USDC is what
+ * a buy of USDC receives or a sell delivers and cNGN the other leg; on EURC-USDC, EURC then USDC.
+ * Whichever it is, the engine signs and rests the pair's base.
  */
-const SIZE_UNITS = ["USDC", "cNGN"] as const satisfies readonly PayCurrency[];
+function sizeUnits(pair: SpotPair): readonly PayCurrency[] {
+  return [pair.displayBase, pair.displayQuote];
+}
 
 /** A signed decimal string as a number, or null without one. */
 function toNumberOrNull(value: string | null) {
   return value === null ? null : Number(value);
 }
 
-/** The cNGN the order is signed for, whole as the engine rests it; null before a size is entered. */
-function toCngnLeg(sizeCngn: number) {
-  return Number.isFinite(sizeCngn) ? Math.floor(sizeCngn) : null;
+/** The base the order is signed for, whole as the engine rests it; null before a size is entered. */
+function toBaseLeg(sizeBase: number) {
+  return Number.isFinite(sizeBase) ? Math.floor(sizeBase) : null;
 }
 
-/** A cNGN-per-USDC price as the ticket shows it: two decimals, as on the future. */
-function formatSpotPrice(cngnPerUsdc: number | null) {
-  return formatMarketPrice(cngnPerUsdc, SPOT_PRICE_DECIMALS);
+/** A displayed price as the ticket shows it: cNGN per USDC to two decimals, USDC per EURC to five. */
+function formatSpotPrice(price: number | null, pair: SpotPair) {
+  return formatMarketPrice(price, pair.priceDecimals);
 }
 
 /** The signed ceiling as basis points, derived from the rate the order is signed with. */
@@ -84,8 +84,8 @@ function venueFee(amountUsdc: number, takerFeeBps: number | null): number | null
 }
 
 /**
- * A USDC-per-cNGN price as the decimal string an envelope or a field takes: ten places hold the
- * engine's resolution for any price this pair trades at, and `toFixed` never falls into the
+ * A USDC-per-base price as the decimal string an envelope or a field takes: ten places hold the
+ * engine's resolution for any price these pairs trade at, and `toFixed` never falls into the
  * scientific notation `String(1e-7)` produces, which the envelope's parser rejects.
  */
 function toPriceString(price: number) {
@@ -129,37 +129,43 @@ function parseAmount(value: string) {
 }
 
 /**
- * Copy and rows for the submit confirmation, in the trader's terms: a buy of USDC pays cNGN for
- * it, a sell of USDC delivers it for cNGN. Lives outside the component so its branching does not
- * count against the panel's cognitive complexity budget.
+ * Copy and rows for the submit confirmation, in the trader's terms: on USDC-cNGN a buy of USDC pays
+ * cNGN for it; on EURC-USDC a buy of EURC pays USDC. In the engine's terms an engine buy always pays
+ * USDC for the base. Lives outside the component so its branching does not count against the
+ * panel's cognitive complexity budget.
  */
 function buildSpotConfirmation({
-  cngnLabel,
+  baseLabel,
+  engineSide,
   isBuy,
+  pair,
   takerFeeLabel,
   venueFeeLabel,
   usdcLabel,
 }: {
-  /** The cNGN leg: what a buy of USDC pays, what a sell of it receives. */
-  cngnLabel: string;
-  /** A buy of USDC. */
+  /** The base leg (cNGN, EURC): what an engine sell pays, what an engine buy receives. */
+  baseLabel: string;
+  engineSide: "buy" | "sell";
+  /** A buy of the displayed base. */
   isBuy: boolean;
+  pair: SpotPair;
   takerFeeLabel: string;
   /** The charge the venue reported for this size, or null when it reported no schedule. */
   venueFeeLabel: string | null;
-  /** The USDC leg: what a buy receives, what a sell delivers. */
+  /** The USDC leg: what an engine buy pays, what an engine sell receives. */
   usdcLabel: string;
 }) {
   const action = isBuy ? "buy" : "sell";
+  const isEngineBuy = engineSide === "buy";
 
   return {
     confirmLabel: `Confirm ${action}`,
-    directionLabel: isBuy ? "Buy USDC" : "Sell USDC",
-    sizeLabel: usdcLabel,
+    directionLabel: `${isBuy ? "Buy" : "Sell"} ${pair.displayBase}`,
+    sizeLabel: pair.displayBase === "USDC" ? usdcLabel : baseLabel,
     title: `Confirm ${action}`,
     summaryRows: [
-      { label: "You pay", value: isBuy ? cngnLabel : usdcLabel },
-      { label: "You receive", value: isBuy ? usdcLabel : cngnLabel },
+      { label: "You pay", value: isEngineBuy ? usdcLabel : baseLabel },
+      { label: "You receive", value: isEngineBuy ? baseLabel : usdcLabel },
       // The charge first, the ceiling under it. The ceiling was the only row here when the venue
       // charged nothing; now that it charges, leading with it would quote a number no fill hits.
       ...(venueFeeLabel === null ? [] : [{ label: "Taker fee", value: venueFeeLabel }]),
@@ -172,7 +178,7 @@ function buildSpotConfirmation({
 }
 
 /**
- * A USDC amount: the order's total (its cNGN size at its price) and the fees charged on it. Four
+ * A USDC amount: the order's total (its base size at its price) and the fees charged on it. Four
  * places because a small order's fee is fractions of a cent, and two because a round figure
  * should still read as money.
  */
@@ -247,9 +253,10 @@ function resolveSizingPrice({
  */
 function deriveOrderEconomics({
   asks,
+  base,
   bids,
-  sizeCngn,
-  availableCngn,
+  sizeBase,
+  availableBase,
   availableUsdc,
   bestAsk,
   bestBid,
@@ -259,10 +266,12 @@ function deriveOrderEconomics({
   takerFeeBps,
 }: {
   asks: OrderBookLevel[];
+  /** The pair's base: what an engine sell spends. */
+  base: SpotBase;
   bids: OrderBookLevel[];
-  /** The order size in cNGN, already converted from whichever unit the Size field is in. */
-  sizeCngn: number;
-  availableCngn: number | null;
+  /** The order size in the base, already converted from whichever unit the Size field is in. */
+  sizeBase: number;
+  availableBase: number | null;
   availableUsdc: number | null;
   bestAsk: number | null;
   bestBid: number | null;
@@ -273,20 +282,20 @@ function deriveOrderEconomics({
   takerFeeBps: number | null;
 }) {
   const crossingPrice = getCrossingPrice(side, bestAsk, bestBid);
-  const hasAmount = Number.isFinite(sizeCngn);
+  const hasAmount = Number.isFinite(sizeBase);
   /*
    * What a market order of this size would really fill at, walked through the resting depth. The
    * touch is only the first level: on a thin book the rest of the order fills behind it, so
    * quoting the touch understates the cost precisely when it matters most.
    */
-  const fill = orderType === "Market" ? getMarketFill(side, asks, bids, sizeCngn) : null;
+  const fill = orderType === "Market" ? getMarketFill(side, asks, bids, sizeBase) : null;
   // A market order costs what it crosses at — the walked average where the book can price it,
   // the touch until a size has been entered.
   const effectivePrice =
     orderType === "Market" ? (fill?.averagePrice ?? crossingPrice) : parseAmount(limitPrice);
   const hasPrice = effectivePrice !== null && Number.isFinite(effectivePrice);
-  // The USDC leg: what an engine buy of cNGN pays, what an engine sell receives.
-  const total = hasPrice && hasAmount ? sizeCngn * (effectivePrice as number) : null;
+  // The USDC leg: what an engine buy of the base pays, what an engine sell receives.
+  const total = hasPrice && hasAmount ? sizeBase * (effectivePrice as number) : null;
 
   const enteredPrice = hasPrice ? (effectivePrice as number) : null;
   // A market order is signed through the touch, so a moving quote cannot strand it as a resting limit.
@@ -305,8 +314,8 @@ function deriveOrderEconomics({
     signedPrice,
   });
 
-  const cost = getOrderCost(side, sizingPrice, sizeCngn);
-  const availableForCost = cost?.currency === "USDC" ? availableUsdc : availableCngn;
+  const cost = getOrderCost(side, sizingPrice, sizeBase, base);
+  const availableForCost = cost?.currency === "USDC" ? availableUsdc : availableBase;
   /*
    * A shortfall, not a rejection: the venue accepts an order the account cannot cover, rests it,
    * and lets it expire unfilled — which reads as the order vanishing. Catching it here is the only
@@ -317,9 +326,9 @@ function deriveOrderEconomics({
       ? { currency: cost.currency, held: availableForCost, needed: cost.amount }
       : null;
 
-  // The ceiling is signed per cNGN at the signed price, so it is counted on the size at that
-  // price: the most the order can be charged, whatever it actually fills at.
-  const signedNotional = hasAmount && signedPrice !== null ? sizeCngn * signedPrice : 0;
+  // The ceiling is signed per unit of base at the signed price, so it is counted on the size at
+  // that price: the most the order can be charged, whatever it actually fills at.
+  const signedNotional = hasAmount && signedPrice !== null ? sizeBase * signedPrice : 0;
 
   return {
     // Surfaced beside the fill itself so the panel never has to reach through it.
@@ -341,7 +350,7 @@ function deriveOrderEconomics({
  * account preparation: once a submission starts, that is the more specific thing to wait on.
  *
  * A shortfall comes last and turns the button into the remedy rather than switching it off. A
- * disabled "Sell cNGN" is a dead control: it states that the order cannot be placed and offers
+ * disabled "Sell USDC" is a dead control: it states that the order cannot be placed and offers
  * nothing to do about it, which is the one blocker on this ticket the trader can clear themselves.
  */
 function getSpotSubmitLabel({
@@ -374,15 +383,15 @@ function getSpotSubmitLabel({
 }
 
 /**
- * Rounds a derived size *down* to what the field holds in that unit: whole cNGN, since that is what
- * the engine rests (the signer floors a fraction anyway, so showing one would misstate the order);
- * four decimals of USDC.
+ * Rounds a derived size *down* to what the field holds in that unit: a whole base (cNGN, EURC),
+ * since that is what the engine rests (the signer floors a fraction anyway, so showing one would
+ * misstate the order); four decimals of USDC.
  *
  * `toFixed` rounds to nearest, which can land a hair above what the account holds — and a hair is
  * enough for the ticket to call the order unaffordable. Flooring keeps a derived size affordable.
  */
 function toAffordableSize(size: number, unit: PayCurrency) {
-  if (unit === "cNGN") {
+  if (unit !== "USDC") {
     return Math.floor(size).toFixed(0);
   }
   return (Math.floor(size * 10_000) / 10_000).toFixed(4);
@@ -397,26 +406,28 @@ function toAffordableSize(size: number, unit: PayCurrency) {
  */
 function getCounterpart({
   averagePrice,
+  base,
   conversionPrice,
-  sizeCngn,
+  sizeBase,
   unit,
 }: {
   /** The walked fill average, where the book has one; it is what the Total is priced at. */
   averagePrice: number | null;
+  base: SpotBase;
   conversionPrice: number | null;
-  sizeCngn: number;
+  sizeBase: number;
   unit: PayCurrency;
 }) {
-  const currency: PayCurrency = unit === "cNGN" ? "USDC" : "cNGN";
+  const currency: PayCurrency = unit === "USDC" ? base : "USDC";
   // The same price the Total uses, so the two are one quantity rather than two nearby ones.
   const price = averagePrice ?? conversionPrice;
 
-  if (!Number.isFinite(sizeCngn) || price === null) {
+  if (!Number.isFinite(sizeBase) || price === null) {
     return formatBalance(null, currency);
   }
 
-  // Entered in USDC, `sizeCngn` is already the counterpart; entered in cNGN, it has to be priced.
-  return formatBalance(unit === "cNGN" ? sizeCngn * price : sizeCngn, currency);
+  // Entered in USDC, `sizeBase` is already the counterpart; entered in the base, it has to be priced.
+  return formatBalance(unit === "USDC" ? sizeBase : sizeBase * price, currency);
 }
 
 /**
@@ -435,8 +446,8 @@ function convertAmountToUnit(amount: number, nextUnit: PayCurrency, price: numbe
 /**
  * How the Size field is denominated, and the order that entry describes.
  *
- * Everything downstream works in cNGN — the ceiling, the cost, the fee, the signed envelope — so
- * this is where a USDC entry becomes a cNGN size, once, rather than at each of those call sites.
+ * Everything downstream works in the base — the ceiling, the cost, the fee, the signed envelope —
+ * so this is where a USDC entry becomes a base size, once, rather than at each of those call sites.
  * The counterpart shown under the field is priced later, off the walked average this size produces.
  */
 function deriveAmountEntry({
@@ -453,7 +464,7 @@ function deriveAmountEntry({
   anchorPrice: number | null;
   bestAsk: number | null;
   bestBid: number | null;
-  /** The limit the order is signed at, USDC per cNGN; null without a typed limit. */
+  /** The limit the order is signed at, USDC per base; null without a typed limit. */
   engineLimit: number | null;
   isMarket: boolean;
   side: "buy" | "sell";
@@ -462,12 +473,12 @@ function deriveAmountEntry({
   const activeUnit = unit;
   const parsedAmount = parseAmount(amount);
   if (!isMarket) {
-    // A limit order's legs are counted at its own limit: USDC at the price typed is that many cNGN.
+    // A limit order's legs are counted at its own limit: USDC at the price typed is that much base.
     return {
       activeUnit,
       conversionPrice: engineLimit,
       parsedAmount,
-      sizeCngn: toOrderSizeCngn(parsedAmount, activeUnit, engineLimit),
+      sizeBase: toOrderSizeBase(parsedAmount, activeUnit, engineLimit),
     };
   }
   /*
@@ -482,9 +493,9 @@ function deriveAmountEntry({
       getCrossingPrice(side, bestAsk, bestBid),
       getMarketableLimitPrice(side, bestAsk, bestBid)
     ) ?? anchorPrice;
-  const sizeCngn = toOrderSizeCngn(parsedAmount, activeUnit, conversionPrice);
+  const sizeBase = toOrderSizeBase(parsedAmount, activeUnit, conversionPrice);
 
-  return { activeUnit, conversionPrice, parsedAmount, sizeCngn };
+  return { activeUnit, conversionPrice, parsedAmount, sizeBase };
 }
 
 /**
@@ -498,15 +509,24 @@ function ConversionLine({ label }: { label: string }) {
 
 /**
  * The limit as the engine signs it, USDC per cNGN, under the cNGN-per-USDC field: rounded so the
- * order never trades past the limit typed. Only under a price field; an em dash without one.
+ * order never trades past the limit typed. Only under a price field on a pair shown the other way
+ * up; EURC-USDC signs the limit typed. An em dash without one.
  */
-function EnginePriceLine({ isMarket, price }: { isMarket: boolean; price: number | null }) {
-  if (isMarket) {
+function EnginePriceLine({
+  isMarket,
+  pair,
+  price,
+}: {
+  isMarket: boolean;
+  pair: SpotPair;
+  price: number | null;
+}) {
+  if (isMarket || !pair.inverted) {
     return null;
   }
   return (
     <p className="text-[11px] text-panel-text-muted">
-      {price === null ? "—" : `${formatUsdcPrice(price)} per cNGN, as signed`}
+      {price === null ? "—" : `${formatUsdcPrice(price)} per ${pair.base}, as signed`}
     </p>
   );
 }
@@ -520,9 +540,13 @@ function EnginePriceLine({ isMarket, price }: { isMarket: boolean; price: number
 function ExpectedPriceRow({
   averagePrice,
   isMarket,
+  orientation,
+  pair,
 }: {
   averagePrice: number | null;
   isMarket: boolean;
+  orientation: SpotOrientation;
+  pair: SpotPair;
 }) {
   if (!isMarket) {
     return null;
@@ -531,7 +555,7 @@ function ExpectedPriceRow({
     <SummaryRow
       label="Expected Price"
       tooltip="Where a market order of this size is expected to fill, walked through the resting book"
-      value={formatSpotPrice(invertPrice(averagePrice))}
+      value={formatSpotPrice(orientation.price(averagePrice), pair)}
     />
   );
 }
@@ -603,12 +627,16 @@ function FeeRow({ ceiling, charged }: { ceiling: number; charged: number | null 
  */
 function getOwnCrossingNote({
   hasWallet,
+  orientation,
   ownOrders,
+  pair,
   side,
   signedPrice,
 }: {
   hasWallet: boolean;
+  orientation: SpotOrientation;
   ownOrders: readonly SpotOpenOrder[];
+  pair: SpotPair;
   side: "buy" | "sell";
   signedPrice: number | null;
 }) {
@@ -619,9 +647,9 @@ function getOwnCrossingNote({
   if (order === null) {
     return null;
   }
-  // the resting order in the trader's terms: an engine buy of cNGN is their sell of USDC
-  const restingSide = engineSide(order.side);
-  return `This would trade against your own resting ${restingSide} at ${formatSpotPrice(invertPrice(order.price))}, which can't settle. Cancel it in Open Orders or change the price.`;
+  // the resting order in the trader's terms: on USDC-cNGN an engine buy of cNGN is their sell of USDC
+  const restingSide = orientation.side(order.side);
+  return `This would trade against your own resting ${restingSide} at ${formatSpotPrice(orientation.price(order.price), pair)}, which can't settle. Cancel it in Open Orders or change the price.`;
 }
 
 /** Why an order that would trade against the trader's own resting order is not signable; nothing otherwise. */
@@ -642,18 +670,20 @@ function getSubmitBlock(isBusy: boolean, ownCrossingNote: string | null) {
 }
 
 /**
- * The Size field: the USDC the order buys or sells, or the cNGN it pays or receives. Either way the
- * other leg is shown underneath, and the engine signs whole cNGN.
+ * The Size field: the displayed base the order buys or sells, or the other leg it pays or receives.
+ * Either way the other leg is shown underneath, and the engine signs the whole base.
  */
 function AmountField({
   amount,
   onChange,
   onUnitSelect,
+  pair,
   unit,
 }: {
   amount: string;
   onChange: (value: string) => void;
   onUnitSelect: (unit: PayCurrency) => void;
+  pair: SpotPair;
   unit: PayCurrency;
 }) {
   return (
@@ -662,7 +692,7 @@ function AmountField({
         <TokenUnitSelect
           label={`Size in ${unit} — switch currency`}
           onSelect={(next) => next !== unit && onUnitSelect(next)}
-          options={SIZE_UNITS}
+          options={sizeUnits(pair)}
           selected={unit}
         />
       }
@@ -670,7 +700,7 @@ function AmountField({
       label="Size"
       onChange={onChange}
       placeholder="0"
-      tooltip="The USDC the order buys or sells, or the cNGN it pays or receives; the other leg is shown underneath. The engine signs whole cNGN."
+      tooltip={`The ${pair.displayBase} the order buys or sells, or the ${pair.displayQuote} it pays or receives; the other leg is shown underneath. The engine signs whole ${pair.base}.`}
       value={amount}
     />
   );
@@ -696,7 +726,7 @@ function getSubmitTone({
 export function SpotOrderFormPanel({
   anchorPrice,
   asks,
-  availableCngn,
+  availableBase,
   availableUsdc,
   bestAsk,
   bestBid,
@@ -705,6 +735,7 @@ export function SpotOrderFormPanel({
   onEdit,
   onSubmitOrder,
   ownOpenOrders = [],
+  pair,
   takerFeeBps,
   isPreparingAccount = false,
   hasWallet = false,
@@ -728,8 +759,10 @@ export function SpotOrderFormPanel({
    * to arrive separately, and the label was the *balance* while the number was the spendable part,
    * so a trader with orders resting read a figure the order could not actually spend.
    */
-  availableCngn: number | null;
+  availableBase: number | null;
   availableUsdc: number | null;
+  /** The spot pair the ticket trades: its base, and which way up the trader sees it. */
+  pair: SpotPair;
   /**
    * The venue's taker fee, in basis points of the quote notional, exactly as /v1/markets reports
    * it. Null means the API did not report one — the fee is then unknown, not zero, and the ticket
@@ -747,7 +780,7 @@ export function SpotOrderFormPanel({
   onDepositRequest?: (currency?: PayCurrency) => void;
   /** Any change to the ticket: the host clears the order status line on it. */
   onEdit?: () => void;
-  /** `price` is USDC per cNGN and `size` is whole cNGN, both as decimal strings. */
+  /** `price` is USDC per base and `size` is the whole base, both as decimal strings. */
   onSubmitOrder: (args: {
     side: "buy" | "sell";
     price: string;
@@ -766,17 +799,19 @@ export function SpotOrderFormPanel({
   isSubmitting?: boolean;
   lastAction?: string | null;
 }) {
-  // The trader's side: a buy or sell of USDC, for cNGN. `side` below is the engine's, the other way.
+  const orientation = spotOrientation(pair);
+  // The trader's side: a buy or sell of the displayed base. `side` below is the engine's, which on
+  // USDC-cNGN is the other way.
   const [uiSide, setUiSide] = useState<"buy" | "sell">("buy");
   const [orderType, setOrderType] = useState<SpotOrderType>("Market");
-  // In cNGN per USDC. Seeded from the mid, not the last trade: a prefill past the touch turns the
-  // trader's chosen "Limit" into a taker on submit, an immediate fill at the taker tier.
+  // In the displayed quote per base. Seeded from the mid, not the last trade: a prefill past the
+  // touch turns the trader's chosen "Limit" into a taker on submit, an immediate fill at the taker tier.
   const [limitPrice, setLimitPrice] = useState(
-    invertPrice(anchorPrice)?.toFixed(SPOT_PRICE_DECIMALS) ?? ""
+    orientation.price(anchorPrice)?.toFixed(pair.priceDecimals) ?? ""
   );
   const [amount, setAmount] = useState("10");
-  // Which leg the Size field is counted in: the USDC bought or sold, or the cNGN paid or received.
-  const [amountUnit, setAmountUnit] = useState<PayCurrency>("USDC");
+  // Which leg the Size field is counted in: the displayed base bought or sold, or the other leg.
+  const [amountUnit, setAmountUnit] = useState<PayCurrency>(pair.displayBase);
   const [confirmOpen, setConfirmOpen] = useState(false);
   /** Wraps a field setter so every edit also tells the host. */
   function edited<T>(set: (value: T) => void) {
@@ -786,17 +821,17 @@ export function SpotOrderFormPanel({
     };
   }
 
-  // Everything below works in the engine's terms: its side, USDC per cNGN, sizes in cNGN.
-  const side = engineSide(uiSide);
+  // Everything below works in the engine's terms: its side, USDC per base, sizes in the base.
+  const side = orientation.side(uiSide);
   const isBuy = uiSide === "buy";
   const needsLimitPrice = orderType !== "Market";
   const isMarket = orderType === "Market";
-  // The limit as signed, USDC per cNGN, rounded never to trade past the cNGN-per-USDC limit typed.
-  const engineLimit = engineLimitPrice(limitPrice, uiSide);
+  // The limit as signed, USDC per base, rounded never to trade past the limit typed.
+  const engineLimit = orientation.limit(limitPrice, uiSide);
   const signedLimit = toNumberOrNull(engineLimit);
-  // The leg the order spends: a buy of USDC pays cNGN, a sell delivers the USDC itself.
-  const spendCurrency: PayCurrency = isBuy ? "cNGN" : "USDC";
-  const { activeUnit, conversionPrice, parsedAmount, sizeCngn } = deriveAmountEntry({
+  // The leg the order spends: an engine buy pays USDC, an engine sell delivers the base.
+  const spendCurrency: PayCurrency = side === "buy" ? "USDC" : pair.base;
+  const { activeUnit, conversionPrice, parsedAmount, sizeBase } = deriveAmountEntry({
     amount,
     anchorPrice,
     bestAsk,
@@ -807,7 +842,7 @@ export function SpotOrderFormPanel({
     unit: amountUnit,
   });
   const availableLabel = formatBalanceFigure(
-    spendCurrency === "USDC" ? availableUsdc : availableCngn,
+    spendCurrency === "USDC" ? availableUsdc : availableBase,
     spendCurrency
   );
   const {
@@ -821,29 +856,34 @@ export function SpotOrderFormPanel({
     totalLabel,
   } = deriveOrderEconomics({
     asks,
-    availableCngn,
+    availableBase,
     availableUsdc,
+    base: pair.base,
     bestAsk,
     bestBid,
     bids,
     limitPrice: engineLimit ?? "",
     orderType,
     side,
-    sizeCngn,
+    sizeBase,
     takerFeeBps,
   });
 
   const counterpartLabel = getCounterpart({
     averagePrice,
+    base: pair.base,
     conversionPrice,
-    sizeCngn,
+    sizeBase,
     unit: activeUnit,
   });
 
-  const cngnLeg = toCngnLeg(sizeCngn);
+  const baseLeg = toBaseLeg(sizeBase);
+  const baseLegLabel = formatBalance(baseLeg, pair.base);
   const confirmation = buildSpotConfirmation({
-    cngnLabel: formatBalance(cngnLeg, "cNGN"),
+    baseLabel: baseLegLabel,
+    engineSide: side,
     isBuy,
+    pair,
     takerFeeLabel: formatUsdcAmount(takerFee),
     usdcLabel: totalLabel,
     venueFeeLabel: feeFromVenue === null ? null : formatUsdcAmount(feeFromVenue),
@@ -861,7 +901,9 @@ export function SpotOrderFormPanel({
 
   const ownCrossingNote = getOwnCrossingNote({
     hasWallet,
+    orientation,
     ownOrders: ownOpenOrders,
+    pair,
     side,
     signedPrice,
   });
@@ -887,14 +929,14 @@ export function SpotOrderFormPanel({
       orderType,
       price: resolveOrderPrice({ limitPrice: engineLimit ?? "", orderType, sizingPrice }),
       side,
-      // Always whole cNGN: the signed envelope carries no other unit, so a USDC-denominated ticket
-      // is converted here rather than sending the figure the trader typed.
-      size: toAffordableSize(sizeCngn, "cNGN"),
+      // Always the whole base: the signed envelope carries no other unit, so a USDC-denominated
+      // ticket is converted here rather than sending the figure the trader typed.
+      size: toAffordableSize(sizeBase, pair.base),
     });
   }
 
   const statusText = lastAction;
-  const sideLabel = isBuy ? "Buy USDC" : "Sell USDC";
+  const sideLabel = `${isBuy ? "Buy" : "Sell"} ${pair.displayBase}`;
   // Both states block submission, but they are not the same thing: "Submitting…" on a button the
   // user never pressed reads as a stuck order rather than a subaccount lookup still in flight.
   const isBusy = isSubmitting || isPreparingAccount;
@@ -915,17 +957,23 @@ export function SpotOrderFormPanel({
       footer={
         <>
           {/*
-           * One total, not a Subtotal/Total pair: the USDC a buy pays or a sell receives for its
-           * cNGN, with the fee charged on it listed separately. Printing a fee-inclusive total as
-           * well cost the Size field its rows on a 700px screen.
+           * One total, not a Subtotal/Total pair: the displayed quote a buy pays or a sell receives
+           * (the cNGN on USDC-cNGN, the USDC on EURC-USDC), with the fee charged on it listed
+           * separately. Printing a fee-inclusive total as well cost the Size field its rows on a
+           * 700px screen.
            */}
           <div className="space-y-0.5">
-            <ExpectedPriceRow averagePrice={averagePrice} isMarket={isMarket} />
+            <ExpectedPriceRow
+              averagePrice={averagePrice}
+              isMarket={isMarket}
+              orientation={orientation}
+              pair={pair}
+            />
             <SummaryRow
               emphasis
               label="Order Value"
-              tooltip="The cNGN this order pays for its USDC, or receives for it"
-              value={formatBalance(cngnLeg, "cNGN")}
+              tooltip={`The ${pair.displayQuote} this order pays for its ${pair.displayBase}, or receives for it`}
+              value={pair.displayQuote === "USDC" ? totalLabel : baseLegLabel}
             />
             <FeeRow ceiling={takerFee} charged={feeFromVenue} />
             <SlippageRow isMarket={isMarket} />
@@ -983,7 +1031,7 @@ export function SpotOrderFormPanel({
       {/*
        * The balance an order draws on is the trading account's, not the connected wallet's, so
        * this is the number that answers "can I place this?". The currency follows the side,
-       * because so does the balance an order spends: a buy of USDC pays cNGN, a sell pays USDC.
+       * because so does the balance an order spends: an engine buy pays USDC, a sell the base.
        */}
       <AvailableRow
         depositLabel={`Deposit ${spendCurrency}`}
@@ -997,31 +1045,34 @@ export function SpotOrderFormPanel({
         <FormField
           adornment={
             <span className="flex items-center gap-2">
-              {/* The trader's touch: their best bid for USDC is the engine's best ask inverted. */}
+              {/*
+               * The trader's touch, on the engine side the order rests: on USDC-cNGN their best bid
+               * for USDC is the engine's best ask inverted.
+               */}
               <PriceQuickFill
                 bestLabel={isBuy ? "BID" : "ASK"}
-                bestPrice={invertPrice(isBuy ? bestAsk : bestBid)}
-                midPrice={invertPrice(anchorPrice)}
-                onSelect={(price) => edited(setLimitPrice)(price.toFixed(SPOT_PRICE_DECIMALS))}
+                bestPrice={orientation.price(side === "buy" ? bestBid : bestAsk)}
+                midPrice={orientation.price(anchorPrice)}
+                onSelect={(price) => edited(setLimitPrice)(price.toFixed(pair.priceDecimals))}
               />
-              <TokenUnit symbol="cNGN" />
+              <TokenUnit symbol={pair.displayQuote} />
             </span>
           }
           id="spot-limit-price"
           label="Limit price"
           onChange={edited(setLimitPrice)}
           placeholder="0.00"
-          tooltip="cNGN per USDC. Seeded from the mid, which cannot cross on either side."
+          tooltip={`${pair.displayQuote} per ${pair.displayBase}. Seeded from the mid, which cannot cross on either side.`}
           value={limitPrice}
         />
       ) : null}
 
-      <EnginePriceLine isMarket={isMarket} price={signedLimit} />
+      <EnginePriceLine isMarket={isMarket} pair={pair} price={signedLimit} />
 
       {/*
-       * Sized in USDC, the market's base, or in cNGN. Only whole cNGN is submittable, so a USDC
-       * entry is converted at the price the order crosses at (a market order) or at its limit; the
-       * line under the field shows the other leg either way.
+       * Sized in the displayed base or the other leg. Only the whole engine base is submittable, so
+       * a USDC entry is converted at the price the order crosses at (a market order) or at its
+       * limit; the line under the field shows the other leg either way.
        */}
       <AmountField
         amount={amount}
@@ -1030,6 +1081,7 @@ export function SpotOrderFormPanel({
           onEdit?.();
           handleUnitSelect(unit);
         }}
+        pair={pair}
         unit={activeUnit}
       />
 

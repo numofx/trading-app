@@ -8,7 +8,9 @@ import type {
   OrderHistoryStatus,
 } from "@/lib/order-history.types";
 import { sideTone } from "@/lib/side-tone";
-import { engineSide } from "@/lib/spot-orientation";
+import { spotOrientation } from "@/lib/spot-orientation";
+import type { SpotPair } from "@/lib/spot-pairs";
+import { SPOT_PAIRS } from "@/lib/spot-pairs";
 import type {
   ActivityRow,
   ActivityView,
@@ -66,26 +68,41 @@ export function buildOpenOrdersActivityView(
   };
 }
 
-/** Prices in cNGN per USDC, spot's quote and the future's: two decimals. */
-function formatCngnPerUsdc(price: number) {
-  return Number.isFinite(price)
-    ? price.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 })
-    : UNKNOWN_BALANCE;
-}
-
 function formatUsdcSize(size: number) {
   return Number.isFinite(size)
     ? `${size.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 })} USDC`
     : UNKNOWN_BALANCE;
 }
 
+/** A spot price as its pair shows it: cNGN per USDC to two places, USDC per EURC to five. */
+function formatSpotPrice(price: number, pair: SpotPair) {
+  return Number.isFinite(price)
+    ? price.toLocaleString("en-US", {
+        maximumFractionDigits: pair.priceDecimals,
+        minimumFractionDigits: pair.priceDecimals,
+      })
+    : UNKNOWN_BALANCE;
+}
+
+/** A spot amount in `symbol`: USDC to two places, a base token (cNGN, EURC) to three. */
+function formatSpotAmount(amount: number, symbol: string) {
+  if (symbol === "USDC") {
+    return formatUsdcSize(amount);
+  }
+  return Number.isFinite(amount)
+    ? `${amount.toLocaleString("en-US", { maximumFractionDigits: 3 })} ${symbol}`
+    : UNKNOWN_BALANCE;
+}
+
 /**
- * Spot's Open Orders in the trader's terms (orders already turned over by `toUsdcCngnOrder`): a
- * buy or sell of USDC, its price in cNGN per USDC, its size and fill in USDC. Only the wallet's own.
+ * A spot pair's Open Orders in the trader's terms (orders already turned the pair's way up by
+ * `spotOrientation`): a buy or sell of the displayed base at its displayed price, its size and fill
+ * in that base. On USDC-cNGN that is USDC at cNGN per USDC. Only the wallet's own.
  */
 export function buildSpotOpenOrdersActivityView(
   openOrders: SpotOpenOrder[],
-  walletAddress: string | null
+  walletAddress: string | null,
+  pair: SpotPair = SPOT_PAIRS.spot
 ): ActivityView {
   return {
     columns: [...OPEN_ORDERS_COLUMNS],
@@ -93,9 +110,9 @@ export function buildSpotOpenOrdersActivityView(
       tones: { [OPEN_ORDERS_SIDE_COLUMN]: sideTone(order.side) },
       cells: [
         order.side === "buy" ? "Buy" : "Sell",
-        formatCngnPerUsdc(order.price),
-        formatUsdcSize(order.size),
-        formatUsdcSize(order.filled),
+        formatSpotPrice(order.price, pair),
+        formatSpotAmount(order.size, pair.displayBase),
+        formatSpotAmount(order.filled, pair.displayBase),
       ],
     })),
   };
@@ -169,9 +186,24 @@ function formatIntentDirection(intent: IntentSide) {
   return intent.side === "buy" ? "Buy" : "Sell";
 }
 
-/** A spot intent's side the trader's way: the engine's buy of cNGN is a sell of USDC. */
-function usdcIntent(intent: IntentSide): IntentSide {
-  return intent === undefined ? undefined : { side: engineSide(intent.side) };
+/** A spot intent's side the trader's way: on USDC-cNGN the engine's buy of cNGN is a sell of USDC. */
+function displayIntent(intent: IntentSide, pair: SpotPair): IntentSide {
+  return intent === undefined ? undefined : { side: spotOrientation(pair).side(intent.side) };
+}
+
+type EngineIntent = { price: string; side: "buy" | "sell"; size: string };
+
+/**
+ * A spot row's engine order: the venue's `spot_contract` echo where it sent one, else, on a pair
+ * shown as it trades (EURC-USDC, which the venue echoes nothing for), the engine fields themselves.
+ * Undefined otherwise, and the row shows dashes rather than engine values under trader labels.
+ */
+function spotEngineIntent(
+  echo: EngineIntent | undefined,
+  engine: EngineIntent,
+  pair: SpotPair
+): EngineIntent | undefined {
+  return echo ?? (pair.inverted ? undefined : engine);
 }
 
 /** The direction cell's tint keyed by its column, or nothing when there is no intent. */
@@ -299,35 +331,58 @@ export function buildPerpOrderHistoryActivityView(
 }
 
 /**
+ * What a spot order traded, in its pair's displayed base: on USDC-cNGN the USDC (or, when the venue
+ * did not value the fill, the cNGN that did); on EURC-USDC the EURC.
+ */
+function formatSpotFilled(filledBase: number, averagePrice: number | null, pair: SpotPair): string {
+  if (pair.displayBase !== "USDC") {
+    return formatSpotAmount(filledBase, pair.base);
+  }
+  return averagePrice === null && filledBase > 0
+    ? formatSpotAmount(filledBase, pair.base)
+    : formatUsdcSize(filledBase * (averagePrice ?? 0));
+}
+
+/** An engine price (USDC per base) the pair's way up, or a dash. */
+function formatEngineSpotPrice(price: number | null, pair: SpotPair) {
+  const shown = spotOrientation(pair).price(price);
+  return shown === null ? UNKNOWN_BALANCE : formatSpotPrice(shown, pair);
+}
+
+/**
  * The connected wallet's orders in every status, newest first, as `GET /v1/orders` returns them.
  *
  * Direction and limit are read from the order's UI intent, which under the identity contract is
- * the engine order itself. "Filled" and "Avg price" come from the order's fills, so they are what
- * the account was actually debited and credited.
+ * the engine order itself (and is the engine order on EURC-USDC, which echoes none). "Filled" and
+ * "Avg price" come from the order's fills, so they are what the account was actually debited and
+ * credited.
  */
 export function buildOrderHistoryActivityView(
   orders: OrderHistoryOrder[],
-  timeZone?: string
+  timeZone?: string,
+  pair: SpotPair = SPOT_PAIRS.spot
 ): ActivityView {
   return {
     columns: [...ORDER_HISTORY_COLUMNS],
     rows: orders.map((order) => {
-      // The venue's intent is the engine order; spot is shown USDC-cNGN, the other way up.
-      const limit = Number(order.spot_contract?.ui_intent.price);
+      // The venue's intent is the engine order; USDC-cNGN is shown the other way up.
+      const engine = spotEngineIntent(
+        order.spot_contract?.ui_intent,
+        { price: order.limit_price, side: order.side, size: order.desired_amount },
+        pair
+      );
+      const limit = Number(engine?.price);
       const { averagePrice, filledCngn } = getOrderFill(order);
-      const intent = usdcIntent(order.spot_contract?.ui_intent);
+      const intent = displayIntent(engine, pair);
 
       return {
         cells: [
           formatOrderTime(order.created_at, timeZone),
           formatInstrument(order),
           formatIntentDirection(intent),
-          // the USDC that traded; when the venue did not value the fill, the cNGN that did
-          averagePrice === null && filledCngn > 0
-            ? formatCngnSize(filledCngn)
-            : formatUsdcSize(filledCngn * (averagePrice ?? 0)),
-          averagePrice === null ? UNKNOWN_BALANCE : formatCngnPerUsdc(1 / averagePrice),
-          limit > 0 ? formatCngnPerUsdc(1 / limit) : UNKNOWN_BALANCE,
+          formatSpotFilled(filledCngn, averagePrice, pair),
+          formatEngineSpotPrice(averagePrice, pair),
+          limit > 0 ? formatEngineSpotPrice(limit, pair) : UNKNOWN_BALANCE,
           ORDER_STATUS_LABELS[order.status] ?? order.status,
         ],
         tones: {
@@ -463,22 +518,31 @@ export function buildPerpTradeHistoryActivityView(
  * The fills on the connected wallet's orders, newest first, as `GET /v1/fills` returns them.
  *
  * Direction, price and size are read from the fill's UI intent, which markets-service derives from
- * the wallet's own order and which under the identity contract equals the engine fill. A fill
- * without an intent shows dashes rather than guessed figures in the trader's columns.
+ * the wallet's own order and which under the identity contract equals the engine fill (EURC-USDC
+ * echoes none, and its engine fill is read directly). A fill without an intent shows dashes rather
+ * than guessed figures in the trader's columns.
  */
 export function buildTradeHistoryActivityView(
   fills: AccountFill[],
-  timeZone?: string
+  timeZone?: string,
+  pair: SpotPair = SPOT_PAIRS.spot
 ): ActivityView {
   return {
     columns: [...TRADE_HISTORY_COLUMNS],
     rows: fills.map((fill) => {
-      // The fill's intent is the engine's; shown USDC-cNGN: a buy of USDC, sized in USDC, the cNGN as its total.
-      const engineIntent = fill.spot_contract?.ui_intent;
-      const intent = usdcIntent(engineIntent);
+      // The fill's intent is the engine's. "Size" is the displayed base and "Total" the other leg:
+      // on USDC-cNGN a buy of USDC sized in USDC with the cNGN as its total; on EURC-USDC as it traded.
+      const engineIntent = spotEngineIntent(
+        fill.spot_contract?.ui_intent,
+        { price: fill.price, side: fill.side, size: fill.size },
+        pair
+      );
+      const intent = displayIntent(engineIntent, pair);
       const price = Number(engineIntent?.price);
-      const sizeCngn = Number(engineIntent?.size ?? fill.size);
-      const sizeUsdc = price * sizeCngn;
+      const sizeBase = Number(engineIntent?.size ?? fill.size);
+      const sizeUsdc = price * sizeBase;
+      const usdcLeg = Number.isFinite(sizeUsdc) ? formatUsdcSize(sizeUsdc) : UNKNOWN_BALANCE;
+      const baseLeg = formatSpotAmount(sizeBase, pair.base);
 
       return {
         tones: directionTones(TRADE_HISTORY_DIRECTION_COLUMN, intent),
@@ -486,9 +550,9 @@ export function buildTradeHistoryActivityView(
           formatOrderTime(fill.created_at, timeZone),
           formatInstrument(fill),
           formatIntentDirection(intent),
-          price > 0 ? formatCngnPerUsdc(1 / price) : UNKNOWN_BALANCE,
-          Number.isFinite(sizeUsdc) ? formatUsdcSize(sizeUsdc) : UNKNOWN_BALANCE,
-          Number.isFinite(sizeCngn) ? formatCngnSize(sizeCngn) : UNKNOWN_BALANCE,
+          price > 0 ? formatEngineSpotPrice(price, pair) : UNKNOWN_BALANCE,
+          pair.displayBase === "USDC" ? usdcLeg : baseLeg,
+          pair.displayBase === "USDC" ? baseLeg : usdcLeg,
           formatFillFee(fill.fee),
           LIQUIDITY_LABELS[fill.liquidity] ?? fill.liquidity,
         ],

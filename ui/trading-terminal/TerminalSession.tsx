@@ -4,8 +4,13 @@ import type { ConnectedWallet } from "@privy-io/react-auth";
 import { useLogin, usePrivy } from "@privy-io/react-auth";
 import type { ReactNode } from "react";
 import { createContext, useContext } from "react";
-import { useCngnBalance } from "@/ui/trading-terminal/useCngnBalance";
+import {
+  getCngnTokenAddress,
+  getDepositableCurrencies,
+  getEurcTokenAddress,
+} from "@/lib/subaccount-deposit-config";
 import { useServerRefresh } from "@/ui/trading-terminal/useServerRefresh";
+import { useTokenBalance } from "@/ui/trading-terminal/useTokenBalance";
 import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
 import { useUsdcBalance } from "@/ui/trading-terminal/useUsdcBalance";
 import { usePrimaryWallet } from "@/ui/usePrimaryWallet";
@@ -39,13 +44,14 @@ export type TerminalSession = {
    * winding down, resolves its own account under its SRM.
    */
   account: ReturnType<typeof useTradingSubaccount>;
-  /** The wallet's own USDC and cNGN, which a deposit draws on. */
+  /** The wallet's own USDC, cNGN and EURC, which a deposit draws on. */
   walletBalances: {
-    cngn: ReturnType<typeof useCngnBalance>["balance"];
+    cngn: ReturnType<typeof useTokenBalance>["balance"];
+    eurc: ReturnType<typeof useTokenBalance>["balance"];
     usdc: ReturnType<typeof useUsdcBalance>["balance"];
   };
   /**
-   * Re-reads both wallet balances, at or past `blockNumber` when a transfer's receipt names one:
+   * Re-reads the wallet balances, at or past `blockNumber` when a transfer's receipt names one:
    * reading latest could hit an RPC node a block behind and leave the pre-transfer figures up.
    */
   refreshWalletBalances: (blockNumber?: bigint | null) => void;
@@ -62,13 +68,19 @@ export function TerminalSessionProvider({ children }: { children: ReactNode }) {
   const walletAddress = primaryWallet?.address ?? null;
   const account = useTradingSubaccount(walletAddress);
   const usdc = useUsdcBalance(walletAddress);
-  const cngn = useCngnBalance(walletAddress);
+  const cngn = useTokenBalance(walletAddress, getCngnTokenAddress());
+  // Read only where EURC is deposited here; null otherwise, and the read never runs.
+  const eurc = useTokenBalance(
+    walletAddress,
+    getDepositableCurrencies().includes("EURC") ? getEurcTokenAddress() : null
+  );
   // The minute's re-read of the server render, for whichever market is on screen.
   useServerRefresh();
 
   function refreshWalletBalances(blockNumber: bigint | null = null) {
     usdc.refresh(blockNumber);
     cngn.refresh(blockNumber);
+    eurc.refresh(blockNumber);
   }
 
   return (
@@ -80,7 +92,7 @@ export function TerminalSessionProvider({ children }: { children: ReactNode }) {
         primaryWallet,
         refreshWalletBalances,
         selectWallet,
-        walletBalances: { cngn: cngn.balance, usdc: usdc.balance },
+        walletBalances: { cngn: cngn.balance, eurc: eurc.balance, usdc: usdc.balance },
         wallets,
         walletsReady,
       }}

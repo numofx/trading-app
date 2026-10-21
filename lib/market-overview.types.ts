@@ -1,5 +1,8 @@
+/** The spot markets: `spot` is cNGN-USDC (shown USDC-cNGN), `eurc` is EURC-USDC. */
+export type SpotMarketId = "spot" | "eurc";
+
 /** Which market's panels render under the shell; each has its own slug under `/trade`. */
-export type TerminalMarketId = "spot" | "perp" | "future";
+export type TerminalMarketId = SpotMarketId | "perp" | "future";
 
 /** The selector's tabs: one per kind of market, the dated future under Futures. */
 export type TerminalMarketKind = "spot" | "perp" | "futures";
@@ -21,7 +24,8 @@ export type MarketOverviewRow = {
   id: TerminalMarketId;
   /**
    * The book's mid, else its one resting side, else the last trade (the perp's or future's mark
-   * last). USDC per cNGN on spot and the perp; cNGN per USDC on the future, as it trades.
+   * last). cNGN per USDC on USDC-cNGN spot and the future, USDC per EURC on EURC-USDC, USDC per
+   * cNGN on the perp.
    */
   price: number | null;
   changePercent24h: number | null;
@@ -46,7 +50,10 @@ export type MarketOverviewRow = {
 };
 
 export type MarketOverviewResponse = {
-  /** Spot, the perp and the front-month future, one row each. */
+  /**
+   * USDC-cNGN spot, the perp and the front-month future, one row each, and EURC-USDC when the
+   * venue lists it.
+   */
   rows: MarketOverviewRow[];
   /** Every future series the venue lists and has not expired, nearest expiry first. */
   futures?: MarketOverviewRow[];

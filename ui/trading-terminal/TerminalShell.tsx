@@ -10,6 +10,7 @@ import type { MarketOverviewRow, TerminalMarketId } from "@/lib/market-overview.
 import { resolveSegment } from "@/lib/market-routes";
 import { buildPerpOverviewMetrics } from "@/lib/perp-market";
 import { buildSpotHeaderMetrics } from "@/lib/spot-orientation";
+import { isSpotMarketId, SPOT_PAIRS } from "@/lib/spot-pairs";
 import { TerminalHeaderBar } from "@/ui/trading-terminal/TerminalHeaderBar";
 import type { TerminalHeaderPublication } from "@/ui/trading-terminal/TerminalHeaderSlot";
 import {
@@ -60,13 +61,13 @@ const OVERVIEW_SEED_MAX_AGE_MS = Duration.toMillis("2 minutes");
  */
 const SEED_READ_DELAY_MS = Duration.toMillis("50 millis");
 
-/** Each market's own header figures from a selector row (spot's row is already cNGN per USDC). */
+/** Each market's own header figures from a selector row (a spot row is already the pair's way up). */
 function seededMetrics(market: TerminalMarketId, row: MarketOverviewRow) {
   if (market === "perp") {
     return buildPerpOverviewMetrics(row);
   }
-  if (market === "spot") {
-    return buildSpotHeaderMetrics({
+  if (isSpotMarketId(market)) {
+    return buildSpotHeaderMetrics(SPOT_PAIRS[market], {
       changePercent: row.changePercent24h,
       high: null,
       low: null,

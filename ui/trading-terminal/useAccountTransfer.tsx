@@ -130,7 +130,11 @@ export function useAccountTransfer({
         open={open}
         triggerClassName={HEADER_ACTION_CLASSES}
         triggerId="header-deposit-trigger"
-        walletBalances={{ cNGN: walletBalances.cngn, USDC: walletBalances.usdc }}
+        walletBalances={{
+          cNGN: walletBalances.cngn,
+          EURC: walletBalances.eurc,
+          USDC: walletBalances.usdc,
+        }}
       />
       <button
         className={HEADER_ACTION_CLASSES}

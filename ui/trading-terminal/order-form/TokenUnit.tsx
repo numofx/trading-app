@@ -6,7 +6,7 @@ import { cn } from "@/lib/cn";
 import { TOKEN_ICONS } from "@/lib/token-icons";
 import { SmartImage } from "@/ui/SmartImage";
 
-export type TokenSymbol = "cNGN" | "USDC";
+export type TokenSymbol = "cNGN" | "EURC" | "USDC";
 
 /** A token mark and ticker, set beside the input it denominates. */
 export function TokenUnit({ symbol }: { symbol: TokenSymbol }) {

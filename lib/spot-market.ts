@@ -1,5 +1,6 @@
 import { PRICE_DECIMALS } from "@/lib/market-formatting";
 import type { BookResponse, PresentedTrade, TradeStats24h } from "@/lib/markets-service";
+import type { SpotBase } from "@/lib/spot-pairs";
 import type {
   Candle,
   OrderBookLevel,
@@ -81,21 +82,27 @@ export function getMaxOrderSize({
 }
 
 /**
- * What an order takes out of the account if it fills: USDC for a buy, cNGN for a sell.
+ * What an engine order takes out of the account if it fills: USDC for a buy, the base (cNGN, EURC)
+ * for a sell.
  *
  * Null when either input is unusable — an unknown cost must not read as a free order.
  */
-export function getOrderCost(side: "buy" | "sell", price: number | null, size: number) {
+export function getOrderCost(
+  side: "buy" | "sell",
+  price: number | null,
+  size: number,
+  base: SpotBase
+): { amount: number; currency: SpotBase | "USDC" } | null {
   if (!Number.isFinite(size) || size <= 0) {
     return null;
   }
   if (side === "sell") {
-    return { amount: size, currency: "cNGN" as const };
+    return { amount: size, currency: base };
   }
   if (price === null || !Number.isFinite(price) || price <= 0) {
     return null;
   }
-  return { amount: size * price, currency: "USDC" as const };
+  return { amount: size * price, currency: "USDC" };
 }
 
 /**
@@ -146,12 +153,16 @@ export function getNextExpiryMs(openOrders: SpotOpenOrder[]) {
 }
 
 /**
- * What this trader's own resting orders already lay claim to.
+ * What this trader's own resting orders already lay claim to, in USDC and in the pair's base.
  *
  * A balance that ignores working orders overstates what a new order can spend: an account holding
  * 1,300 cNGN with 1,382 already committed can fund nothing, but reads as fully available.
  */
-export function getCommittedBalances(openOrders: SpotOpenOrder[], walletAddress: string | null) {
+export function getCommittedBalances(
+  openOrders: SpotOpenOrder[],
+  walletAddress: string | null,
+  base: SpotBase
+) {
   const owned =
     walletAddress === null
       ? []
@@ -159,19 +170,19 @@ export function getCommittedBalances(openOrders: SpotOpenOrder[], walletAddress:
           (order) => order.ownerAddress.toLowerCase() === walletAddress.toLowerCase()
         );
 
-  let cngn = 0;
+  let baseAmount = 0;
   let usdc = 0;
   for (const order of owned) {
     const remaining = Math.max(0, order.size - order.filled);
-    const cost = getOrderCost(order.side, order.price, remaining);
-    if (cost?.currency === "cNGN") {
-      cngn += cost.amount;
-    } else if (cost?.currency === "USDC") {
+    const cost = getOrderCost(order.side, order.price, remaining, base);
+    if (cost?.currency === "USDC") {
       usdc += cost.amount;
+    } else if (cost !== null) {
+      baseAmount += cost.amount;
     }
   }
 
-  return { cngn, usdc };
+  return { base: baseAmount, usdc };
 }
 
 /**
@@ -339,18 +350,18 @@ export function getMarketFill(
 }
 
 /**
- * An order's size in cNGN, whichever currency the trader entered it in.
+ * An order's size in the engine's base (cNGN, EURC), whichever currency the trader entered it in.
  *
- * The Size field can be denominated in either leg — cNGN, the amount the order is signed for, or
- * USDC, what the trader is spending or receiving. Only the cNGN figure is submittable, so a USDC
- * entry is converted at the price the order would cross at. NaN when there is no price to convert
- * with, rather than a size derived from a guess.
+ * The Size field can be denominated in either leg — the base, the amount the order is signed for,
+ * or USDC, what the trader is spending or receiving. Only the base figure is submittable, so a USDC
+ * entry is converted at the price the order would cross at (USDC per base). NaN when there is no
+ * price to convert with, rather than a size derived from a guess.
  */
-export function toOrderSizeCngn(amount: number, unit: "USDC" | "cNGN", price: number | null) {
+export function toOrderSizeBase(amount: number, unit: SpotBase | "USDC", price: number | null) {
   if (!Number.isFinite(amount)) {
     return Number.NaN;
   }
-  if (unit === "cNGN") {
+  if (unit !== "USDC") {
     return amount;
   }
   return price === null || price <= 0 ? Number.NaN : amount / price;

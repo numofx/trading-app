@@ -1,3 +1,5 @@
+import type { SpotBase } from "@/lib/spot-pairs";
+
 /** The fields of a `/v1/markets` entry that identify which terminal market it is. */
 export type MarketIdentity = {
   contract_type?: string;
@@ -22,10 +24,21 @@ function isCngnOverUsdc(market: MarketIdentity) {
   return market.base_asset_symbol === "cNGN" && market.quote_asset_symbol === "USDC";
 }
 
-/** cNGN-USDC, when the venue lists it. */
-export function findSpotMarket<T extends MarketIdentity>(markets: readonly T[]): T | null {
+/**
+ * The spot market trading `base` against USDC, when the venue lists it: cNGN-USDC by default,
+ * EURC-USDC for `"EURC"`. Every spot pair is the base over USDC, priced in USDC per base.
+ */
+export function findSpotMarket<T extends MarketIdentity>(
+  markets: readonly T[],
+  base: SpotBase = "cNGN"
+): T | null {
   return (
-    markets.find((market) => market.contract_type === "spot" && isCngnOverUsdc(market)) ?? null
+    markets.find(
+      (market) =>
+        market.contract_type === "spot" &&
+        market.base_asset_symbol === base &&
+        market.quote_asset_symbol === "USDC"
+    ) ?? null
   );
 }
 

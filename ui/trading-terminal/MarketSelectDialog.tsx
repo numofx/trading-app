@@ -4,7 +4,7 @@ import { Dialog } from "@base-ui/react/dialog";
 import { Check, ChevronDown, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
-import { buildFutureOverviewMetrics, formatFuturePrice } from "@/lib/future-market";
+import { buildFutureOverviewMetrics } from "@/lib/future-market";
 import { formatPrice } from "@/lib/market-formatting";
 import {
   emptyOverviewRow,
@@ -14,6 +14,7 @@ import {
   formatOverviewVolume,
   getTerminalMarket,
   listedFutureSymbols,
+  listedSpotMarkets,
   selectorMarkets,
 } from "@/lib/market-overview";
 import type {
@@ -22,6 +23,7 @@ import type {
   TerminalMarketId,
   TerminalMarketKind,
 } from "@/lib/market-overview.types";
+import { isSpotMarketId, SPOT_PAIRS } from "@/lib/spot-pairs";
 import { SmartImage } from "@/ui/SmartImage";
 import { SmartLink } from "@/ui/SmartLink";
 import { useMarketOverview } from "@/ui/trading-terminal/useMarketOverview";
@@ -58,6 +60,7 @@ const HIDDEN_ON_PHONE = "hidden md:block";
 /** The token marks a symbol carries, in the order its name reads: "cNGN-USDC" shows both, "cNGN-PERP" the one. */
 const TOKEN_MARKS = {
   cNGN: "/tokens/cngn.svg",
+  EURC: "/tokens/eurc.png",
   USDC: "/tokens/usdc.svg",
 } as const satisfies Record<string, string>;
 
@@ -228,13 +231,20 @@ function FutureCells({ row }: { row: MarketOverviewRow }) {
   );
 }
 
+/** A spot row's price as its pair shows it, the perp's in USDC per cNGN. */
+function formatRowPrice(entry: TerminalMarketEntry, price: number | null) {
+  return isSpotMarketId(entry.id)
+    ? formatPrice(price, SPOT_PAIRS[entry.id].priceDecimals)
+    : formatPrice(price);
+}
+
 /** Spot's and the perp's figures: price, the day's change and volume, and the perp's own. */
 function MarketCells({ entry, row }: { entry: TerminalMarketEntry; row: MarketOverviewRow }) {
   return (
     <>
       <span className={cn(CELL_CLASS, "text-panel-text-active")}>
-        {/* Spot is quoted cNGN per USDC; the perp keeps USDC per cNGN. */}
-        {entry.kind === "perp" ? formatPrice(row.price) : formatFuturePrice(row.price)}
+        {/* USDC-cNGN is quoted cNGN per USDC, EURC-USDC USDC per EURC; the perp keeps USDC per cNGN. */}
+        {formatRowPrice(entry, row.price)}
       </span>
       <ChangeCell value={row.changePercent24h} />
       <span className={cn(CELL_CLASS, HIDDEN_ON_PHONE)}>
@@ -327,7 +337,10 @@ export function MarketSelectDialog({
   });
   // Every series the venue lists, nearest expiry first, and the one on screen if it is not among them.
   const entries = filterTerminalMarkets(
-    selectorMarkets(listedFutureSymbols(overview.futures, futureSymbol)),
+    selectorMarkets(
+      listedFutureSymbols(overview.futures, futureSymbol),
+      listedSpotMarkets(overview.rows, market)
+    ),
     kind,
     ""
   );

@@ -104,6 +104,8 @@ export function useMarketOverview(open: boolean, live: MarketOverviewRow) {
   return {
     /** Every future series the venue lists, nearest expiry first. */
     futures,
+    /** The rows the venue served, one per market it lists (EURC-USDC only when listed). */
+    rows,
     /** A future series' row by its symbol; its figures are the venue's mark and index, not a live touch. */
     futureRow: (symbol: string) => findFutureRow(futures, symbol) ?? emptyOverviewRow("future"),
     rowFor,

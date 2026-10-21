@@ -234,6 +234,40 @@ export function getCngnAssetAddress(): `0x${string}` {
   return getAddress(getCngnDeployment().asset);
 }
 
+/** Circle's EURC on Base mainnet (6 decimals): the token the EURC-USDC escrow wraps. */
+const EURC_TOKEN_MAINNET = "0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42";
+
+/**
+ * The EURC-USDC escrow: a WrappedERC20Asset over Base EURC under the MarginEngine, the market's
+ * `asset_address`, the contract a EURC deposit pays into and the id of an account's EURC leg. It
+ * has no code default until it is deployed (numofx/exchange `deploy-eurc-spot.s.sol`): set
+ * `NEXT_PUBLIC_EURC_ASSET_ADDRESS` to the venue's EURC-USDC `asset_address`, which the build check
+ * compares. Null while unset, and EURC is then neither deposited nor withdrawn here.
+ */
+export function getEurcAssetAddress(): `0x${string}` | null {
+  const configured = process.env.NEXT_PUBLIC_EURC_ASSET_ADDRESS?.trim();
+  return configured ? getAddress(configured) : null;
+}
+
+/**
+ * The EURC ERC-20 pulled from the wallet: Circle's EURC on mainnet, `NEXT_PUBLIC_EURC_TOKEN_ADDRESS`
+ * where set. Null on Sepolia without the env, where this venue wraps no EURC.
+ */
+export function getEurcTokenAddress(): `0x${string}` | null {
+  const configured = process.env.NEXT_PUBLIC_EURC_TOKEN_ADDRESS?.trim();
+  if (configured) {
+    return getAddress(configured);
+  }
+  return isAppMainnet() ? getAddress(EURC_TOKEN_MAINNET) : null;
+}
+
+/** The EURC escrow and token together, or null unless both resolve: one is useless without the other. */
+function getEurcDeployment() {
+  const asset = getEurcAssetAddress();
+  const token = getEurcTokenAddress();
+  return asset === null || token === null ? null : { asset, token };
+}
+
 /**
  * Deposit plumbing for one currency.
  *
@@ -255,6 +289,14 @@ export function getDepositAddresses(currency: DepositCurrency): DepositAddresses
     };
   }
 
+  if (currency === "EURC") {
+    const eurc = getEurcDeployment();
+    if (eurc === null) {
+      throw new Error("EURC deposits are not configured on this deployment");
+    }
+    return { ...shared, baseAssetContract: eurc.asset, token: eurc.token };
+  }
+
   return {
     ...shared,
     baseAssetContract: getCngnAssetAddress(),
@@ -262,9 +304,12 @@ export function getDepositAddresses(currency: DepositCurrency): DepositAddresses
   };
 }
 
-/** The currencies this deployment lists, in display order. Some may be paused for deposits. */
+/**
+ * The currencies this deployment lists, in display order. Some may be paused for deposits. EURC
+ * is listed once its escrow is configured.
+ */
 export function getDepositableCurrencies(): DepositCurrency[] {
-  return ["USDC", "cNGN"];
+  return getEurcDeployment() === null ? ["USDC", "cNGN"] : ["USDC", "cNGN", "EURC"];
 }
 
 /**

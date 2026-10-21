@@ -3,6 +3,7 @@ import { formatUnits } from "viem";
 import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
 import { getDepositPauseReason } from "@/lib/subaccount-deposit-config";
 import { toTokenUnits } from "@/lib/subaccount-withdraw";
+import { TOKEN_ICONS, tokenIcon } from "@/lib/token-icons";
 import type { WithdrawableAsset } from "@/lib/withdrawable-assets";
 import { getAssetLedgerUnits } from "@/lib/withdrawable-assets";
 import type {
@@ -213,7 +214,7 @@ export function getAmountFontClass(text: string) {
 
 /** Token mark for a ticker, from the same set the market pill uses. */
 export function getTokenIconSrc(symbol: string) {
-  return symbol === "cNGN" ? "/tokens/cngn.svg" : "/tokens/usdc.svg";
+  return tokenIcon(symbol) ?? TOKEN_ICONS.USDC;
 }
 
 /** Screen names for the drill-downs, which read differently depending on the direction. */

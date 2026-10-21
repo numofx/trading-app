@@ -1,5 +1,5 @@
 /** The two assets this venue holds, and the symbols their balances are printed with. */
-export type BalanceSymbol = "cNGN" | "USDC";
+export type BalanceSymbol = "cNGN" | "EURC" | "USDC";
 
 /** Rendered when a balance is genuinely unknown — never substitute a zero the account may not hold. */
 const UNKNOWN_BALANCE = "—";

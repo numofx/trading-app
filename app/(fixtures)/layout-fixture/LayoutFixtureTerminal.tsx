@@ -116,7 +116,7 @@ export function LayoutFixtureTerminal() {
     // grid under it are laid out exactly as `/trade/cngn-usdc` lays them out.
     <TerminalShell market="spot">
       <SpotTradingTerminal
-        accountCngn={accountCngn}
+        accountBase={accountCngn}
         accountUsdc={accountUsdc}
         candleInterval={candleInterval}
         candles={[]}

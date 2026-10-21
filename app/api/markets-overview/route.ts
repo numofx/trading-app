@@ -35,12 +35,15 @@ export async function GET() {
   // The same pickers the terminals use, so the selector can never look for a market under an
   // orientation the venue no longer reports and show dashes for one it is serving.
   const spot = findSpotMarket(markets);
+  const eurc = findSpotMarket(markets, "EURC");
   const perp = findPerpMarket(markets);
   // Every series not yet expired, nearest first; the first is the front month `/` opens.
   const futures = listLiveFutures(markets, Date.now());
 
-  const [spotRow, perpRow, futureRows] = await Promise.all([
+  const [spotRow, eurcRow, perpRow, futureRows] = await Promise.all([
     readRow("spot", spot ?? undefined, null),
+    // Listed only once the venue serves it: the row's presence is what puts it in the selector.
+    eurc === null ? Promise.resolve(null) : readRow("eurc", eurc, null),
     readRow("perp", perp ?? undefined, parsePerpState(perp?.perp)),
     Promise.all(futures.map((future) => readRow("future", future, null, parseFutureState(future)))),
   ]);
@@ -48,7 +51,12 @@ export async function GET() {
   return NextResponse.json(
     {
       futures: futureRows,
-      rows: [spotRow, perpRow, futureRows[0] ?? emptyOverviewRow("future")],
+      rows: [
+        spotRow,
+        ...(eurcRow === null ? [] : [eurcRow]),
+        perpRow,
+        futureRows[0] ?? emptyOverviewRow("future"),
+      ],
     } satisfies MarketOverviewResponse,
     {
       headers: { "cache-control": "no-store" },

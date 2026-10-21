@@ -44,6 +44,12 @@ export function getLedgerLegs({
   };
 }
 
+/** The two legs a spot order can spend: USDC cash and the pair's base (cNGN, EURC), in 1e18 units. */
+type AccountLegs = {
+  cashUnits: bigint | null;
+  baseUnits: bigint | null;
+};
+
 /**
  * The legs a wallet's trading account holds, as far as the order ticket can know.
  *
@@ -58,14 +64,14 @@ export function getAccountLegs({
   subaccountId,
 }: {
   /** The ledger read for `subaccountId`, or null while it is outstanding or failed. */
-  balance: LedgerLegs | null;
+  balance: AccountLegs | null;
   /** The lookup for the connected wallet has completed. */
   isAccountResolved: boolean;
   subaccountId: string | null;
-}): LedgerLegs {
+}): AccountLegs {
   if (subaccountId === null && isAccountResolved) {
-    return { cashUnits: 0n, cngnUnits: 0n };
+    return { baseUnits: 0n, cashUnits: 0n };
   }
 
-  return { cashUnits: balance?.cashUnits ?? null, cngnUnits: balance?.cngnUnits ?? null };
+  return { baseUnits: balance?.baseUnits ?? null, cashUnits: balance?.cashUnits ?? null };
 }

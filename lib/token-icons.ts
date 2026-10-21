@@ -1,6 +1,7 @@
 /** The terminal's token marks, by ticker, as served from `public/tokens`. */
 export const TOKEN_ICONS = {
   cNGN: "/tokens/cngn.svg",
+  EURC: "/tokens/eurc.png",
   USDC: "/tokens/usdc.svg",
 } as const satisfies Record<string, string>;
 

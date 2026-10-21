@@ -18,15 +18,19 @@ import {
   buildSpotOrderEnvelope,
   SPOT_ORDER_LIFETIME_LABEL,
 } from "@/lib/spot-order-submission";
-import { invertPrice, SPOT_PRICE_DECIMALS } from "@/lib/spot-orientation";
+import { spotOrientation } from "@/lib/spot-orientation";
+import type { SpotPair } from "@/lib/spot-pairs";
 import {
+  getCngnAssetAddress,
   getCngnTokenAddress,
+  getEurcAssetAddress,
   getLegacySpotStack,
   getUsdcTokenAddress,
 } from "@/lib/subaccount-deposit-config";
 import { getAccountLegs } from "@/lib/subaccount-ledger";
 import type { SpotMarket } from "@/lib/trading.types";
 import type { WithdrawableAsset } from "@/lib/withdrawable-assets";
+import { getAssetLedgerUnits } from "@/lib/withdrawable-assets";
 import { buildDepositAccount, DepositDialog } from "@/ui/trading-terminal/DepositDialog";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
 import { SpotTradingTerminal } from "@/ui/trading-terminal/SpotTradingTerminal";
@@ -81,6 +85,23 @@ function resolveSpotExecutionPrice(
 }
 
 /**
+ * Where and at what price an order is signed, or why it cannot be: a pair the venue serves no stack
+ * for (see `servedOrderMarket`), or a market order with nothing to cross.
+ */
+function resolveSpotSubmission(
+  spotMarket: SpotMarket,
+  pair: SpotPair,
+  resolvePrice: () => SpotExecutionPrice
+): { error: string } | { market: OrderMarketOverride | undefined; price: string } {
+  const market = servedOrderMarket(spotMarket, pair);
+  if (market === null) {
+    return { error: `${MARKET_LABELS[pair.symbol]} is not live on the venue` };
+  }
+  const resolved = resolvePrice();
+  return "error" in resolved ? resolved : { market, price: resolved.price };
+}
+
+/**
  * Whether the ticket should read "Loading account…" rather than offering to trade.
  *
  * Covers two waits: the subaccount lookup, and the gap where Privy reports a session before
@@ -132,10 +153,15 @@ const ORDER_SETTLE_TIMEOUT_MS = Duration.toMillis("8 seconds");
  * deliberately does not quote a price: the order-status response carries amounts and a status but
  * no execution price, and inventing one is how the limit came to be reported as the fill.
  */
-function describeOrderOutcome(outcome: OrderOutcome | null, size: string, price: string) {
+function describeOrderOutcome(
+  outcome: OrderOutcome | null,
+  size: string,
+  price: string,
+  base: SpotPair["base"]
+) {
   const at = formatUsdcPrice(Number(price));
   if (outcome?.status === "filled") {
-    return `Filled: paid or received ${size} cNGN. Balances updated.`;
+    return `Filled: paid or received ${size} ${base}. Balances updated.`;
   }
   if (outcome?.status === "expired") {
     return `Order expired unfilled at ${at}.`;
@@ -166,8 +192,9 @@ async function readOrderOutcome(orderId: string): Promise<OrderOutcome | null> {
   }
 }
 
-/** Properties shared by every spot order analytics event. */
+/** Properties shared by every spot order analytics event. `size` is the engine base, whole. */
 function buildSpotOrderEvent(
+  pair: SpotPair,
   side: "buy" | "sell",
   orderType: "Limit" | "Market",
   size: string,
@@ -175,11 +202,17 @@ function buildSpotOrderEvent(
 ) {
   return {
     limit_price: executionPrice,
-    market_id: "cngn-usdc-spot",
+    market_id: pair.analyticsId,
     order_side: side,
     order_type: orderType,
-    size_cngn: size,
+    // `size_cngn` predates EURC and stays its name on cNGN-USDC, so the existing insights hold.
+    ...(pair.base === "cNGN" ? { size_cngn: size } : { size_base: size }),
   };
+}
+
+/** The escrow the pair's base settles in: the id of the account's base leg. Null if unconfigured. */
+function baseAssetAddress(pair: SpotPair) {
+  return pair.base === "cNGN" ? getCngnAssetAddress() : getEurcAssetAddress();
 }
 
 /** What a fill changes on spot: the trading account's ledger, by asset. */
@@ -188,16 +221,19 @@ function balanceSignature(rows: { asset: string; balance: bigint }[] | null) {
 }
 
 /**
- * The spot market under the shell: its panels, ticket, deposit dialog and the signing behind
- * them. The session (wallet, trading account, wallet balances) is the shell's, so a switch to the
- * perp and back keeps it; everything here is the market's own and remounts with it.
+ * A spot market under the shell: its panels, ticket, deposit dialog and the signing behind them.
+ * The session (wallet, trading account, wallet balances) is the shell's, so a switch to another
+ * market and back keeps it; everything here is the market's own and remounts with it. Both spot
+ * pairs trade from the one MarginEngine account.
  */
 export function SpotMarketPanels({
   candleInterval,
+  pair,
   spotMarket,
 }: {
   /** The interval the page read the candles at, from `?interval=`. */
   candleInterval: ChartInterval;
+  pair: SpotPair;
   spotMarket: SpotMarket;
 }) {
   // `null` until something actually happens — an idle placeholder would occupy
@@ -231,7 +267,8 @@ export function SpotMarketPanels({
     useSubaccountBalance(tradingSubaccountId);
   const orderStatus = useOrderStatus(balanceSignature(subaccountBalance?.rows ?? null));
   // The spot stack retired by the unified cutover: the wallet's account there is withdraw-only.
-  const legacyStack = getLegacySpotStack();
+  // It only ever held cNGN-USDC, so only that market lists it.
+  const legacyStack = pair.base === "cNGN" ? getLegacySpotStack() : null;
   const legacyAccount = useTradingSubaccount(
     legacyStack === null ? null : (primaryWallet?.address ?? null),
     legacyStack === null
@@ -250,8 +287,16 @@ export function SpotMarketPanels({
   );
   // A wallet with no trading account holds zero, not an unknown amount, so the ticket's shortfall
   // check can stop an order that would otherwise be signed against an empty account.
+  const baseAsset = baseAssetAddress(pair);
   const accountLegs = getAccountLegs({
-    balance: subaccountBalance,
+    balance:
+      subaccountBalance === null
+        ? null
+        : {
+            baseUnits:
+              baseAsset === null ? null : getAssetLedgerUnits(subaccountBalance.rows, baseAsset),
+            cashUnits: subaccountBalance.cashUnits,
+          },
     isAccountResolved: isTradingSubaccountResolved,
     subaccountId: tradingSubaccountId,
   });
@@ -288,14 +333,16 @@ export function SpotMarketPanels({
       orderStatus.announce("Connect a wallet before submitting an order");
       return;
     }
-    const resolvedPrice = resolveSpotExecutionPrice(orderType, side, book, price);
+    const resolved = resolveSpotSubmission(spotMarket, pair, () =>
+      resolveSpotExecutionPrice(orderType, side, book, price)
+    );
 
-    if ("error" in resolvedPrice) {
-      orderStatus.announce(resolvedPrice.error);
+    if ("error" in resolved) {
+      orderStatus.announce(resolved.error);
       return;
     }
 
-    const executionPrice = resolvedPrice.price;
+    const { market: orderMarket, price: executionPrice } = resolved;
 
     try {
       setIsSubmittingOrder(true);
@@ -313,7 +360,7 @@ export function SpotMarketPanels({
       const walletClient = createWalletClient({ chain: appChain, transport: custom(provider) });
 
       const envelope = buildSpotOrderEnvelope({
-        market: servedOrderMarket(spotMarket),
+        market: orderMarket,
         side,
         subaccountId: resolvedTradingSubaccountId,
         uiPrice: executionPrice,
@@ -331,7 +378,7 @@ export function SpotMarketPanels({
 
       if (!ok) {
         posthog.capture("order_rejected", {
-          ...buildSpotOrderEvent(side, orderType, size, executionPrice),
+          ...buildSpotOrderEvent(pair, side, orderType, size, executionPrice),
           error_message: body?.error ?? null,
           http_status: status,
         });
@@ -339,7 +386,7 @@ export function SpotMarketPanels({
         return;
       }
       posthog.capture("order_submitted", {
-        ...buildSpotOrderEvent(side, orderType, size, executionPrice),
+        ...buildSpotOrderEvent(pair, side, orderType, size, executionPrice),
         order_id: body?.order?.order_id ?? null,
       });
       orderStatus.announce("Order accepted. Checking whether it filled…", { awaitFill: true });
@@ -351,7 +398,7 @@ export function SpotMarketPanels({
         intervalMs: ORDER_SETTLE_POLL_INTERVAL_MS,
         timeoutMs: ORDER_SETTLE_TIMEOUT_MS,
       });
-      orderStatus.settle(describeOrderOutcome(outcome, size, executionPrice));
+      orderStatus.settle(describeOrderOutcome(outcome, size, executionPrice, pair.base));
       // Read balances after the outcome, not before it: refreshing on acceptance alone showed the
       // pre-fill account and left the strip disagreeing with the trade that had just happened.
       refreshWalletBalances();
@@ -363,7 +410,7 @@ export function SpotMarketPanels({
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Spot order submission failed";
       posthog.captureException(error, {
-        properties: { market_id: "cngn-usdc-spot", order_side: side, order_type: orderType },
+        properties: { market_id: pair.analyticsId, order_side: side, order_type: orderType },
       });
       orderStatus.settle(errorMessage);
       return;
@@ -437,13 +484,13 @@ export function SpotMarketPanels({
   return (
     <>
       <MarketDocumentTitle
-        digits={SPOT_PRICE_DECIMALS}
-        pair={MARKET_LABELS["cNGN-USDC"]}
-        price={invertPrice(spotMarket.mark)}
+        digits={pair.priceDecimals}
+        pair={MARKET_LABELS[pair.symbol]}
+        price={spotOrientation(pair).price(spotMarket.mark)}
       />
 
       <SpotTradingTerminal
-        accountCngn={toLedgerAmount(accountLegs.cngnUnits)}
+        accountBase={toLedgerAmount(accountLegs.baseUnits)}
         accountUsdc={toLedgerAmount(accountLegs.cashUnits)}
         candleInterval={candleInterval}
         candles={spotMarket.candles}
@@ -479,6 +526,7 @@ export function SpotMarketPanels({
         onSignOrderHistory={handleSignOrderHistory}
         onSubmitOrder={handleSubmitSpot}
         onWithdrawRequest={transfer.openWithdraw}
+        pair={pair}
         spotMarket={spotMarket}
         walletAddress={primaryWallet?.address ?? null}
       />
@@ -515,14 +563,20 @@ function legacyWithdrawableAssets(stack: {
  * not to advertise an empty account.
  */
 /**
- * The venue's own asset and module for spot, for the ticket to sign against, so a cutover on the
- * backend cannot leave the ticket signing for a stack the venue no longer settles. Undefined when the
- * venue did not report them, and the configured defaults apply.
+ * The venue's own asset and module for the pair, for the ticket to sign against, so a cutover on
+ * the backend cannot leave the ticket signing for a stack the venue no longer settles. When the
+ * venue did not report them, cNGN-USDC falls back to the configured defaults (undefined); any other
+ * pair has none, and null stops the order: the defaults name the cNGN escrow, and a EURC order
+ * signed for it would be a cNGN order.
  */
-function servedOrderMarket(spotMarket: SpotMarket): OrderMarketOverride | undefined {
-  return spotMarket.orderStack === null
-    ? undefined
-    : { ...spotMarket.orderStack, orderIdPrefix: "spot" };
+function servedOrderMarket(
+  spotMarket: SpotMarket,
+  pair: SpotPair
+): OrderMarketOverride | undefined | null {
+  if (spotMarket.orderStack !== null) {
+    return { ...spotMarket.orderStack, orderIdPrefix: pair.orderIdPrefix };
+  }
+  return pair.base === "cNGN" ? undefined : null;
 }
 
 /** One cent in the ledger's 18-decimal USDC units. */

@@ -10,6 +10,10 @@
  * configured instrument`), so the trader sees a 422 instead of a fill; this check fails the build
  * first. Every build compares the resolved value, so a default left behind fails locally too.
  *
+ * EURC-USDC has no code default: once the venue lists it, `NEXT_PUBLIC_EURC_ASSET_ADDRESS` must be
+ * set to its `asset_address`, the escrow EURC deposits pay into, or the build fails. Until then
+ * there is nothing to compare and the bundle offers no EURC.
+ *
  * Outside production, an unset MARKETS_SERVICE_URL (a local UI build) or an unreachable venue is a
  * notice and the build goes on. On a Vercel production build both fail it: an unverified stack is
  * not one to ship.
@@ -119,6 +123,31 @@ const perp = markets.find(
 );
 
 const failures = [];
+
+const eurc = markets.find(
+  (market) =>
+    market.contract_type === "spot" &&
+    market.base_asset_symbol === "EURC" &&
+    market.quote_asset_symbol === "USDC"
+);
+if (eurc?.asset_address) {
+  const served = eurc.asset_address.toLowerCase();
+  const fromEnv = process.env.NEXT_PUBLIC_EURC_ASSET_ADDRESS?.trim().toLowerCase();
+  if (!fromEnv) {
+    failures.push(
+      `the venue lists EURC-USDC at ${served} but NEXT_PUBLIC_EURC_ASSET_ADDRESS is unset, so the bundle could not deposit or show EURC`
+    );
+  } else if (fromEnv !== served) {
+    failures.push(
+      `NEXT_PUBLIC_EURC_ASSET_ADDRESS resolves EURC escrow ${fromEnv} but the venue serves ${served}`
+    );
+  } else {
+    note(`EURC escrow ${served} matches NEXT_PUBLIC_EURC_ASSET_ADDRESS`);
+  }
+} else {
+  note("venue does not list EURC-USDC; EURC escrow not compared");
+}
+
 const comparisons = [
   ...CHECKS.map((check) => [spot, ...check]),
   ...(perp ? PERP_CHECKS.map((check) => [perp, ...check]) : []),

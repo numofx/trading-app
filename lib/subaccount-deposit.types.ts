@@ -10,8 +10,11 @@
 
 export type DepositPath = "create-and-deposit" | "deposit-existing";
 
-/** Assets a trading subaccount can be funded with. Both settle through a WrappedERC20Asset. */
-export type DepositCurrency = "USDC" | "cNGN";
+/**
+ * Assets a trading subaccount can be funded with. Each settles through a WrappedERC20Asset; EURC
+ * only where its escrow is configured (`getEurcAssetAddress`).
+ */
+export type DepositCurrency = "USDC" | "cNGN" | "EURC";
 
 export type DepositAddresses = {
   /**

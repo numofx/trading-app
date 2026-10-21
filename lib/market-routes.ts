@@ -5,7 +5,7 @@ export type FixedMarketId = Exclude<TerminalMarketId, "future">;
 
 /**
  * The one trading route, `/trade/[market]`, and the slugs it answers to, lowercase, so the URL reads
- * the same however it was typed or shared. Spot and the perp have fixed slugs. A future's slug is
+ * the same however it was typed or shared. The spot markets and the perp have fixed slugs. A future's slug is
  * its venue symbol lowercased (`USDC-cNGN-30NOV26` → `usdc-cngn-30nov26`), so a new series is a new
  * URL with no code change; whether that series is listed is the segment layout's question, asked
  * of the venue. Every market renders under one persistent shell (header, wallet, trading account,
@@ -16,6 +16,7 @@ export type FixedMarketId = Exclude<TerminalMarketId, "future">;
  * this file, so `lib/market-routes.test.mjs` pins the two together.
  */
 export const MARKET_SLUGS = {
+  eurc: "eurc-usdc",
   perp: "cngn-perp",
   spot: "cngn-usdc",
 } as const satisfies Record<FixedMarketId, string>;
@@ -25,7 +26,7 @@ export type MarketSlug = (typeof MARKET_SLUGS)[FixedMarketId];
 /** `usdc-cngn-<DDMONYY>`: the venue lists each future as `USDC-cNGN-<DDMONYY>`. */
 const FUTURE_SLUG_PATTERN = /^usdc-cngn-(\d{2}[a-z]{3}\d{2})$/;
 
-/** The URL of spot's or the perp's terminal. */
+/** The URL of a spot market's or the perp's terminal. */
 export function marketPath(id: FixedMarketId): `/trade/${MarketSlug}` {
   return `/trade/${MARKET_SLUGS[id]}`;
 }
@@ -41,7 +42,7 @@ export function futureSymbolForSlug(slug: string): string | null {
   return series === undefined ? null : `USDC-cNGN-${series.toUpperCase()}`;
 }
 
-/** What a canonical slug names: spot or the perp, or a future series by its venue symbol. */
+/** What a canonical slug names: a spot market or the perp, or a future series by its venue symbol. */
 export type ResolvedMarket = { id: FixedMarketId } | { id: "future"; symbol: string };
 
 /**

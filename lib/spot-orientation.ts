@@ -1,5 +1,7 @@
 import { formatMarketPrice } from "@/lib/market-formatting";
 import type { PerpHeaderMetric } from "@/lib/perp-market.types";
+import type { SpotPair } from "@/lib/spot-pairs";
+import { SPOT_PAIRS } from "@/lib/spot-pairs";
 import type {
   Candle,
   OrderBookLevel,
@@ -18,12 +20,6 @@ import type {
  * Under the inversion an engine ask (selling cNGN for USDC) is a bid for USDC, so the two sides of
  * the book swap, a trade's side flips, and a candle's high is the engine's low inverted.
  */
-
-/** The future's precision: two decimals of cNGN per USDC resolve well under a basis point. */
-export const SPOT_PRICE_DECIMALS = 2;
-
-/** The ladder's groupings in cNGN per USDC, finest first, as on the future. */
-export const SPOT_PRICE_GROUPS = [0.01, 0.1, 1, 5] as const;
 
 /** The trader's side as the engine's: a buy of USDC is the engine's sell of cNGN. */
 export function engineSide(side: "buy" | "sell"): "buy" | "sell" {
@@ -156,11 +152,74 @@ export function engineLimitPrice(cngnPerUsdc: string, side: "buy" | "sell"): str
   return decimals === "" ? whole : `${whole}.${decimals}`;
 }
 
+/**
+ * A typed limit as the engine signs it on a pair shown the way it trades: the decimal itself,
+ * commas dropped. Null for anything but a positive decimal.
+ */
+export function directLimitPrice(price: string): string | null {
+  const trimmed = price.replaceAll(",", "").trim();
+  const match = DECIMAL_PATTERN.exec(trimmed);
+  if (match === null || BigInt(match[1] + (match[2] ?? "")) === 0n) {
+    return null;
+  }
+  return trimmed;
+}
+
+/**
+ * How one spot pair's venue data reaches the screen, and the trader's order reaches the engine.
+ * USDC-cNGN turns everything over; EURC-USDC passes it through as served.
+ */
+export type SpotOrientation = {
+  book: typeof toUsdcCngnBook;
+  trades: typeof toUsdcCngnTrades;
+  candles: typeof toUsdcCngnCandles;
+  stats: typeof toUsdcCngnStats;
+  order: typeof toUsdcCngnOrder;
+  /** An engine price the trader's way up. */
+  price: typeof invertPrice;
+  /** The trader's side as the engine's, and back: the two are the same mapping. */
+  side: typeof engineSide;
+  /** The engine limit for a limit typed in the trader's terms, rounded never to trade past it. */
+  limit: typeof engineLimitPrice;
+};
+
+const INVERTED: SpotOrientation = {
+  book: toUsdcCngnBook,
+  candles: toUsdcCngnCandles,
+  limit: engineLimitPrice,
+  order: toUsdcCngnOrder,
+  price: invertPrice,
+  side: engineSide,
+  stats: toUsdcCngnStats,
+  trades: toUsdcCngnTrades,
+};
+
+const DIRECT: SpotOrientation = {
+  book: (engine) => ({ asks: [...engine.asks], bids: [...engine.bids] }),
+  candles: (candles) => [...candles],
+  limit: (price) => directLimitPrice(price),
+  order: (order) => order,
+  price: (price) => (price !== null && Number.isFinite(price) && price > 0 ? price : null),
+  side: (side) => side,
+  stats: (stats) => stats,
+  trades: (trades) => [...trades],
+};
+
+/** The orientation `pair` is shown in. */
+export function spotOrientation(pair: SpotPair): SpotOrientation {
+  return pair.inverted ? INVERTED : DIRECT;
+}
+
+/** A displayed price with its pair's prefix: "₦1,361.98", "$1.17234"; an em dash when unknown. */
+export function formatSpotPairPrice(pair: SpotPair, price: number | null) {
+  return price === null || !Number.isFinite(price)
+    ? "—"
+    : `${pair.pricePrefix}${formatMarketPrice(price, pair.priceDecimals)}`;
+}
+
 /** A cNGN-per-USDC price for the header and the selector: "₦1,361.98"; an em dash when unknown. */
 export function formatSpotNairaPrice(cngnPerUsdc: number | null) {
-  return cngnPerUsdc === null || !Number.isFinite(cngnPerUsdc)
-    ? "—"
-    : `₦${formatMarketPrice(cngnPerUsdc, SPOT_PRICE_DECIMALS)}`;
+  return formatSpotPairPrice(SPOT_PAIRS.spot, cngnPerUsdc);
 }
 
 /** A change that rounds to 0.00% is no move: neutral, unsigned. */
@@ -186,23 +245,26 @@ function formatChange(changePercent: number | null) {
 }
 
 /**
- * Spot's header figures in the trader's terms: the price in cNGN per USDC (the book's mid, else a
- * side, else the last trade), the 24h change of that price, the USDC traded, and the window's high
- * and low the same way up.
+ * A spot pair's header figures in the trader's terms: the price (the book's mid, else a side, else
+ * the last trade; cNGN per USDC on USDC-cNGN), the 24h change of that price, the USDC traded, and
+ * the window's high and low the same way up.
  */
-export function buildSpotHeaderMetrics(figures: {
-  changePercent: number | null;
-  high: number | null;
-  low: number | null;
-  price: number | null;
-  volumeLabel: string;
-}): PerpHeaderMetric[] {
+export function buildSpotHeaderMetrics(
+  pair: SpotPair,
+  figures: {
+    changePercent: number | null;
+    high: number | null;
+    low: number | null;
+    price: number | null;
+    volumeLabel: string;
+  }
+): PerpHeaderMetric[] {
   return [
     {
       label: "Price",
       tone: null,
-      tooltip: "cNGN per USDC",
-      value: formatSpotNairaPrice(figures.price),
+      tooltip: `${pair.displayQuote} per ${pair.displayBase}`,
+      value: formatSpotPairPrice(pair, figures.price),
     },
     {
       label: "24h Change",
@@ -210,7 +272,7 @@ export function buildSpotHeaderMetrics(figures: {
       value: formatChange(figures.changePercent),
     },
     { label: "24h Volume", tone: null, tooltip: "USDC traded", value: figures.volumeLabel },
-    { label: "24h High", tone: null, value: formatSpotNairaPrice(figures.high) },
-    { label: "24h Low", tone: null, value: formatSpotNairaPrice(figures.low) },
+    { label: "24h High", tone: null, value: formatSpotPairPrice(pair, figures.high) },
+    { label: "24h Low", tone: null, value: formatSpotPairPrice(pair, figures.low) },
   ];
 }

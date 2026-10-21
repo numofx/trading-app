@@ -45,7 +45,7 @@ import {
   getAnchorPrice,
   getMarketableLimitPrice,
   getMarketSizingPrice,
-  toOrderSizeCngn,
+  toOrderSizeBase,
 } from "@/lib/spot-market";
 import type { OrderIdempotencyKey } from "@/lib/spot-order-submission";
 import {
@@ -157,7 +157,7 @@ function resolvePerpOrderPrice(
  */
 function resolvePerpOrderSize(request: PerpOrderRequest, sizingPrice: number): string | null {
   const typed = Number(request.size.replaceAll(",", ""));
-  const sizeCngn = Math.floor(toOrderSizeCngn(typed, request.sizeUnit, sizingPrice));
+  const sizeCngn = Math.floor(toOrderSizeBase(typed, request.sizeUnit, sizingPrice));
   return Number.isFinite(sizeCngn) && sizeCngn >= 1 ? sizeCngn.toFixed(0) : null;
 }
 

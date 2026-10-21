@@ -1,23 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { erc20Abi, formatUnits, getAddress } from "viem";
+import { erc20Abi, getAddress } from "viem";
 import { createBasePublicClient } from "@/lib/base-public-client";
 import { readAtOrAfterBlock } from "@/lib/read-at-block";
-import { getCngnTokenAddress } from "@/lib/subaccount-deposit-config";
 
-export type CngnBalance = {
+export type TokenBalance = {
   decimals: number;
   units: bigint;
 };
 
 /**
- * Wallet balance of the underlying cNGN token, or null when no wallet is connected or the read
- * fails. Mirrors {@link useUsdcBalance}; unlike {@link useSubaccountBalance} this is wallet-held
- * cNGN, not the deposited ledger leg.
+ * Wallet balance of an ERC-20 (cNGN, EURC), or null when no wallet is connected, the token is not
+ * configured, or the read fails. Mirrors {@link useUsdcBalance}; unlike {@link useSubaccountBalance}
+ * this is wallet-held, not the deposited ledger leg.
  */
-export function useCngnBalance(walletAddress: string | null) {
-  const [balance, setBalance] = useState<CngnBalance | null>(null);
+export function useTokenBalance(walletAddress: string | null, tokenAddress: `0x${string}` | null) {
+  const [balance, setBalance] = useState<TokenBalance | null>(null);
   // A fresh object per refresh, so repeating the same block still re-runs the read.
   const [refreshRequest, setRefreshRequest] = useState<{ minBlock: bigint | null }>({
     minBlock: null,
@@ -26,7 +25,7 @@ export function useCngnBalance(walletAddress: string | null) {
   useEffect(() => {
     let cancelled = false;
 
-    if (!walletAddress) {
+    if (!walletAddress || tokenAddress === null) {
       setBalance(null);
       return () => {
         cancelled = true;
@@ -66,18 +65,16 @@ export function useCngnBalance(walletAddress: string | null) {
       }
     }
 
-    readBalance(getCngnTokenAddress(), getAddress(walletAddress), refreshRequest.minBlock).catch(
-      () => {
-        if (!cancelled) {
-          setBalance(null);
-        }
+    readBalance(tokenAddress, getAddress(walletAddress), refreshRequest.minBlock).catch(() => {
+      if (!cancelled) {
+        setBalance(null);
       }
-    );
+    });
 
     return () => {
       cancelled = true;
     };
-  }, [walletAddress, refreshRequest]);
+  }, [walletAddress, tokenAddress, refreshRequest]);
 
   /** Re-reads the balance; pass a confirmed transaction's block to wait until the read reflects it. */
   function refresh(minBlock: bigint | null = null) {
@@ -85,13 +82,4 @@ export function useCngnBalance(walletAddress: string | null) {
   }
 
   return { balance, refresh };
-}
-
-export function formatCngnBalanceLabel(balance: CngnBalance | null) {
-  if (balance === null) {
-    return null;
-  }
-
-  const value = Number(formatUnits(balance.units, balance.decimals));
-  return `${value.toLocaleString("en-US", { maximumFractionDigits: 2 })} cNGN`;
 }

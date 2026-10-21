@@ -1,14 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { TOKEN_ICONS } from "@/lib/token-icons";
 import { SmartImage } from "@/ui/SmartImage";
 import type { TokenSymbol } from "@/ui/trading-terminal/order-form/TokenUnit";
 import { PanelTitle } from "@/ui/trading-terminal/PanelTabs";
-
-const TOKEN_ICONS = {
-  cNGN: "/tokens/cngn.svg",
-  USDC: "/tokens/usdc.svg",
-} satisfies Record<TokenSymbol, string>;
 
 export type AccountSummaryRow = {
   /** A control that replaces the deposit and withdraw buttons, e.g. a retired account's withdraw dialog trigger. */

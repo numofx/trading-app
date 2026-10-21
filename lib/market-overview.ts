@@ -1,6 +1,7 @@
 import { MARKET_LABELS } from "@/lib/market-labels";
 import type {
   MarketOverviewRow,
+  SpotMarketId,
   TerminalMarketEntry,
   TerminalMarketId,
   TerminalMarketKind,
@@ -8,16 +9,20 @@ import type {
 import { futurePath, marketPath } from "@/lib/market-routes";
 import { PERP_MARKET_LABEL } from "@/lib/perp-terminal-config";
 import { getAnchorPrice, getBestPrices } from "@/lib/spot-market";
-import { invertPrice, toUsdcCngnStats } from "@/lib/spot-orientation";
+import { spotOrientation } from "@/lib/spot-orientation";
+import { isSpotMarketId, SPOT_PAIRS } from "@/lib/spot-pairs";
 import { formatCompactVolume, get24hStats, getVenueLastPrice } from "@/lib/ticker-stats";
 import type { SpotMarket } from "@/lib/trading.types";
 
-const SPOT_ENTRY = {
-  href: marketPath("spot"),
-  id: "spot",
-  kind: "spot",
-  symbol: MARKET_LABELS["cNGN-USDC"],
-} as const satisfies TerminalMarketEntry;
+/** A spot pair's entry, under its display name: USDC-cNGN, EURC-USDC. */
+function spotEntry(id: SpotMarketId): TerminalMarketEntry {
+  return {
+    href: marketPath(id),
+    id,
+    kind: "spot",
+    symbol: MARKET_LABELS[SPOT_PAIRS[id].symbol],
+  };
+}
 
 /**
  * The perp, which is winding down: close-only on its old accounts, then withdrawals. It is out of
@@ -36,13 +41,31 @@ export function futureEntry(symbol: string): TerminalMarketEntry {
 }
 
 /**
- * The markets the selector offers, each at its own URL under `/trade`: spot, and the future series
- * the venue lists (`futureSymbols`, nearest expiry first; empty when it lists none). The shell
- * (header, wallet, trading account, selector) persists across them; the market's panels are keyed
- * by the slug, so switching never carries one market's ticket or book into the other.
+ * The markets the selector offers, each at its own URL under `/trade`: USDC-cNGN spot, the other
+ * spot pairs the venue lists (`listedSpot`: EURC-USDC once it is served), and the future series it
+ * lists (`futureSymbols`, nearest expiry first; empty when it lists none). The shell (header,
+ * wallet, trading account, selector) persists across them; the market's panels are keyed by the
+ * slug, so switching never carries one market's ticket or book into the other.
  */
-export function selectorMarkets(futureSymbols: readonly string[]): TerminalMarketEntry[] {
-  return [SPOT_ENTRY, ...futureSymbols.map(futureEntry)];
+export function selectorMarkets(
+  futureSymbols: readonly string[],
+  listedSpot: readonly SpotMarketId[] = []
+): TerminalMarketEntry[] {
+  const spot = listedSpot.filter((id) => id !== "spot").map(spotEntry);
+  return [spotEntry("spot"), ...spot, ...futureSymbols.map(futureEntry)];
+}
+
+/**
+ * The spot pairs beyond USDC-cNGN to list: those the venue's overview served a row for, and the one
+ * on screen if it is missing, so the pill's own market is never absent from its list.
+ */
+export function listedSpotMarkets(
+  rows: readonly MarketOverviewRow[],
+  onScreen: TerminalMarketId
+): SpotMarketId[] {
+  return (Object.keys(SPOT_PAIRS) as SpotMarketId[]).filter(
+    (id) => id !== "spot" && (id === onScreen || rows.some((row) => row.id === id))
+  );
 }
 
 /** The series to list: the venue's, nearest expiry first, with the one on screen kept if it is missing. */
@@ -72,7 +95,7 @@ export function getTerminalMarket(
   if (id === "future" && futureSymbol !== null) {
     return futureEntry(futureSymbol);
   }
-  return SPOT_ENTRY;
+  return spotEntry(isSpotMarketId(id) ? id : "spot");
 }
 
 /** A row with nothing served: every figure a dash. */
@@ -98,8 +121,9 @@ export function emptyOverviewRow(id: TerminalMarketId): MarketOverviewRow {
  * The selector's figures for one market, derived exactly as that market's own header derives
  * them: the price is the book's mid (else one side, else the last trade), the change is measured
  * from the window's first trade to the last, and the volume is the window's USDC notional.
- * `markPrice` is the perp's fallback when nothing rests and nothing traded; spot has none. Spot is
- * shown USDC-cNGN, so its price and change are the venue's turned over: cNGN per USDC.
+ * `markPrice` is the perp's fallback when nothing rests and nothing traded; spot has none. A spot
+ * pair's price and change are in its displayed terms: USDC-cNGN's the venue's turned over, cNGN per
+ * USDC; EURC-USDC's as served, USDC per EURC.
  *
  * The future passes its mark and last trade time, and its volume in contracts: the venue's quote
  * volume on it is price × contracts, not money, so the USDC notional is the contracts at their size.
@@ -130,11 +154,12 @@ export function buildOverviewRow(
   const { bestAsk, bestBid } = getBestPrices(market.orderBookAsks, market.orderBookBids);
   const enginePrice =
     getAnchorPrice(bestAsk, bestBid, lastPrice) ?? perp?.markPrice ?? future?.markPrice ?? null;
-  const isSpot = id === "spot";
-  const price = isSpot ? invertPrice(enginePrice) : enginePrice;
-  const { changePercent } = isSpot
-    ? get24hStats(toUsdcCngnStats(market.stats24h), invertPrice(lastPrice))
-    : get24hStats(market.stats24h, lastPrice);
+  const orientation = isSpotMarketId(id) ? spotOrientation(SPOT_PAIRS[id]) : null;
+  const price = orientation === null ? enginePrice : orientation.price(enginePrice);
+  const { changePercent } =
+    orientation === null
+      ? get24hStats(market.stats24h, lastPrice)
+      : get24hStats(orientation.stats(market.stats24h), orientation.price(lastPrice));
   const futureVolume = future?.volumeUnits == null ? null : future.volumeUnits * future.unitUsdc;
   return {
     changePercent24h: changePercent,

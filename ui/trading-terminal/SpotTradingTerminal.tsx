@@ -3,7 +3,12 @@
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useEffectEvent, useState } from "react";
-import { buildSpotOpenOrdersActivityView, getOwnedOpenOrders } from "@/lib/account-activity-views";
+import {
+  buildOrderHistoryActivityView,
+  buildSpotOpenOrdersActivityView,
+  buildTradeHistoryActivityView,
+  getOwnedOpenOrders,
+} from "@/lib/account-activity-views";
 import { formatBalance } from "@/lib/account-balance-display";
 import type { ChartInterval } from "@/lib/chart-interval";
 import { CHART_INTERVALS, DEFAULT_CHART_INTERVAL } from "@/lib/chart-interval";
@@ -14,17 +19,9 @@ import {
   getWorkingOrders,
   withoutCancelledOrders,
 } from "@/lib/spot-market";
-import {
-  buildSpotHeaderMetrics,
-  invertPrice,
-  SPOT_PRICE_DECIMALS,
-  SPOT_PRICE_GROUPS,
-  toUsdcCngnBook,
-  toUsdcCngnCandles,
-  toUsdcCngnOrder,
-  toUsdcCngnStats,
-  toUsdcCngnTrades,
-} from "@/lib/spot-orientation";
+import { buildSpotHeaderMetrics, spotOrientation } from "@/lib/spot-orientation";
+import type { SpotPair } from "@/lib/spot-pairs";
+import { SPOT_PAIRS } from "@/lib/spot-pairs";
 import { ACTIVITY_VIEWS, FOOTER_LINKS, SPOT_BOTTOM_TABS } from "@/lib/spot-terminal-config";
 import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
 import { get24hStats } from "@/lib/ticker-stats";
@@ -43,31 +40,33 @@ import { useChartInterval } from "@/ui/trading-terminal/useChartInterval";
 import { useLiveMarketBook } from "@/ui/trading-terminal/useLiveMarketBook";
 import { useSignedHistoryTabs } from "@/ui/trading-terminal/useSignedHistoryTabs";
 
-/** The venue's symbol for this market; markets-service resolves the stream subscription from it. */
-const SPOT_MARKET_SYMBOL = "cNGN-USDC";
-
 /**
- * Spot shown as USDC-cNGN, the way the future is quoted: prices in cNGN per USDC, sizes in USDC
- * (the book can switch them to cNGN). The venue serves the engine's cNGN-USDC; `spot-orientation`
- * turns it over for every panel but the ticket, which works in the engine's terms underneath.
+ * The book in the pair's displayed terms. USDC-cNGN is quoted the way the future is: prices in
+ * cNGN per USDC, sizes in USDC (switchable to cNGN). The venue serves the engine's cNGN-USDC;
+ * `spot-orientation` turns it over for every panel but the ticket, which works in the engine's
+ * terms underneath. EURC-USDC is shown as it trades: USDC per EURC, sized in EURC.
  */
-const BOOK_UNITS: BookUnits = {
-  base: "USDC",
-  price: "cNGN",
-  priceDecimals: SPOT_PRICE_DECIMALS,
-  priceGroups: SPOT_PRICE_GROUPS,
-  quote: "cNGN",
-};
+function bookUnits(pair: SpotPair): BookUnits {
+  return {
+    base: pair.displayBase,
+    price: pair.displayQuote,
+    priceDecimals: pair.priceDecimals,
+    priceGroups: pair.priceGroups,
+    quote: pair.displayQuote,
+  };
+}
 
-const CHART_UNITS: ChartUnits = {
-  axisDecimals: SPOT_PRICE_DECIMALS,
-  pair: "USDC-cNGN",
-  priceDecimals: SPOT_PRICE_DECIMALS,
-  volumeUnit: "USDC",
-};
+function chartUnits(pair: SpotPair): ChartUnits {
+  return {
+    axisDecimals: pair.priceDecimals,
+    pair: `${pair.displayBase}-${pair.displayQuote}`,
+    priceDecimals: pair.priceDecimals,
+    volumeUnit: "USDC",
+  };
+}
 
 /**
- * The spot market's panels on the terminal's grid, under the shell's header, which it feeds its
+ * A spot market's panels on the terminal's grid, under the shell's header, which it feeds its
  * figures and the deposit control through the header slot. Presentational: the wallet, signing
  * and the account live in `SpotMarketPanels`, so a fixture can render this with made-up figures.
  */
@@ -75,7 +74,8 @@ export function SpotTradingTerminal({
   candles,
   candleInterval = DEFAULT_CHART_INTERVAL,
   spotMarket,
-  accountCngn = null,
+  pair = SPOT_PAIRS.spot,
+  accountBase = null,
   accountUsdc = null,
   walletAddress = null,
   depositControl,
@@ -97,8 +97,13 @@ export function SpotTradingTerminal({
   /** The interval `candles` are bucketed at, which streamed fills are folded in at: the URL's `?interval=`. */
   candleInterval?: ChartInterval;
   spotMarket: SpotMarket;
-  /** Subaccount balances as numbers — the ticket sizes a percentage of what the account can spend. */
-  accountCngn?: number | null;
+  /** Which spot pair this is; USDC-cNGN when omitted. */
+  pair?: SpotPair;
+  /**
+   * Subaccount balances as numbers, the pair's base (cNGN, EURC) and USDC — the ticket sizes a
+   * percentage of what the account can spend.
+   */
+  accountBase?: number | null;
   accountUsdc?: number | null;
   /** Connected wallet, used to pick this trader's own orders out of the public book. */
   walletAddress?: string | null;
@@ -166,8 +171,10 @@ export function SpotTradingTerminal({
   const signedHistory = useSignedHistoryTabs({
     bottomTab,
     isSignedIn,
-    market: SPOT_MARKET_SYMBOL,
+    market: pair.symbol,
     signMessage: onSignOrderHistory,
+    orderHistoryView: (orders) => buildOrderHistoryActivityView(orders, undefined, pair),
+    tradeHistoryView: (fills) => buildTradeHistoryActivityView(fills, undefined, pair),
     walletAddress,
   });
 
@@ -231,14 +238,15 @@ export function SpotTradingTerminal({
     candleInterval,
     candles,
     snapshot: spotMarket,
-    symbol: SPOT_MARKET_SYMBOL,
+    symbol: pair.symbol,
     type: "spot",
   });
   const anchorPrice = getAnchorPrice(bestAsk, bestBid, lastPrice);
   // The panels' view, turned the trader's way up; the ticket keeps the engine's book.
-  const shown = toUsdcCngnBook({ asks: bookAsks, bids: bookBids });
-  const shownTrades = toUsdcCngnTrades(bookTrades);
-  const shownLast = invertPrice(lastPrice);
+  const orientation = spotOrientation(pair);
+  const shown = orientation.book({ asks: bookAsks, bids: bookBids });
+  const shownTrades = orientation.trades(bookTrades);
+  const shownLast = orientation.price(lastPrice);
 
   function handleSubmitOrder(args: {
     side: "buy" | "sell";
@@ -249,7 +257,7 @@ export function SpotTradingTerminal({
     onSubmitOrder({ ...args, book: { bestAsk, bestBid } });
   }
   const { changePercent, high, low, volumeLabel } = get24hStats(
-    toUsdcCngnStats(liveStats),
+    orientation.stats(liveStats),
     shownLast
   );
   // Assets is the one bottom tab with a real data source today, so it's built from live balances
@@ -266,13 +274,17 @@ export function SpotTradingTerminal({
    * orders already claim. Showing the raw balance let an account with 1,300 cNGN and 1,382 cNGN
    * already working read as fully available.
    */
-  const committed = getCommittedBalances(workingOrders, walletAddress);
-  const spendableCngn = accountCngn === null ? null : Math.max(0, accountCngn - committed.cngn);
+  const committed = getCommittedBalances(workingOrders, walletAddress, pair.base);
+  const spendableBase = accountBase === null ? null : Math.max(0, accountBase - committed.base);
   const spendableUsdc = accountUsdc === null ? null : Math.max(0, accountUsdc - committed.usdc);
 
   function buildActivityView() {
     if (bottomTab === "open-orders") {
-      return buildSpotOpenOrdersActivityView(workingOrders.map(toUsdcCngnOrder), walletAddress);
+      return buildSpotOpenOrdersActivityView(
+        workingOrders.map(orientation.order),
+        walletAddress,
+        pair
+      );
     }
     return (
       signedHistory.view ??
@@ -282,14 +294,20 @@ export function SpotTradingTerminal({
 
   const activityView = buildActivityView();
 
-  const shownPrice = invertPrice(anchorPrice);
+  const shownPrice = orientation.price(anchorPrice);
   usePublishTerminalHeader({
     changePercent24h: changePercent,
     depositControl,
     high24h: high,
     low24h: low,
-    market: "spot",
-    metrics: buildSpotHeaderMetrics({ changePercent, high, low, price: shownPrice, volumeLabel }),
+    market: pair.id,
+    metrics: buildSpotHeaderMetrics(pair, {
+      changePercent,
+      high,
+      low,
+      price: shownPrice,
+      volumeLabel,
+    }),
     price: shownPrice,
     volume24hLabel: volumeLabel,
   });
@@ -350,14 +368,14 @@ export function SpotTradingTerminal({
           onTabChange={setBookTab}
           tab={bookTab}
           trades={shownTrades}
-          units={BOOK_UNITS}
+          units={bookUnits(pair)}
         />
       }
       chart={
         <SpotChartPanel
           asks={shown.asks}
           bids={shown.bids}
-          candles={toUsdcCngnCandles(liveCandles)}
+          candles={orientation.candles(liveCandles)}
           chartTab={chartTab}
           indicatorsEnabled={indicatorsEnabled}
           onChartTabChange={setChartTab}
@@ -367,7 +385,7 @@ export function SpotTradingTerminal({
           selectedTimeframe={timeframe}
           selectedTool={selectedTool}
           timeframes={CHART_INTERVALS}
-          units={CHART_UNITS}
+          units={chartUnits(pair)}
         />
       }
       ticketColumn={
@@ -380,7 +398,7 @@ export function SpotTradingTerminal({
           <SpotOrderFormPanel
             anchorPrice={anchorPrice}
             asks={bookAsks}
-            availableCngn={spendableCngn}
+            availableBase={spendableBase}
             availableUsdc={spendableUsdc}
             bestAsk={bestAsk}
             bestBid={bestBid}
@@ -393,13 +411,15 @@ export function SpotTradingTerminal({
             onEdit={onFormEdit}
             onSubmitOrder={handleSubmitOrder}
             ownOpenOrders={ownedOpenOrders}
+            pair={pair}
             takerFeeBps={spotMarket.takerFeeBps}
           />
           {/* Both legs of the account, in the order the ticket spends them, then any retired account's. */}
           <AccountSummary
             rows={buildAccountRows({
-              accountCngn,
+              accountBase,
               accountUsdc,
+              base: pair.base,
               hasWallet,
               legacy,
               legacyControl,
@@ -419,8 +439,9 @@ export function SpotTradingTerminal({
  * share one withdraw dialog hung on the first of them.
  */
 function buildAccountRows(inputs: {
-  accountCngn: number | null;
+  accountBase: number | null;
   accountUsdc: number | null;
+  base: SpotPair["base"];
   hasWallet: boolean;
   legacy: { accountId: string; cngnLabel: string | null; usdcLabel: string | null } | null;
   legacyControl: ReactNode;
@@ -433,7 +454,7 @@ function buildAccountRows(inputs: {
     onDeposit: () => inputs.onDepositRequest?.(symbol),
     symbol,
   });
-  const rows = [live("USDC", inputs.accountUsdc), live("cNGN", inputs.accountCngn)];
+  const rows = [live("USDC", inputs.accountUsdc), live(inputs.base, inputs.accountBase)];
   if (inputs.legacy === null) {
     return rows;
   }
@@ -444,7 +465,7 @@ function buildAccountRows(inputs: {
       ["cNGN", inputs.legacy.cngnLabel],
     ] as const
   )
-    .filter((entry): entry is readonly [DepositCurrency, string] => entry[1] !== null)
+    .filter((entry): entry is readonly ["USDC" | "cNGN", string] => entry[1] !== null)
     .map(([symbol, balance], index) => ({
       // One dialog withdraws from both escrows, so the trigger sits on the first row only.
       action: index === 0 ? inputs.legacyControl : <span />,

@@ -9,6 +9,7 @@ import {
   findSpotMarket,
 } from "@/lib/market-pickers";
 import type { PerpStatePresentation } from "@/lib/perp-market";
+import type { SpotBase } from "@/lib/spot-pairs";
 
 export type MarketPresentation = {
   asset_address?: string;
@@ -200,8 +201,9 @@ export async function getMarketsServiceMarkets() {
   return (await response.json()) as MarketPresentation[];
 }
 
-export async function getLiveSpotMarket() {
-  return findSpotMarket(await getMarketsServiceMarkets());
+/** The spot market trading `base` against USDC, when markets-service lists it. */
+export async function getLiveSpotMarket(base: SpotBase = "cNGN") {
+  return findSpotMarket(await getMarketsServiceMarkets(), base);
 }
 
 /** cNGN-PERP, when markets-service lists it: contract_type `perpetual`, cNGN over USDC. */

@@ -92,6 +92,25 @@ from its `/v1/markets` entry (`contract_type: future`, the `future` block, `fill
 - **The series closes** for new orders at its last trade time (13:00 UTC on 30 Nov) and settles at
   14:00; the header counts down to the first.
 
+## EURC-USDC spot
+
+A second spot market, at `/trade/eurc-usdc` under the selector's Spot tab: EURC against USDC on
+the same MarginEngine account, TradeModule and USDC cash as cNGN-USDC (numofx/exchange
+`deploy-eurc-spot.s.sol`). It is shown as it trades, USDC per EURC to five decimals, sized in whole
+EURC, a buy a buy of EURC; there is no inversion and no `order_entry_spec`, so its book, orders and
+fills are read from the engine fields. Fees come from `/v1/markets` (5 bps taker, 0 maker).
+
+It is **dormant until the venue lists it**: like a future series, `/trade/eurc-usdc` is a 404 and
+the selector omits it until `/v1/markets` serves `EURC-USDC` (markets-service
+`EURC_SPOT_ASSET_ADDRESS`). Orders sign for the `asset_address` the venue serves, never a default;
+with none served the ticket refuses to sign. The escrow has no code default:
+
+- `NEXT_PUBLIC_EURC_ASSET_ADDRESS` — the EURC-USDC escrow (its `asset_address`). Set, it adds EURC
+  to Deposit and Withdraw and the account's EURC leg. The build check fails once the venue lists
+  EURC-USDC unless this matches it.
+- `NEXT_PUBLIC_EURC_TOKEN_ADDRESS` — optional; defaults to Circle EURC
+  `0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42` on Base mainnet (none on Sepolia).
+
 ## Runtime config
 
 The app reads the live spot market from `markets-service` and renders it through the orderbook UI.
