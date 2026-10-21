@@ -6,8 +6,8 @@ Renders the cNGN-USDC spot market through an orderbook UI, with off/on ramping v
 
 The app renders **cNGN-USDC** spot at `/trade/cngn-usdc` and the front-month **cNGN future**
 (`USDC-cNGN-<DDMONYY>`) at its lowercased symbol, e.g. `/trade/usdc-cngn-30nov26`, switched from the
-market selector in the header. **cNGN-PERP** at `/trade/cngn-perp` is winding down: out of the
-selector, reached at `/perp` (307). One route, one shell: the `/trade` layout holds the header, the
+market selector in the header. **cNGN-PERP** is delisted (exchange #251): out of the selector, and
+`/trade/cngn-perp` is a 404 unless `/v1/markets` lists it again; `/perp` no longer redirects. One route, one shell: the `/trade` layout holds the header, the
 wallet, the trading account and the selector, and a switch replaces only the market's panels under
 it (keyed by the slug, so a ticket or a book tab never carries over). The slugs live in
 `lib/market-routes.ts`. `/` opens the front-month future, chosen per request from `/v1/markets`, or
@@ -27,8 +27,8 @@ about it from `markets-service`, with no env of its own:
 
 - `/v1/markets` lists `cNGN-PERP` (`contract_type: perpetual`) with a `perp` object: mark, index,
   funding, margin rates, max leverage, and the module, cash and SRM a trader signs and deposits for.
-  Until it does, `/trade/cngn-perp` renders its not-live state: empty panels and a ticket that
-  cannot submit.
+  Without that listing, `/trade/cngn-perp` is a 404 (the segment's layout asks the venue, and
+  renders the not-live state only when the venue cannot be read).
 - Orders are signed exactly as entered (USDC per cNGN, cNGN contracts, a long is the on-chain long)
   for the perp's module and asset. A trader's perp margin is their account under the perp SRM,
   opened by the first deposit. From 2026-10-04 to the MarginEngine cutover it was also the spot

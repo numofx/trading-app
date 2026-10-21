@@ -11,9 +11,9 @@ export type FixedMarketId = Exclude<TerminalMarketId, "future">;
  * of the venue. Every market renders under one persistent shell (header, wallet, trading account,
  * selector); only the market's own panels change with the slug.
  *
- * `/` opens the front-month future, chosen per request by `app/route.ts`. `next.config.ts`
- * redirects `/perp` to the perp, which is winding down and reachable only by URL; it cannot import
- * this file, so `lib/market-routes.test.mjs` pins the two together.
+ * `/` opens the front-month future, chosen per request by `app/route.ts`. The perp is delisted:
+ * its slug is a 404 unless the venue lists it again (the segment's layout asks), and `/perp`, which
+ * once redirected to it, is gone; `lib/market-routes.test.mjs` pins `next.config.ts` to no redirects.
  */
 export const MARKET_SLUGS = {
   eurc: "eurc-usdc",
