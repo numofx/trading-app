@@ -5,6 +5,11 @@ import posthog from "posthog-js";
 import { useEffect, useEffectEvent, useState } from "react";
 import { createWalletClient, custom, decodeEventLog, erc20Abi, getAddress, parseUnits } from "viem";
 import { createBasePublicClient, getAppChain } from "@/lib/base-public-client";
+import {
+  EURC_DEPOSITS_UNAVAILABLE,
+  fetchListedEurcEscrow,
+  resolveEurcDepositEscrow,
+} from "@/lib/eurc-deposit-escrow";
 import { withGasHeadroom } from "@/lib/gas-headroom";
 import type {
   DepositAddresses,
@@ -341,7 +346,28 @@ export function useSubaccountDeposit({
       return;
     }
 
-    const addresses = addressesOverride ?? getDepositAddresses(currency);
+    // EURC pays into an escrow known only after its deploy: the venue's listing and this build's config
+    // must agree on it at the moment of the deposit, or nothing is signed. Checked before any address
+    // is resolved, so an unconfigured build says why instead of throwing.
+    let eurcEscrow: `0x${string}` | null = null;
+    if (currency === "EURC") {
+      const check = resolveEurcDepositEscrow(
+        await fetchListedEurcEscrow(),
+        process.env.NEXT_PUBLIC_EURC_ASSET_ADDRESS
+      );
+      if (!check.ok) {
+        posthog.capture("eurc_deposit_blocked", { reason: check.reason });
+        setInputError(EURC_DEPOSITS_UNAVAILABLE);
+        return;
+      }
+      eurcEscrow = check.escrow;
+    }
+
+    const resolved = addressesOverride ?? getDepositAddresses(currency);
+    const addresses =
+      eurcEscrow === null || resolved === null
+        ? resolved
+        : { ...resolved, baseAssetContract: eurcEscrow };
 
     if (addresses === null) {
       setInputError(`${currency} deposits are not configured for this network.`);
