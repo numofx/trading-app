@@ -10,7 +10,7 @@ import type {
 import { formatMarketPrice } from "@/lib/market-formatting";
 import type { PerpHeaderMetric } from "@/lib/perp-market.types";
 import { sideTone } from "@/lib/side-tone";
-import { getMarketFill } from "@/lib/spot-market";
+import { getMarketableLimitPrice, getMarketFill } from "@/lib/spot-market";
 import { formatCompactUsd } from "@/lib/ticker-stats";
 import { tokenIcon } from "@/lib/token-icons";
 import type { ActivityRow, ActivityView, CellTone, OrderBookLevel } from "@/lib/trading.types";
@@ -442,6 +442,82 @@ export function maxFutureNotional({
   const perUsdc = account.imRate + (takerFeeBps ?? 0) / 10_000;
   const opening = perUsdc > 0 ? Math.max(0, account.initialMarginSurplus) / perUsdc : 0;
   return Math.floor((closable + opening) / state.unitUsdc) * state.unitUsdc;
+}
+
+/**
+ * The venue units a market order on `side` fills at once: the size resting inside the limit it is
+ * signed at, the touch through `maxSlippage` held inside the fill band. A market order is a limit
+ * order that rests, so whatever the book does not hold inside that limit stays on it.
+ */
+export function futureMarketableUnits({
+  asks,
+  band,
+  bids,
+  maxSlippage,
+  side,
+}: {
+  asks: OrderBookLevel[];
+  band: FutureState["fillBand"];
+  bids: OrderBookLevel[];
+  maxSlippage: number;
+  side: FutureSide;
+}) {
+  const uiSide = futureOrderUiSide(side);
+  const limit = getMarketableLimitPrice(
+    uiSide,
+    asks[0]?.price ?? null,
+    bids[0]?.price ?? null,
+    maxSlippage
+  );
+  if (limit === null) {
+    return 0;
+  }
+  const banded = band === null ? limit : Math.min(band.high, Math.max(band.low, limit));
+  const levels = uiSide === "buy" ? asks : bids;
+  const reachable = levels.filter((level) =>
+    uiSide === "buy" ? level.price <= banded : level.price >= banded
+  );
+  return Math.floor(reachable.reduce((sum, level) => sum + level.size, 0));
+}
+
+/**
+ * The Close on a position row: a reduce-only market order on the opposite side, sized to the
+ * position or to what the book fills inside the slippage, whichever is smaller, so a close never
+ * leaves a remainder resting. `held` is the position in venue units, to say a close is partial.
+ */
+export function futureCloseOrder({
+  account,
+  asks,
+  bids,
+  maxSlippage,
+  state,
+}: {
+  account: FutureAccount | null;
+  asks: OrderBookLevel[];
+  bids: OrderBookLevel[];
+  maxSlippage: number;
+  state: FutureState;
+}): { error: string } | { held: number; side: FutureSide; units: number } {
+  const position =
+    account === null ? 0 : futureNotionalUsdc(toContracts(account.positionUnits), state);
+  const held = state.unitUsdc > 0 ? Math.floor(Math.abs(position) / state.unitUsdc) : 0;
+  if (held < 1) {
+    return { error: "No position to close." };
+  }
+  const side: FutureSide = position > 0 ? "short" : "long";
+  const fillable = futureMarketableUnits({
+    asks,
+    band: state.fillBand,
+    bids,
+    maxSlippage,
+    side,
+  });
+  if (fillable < 1) {
+    return {
+      error: `No ${side === "long" ? "asks" : "bids"} to close against. Use a reduce-only limit order.`,
+    };
+  }
+  return { held, side, units: Math.min(held, fillable) };
 }
 
 const USD_CELL = new Intl.NumberFormat("en-US", {

@@ -11,6 +11,7 @@ import {
   formatFutureUsdc,
   formatFutureVm,
   futureFillVmCngn,
+  futureMarketableUnits,
   futureMaxFeeUsdc,
   futureNotionalUsdc,
   futureOrderUiSide,
@@ -319,6 +320,42 @@ function describePriceProblem(inputs: {
 }
 
 /**
+ * A market order is a limit that rests: what the book does not hold inside the slippage stays on
+ * the book instead of filling, which the trader should know before signing. Null when it all fills.
+ */
+function describeDepthShortfall(inputs: {
+  asks: OrderBookLevel[];
+  bids: OrderBookLevel[];
+  maxSlippage: number;
+  notional: number | null;
+  orderType: FutureOrderType;
+  side: FutureSide;
+  state: FutureState | null;
+}) {
+  const { notional, state } = inputs;
+  if (
+    inputs.orderType === "Limit" ||
+    notional === null ||
+    state === null ||
+    !(state.unitUsdc > 0)
+  ) {
+    return null;
+  }
+  const fillable =
+    futureMarketableUnits({
+      asks: inputs.asks,
+      band: state.fillBand,
+      bids: inputs.bids,
+      maxSlippage: inputs.maxSlippage,
+      side: inputs.side,
+    }) * state.unitUsdc;
+  if (fillable >= notional) {
+    return null;
+  }
+  return `The book fills ${SIZE.format(fillable)} USDC within ${SIZE.format(inputs.maxSlippage * 100)}% slippage; the other ${SIZE.format(notional - fillable)} USDC would rest as a limit order.`;
+}
+
+/**
  * Everything the ticket shows that follows from its fields and the market: whether the series
  * takes orders, the size, the price it would trade at and what is wrong with it, and the margin.
  */
@@ -329,6 +366,7 @@ function deriveTicket(inputs: {
   bestAsk: number | null;
   bestBid: number | null;
   limitPrice: string;
+  maxSlippage: number;
   nowMs: number;
   orderType: FutureOrderType;
   reduceOnly: boolean;
@@ -366,6 +404,16 @@ function deriveTicket(inputs: {
     state === null || reduce.filled === null || units === null
       ? null
       : estimateFutureOrder({ account, notional: reduce.filled, side, state, takerFeeBps });
+  const depthNote = describeDepthShortfall({
+    asks: inputs.asks,
+    bids: inputs.bids,
+    maxSlippage: inputs.maxSlippage,
+    // Under Reduce Only the venue takes no more than the position, so that is the size.
+    notional: reduce.filled,
+    orderType,
+    side,
+    state,
+  });
   // A market order's price is the book walked for its size, not the touch alone.
   const fill =
     state === null || orderType === "Limit"
@@ -376,6 +424,7 @@ function deriveTicket(inputs: {
       state === null
         ? "The future isn't listed on the venue right now."
         : futureTradingBlock(state, inputs.nowMs),
+    depthNote,
     estimate,
     expectedPrice:
       orderType === "Limit" ? typedLimit : (fill.averagePrice ?? touch ?? inputs.referencePrice),
@@ -695,6 +744,7 @@ export function FutureOrderFormPanel({
 
   const {
     block,
+    depthNote,
     estimate,
     expectedPrice,
     leverage,
@@ -713,6 +763,7 @@ export function FutureOrderFormPanel({
     bestAsk,
     bestBid,
     limitPrice,
+    maxSlippage,
     nowMs,
     orderType,
     reduceOnly,
@@ -784,7 +835,8 @@ export function FutureOrderFormPanel({
   // A typed limit outside the band is said under the field, as it is typed; the status line keeps
   // what is not about the limit.
   const limitError = orderType === "Limit" ? shownPriceError : null;
-  const statusText = block ?? lastAction ?? (limitError === null ? shownPriceError : null);
+  const statusText =
+    block ?? lastAction ?? (limitError === null ? shownPriceError : null) ?? depthNote;
 
   return (
     <OrderFormShell

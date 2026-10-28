@@ -24,6 +24,7 @@ import {
   describeFutureRejection,
   FUTURE_PRICE_DECIMALS,
   FUTURE_PRICE_GROUPS,
+  futureCloseOrder,
   futureMarkSource,
   futureOrderUiSide,
   futureWorstFeeUnits,
@@ -33,6 +34,7 @@ import type { FutureAccount, FutureMarket } from "@/lib/future-market.types";
 import { FUTURE_ACTIVITY_VIEWS, FUTURE_BOTTOM_TABS } from "@/lib/future-terminal-config";
 import type { OrderOutcome } from "@/lib/order-settlement";
 import { isOrderFillKnown, pollOrderOutcome } from "@/lib/order-settlement";
+import { PERP_DEFAULT_MAX_SLIPPAGE } from "@/lib/perp-market";
 import { getAnchorPrice, getMarketableLimitPrice } from "@/lib/spot-market";
 import { buildCancelEnvelope, buildSpotOrderEnvelope } from "@/lib/spot-order-submission";
 import { FOOTER_LINKS } from "@/lib/spot-terminal-config";
@@ -374,7 +376,9 @@ function buildRowAction(inputs: {
   cancellingNonce: string | null;
   hasWallet: boolean;
   isLive: boolean;
+  isSubmitting: boolean;
   onCancel: (nonce: string, ownerAddress: string) => void;
+  onClose: () => void;
   onDeposit: (currency: DepositCurrency) => void;
   onWithdraw: (currency: DepositCurrency) => void;
   ownedOpenOrders: { nonce: string; ownerAddress: string }[];
@@ -388,6 +392,20 @@ function buildRowAction(inputs: {
   }
   if (inputs.bottomTab === "balances") {
     return buildBalanceRowAction(inputs.account, inputs.onDeposit, inputs.onWithdraw);
+  }
+  if (inputs.bottomTab === "positions") {
+    // One series, so at most one row.
+    return (rowIndex: number) =>
+      rowIndex === 0 && (inputs.account?.positionUnits ?? 0n) !== 0n ? (
+        <button
+          className={ROW_BUTTON_CLASSES}
+          disabled={inputs.isSubmitting}
+          onClick={inputs.onClose}
+          type="button"
+        >
+          {inputs.isSubmitting ? "Closing…" : "Close"}
+        </button>
+      ) : null;
   }
   if (inputs.bottomTab !== "open-orders") {
     return undefined;
@@ -558,7 +576,14 @@ function useFutureOrderActions({
     }
   }
 
-  async function submit(request: FutureOrderRequest) {
+  /**
+   * `options.awaitingSignature` replaces the line shown while the wallet signs, and
+   * `options.eventOrderType` the order type the analytics events carry (a Close is a market order).
+   */
+  async function submit(
+    request: FutureOrderRequest,
+    options: { awaitingSignature?: string; eventOrderType?: string } = {}
+  ) {
     if (market === null || wallet === null) {
       return;
     }
@@ -575,7 +600,7 @@ function useFutureOrderActions({
       market_id: "usdc-cngn-future",
       notional_usdc: request.units * market.state.unitUsdc,
       order_side: request.side,
-      order_type: request.orderType,
+      order_type: options.eventOrderType ?? request.orderType,
     };
     setIsSubmitting(true);
     try {
@@ -586,7 +611,9 @@ function useFutureOrderActions({
         reduceOnly: request.reduceOnly,
         side: futureOrderUiSide(request.side),
         onAwaitingSignature: () =>
-          orderStatus.announce(`Awaiting wallet signature for account #${subaccountId}`),
+          orderStatus.announce(
+            options.awaitingSignature ?? `Awaiting wallet signature for account #${subaccountId}`
+          ),
         subaccountId,
         units: request.units,
         wallet,
@@ -740,6 +767,44 @@ export function FutureMarketPanels({
 
   const openInterestUsd = useFutureOpenInterest(market);
 
+  /**
+   * Closes the position with a reduce-only market order on the opposite side, sized to what the
+   * book fills inside the default slippage. A position larger than that closes in parts: the venue
+   * holds a reduce-only order to the position, so a stale size can shrink it but never flip it.
+   */
+  function handleClose() {
+    if (market === null) {
+      return;
+    }
+    const close = futureCloseOrder({
+      account: futureAccount.account,
+      asks: book.asks,
+      bids: book.bids,
+      maxSlippage: PERP_DEFAULT_MAX_SLIPPAGE,
+      state: market.state,
+    });
+    if ("error" in close) {
+      orderStatus.announce(close.error);
+      return;
+    }
+    const usdc = (units: number) => (units * market.state.unitUsdc).toLocaleString("en-US");
+    const part =
+      close.units < close.held
+        ? `${usdc(close.units)} of ${usdc(close.held)} USDC (all the book fills now; Close again for the rest)`
+        : `${usdc(close.units)} USDC`;
+    void actions.submit(
+      {
+        limitPrice: "",
+        maxSlippage: PERP_DEFAULT_MAX_SLIPPAGE,
+        orderType: "Market",
+        reduceOnly: true,
+        side: close.side,
+        units: close.units,
+      },
+      { awaitingSignature: `Awaiting wallet signature to close ${part}`, eventOrderType: "Close" }
+    );
+  }
+
   usePublishTerminalHeader({
     changePercent24h: stats.changePercent,
     depositControl: market === null ? undefined : transfer.headerControl,
@@ -781,6 +846,8 @@ export function FutureMarketPanels({
               cancellingNonce: actions.cancellingNonce,
               hasWallet: primaryWallet !== null,
               isLive: market !== null,
+              isSubmitting: actions.isSubmitting,
+              onClose: handleClose,
               onDeposit: transfer.openDeposit,
               onWithdraw: transfer.openWithdraw,
               onCancel: (nonce, ownerAddress) => void actions.cancel(nonce, ownerAddress),
