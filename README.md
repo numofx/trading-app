@@ -90,7 +90,7 @@ from its `/v1/markets` entry (`contract_type: future`, the `future` block, `fill
   maintenance, `getPendingVM` and the engine's futures rates. `/v1/positions` covers the perp
   only. There is no entry price, uPnL or liquidation price; the engine keeps none.
 - **The series closes** for new orders at its last trade time (13:00 UTC on 30 Nov) and settles at
-  14:00; the header counts down to the first.
+  14:00.
 
 ## EURC-USDC spot
 

@@ -188,42 +188,6 @@ export function isOutsideFillBand(price: number, band: FutureState["fillBand"]) 
   return band !== null && (price < band.low || price > band.high);
 }
 
-/** Time left to an instant, coarsest two units: "48d 17h", "5h 12m", "12m", "<1m"; "—" once past. */
-export function formatCountdown(targetMs: number, nowMs: number) {
-  const left = targetMs - nowMs;
-  if (!Number.isFinite(left) || left <= 0) {
-    return "—";
-  }
-  const day = Duration.toMillis("1 day");
-  const hour = Duration.toMillis("1 hour");
-  const minute = Duration.toMillis("1 minute");
-  const days = Math.floor(left / day);
-  const hours = Math.floor((left % day) / hour);
-  const minutes = Math.floor((left % hour) / minute);
-  if (days > 0) {
-    return `${days}d ${hours}h`;
-  }
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
-  }
-  return minutes > 0 ? `${minutes}m` : "<1m";
-}
-
-const UTC_STAMP = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  hour: "2-digit",
-  hourCycle: "h23",
-  minute: "2-digit",
-  month: "short",
-  timeZone: "UTC",
-  year: "numeric",
-});
-
-/** An instant in UTC, as the series is specified: "30 Nov 2026, 14:00 UTC". */
-export function formatUtcStamp(ms: number) {
-  return `${UTC_STAMP.format(ms)} UTC`;
-}
-
 /** A future long is a buy: it gains when cNGN weakens, as more cNGN per USDC. */
 export function futureOrderUiSide(side: FutureSide): "buy" | "sell" {
   return side === "long" ? "buy" : "sell";
@@ -722,17 +686,6 @@ function formatBasis(basis: ReturnType<typeof futureBasis>) {
   return `${signPrefix(basis.points)}${formatFuturePrice(Math.abs(basis.points))} (${signedPercent(basis.premium * 100, 2)})`;
 }
 
-/** Time to expiry, or what the series is once it has none left. */
-function formatExpiresIn(state: FutureStatsInput | null, nowMs: number) {
-  if (state === null) {
-    return "—";
-  }
-  if (state.settled) {
-    return "Settled";
-  }
-  return state.expiryMs <= nowMs ? "Expired" : formatCountdown(state.expiryMs, nowMs);
-}
-
 /**
  * Open interest at its USDC notional from the asset's `totalPosition`: the sum of every account's
  * |position| under the manager, 18 decimals a contract. That counts each contract on both its long
@@ -752,8 +705,7 @@ function formatOpenInterestUsd(value: number | null) {
 
 /**
  * The future's header figures, in order: mark (with how it is set), index, basis in forward points
- * and percent, the basis annualized, open interest at its USDC notional, and the time to expiry.
- * Prices are cNGN per USDC.
+ * and percent, the basis annualized, and open interest at its USDC notional. Prices are cNGN per USDC.
  */
 export function buildFutureHeaderMetrics({
   markSource,
@@ -801,15 +753,6 @@ export function buildFutureHeaderMetrics({
       tooltip: "Contracts open, one side, at their USDC notional",
       // Nothing open is a figure, not a gap: "$0", where an unread value is a dash.
       value: formatOpenInterestUsd(openInterestUsd),
-    },
-    {
-      label: "Expires In",
-      tone: null,
-      tooltip:
-        state === null
-          ? undefined
-          : `New orders close ${formatUtcStamp(state.lastTradeAtMs)}; the series settles ${formatUtcStamp(state.expiryMs)}`,
-      value: formatExpiresIn(state, nowMs),
     },
   ];
 }

@@ -46,7 +46,7 @@ function tabFor(kind: TerminalMarketKind): TerminalMarketKind {
  */
 const GRID_CLASS = {
   futures:
-    "grid-cols-[minmax(0,2.8fr)_minmax(0,1fr)_minmax(0,0.9fr)] md:grid-cols-[minmax(0,2.3fr)_minmax(0,0.9fr)_minmax(0,1.35fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,0.85fr)_1rem]",
+    "grid-cols-[minmax(0,2.8fr)_minmax(0,1fr)_minmax(0,0.9fr)] md:grid-cols-[minmax(0,2.3fr)_minmax(0,0.9fr)_minmax(0,1.35fr)_minmax(0,0.8fr)_minmax(0,1fr)_1rem]",
   perp: "grid-cols-[minmax(0,2.8fr)_minmax(0,1.05fr)_minmax(0,1.15fr)_1rem] md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_1rem]",
   spot: "grid-cols-[minmax(0,2.8fr)_minmax(0,1.05fr)_minmax(0,1.15fr)_1rem] md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_1rem]",
 } satisfies Record<TerminalMarketKind, string>;
@@ -131,7 +131,7 @@ function ChangeCell({ value }: { value: number | null }) {
 }
 
 /** The Futures tab's figures, in the stats bar's order. */
-const FUTURE_COLUMNS = ["Mark", "Basis", "APR", "Open Interest", "Expires In"] as const;
+const FUTURE_COLUMNS = ["Mark", "Basis", "APR", "Open Interest"] as const;
 
 /** What a phone's width holds beside the series name: the mark and the APR, short figures both. */
 const FUTURE_PHONE_COLUMNS = new Set<string>(["Mark", "APR"]);
