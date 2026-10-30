@@ -177,12 +177,22 @@ function resolveFutureOrderPrice(
 }
 
 /**
+ * How long a Close is signed for. The venue stops matching an order at its expiry and the chain
+ * refuses to settle one past it, so what the book cannot fill lapses instead of resting. It covers
+ * the wallet prompt, since the expiry is fixed before signing, and the settlement of every rung,
+ * each waiting on its receipt.
+ */
+const CLOSE_ORDER_LIFETIME_SECONDS = Duration.toSeconds("2 minutes");
+
+/**
  * Signs a future order for the series' asset and sub id on its TradeModule, with the fee ceiling
  * per contract, then posts it. `price` is cNGN per USDC; `units` the venue's whole units, each
  * signed as the market's `amountScale`. A limit order is signed to the series' last trade time, so
- * it rests until filled or cancelled; a market order keeps the day-long default.
+ * it rests until filled or cancelled; a market order keeps the day-long default unless
+ * `lifetimeSeconds` shortens it.
  */
 async function signAndPostFutureOrder({
+  lifetimeSeconds,
   market,
   onAwaitingSignature,
   orderType,
@@ -193,6 +203,7 @@ async function signAndPostFutureOrder({
   units,
   wallet,
 }: {
+  lifetimeSeconds?: number;
   market: FutureMarket;
   onAwaitingSignature: () => void;
   orderType: FutureOrderRequest["orderType"];
@@ -209,7 +220,7 @@ async function signAndPostFutureOrder({
   const provider = await wallet.getEthereumProvider();
   const walletClient = createWalletClient({ chain: appChain, transport: custom(provider) });
   const envelope = buildSpotOrderEnvelope({
-    expiry: orderType === "Limit" ? Math.floor(market.state.lastTradeAtMs / 1000) : undefined,
+    expiry: resolveFutureOrderExpiry(orderType, market, lifetimeSeconds),
     market: {
       amountScale: market.state.amountScale,
       assetAddress: market.stack.assetAddress,
@@ -237,6 +248,17 @@ async function signAndPostFutureOrder({
   });
   const body = (await response.json().catch(() => null)) as { error?: string } | null;
   return { body, ok: response.ok, orderId: envelope.payload.order_id, status: response.status };
+}
+
+function resolveFutureOrderExpiry(
+  orderType: FutureOrderRequest["orderType"],
+  market: FutureMarket,
+  lifetimeSeconds: number | undefined
+) {
+  if (lifetimeSeconds !== undefined) {
+    return Math.floor(Date.now() / 1000) + lifetimeSeconds;
+  }
+  return orderType === "Limit" ? Math.floor(market.state.lastTradeAtMs / 1000) : undefined;
 }
 
 const FILL_POLL_INTERVAL_MS = Duration.toMillis("1 second");
@@ -577,12 +599,13 @@ function useFutureOrderActions({
   }
 
   /**
-   * `options.awaitingSignature` replaces the line shown while the wallet signs, and
-   * `options.eventOrderType` the order type the analytics events carry (a Close is a market order).
+   * `options.awaitingSignature` replaces the line shown while the wallet signs,
+   * `options.eventOrderType` the order type the analytics events carry (a Close is a market order)
+   * and `options.lifetimeSeconds` how long the order is signed for, when not the default.
    */
   async function submit(
     request: FutureOrderRequest,
-    options: { awaitingSignature?: string; eventOrderType?: string } = {}
+    options: { awaitingSignature?: string; eventOrderType?: string; lifetimeSeconds?: number } = {}
   ) {
     if (market === null || wallet === null) {
       return;
@@ -605,6 +628,7 @@ function useFutureOrderActions({
     setIsSubmitting(true);
     try {
       const { body, ok, orderId, status } = await signAndPostFutureOrder({
+        lifetimeSeconds: options.lifetimeSeconds,
         market,
         orderType: request.orderType,
         price: resolved.price,
@@ -771,6 +795,8 @@ export function FutureMarketPanels({
    * Closes the position with a reduce-only market order on the opposite side, sized to what the
    * book fills inside the default slippage. A position larger than that closes in parts: the venue
    * holds a reduce-only order to the position, so a stale size can shrink it but never flip it.
+   * The order is signed for minutes, not a day, so a book that moved before it landed leaves no
+   * remainder resting (2026-10-28: 240 USDC of a Close sized to a stale rung did).
    */
   function handleClose() {
     if (market === null) {
@@ -801,7 +827,11 @@ export function FutureMarketPanels({
         side: close.side,
         units: close.units,
       },
-      { awaitingSignature: `Awaiting wallet signature to close ${part}`, eventOrderType: "Close" }
+      {
+        awaitingSignature: `Awaiting wallet signature to close ${part}`,
+        eventOrderType: "Close",
+        lifetimeSeconds: CLOSE_ORDER_LIFETIME_SECONDS,
+      }
     );
   }
 
