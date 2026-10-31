@@ -831,11 +831,17 @@ function toneOf(value: number | null): PerpHeaderMetric["tone"] {
   return value > 0 ? "up" : "down";
 }
 
-function formatBasis(basis: ReturnType<typeof futureBasis>, digits: number) {
+/** A header price, with "$" when the series is quoted in USDC (American terms). */
+function formatHeaderPrice(value: number | null, digits: number, dollars: boolean) {
+  const text = formatFuturePrice(value, digits);
+  return dollars && text !== "—" ? `$${text}` : text;
+}
+
+function formatBasis(basis: ReturnType<typeof futureBasis>, digits: number, dollars: boolean) {
   if (basis === null) {
     return "—";
   }
-  return `${signPrefix(basis.points)}${formatFuturePrice(Math.abs(basis.points), digits)} (${signedPercent(basis.premium * 100, 2)})`;
+  return `${signPrefix(basis.points)}${formatHeaderPrice(Math.abs(basis.points), digits, dollars)} (${signedPercent(basis.premium * 100, 2)})`;
 }
 
 /**
@@ -888,7 +894,7 @@ export function buildFutureHeaderMetrics({
       label: "Mark",
       tone: null,
       tooltip: markTooltip(markSource, state),
-      value: formatFuturePrice(state?.markPrice ?? null, digits),
+      value: formatHeaderPrice(state?.markPrice ?? null, digits, american),
     },
     {
       label: "Index",
@@ -896,13 +902,13 @@ export function buildFutureHeaderMetrics({
       tooltip: american
         ? `The ${state.baseSymbol} reference in ${state.priceUnit}; the series settles at its average over the last hour`
         : "The NGN/USD reference in cNGN per USDC; the series settles at its average over the last hour",
-      value: formatFuturePrice(state?.indexPrice ?? null, digits),
+      value: formatHeaderPrice(state?.indexPrice ?? null, digits, american),
     },
     {
       label: "Basis",
       tone: toneOf(basis?.points ?? null),
       tooltip: "Mark − Index. Positive when the future trades above spot.",
-      value: formatBasis(basis, digits),
+      value: formatBasis(basis, digits, american),
     },
     {
       label: "APR",
