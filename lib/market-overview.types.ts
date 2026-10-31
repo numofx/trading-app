@@ -1,3 +1,4 @@
+import type { FutureQuoting } from "@/lib/future-market";
 /** The spot markets: `spot` is cNGN-USDC (shown USDC-cNGN), `eurc` is EURC-USDC. */
 export type SpotMarketId = "spot" | "eurc";
 
@@ -24,8 +25,8 @@ export type MarketOverviewRow = {
   id: TerminalMarketId;
   /**
    * The book's mid, else its one resting side, else the last trade (the perp's or future's mark
-   * last). cNGN per USDC on USDC-cNGN spot and the future, USDC per EURC on EURC-USDC, USDC per
-   * cNGN on the perp.
+   * last). cNGN per USDC on USDC-cNGN spot and the v1 future, USDC per EURC on EURC-USDC, USDC per
+   * base on a v2 future, USDC per cNGN on the perp.
    */
   price: number | null;
   changePercent24h: number | null;
@@ -38,15 +39,17 @@ export type MarketOverviewRow = {
   expiryMs: number | null;
   /** The future's last trade time, epoch ms: after it the venue takes no new orders. */
   lastTradeAtMs: number | null;
-  /** The future series' venue symbol, `USDC-cNGN-<DDMONYY>`; null on spot and the perp. */
+  /** The future series' venue symbol (`cNGN-30NOV26`); null on spot and the perp. */
   symbol: string | null;
-  /** The future's mark and index, cNGN per USDC, as the venue serves them. */
+  /** The future's mark and index, in the series' terms, as the venue serves them. */
   markPrice: number | null;
   indexPrice: number | null;
   /** Whether the future series has settled; null on spot and the perp. */
   settled: boolean | null;
   /** How the future's next mark is set, from its book's depth; null on spot and the perp. */
   markSource: "book" | "carry" | null;
+  /** How the future series is quoted (its terms, base, price unit and decimals); null on spot and the perp. */
+  futureQuoting: FutureQuoting | null;
 };
 
 export type MarketOverviewResponse = {

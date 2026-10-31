@@ -7,6 +7,7 @@ import posthog from "posthog-js";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { createWalletClient, custom, isAddressEqual } from "viem";
+import type { FutureUnits } from "@/lib/account-activity-views";
 import {
   buildFutureOpenOrdersActivityView,
   buildFutureOrderHistoryActivityView,
@@ -22,15 +23,14 @@ import {
   buildFutureHeaderMetrics,
   buildFuturePositionsView,
   describeFutureRejection,
-  FUTURE_PRICE_DECIMALS,
-  FUTURE_PRICE_GROUPS,
   futureCloseOrder,
   futureMarkSource,
   futureOrderUiSide,
+  futureSizeUsdc,
   futureWorstFeeUnits,
   isOutsideFillBand,
 } from "@/lib/future-market";
-import type { FutureAccount, FutureMarket } from "@/lib/future-market.types";
+import type { FutureAccount, FutureMarket, FutureState } from "@/lib/future-market.types";
 import { FUTURE_ACTIVITY_VIEWS, FUTURE_BOTTOM_TABS } from "@/lib/future-terminal-config";
 import type { OrderOutcome } from "@/lib/order-settlement";
 import { isOrderFillKnown, pollOrderOutcome } from "@/lib/order-settlement";
@@ -66,56 +66,69 @@ import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount
 
 type FutureBottomTab = keyof typeof FUTURE_ACTIVITY_VIEWS;
 
-/** What the venue's amounts count: USDC of notional, or whole contracts on a venue that sizes in them. */
+/** The v1 series' units: what the panels read before a series is listed. */
+const V1_UNITS: FutureUnits = {
+  priceDecimals: 2,
+  sizeSymbol: "USDC",
+  terms: "usdc",
+  unitSize: 1,
+  vmSymbol: "cNGN",
+};
+
+/** What the book's and chart's sizes count: the series' `sizeSymbol`, or contracts on a venue that sizes in them. */
 function sizeUnitLabel(market: FutureMarket | null) {
-  return market !== null && market.state.unitUsdc === market.state.contractSizeUsdc
+  if (market === null) {
+    return "USDC";
+  }
+  return market.state.unitSize === market.state.contractSize
     ? "Contracts"
-    : "USDC";
+    : market.state.sizeSymbol;
 }
 
-/** USDC of notional restates in cNGN at each level's price; whole contracts have no such restatement. */
+/**
+ * The book in the series' terms. Each level's size restates at its price: USDC of notional in cNGN
+ * on the v1 series, the base in USDC on a v2 one. Whole contracts have no such restatement.
+ */
 function bookUnits(market: FutureMarket | null): BookUnits {
   const base = sizeUnitLabel(market);
+  const american = market?.state.terms === "american";
+  const restated = american ? "USDC" : "cNGN";
   return {
     base,
-    price: "cNGN",
-    priceDecimals: FUTURE_PRICE_DECIMALS,
-    priceGroups: FUTURE_PRICE_GROUPS,
-    quote: base === "USDC" ? "cNGN" : null,
+    price: restated,
+    priceDecimals: market?.state.priceDecimals ?? V1_UNITS.priceDecimals,
+    priceGroups: market?.state.priceGroups ?? [1, 0.1, 0.01],
+    quote: base === "Contracts" ? null : restated,
   };
 }
 
 function chartUnits(symbol: string, market: FutureMarket | null): ChartUnits {
+  const digits = market?.state.priceDecimals ?? V1_UNITS.priceDecimals;
   return {
-    axisDecimals: FUTURE_PRICE_DECIMALS,
+    axisDecimals: digits,
     pair: symbol,
-    priceDecimals: FUTURE_PRICE_DECIMALS,
+    priceDecimals: digits,
     priceLabel: "Last traded",
     volumeUnit: sizeUnitLabel(market).toLowerCase(),
   };
 }
 
-/** A fill's volume in the chart's unit: its size, already USDC of notional (or contracts). */
-function fillSize(trade: TradePrint) {
-  return trade.size;
-}
-
-/** Each side's resting notional in USDC: the venue's sizes count `unitUsdc` each. */
+/** Each side's resting notional in USDC; the book's sizes are in the series' `sizeSymbol`. */
 function bookDepthUsdc(
-  book: { asks: { size: number }[]; bids: { size: number }[] },
-  unitUsdc: number
+  book: { asks: { price: number; size: number }[]; bids: { price: number; size: number }[] },
+  state: FutureState
 ) {
-  const total = (levels: { size: number }[]) =>
-    levels.reduce((sum, level) => sum + level.size, 0) * unitUsdc;
+  const total = (levels: { price: number; size: number }[]) =>
+    levels.reduce((sum, level) => sum + (futureSizeUsdc(level.size, level.price, state) ?? 0), 0);
   return { asks: total(book.asks), bids: total(book.bids) };
 }
 
 /** How the next mark is set, from the live book; null without the market. */
 function markSourceOf(
   market: FutureMarket | null,
-  book: { asks: { size: number }[]; bids: { size: number }[] }
+  book: { asks: { price: number; size: number }[]; bids: { price: number; size: number }[] }
 ) {
-  return market === null ? null : futureMarkSource(bookDepthUsdc(book, market.state.unitUsdc));
+  return market === null ? null : futureMarkSource(bookDepthUsdc(book, market.state));
 }
 
 /** How often the countdown to the last trade time re-renders. */
@@ -135,8 +148,8 @@ function useNow() {
 }
 
 /** The signed limit as a decimal string; two places beyond the display, never exponent notation. */
-function toPriceString(price: number) {
-  return price.toFixed(FUTURE_PRICE_DECIMALS + 2);
+function toPriceString(price: number, priceDecimals: number) {
+  return price.toFixed(priceDecimals + 2);
 }
 
 /**
@@ -155,7 +168,7 @@ function resolveFutureOrderPrice(
   if (request.orderType === "Limit") {
     const limit = Number(request.limitPrice.replaceAll(",", ""));
     if (!Number.isFinite(limit) || limit <= 0) {
-      return { error: "Enter a limit price in cNGN per USDC." };
+      return { error: `Enter a limit price in ${market.state.priceUnit}.` };
     }
     if (isOutsideFillBand(limit, band)) {
       return { error: "Limit price outside the fill band shown under the field." };
@@ -173,7 +186,7 @@ function resolveFutureOrderPrice(
     return { error: "No resting liquidity on that side. Use a limit order." };
   }
   const banded = Math.min(band.high, Math.max(band.low, marketable));
-  return { price: toPriceString(banded) };
+  return { price: toPriceString(banded, market.state.priceDecimals) };
 }
 
 /**
@@ -186,8 +199,8 @@ const CLOSE_ORDER_LIFETIME_SECONDS = Duration.toSeconds("2 minutes");
 
 /**
  * Signs a future order for the series' asset and sub id on its TradeModule, with the fee ceiling
- * per contract, then posts it. `price` is cNGN per USDC; `units` the venue's whole units, each
- * signed as the market's `amountScale`. A limit order is signed to the series' last trade time, so
+ * per contract, then posts it. `price` is in the series' terms; `units` the venue's whole units,
+ * each signed as the market's `amountScale`. A limit order is signed to the series' last trade time, so
  * it rests until filled or cancelled; a market order keeps the day-long default unless
  * `lifetimeSeconds` shortens it.
  */
@@ -227,7 +240,11 @@ async function signAndPostFutureOrder({
       orderIdPrefix: "future",
       subId: market.stack.subId,
       tradeModuleAddress: market.stack.tradeModuleAddress,
-      worstFeeUnits: futureWorstFeeUnits(market.state.contractSizeUsdc),
+      // A v2 contract's fee grows with the price: ceiling it at the most the order can fill at.
+      worstFeeUnits: futureWorstFeeUnits(
+        market.state,
+        Math.max(Number(price), market.state.fillBand?.high ?? 0)
+      ),
     },
     reduceOnly,
     side,
@@ -344,7 +361,7 @@ function buildActivityView(inputs: {
       return buildFutureOpenOrdersActivityView(
         market.openOrders,
         inputs.walletAddress,
-        market.state.unitUsdc
+        market.state
       );
     default:
       return inputs.signedHistoryView ?? FUTURE_ACTIVITY_VIEWS[bottomTab];
@@ -352,17 +369,20 @@ function buildActivityView(inputs: {
 }
 
 /**
- * Deposit and Withdraw on each Balances row, USDC then cNGN as `buildFutureBalancesView` lays
- * them out; Withdraw only where something is held.
+ * Deposit and Withdraw on each Balances row, USDC then (on the v1 series) cNGN as
+ * `buildFutureBalancesView` lays them out; Withdraw only where something is held.
  */
 function buildBalanceRowAction(
   account: FutureAccount | null,
+  state: FutureState | null,
   onDeposit: (currency: DepositCurrency) => void,
   onWithdraw: (currency: DepositCurrency) => void
 ) {
   const rows: { currency: DepositCurrency; held: bigint }[] = [
     { currency: "USDC", held: account?.cashUnits ?? 0n },
-    { currency: "cNGN", held: account?.cngnUnits ?? 0n },
+    ...(state?.terms === "american"
+      ? []
+      : [{ currency: "cNGN" as const, held: account?.cngnUnits ?? 0n }]),
   ];
   return (rowIndex: number) => {
     const row = rows[rowIndex];
@@ -394,6 +414,7 @@ function buildBalanceRowAction(
 
 function buildRowAction(inputs: {
   account: FutureAccount | null;
+  state: FutureState | null;
   bottomTab: FutureBottomTab;
   cancellingNonce: string | null;
   hasWallet: boolean;
@@ -413,7 +434,7 @@ function buildRowAction(inputs: {
     return inputs.tradeHistoryRowAction;
   }
   if (inputs.bottomTab === "balances") {
-    return buildBalanceRowAction(inputs.account, inputs.onDeposit, inputs.onWithdraw);
+    return buildBalanceRowAction(inputs.account, inputs.state, inputs.onDeposit, inputs.onWithdraw);
   }
   if (inputs.bottomTab === "positions") {
     // One series, so at most one row.
@@ -487,7 +508,10 @@ function buildEmptyState(
   }
   if (subaccountId === null) {
     return {
-      body: "Spot and the future trade from one account. Deposit USDC to open it.",
+      body:
+        market.state.terms === "american"
+          ? `${market.symbol} trades from its own account under the futures engine, margined in USDC. Deposit USDC to open it.`
+          : "Spot and the future trade from one account. Deposit USDC to open it.",
       title: "No trading account",
     };
   }
@@ -500,19 +524,27 @@ function buildEmptyState(
   return undefined;
 }
 
-/** The trading account's two holdings under the ticket, each with its Deposit and Withdraw. */
+/**
+ * The trading account's holdings under the ticket, each with its Deposit and Withdraw: USDC and
+ * cNGN on the v1 series, USDC alone on a v2 one, which margins in USDC.
+ */
 function buildAccountRows(
   account: FutureAccount | null,
+  state: FutureState | null,
   onDeposit: (currency: DepositCurrency) => void,
   onWithdraw: (currency: DepositCurrency) => void
 ): AccountSummaryRow[] {
+  const usdc: AccountSummaryRow = {
+    balance: formatBalance(account?.cash ?? null, "USDC"),
+    onWithdraw: account === null ? undefined : () => onWithdraw("USDC"),
+    symbol: "USDC",
+    onDeposit: () => onDeposit("USDC"),
+  };
+  if (state?.terms === "american") {
+    return [usdc];
+  }
   return [
-    {
-      balance: formatBalance(account?.cash ?? null, "USDC"),
-      onWithdraw: account === null ? undefined : () => onWithdraw("USDC"),
-      symbol: "USDC",
-      onDeposit: () => onDeposit("USDC"),
-    },
+    usdc,
     {
       balance: formatBalance(account?.cngn ?? null, "cNGN"),
       onWithdraw: (account?.cngnUnits ?? 0n) > 0n ? () => onWithdraw("cNGN") : undefined,
@@ -523,15 +555,36 @@ function buildAccountRows(
 }
 
 /**
+ * Deposits a v2 series' account refuses: it margins and pays variation margin in USDC, so its
+ * account takes USDC alone. None on the v1 series.
+ */
+function v2DepositPauses(market: FutureMarket | null) {
+  if (market?.state.terms !== "american") {
+    return undefined;
+  }
+  const reason = `${market.symbol} is margined in USDC only.`;
+  return { cNGN: reason, EURC: reason };
+}
+
+/** A list of levels or prints with each size in the series' `sizeSymbol`, from the venue's units. */
+function inSizeSymbol<T extends { size: number }>(rows: T[], unitSize: number): T[] {
+  return unitSize === 1 ? rows : rows.map((row) => ({ ...row, size: row.size * unitSize }));
+}
+
+/**
  * The future's book, trades and candles from the shared live-book hook, its headline price (the
- * touch, else the venue's mark) and its 24h volume as USDC of notional.
+ * touch, else the venue's mark) and its 24h volume as USDC of notional. The venue counts sizes in
+ * its units; the book and trades are restated in the series' `sizeSymbol` here, once, so every
+ * panel and the ticket read them as shown (1 venue unit is 1,000 cNGN on cNGN-30NOV26).
  */
 function useFutureBook(market: FutureMarket | null, symbol: string, candleInterval: ChartInterval) {
-  const book = useLiveMarketBook({
+  const unitSize = market?.state.unitSize ?? 1;
+  const live = useLiveMarketBook({
     candleInterval,
     candles: market?.candles ?? [],
     enabled: market !== null,
-    fillVolume: fillSize,
+    // A print's volume in the chart's unit: its size in the series' `sizeSymbol`.
+    fillVolume: (trade: TradePrint) => trade.size * unitSize,
     symbol,
     type: "future",
     snapshot: {
@@ -542,13 +595,23 @@ function useFutureBook(market: FutureMarket | null, symbol: string, candleInterv
       trades: market?.trades ?? [],
     },
   });
+  const book = {
+    ...live,
+    asks: inSizeSymbol(live.asks, unitSize),
+    bids: inSizeSymbol(live.bids, unitSize),
+    trades: inSizeSymbol(live.trades, unitSize),
+  };
   const anchor = getAnchorPrice(book.bestAsk, book.bestBid, book.lastPrice);
+  const price = market === null ? null : (anchor ?? market.state.markPrice);
   const units = market?.volumeUnits24h ?? null;
   return {
     book,
-    price: market === null ? null : (anchor ?? market.state.markPrice),
+    price,
     stats: get24hStats(book.stats24h, book.lastPrice),
-    volumeUsd: market === null || units === null ? null : units * market.state.unitUsdc,
+    volumeUsd:
+      market === null || units === null
+        ? null
+        : futureSizeUsdc(units * unitSize, price, market.state),
   };
 }
 
@@ -620,8 +683,12 @@ function useFutureOrderActions({
       return;
     }
     const event = {
-      market_id: "usdc-cngn-future",
-      notional_usdc: request.units * market.state.unitUsdc,
+      market_id: market.symbol.toLowerCase(),
+      notional_usdc: futureSizeUsdc(
+        request.units * market.state.unitSize,
+        Number(resolved.price),
+        market.state
+      ),
       order_side: request.side,
       order_type: options.eventOrderType ?? request.orderType,
     };
@@ -658,7 +725,7 @@ function useFutureOrderActions({
       router.refresh();
     } catch (error) {
       posthog.captureException(error, {
-        properties: { market_id: "usdc-cngn-future", order_side: request.side },
+        properties: { market_id: market.symbol.toLowerCase(), order_side: request.side },
       });
       orderStatus.settle(
         error instanceof Error ? error.message : "Futures order submission failed"
@@ -744,6 +811,9 @@ export function FutureMarketPanels({
   const [bottomTab, setBottomTab] = useState<FutureBottomTab>("positions");
 
   const stack = market?.stack ?? null;
+  const state = market?.state ?? null;
+  // How the series' amounts read; the v1 series' until one is listed.
+  const units: FutureUnits = state ?? V1_UNITS;
   const { account, shared } = useFutureTradingAccount(
     stack,
     primaryWallet?.address ?? null,
@@ -756,6 +826,7 @@ export function FutureMarketPanels({
     account,
     accountRows: futureAccount.rows,
     depositManager: shared ? undefined : stack?.managerAddress,
+    depositPauseReasons: v2DepositPauses(market),
     depositNotes: {
       cNGN: "cNGN counts as margin at half its index value. Variation margin is paid from cNGN first, then USDC.",
     },
@@ -768,10 +839,8 @@ export function FutureMarketPanels({
     market: symbol,
     signMessage: buildHistorySigner(primaryWallet, walletsReady),
     walletAddress: primaryWallet?.address ?? null,
-    orderHistoryView: (orders) =>
-      buildFutureOrderHistoryActivityView(orders, symbol, market?.state.unitUsdc ?? 1),
-    tradeHistoryView: (fills) =>
-      buildFutureTradeHistoryActivityView(fills, symbol, market?.state.unitUsdc ?? 1),
+    orderHistoryView: (orders) => buildFutureOrderHistoryActivityView(orders, symbol, units),
+    tradeHistoryView: (fills) => buildFutureTradeHistoryActivityView(fills, symbol, units),
   });
 
   const { book, price, stats } = useFutureBook(market, symbol, candleInterval);
@@ -813,11 +882,12 @@ export function FutureMarketPanels({
       orderStatus.announce(close.error);
       return;
     }
-    const usdc = (units: number) => (units * market.state.unitUsdc).toLocaleString("en-US");
+    const { sizeSymbol, unitSize } = market.state;
+    const sized = (units: number) => (units * unitSize).toLocaleString("en-US");
     const part =
       close.units < close.held
-        ? `${usdc(close.units)} of ${usdc(close.held)} USDC (all the book fills now; Close again for the rest)`
-        : `${usdc(close.units)} USDC`;
+        ? `${sized(close.units)} of ${sized(close.held)} ${sizeSymbol} (all the book fills now; Close again for the rest)`
+        : `${sized(close.units)} ${sizeSymbol}`;
     void actions.submit(
       {
         limitPrice: "",
@@ -845,7 +915,7 @@ export function FutureMarketPanels({
       markSource: markSourceOf(market, book),
       nowMs,
       openInterestUsd,
-      state: market?.state ?? null,
+      state,
     }),
     price,
     volume24hLabel: stats.volumeLabel,
@@ -853,7 +923,7 @@ export function FutureMarketPanels({
 
   return (
     <>
-      <MarketDocumentTitle digits={FUTURE_PRICE_DECIMALS} pair={symbol} price={price} />
+      <MarketDocumentTitle digits={units.priceDecimals} pair={symbol} price={price} />
 
       <TerminalGrid
         activity={
@@ -872,6 +942,7 @@ export function FutureMarketPanels({
             onTabSelect={(tab) => setBottomTab(tab as FutureBottomTab)}
             rowAction={buildRowAction({
               account: futureAccount.account,
+              state,
               bottomTab,
               cancellingNonce: actions.cancellingNonce,
               hasWallet: primaryWallet !== null,
@@ -940,13 +1011,14 @@ export function FutureMarketPanels({
               onEdit={orderStatus.clear}
               onSubmit={market === null ? undefined : actions.submit}
               referencePrice={price}
-              state={market?.state ?? null}
+              state={state}
               takerFeeBps={market?.takerFeeBps ?? null}
             />
             {/* The trading account's holdings under the ticket. */}
             <AccountSummary
               rows={buildAccountRows(
                 futureAccount.account,
+                state,
                 transfer.openDeposit,
                 transfer.openWithdraw
               )}

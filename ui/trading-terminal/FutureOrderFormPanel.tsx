@@ -10,17 +10,16 @@ import {
   formatFuturePrice,
   formatFutureUsdc,
   formatFutureVm,
-  futureFillVmCngn,
-  futureMarketableUnits,
+  futureFillVm,
+  futureMarketableSize,
   futureMaxFeeUsdc,
-  futureNotionalUsdc,
   futureOrderUiSide,
   futureOrderUnits,
+  futurePositionSize,
   futureReduceOnlyTerms,
   futureTradingBlock,
   isOutsideFillBand,
-  maxFutureNotional,
-  toContracts,
+  maxFutureSize,
 } from "@/lib/future-market";
 import type { FutureAccount, FutureSide, FutureState } from "@/lib/future-market.types";
 import { formatLeverage, PERP_DEFAULT_MAX_SLIPPAGE } from "@/lib/perp-market";
@@ -36,22 +35,42 @@ import { SideToggle } from "@/ui/trading-terminal/order-form/SideToggle";
 import { SlippageRow } from "@/ui/trading-terminal/order-form/SlippageRow";
 import { SubmitButton } from "@/ui/trading-terminal/order-form/SubmitButton";
 import { SummaryRow } from "@/ui/trading-terminal/order-form/SummaryRow";
+import type { TokenSymbol } from "@/ui/trading-terminal/order-form/TokenUnit";
 
 const ORDER_TYPES = ["Market", "Limit"] as const;
 
 type FutureOrderType = (typeof ORDER_TYPES)[number];
 
-const SIDES = [
-  { label: "Long", tone: "buy", tooltip: "Gains if the naira weakens", value: "long" },
-  { label: "Short", tone: "sell", tooltip: "Gains if the naira strengthens", value: "short" },
-] as const;
+/** Long and Short, each with what it gains on: the naira on the v1 series, the base on a v2 one. */
+function sidesFor(state: FutureState | null) {
+  const american = state?.terms === "american";
+  const base = state?.baseSymbol ?? "cNGN";
+  return [
+    {
+      label: "Long",
+      tone: "buy",
+      tooltip: american
+        ? `Gains if ${base} strengthens against USDC`
+        : "Gains if the naira weakens",
+      value: "long",
+    },
+    {
+      label: "Short",
+      tone: "sell",
+      tooltip: american
+        ? `Gains if ${base} weakens against USDC`
+        : "Gains if the naira strengthens",
+      value: "short",
+    },
+  ] as const;
+}
 
 export type FutureOrderRequest = {
   side: FutureSide;
   orderType: FutureOrderType;
-  /** cNGN per USDC; the limit for a limit order, ignored for a market order (priced off the touch). */
+  /** In the series' price unit; the limit for a limit order, ignored for a market order (priced off the touch). */
   limitPrice: string;
-  /** The size in the venue's whole units, `unitUsdc` of notional each. */
+  /** The size in the venue's whole units, `unitSize` of the series' `sizeSymbol` each. */
   units: number;
   /** How far through the touch a market order is signed, as a fraction. */
   maxSlippage: number;
@@ -72,8 +91,8 @@ function parsePrice(value: string) {
 
 const SIZE_PATTERN = /^\d+(\.\d+)?$/;
 
-/** The typed size, USDC of notional, or null unless it is a positive decimal. */
-function parseNotional(value: string) {
+/** A typed size or amount, or null unless it is a positive decimal. */
+function parseSize(value: string) {
   const trimmed = value.replaceAll(",", "").trim();
   if (!SIZE_PATTERN.test(trimmed)) {
     return null;
@@ -84,91 +103,123 @@ function parseNotional(value: string) {
 
 const SIZE = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
 
-/** A signed notional as the position it is: "Long 10 USDC", "Flat". */
-function formatPosition(notional: number) {
-  if (Math.abs(notional) < 1e-9) {
+/** A signed size as the position it is: "Long 10 USDC", "Long 250,000 cNGN", "Flat". */
+function formatPosition(size: number, symbol: string) {
+  if (Math.abs(size) < 1e-9) {
     return "Flat";
   }
-  return `${notional > 0 ? "Long" : "Short"} ${SIZE.format(Math.abs(notional))} USDC`;
+  return `${size > 0 ? "Long" : "Short"} ${SIZE.format(Math.abs(size))} ${symbol}`;
 }
 
 /** The position now and after the order: "Long 2 USDC → Long 1,002 USDC"; a dash without an order. */
-function formatPositionChange(position: number, after: number | null) {
-  return after === null ? "—" : `${formatPosition(position)} → ${formatPosition(after)}`;
+function formatPositionChange(position: number, after: number | null, symbol: string) {
+  return after === null
+    ? "—"
+    : `${formatPosition(position, symbol)} → ${formatPosition(after, symbol)}`;
 }
 
-const SIZE_UNITS = ["USDC", "cNGN"] as const;
+const TOKEN_SYMBOLS: readonly string[] = ["cNGN", "EURC", "USDC"] satisfies TokenSymbol[];
 
-type SizeUnit = (typeof SIZE_UNITS)[number];
-
-const CNGN = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+/** A series' symbol as the size card names it: every listed base is one of its tokens. */
+function tokenSymbol(symbol: string): TokenSymbol {
+  return TOKEN_SYMBOLS.includes(symbol) ? (symbol as TokenSymbol) : "USDC";
+}
 
 /**
- * The ticket's size, kept in both units: USDC of notional is the figure underneath (what the order
- * is signed in), its cNGN value follows through the ticket's price (cNGN per USDC). Typed in cNGN,
- * the USDC size is rounded down to the venue's step, so the order never exceeds what was typed.
+ * The size field's second unit, and how its figure is rounded: cNGN on the v1 series (the USDC
+ * size times cNGN per USDC, whole cNGN), USDC on a v2 one (the base size times USDC per base, to
+ * the cent). Either way it is the size times the price.
  */
-function useFutureSize(price: number | null, unitUsdc: number) {
-  const [sizeUsdc, setSizeUsdc] = useState("");
-  const [sizeCngn, setSizeCngn] = useState("");
-  const [unit, setUnit] = useState<SizeUnit>("USDC");
+function altUnitOf(state: FutureState | null) {
+  return state?.terms === "american"
+    ? { decimals: 2, symbol: "USDC" as const }
+    : { decimals: 0, symbol: "cNGN" as const };
+}
+
+/**
+ * The ticket's size, kept in both units: the series' `sizeSymbol` is the figure underneath (what
+ * the order is signed in), its value in the second unit follows through the ticket's price. Typed
+ * in the second unit, the size is rounded down to the venue's step, so the order never exceeds what
+ * was typed.
+ */
+function useFutureSize(price: number | null, state: FutureState | null) {
+  const sizeSymbol = tokenSymbol(state?.sizeSymbol ?? "USDC");
+  const unitSize = state?.unitSize ?? 1;
+  const alt = altUnitOf(state);
+  const [size, setSizeText] = useState("");
+  const [altSize, setAltSize] = useState("");
+  const [showAlt, setShowAlt] = useState(false);
   const priced = price !== null && price > 0;
 
-  function cngnOf(usdc: number | null) {
-    return usdc === null || !priced ? "" : String(Math.round(usdc * price));
+  function altOf(value: number | null) {
+    return value === null || !priced ? "" : (value * price).toFixed(alt.decimals);
   }
 
   function onInput(value: string) {
-    if (unit === "USDC") {
-      setSizeUsdc(value);
-      setSizeCngn(cngnOf(parseNotional(value)));
+    if (!showAlt) {
+      setSizeText(value);
+      setAltSize(altOf(parseSize(value)));
       return;
     }
-    setSizeCngn(value);
-    const cngn = parseNotional(value);
-    const usdc =
-      cngn === null || !priced || unitUsdc <= 0
+    setAltSize(value);
+    const typed = parseSize(value);
+    const next =
+      typed === null || !priced || unitSize <= 0
         ? null
-        : Math.floor(cngn / price / unitUsdc) * unitUsdc;
-    setSizeUsdc(usdc === null || usdc <= 0 ? "" : String(usdc));
+        : Math.floor(typed / price / unitSize) * unitSize;
+    setSizeText(next === null || next <= 0 ? "" : String(next));
   }
 
-  /** Sets the size in USDC from the slider or MAX; the cNGN view follows. */
-  function setUsdc(usdc: number) {
-    setSizeUsdc(usdc <= 0 ? "" : String(usdc));
-    setSizeCngn(cngnOf(usdc > 0 ? usdc : null));
+  /** Sets the size from the slider or MAX; the second unit follows. */
+  function setSize(value: number) {
+    setSizeText(value <= 0 ? "" : String(value));
+    setAltSize(altOf(value > 0 ? value : null));
   }
 
   function toggleUnit() {
-    setUnit(unit === "USDC" ? "cNGN" : "USDC");
-    setSizeCngn(cngnOf(parseNotional(sizeUsdc)));
+    setShowAlt(!showAlt);
+    setAltSize(altOf(parseSize(size)));
   }
 
   return {
+    altSize,
+    altSymbol: alt.symbol,
     onInput,
-    setUsdc,
-    shown: unit === "USDC" ? sizeUsdc : sizeCngn,
-    sizeCngn,
-    sizeUsdc,
+    setSize,
+    shown: showAlt ? altSize : size,
+    showAlt,
+    size,
+    sizeSymbol,
     toggleUnit,
-    unit,
+    unit: showAlt ? alt.symbol : sizeSymbol,
   };
 }
 
 /** What the Size field counts, for its tooltip. */
-function sizeTooltip(unit: SizeUnit, unitUsdc: number, contractSize: number, price: number | null) {
-  const steps = `in steps of ${SIZE.format(unitUsdc)} USDC; one contract is ${USD.format(contractSize)} USDC`;
-  if (unit === "USDC") {
-    return `USDC of notional, ${steps}.`;
+function sizeTooltip(
+  fields: ReturnType<typeof useFutureSize>,
+  state: FutureState | null,
+  price: number | null
+) {
+  const unitSize = state?.unitSize ?? 1;
+  const contractSize = state?.contractSize ?? 1000;
+  const symbol = fields.sizeSymbol;
+  const steps = `in steps of ${SIZE.format(unitSize)} ${symbol}; one contract is ${SIZE.format(contractSize)} ${symbol}`;
+  const signed = state?.terms === "american" ? symbol : "USDC of notional";
+  if (!fields.showAlt) {
+    return `${signed}, ${steps}.`;
   }
-  const at = price === null ? "" : ` at ${formatFuturePrice(price)} cNGN per USDC`;
-  return `The size as its cNGN value${at}. The order is signed in USDC of notional, ${steps}.`;
+  const at =
+    price === null || state === null
+      ? ""
+      : ` at ${formatFuturePrice(price, state.priceDecimals)} ${state.priceUnit}`;
+  return `The size as its ${fields.altSymbol} value${at}. The order is signed in ${signed}, ${steps}.`;
 }
 
 /** What MAX would set, for its tooltip. */
-function maxSizeTitle(maxNotional: number, hasAccount: boolean) {
+function maxSizeTitle(maxSize: number, symbol: string, hasAccount: boolean) {
   return hasAccount
-    ? `${SIZE.format(maxNotional)} USDC: the most the account's margin can open on this side`
+    ? `${SIZE.format(maxSize)} ${symbol}: the most the account's margin can open on this side`
     : "Needs an account";
 }
 
@@ -190,7 +241,7 @@ function FutureLeverageRow({
   return (
     <div className="flex items-center justify-between gap-2 px-0.5 text-[12px]">
       <FieldLabel
-        tooltip={`Your account's leverage after this order: the position's notional over the margin the engine credits you (USDC in full, cNGN at its factor). The engine opens up to ${maxLeverage === null ? "its ceiling" : formatLeverage(maxLeverage)}; it margins the account as a whole, so there is no per-position leverage to set.`}
+        tooltip={`Your account's leverage after this order: the position's notional over the margin the engine credits you (USDC in full, any other collateral at its factor). The engine opens up to ${maxLeverage === null ? "its ceiling" : formatLeverage(maxLeverage)}; it margins the account as a whole, so there is no per-position leverage to set.`}
       >
         Position Leverage
       </FieldLabel>
@@ -215,7 +266,7 @@ function FutureLeverageRow({
   );
 }
 
-/** The price the cNGN view converts at: the typed limit, else the touch the order would cross. */
+/** The price the second unit converts at: the typed limit, else the touch the order would cross. */
 function sizingPrice(inputs: {
   bestAsk: number | null;
   bestBid: number | null;
@@ -232,50 +283,51 @@ function sizingPrice(inputs: {
 
 /** The size in the unit not shown, under the typed figure. */
 function otherUnitText(fields: ReturnType<typeof useFutureSize>) {
-  if (fields.unit === "USDC") {
-    return `${fields.sizeCngn === "" ? "0" : CNGN.format(Number(fields.sizeCngn))} cNGN`;
+  if (!fields.showAlt) {
+    const digits = fields.altSymbol === "USDC" ? 2 : 0;
+    const alt = fields.altSize === "" ? 0 : Number(fields.altSize);
+    return `${alt.toLocaleString("en-US", { maximumFractionDigits: digits })} ${fields.altSymbol}`;
   }
-  return `${fields.sizeUsdc === "" ? "0" : SIZE.format(Number(fields.sizeUsdc))} USDC`;
+  return `${fields.size === "" ? "0" : SIZE.format(Number(fields.size))} ${fields.sizeSymbol}`;
 }
 
-/** The size card, sized in USDC of notional with its cNGN value, and the step hint under it. */
+/** The size card, sized in the series' `sizeSymbol` with its value in the second unit, and the step hint under it. */
 function FutureSizeField({
-  contractSize,
   fields,
   hasAccount,
-  maxNotional,
-  notional,
+  maxSize,
   onEdit,
+  size,
+  state,
   ticketPrice,
-  unitUsdc,
   validSize,
 }: {
-  contractSize: number;
   fields: ReturnType<typeof useFutureSize>;
   hasAccount: boolean;
-  maxNotional: number;
-  notional: number | null;
+  maxSize: number;
   onEdit: () => void;
+  size: number | null;
+  state: FutureState | null;
   ticketPrice: number | null;
-  unitUsdc: number;
   validSize: boolean;
 }) {
+  const unitSize = state?.unitSize ?? 1;
   return (
     <div className="space-y-1">
       <OrderSizeCard
-        baseUnit="USDC"
+        baseUnit={fields.sizeSymbol}
         canToggleUnit={ticketPrice !== null && ticketPrice > 0}
         formatBase={(value) => SIZE.format(value)}
         inputId="future-size"
-        max={hasAccount && maxNotional >= unitUsdc ? maxNotional : null}
-        maxTitle={maxSizeTitle(maxNotional, hasAccount)}
+        max={hasAccount && maxSize >= unitSize ? maxSize : null}
+        maxTitle={maxSizeTitle(maxSize, fields.sizeSymbol, hasAccount)}
         onInput={(value) => {
           onEdit();
           fields.onInput(value);
         }}
         onSetBase={(value) => {
           onEdit();
-          fields.setUsdc(value);
+          fields.setSize(value);
         }}
         onToggleUnit={() => {
           onEdit();
@@ -283,14 +335,15 @@ function FutureSizeField({
         }}
         otherUnitText={otherUnitText(fields)}
         shown={fields.shown}
-        size={notional}
-        step={unitUsdc}
-        tooltip={sizeTooltip(fields.unit, unitUsdc, contractSize, ticketPrice)}
+        size={size}
+        step={unitSize}
+        tooltip={sizeTooltip(fields, state, ticketPrice)}
         unit={fields.unit}
       />
-      {!validSize && fields.sizeUsdc !== "" ? (
+      {!validSize && fields.size !== "" ? (
         <p className="text-[11px] text-panel-text-muted tabular-nums">
-          Whole steps of {SIZE.format(unitUsdc)} USDC, at least {SIZE.format(unitUsdc)}.
+          Whole steps of {SIZE.format(unitSize)} {fields.sizeSymbol}, at least{" "}
+          {SIZE.format(unitSize)}.
         </p>
       ) : null}
     </div>
@@ -300,22 +353,23 @@ function FutureSizeField({
 /** Why the ticket's price cannot be signed, or null when it can. */
 function describePriceProblem(inputs: {
   band: FutureState["fillBand"];
-  hasState: boolean;
   orderType: FutureOrderType;
+  state: FutureState | null;
   touch: number | null;
   typedLimit: number | null;
 }): string | null {
-  if (inputs.hasState && inputs.band === null) {
+  const digits = inputs.state?.priceDecimals ?? 2;
+  if (inputs.state !== null && inputs.band === null) {
     return "The venue cannot read the fill band right now; orders resume when it can.";
   }
   if (inputs.orderType === "Market") {
     return inputs.touch === null ? "No resting liquidity on that side. Use a limit order." : null;
   }
   if (inputs.typedLimit === null) {
-    return "Enter a limit price in cNGN per USDC.";
+    return `Enter a limit price in ${inputs.state?.priceUnit ?? "cNGN per USDC"}.`;
   }
   return isOutsideFillBand(inputs.typedLimit, inputs.band) && inputs.band !== null
-    ? `Outside the fill band: orders must be between ${formatFuturePrice(inputs.band.low)} and ${formatFuturePrice(inputs.band.high)}.`
+    ? `Outside the fill band: orders must be between ${formatFuturePrice(inputs.band.low, digits)} and ${formatFuturePrice(inputs.band.high, digits)}.`
     : null;
 }
 
@@ -327,32 +381,28 @@ function describeDepthShortfall(inputs: {
   asks: OrderBookLevel[];
   bids: OrderBookLevel[];
   maxSlippage: number;
-  notional: number | null;
   orderType: FutureOrderType;
   side: FutureSide;
+  size: number | null;
   state: FutureState | null;
 }) {
-  const { notional, state } = inputs;
-  if (
-    inputs.orderType === "Limit" ||
-    notional === null ||
-    state === null ||
-    !(state.unitUsdc > 0)
-  ) {
+  const { size, state } = inputs;
+  if (inputs.orderType === "Limit" || size === null || state === null || !(state.unitSize > 0)) {
     return null;
   }
-  const fillable =
-    futureMarketableUnits({
-      asks: inputs.asks,
-      band: state.fillBand,
-      bids: inputs.bids,
-      maxSlippage: inputs.maxSlippage,
-      side: inputs.side,
-    }) * state.unitUsdc;
-  if (fillable >= notional) {
+  const fillable = futureMarketableSize({
+    asks: inputs.asks,
+    band: state.fillBand,
+    bids: inputs.bids,
+    maxSlippage: inputs.maxSlippage,
+    side: inputs.side,
+    unitSize: state.unitSize,
+  });
+  if (fillable >= size - 1e-9) {
     return null;
   }
-  return `The book fills ${SIZE.format(fillable)} USDC within ${SIZE.format(inputs.maxSlippage * 100)}% slippage; the other ${SIZE.format(notional - fillable)} USDC would rest as a limit order.`;
+  const symbol = state.sizeSymbol;
+  return `The book fills ${SIZE.format(fillable)} ${symbol} within ${SIZE.format(inputs.maxSlippage * 100)}% slippage; the other ${SIZE.format(size - fillable)} ${symbol} would rest as a limit order.`;
 }
 
 /**
@@ -377,48 +427,57 @@ function deriveTicket(inputs: {
   takerFeeBps: number | null;
 }) {
   const { account, orderType, side, state, takerFeeBps } = inputs;
-  const notional = parseNotional(inputs.size);
-  const units = state === null || notional === null ? null : futureOrderUnits(notional, state);
+  const size = parseSize(inputs.size);
+  const units = state === null || size === null ? null : futureOrderUnits(size, state);
   const typedLimit = parsePrice(inputs.limitPrice);
   const touch = side === "long" ? inputs.bestAsk : inputs.bestBid;
   const priceError = describePriceProblem({
     band: state?.fillBand ?? null,
-    hasState: state !== null,
     orderType,
+    state,
     touch,
     typedLimit,
   });
-  const position =
-    account === null || state === null
-      ? 0
-      : futureNotionalUsdc(toContracts(account.positionUnits), state);
+  const position = state === null ? 0 : futurePositionSize(account, state);
   const reduce = futureReduceOnlyTerms({
-    notional,
     position,
     reduceOnly: inputs.reduceOnly,
     side,
-    unitUsdc: state?.unitUsdc ?? 1,
-  });
-  // Under Reduce Only the venue fills no more than the position: the figures are that fill's.
-  const estimate =
-    state === null || reduce.filled === null || units === null
-      ? null
-      : estimateFutureOrder({ account, notional: reduce.filled, side, state, takerFeeBps });
-  const depthNote = describeDepthShortfall({
-    asks: inputs.asks,
-    bids: inputs.bids,
-    maxSlippage: inputs.maxSlippage,
-    // Under Reduce Only the venue takes no more than the position, so that is the size.
-    notional: reduce.filled,
-    orderType,
-    side,
-    state,
+    size,
+    unitSize: state?.unitSize ?? 1,
   });
   // A market order's price is the book walked for its size, not the touch alone.
   const fill =
     state === null || orderType === "Limit"
       ? { averagePrice: null, slippage: null }
-      : estimateFutureFill({ asks: inputs.asks, bids: inputs.bids, notional, side, state });
+      : estimateFutureFill({ asks: inputs.asks, bids: inputs.bids, side, size });
+  const expectedPrice =
+    orderType === "Limit" ? typedLimit : (fill.averagePrice ?? touch ?? inputs.referencePrice);
+  // Under Reduce Only the venue fills no more than the position: the figures are that fill's. A v2
+  // series values the size at the price it trades at.
+  const estimate =
+    state === null || reduce.filled === null || units === null
+      ? null
+      : estimateFutureOrder({
+          account,
+          price: expectedPrice,
+          side,
+          size: reduce.filled,
+          state,
+          takerFeeBps,
+        });
+  const depthNote = describeDepthShortfall({
+    asks: inputs.asks,
+    bids: inputs.bids,
+    maxSlippage: inputs.maxSlippage,
+    orderType,
+    side,
+    // Under Reduce Only the venue takes no more than the position, so that is the size.
+    size: reduce.filled,
+    state,
+  });
+  // MAX and leverage value a v2 size at the ticket's price before there is an order to price.
+  const sizingAt = expectedPrice ?? inputs.referencePrice;
   return {
     block:
       state === null
@@ -426,18 +485,22 @@ function deriveTicket(inputs: {
         : futureTradingBlock(state, inputs.nowMs),
     depthNote,
     estimate,
-    expectedPrice:
-      orderType === "Limit" ? typedLimit : (fill.averagePrice ?? touch ?? inputs.referencePrice),
+    expectedPrice,
     leverage:
       state === null
         ? { leverage: null, maxLeverage: null }
-        : estimateFutureLeverage({ account, afterNotional: estimate?.after ?? position, state }),
-    maxNotional:
-      reduce.maxNotional ??
-      (state === null ? 0 : maxFutureNotional({ account, side, state, takerFeeBps })),
+        : estimateFutureLeverage({
+            account,
+            afterSize: estimate?.after ?? position,
+            price: sizingAt,
+            state,
+          }),
+    maxSize:
+      reduce.maxSize ??
+      (state === null ? 0 : maxFutureSize({ account, price: sizingAt, side, state, takerFeeBps })),
     reduce,
     slippage: fill.slippage,
-    notional,
+    size,
     position,
     priceError,
     // An empty limit field is not yet an error worth a line; the disabled button says enough.
@@ -467,35 +530,55 @@ function SlippageLine({
   );
 }
 
+/** The summary's tooltips that differ by the series' terms. */
+function summaryTooltips(state: FutureState | null) {
+  const digits = state?.priceDecimals ?? 2;
+  const mark = formatFuturePrice(state?.markPrice ?? null, digits);
+  if (state?.terms === "american") {
+    return {
+      notional: `The size's value in USDC at the expected price: one contract is ${SIZE.format(state.contractSize)} ${state.sizeSymbol}`,
+      touch: `The touch a market order crosses, ${state.priceUnit}`,
+      vm: `Settled in USDC on the fill: the gap between the fill price and the mark (${mark}), times the size. A long filled above the mark, or a short below it, pays it.`,
+    };
+  }
+  return {
+    notional: `The size in USDC, whatever the price: one contract is ${USD.format(state?.contractSize ?? 1000)} USDC`,
+    touch: "The touch a market order crosses, cNGN per USDC",
+    vm: `Settled in cNGN on the fill: the gap between the fill price and the mark (${mark}), times the size. A long filled above the mark, or a short below it, pays it; USDC covers any cNGN the account lacks.`,
+  };
+}
+
 function TicketSummary({
-  contractSize,
   estimate,
   expectedPrice,
   hasAccount,
-  markPrice,
   maxSlippage,
   onMaxSlippageChange,
   orderType,
   position,
   side,
   slippage,
+  state,
   takerFeeBps,
 }: {
-  contractSize: number;
   estimate: ReturnType<typeof estimateFutureOrder> | null;
   expectedPrice: number | null;
   hasAccount: boolean;
-  /** The engine's last mark, cNGN per USDC: what a fill's VM is settled against. */
-  markPrice: number | null;
   maxSlippage: number;
   onMaxSlippageChange: (max: number) => void;
   orderType: FutureOrderType;
   position: number;
   side: FutureSide;
   slippage: number | null;
+  state: FutureState | null;
   takerFeeBps: number | null;
 }) {
   const shortfall = estimate?.shortfall ?? 0;
+  // The engine's last mark: what a fill's VM is settled against.
+  const markPrice = state?.markPrice ?? null;
+  const digits = state?.priceDecimals ?? 2;
+  const sizeSymbol = state?.sizeSymbol ?? "USDC";
+  const tooltips = summaryTooltips(state);
   // No size, no order: every figure about it is a dash rather than a figure for nothing.
   const sized = estimate !== null;
   return (
@@ -504,15 +587,13 @@ function TicketSummary({
         <SummaryRow
           label="Expected Price"
           tooltip={
-            orderType === "Limit"
-              ? "A limit order trades at its limit or better"
-              : "The touch a market order crosses, cNGN per USDC"
+            orderType === "Limit" ? "A limit order trades at its limit or better" : tooltips.touch
           }
-          value={sized ? formatFuturePrice(expectedPrice) : "—"}
+          value={sized ? formatFuturePrice(expectedPrice, digits) : "—"}
         />
         <SummaryRow
           label="Notional"
-          tooltip={`The size in USDC, whatever the price: one contract is ${USD.format(contractSize)} USDC`}
+          tooltip={tooltips.notional}
           value={formatUsd(estimate?.notional ?? null)}
         />
         <SummaryRow
@@ -530,17 +611,13 @@ function TicketSummary({
         )}
         <SummaryRow
           label="VM at Mark"
-          tooltip={`Settled in cNGN on the fill: the gap between the fill price and the mark (${formatFuturePrice(markPrice)}), times the size. A long filled above the mark, or a short below it, pays it; USDC covers any cNGN the account lacks.`}
+          tooltip={tooltips.vm}
           value={
-            sized
+            sized && state !== null
               ? formatFutureVm(
-                  futureFillVmCngn({
-                    markPrice,
-                    notional: estimate?.notional ?? 0,
-                    price: expectedPrice,
-                    side,
-                  }),
-                  markPrice
+                  futureFillVm({ markPrice, price: expectedPrice, side, size: estimate.size }),
+                  markPrice,
+                  state
                 )
               : "—"
           }
@@ -557,7 +634,7 @@ function TicketSummary({
         <SummaryRow
           label="Position After"
           tooltip="Your position in the series now, and once this order fills in full."
-          value={formatPositionChange(position, estimate?.after ?? null)}
+          value={formatPositionChange(position, estimate?.after ?? null, sizeSymbol)}
         />
       </div>
 
@@ -582,28 +659,37 @@ function buildFutureConfirmation(inputs: {
   position: number;
   reducing: boolean;
   side: FutureSide;
+  state: FutureState;
   takerFeeBps: number | null;
 }) {
-  const { estimate, side } = inputs;
+  const { estimate, side, state } = inputs;
   const verb = side === "long" ? "long" : "short";
   return {
     confirmLabel: `Confirm ${verb}`,
     directionLabel: side === "long" ? "Long" : "Short",
     orderSide: futureOrderUiSide(side),
-    sizeLabel: formatUsd(estimate.notional),
+    sizeLabel: `${SIZE.format(estimate.size)} ${state.sizeSymbol}`,
     title: `Confirm ${verb}`,
     summaryRows: [
       {
         label: inputs.orderType === "Limit" ? "Limit price" : "Expected price",
-        value: formatFuturePrice(inputs.expectedPrice),
+        value: formatFuturePrice(inputs.expectedPrice, state.priceDecimals),
       },
       { label: "Notional", value: formatUsd(estimate.notional) },
       { label: "Initial margin", value: formatUsd(estimate.initialMargin) },
       ...(inputs.takerFeeBps === null
         ? []
         : [{ label: "Taker fee", value: formatFutureUsdc(estimate.fee) }]),
-      { label: "Max fee", value: formatFutureUsdc(futureMaxFeeUsdc(estimate.notional)) },
-      { label: "Position after", value: formatPositionChange(inputs.position, estimate.after) },
+      {
+        label: "Max fee",
+        value: formatFutureUsdc(
+          estimate.notional === null ? null : futureMaxFeeUsdc(estimate.notional)
+        ),
+      },
+      {
+        label: "Position after",
+        value: formatPositionChange(inputs.position, estimate.after, state.sizeSymbol),
+      },
       ...(inputs.reducing ? [{ label: "Reduce only", value: "Yes" }] : []),
     ],
   };
@@ -614,7 +700,8 @@ type ButtonState = { enabled: boolean; label: string; tone: "buy" | "sell" | "ne
 function resolveButton(inputs: {
   account: FutureAccount | null;
   blocked: boolean;
-  notional: number | null;
+  size: number | null;
+  sizeSymbol: string;
   hasAccount: boolean;
   hasWallet: boolean;
   isAccepted: boolean;
@@ -655,20 +742,44 @@ function resolveButton(inputs: {
     return neutral("Deposit margin", true);
   }
   const verb = inputs.side === "long" ? "Long" : "Short";
-  const label = inputs.notional === null ? verb : `${verb} ${SIZE.format(inputs.notional)} USDC`;
+  const label =
+    inputs.size === null ? verb : `${verb} ${SIZE.format(inputs.size)} ${inputs.sizeSymbol}`;
   return {
-    enabled: inputs.notional !== null && inputs.priceError === null && inputs.account !== null,
+    enabled: inputs.size !== null && inputs.priceError === null && inputs.account !== null,
     label,
     tone: futureOrderUiSide(inputs.side),
   };
 }
 
+/** The limit field's unit, placeholder and tooltip, and the margin line's note, by the series' terms. */
+function ticketCopy(state: FutureState | null) {
+  if (state?.terms === "american") {
+    return {
+      availableMargin:
+        "The account's initial margin surplus across its futures positions: what new positions can draw on. Profit and loss arrive as variation margin, in USDC, at each hourly mark.",
+      limitPlaceholder: (0).toFixed(state.priceDecimals),
+      limitTooltip: state.priceUnit,
+      limitUnit: "USDC",
+    };
+  }
+  return {
+    availableMargin:
+      "The account's initial margin surplus, across spot holdings and futures positions: what new positions can draw on. Profit and loss arrive as variation margin at each hourly mark.",
+    limitPlaceholder: "0.00",
+    limitTooltip: "cNGN per USDC",
+    limitUnit: "cNGN",
+  };
+}
+
 /**
- * The future's order ticket. Size is USDC of notional, in whole venue units (1 USDC; a contract is
- * 1,000), and the price is cNGN per USDC: a long gains as cNGN weakens, a short as it strengthens. Every order must sit inside the
- * fill band around the index, which the ticket checks before signing. The engine margins the whole
- * account at its initial rate on what an order adds to the position; reducing one is
- * always allowed. Without a live series (`state` null) the form renders but cannot submit.
+ * The future's order ticket, in the series' own terms. On the v1 series the size is USDC of
+ * notional in whole venue units (1 USDC; a contract is 1,000) and the price cNGN per USDC: a long
+ * gains as cNGN weakens. On a v2 series the size is the base (1,000 cNGN or 1 EURC a unit) and the
+ * price USDC per base: a long is long the base, and the notional is the size at the price. Every
+ * order must sit inside the fill band around the index, which the ticket checks before signing. The
+ * engine margins the whole account at its initial rate on what an order adds to the position;
+ * reducing one is always allowed. Without a live series (`state` null) the form renders but cannot
+ * submit.
  */
 export function FutureOrderFormPanel({
   account,
@@ -711,7 +822,7 @@ export function FutureOrderFormPanel({
   onDepositRequest: () => void;
   onEdit: () => void;
   onSubmit?: (request: FutureOrderRequest) => void;
-  /** The price a market order fills near, cNGN per USDC: the touch, else the mark. */
+  /** The price a market order fills near, in the series' terms: the touch, else the mark. */
   referencePrice: number | null;
   state: FutureState | null;
   takerFeeBps: number | null;
@@ -723,8 +834,6 @@ export function FutureOrderFormPanel({
   /** The order awaiting the confirm popup; null while it is closed. */
   const [pending, setPending] = useState<FutureOrderRequest | null>(null);
   const [reduceOnly, setReduceOnly] = useState(false);
-  const contractSize = state?.contractSizeUsdc ?? 1000;
-  const unitUsdc = state?.unitUsdc ?? 1;
   const ticketPrice = sizingPrice({
     bestAsk,
     bestBid,
@@ -733,7 +842,8 @@ export function FutureOrderFormPanel({
     referencePrice,
     side,
   });
-  const fields = useFutureSize(ticketPrice, unitUsdc);
+  const fields = useFutureSize(ticketPrice, state);
+  const copy = ticketCopy(state);
 
   function edited<T>(set: (value: T) => void) {
     return (value: T) => {
@@ -748,12 +858,12 @@ export function FutureOrderFormPanel({
     estimate,
     expectedPrice,
     leverage,
-    maxNotional,
-    notional,
+    maxSize,
     position,
     priceError,
     reduce,
     shownPriceError,
+    size,
     slippage,
     units,
   } = deriveTicket({
@@ -769,7 +879,7 @@ export function FutureOrderFormPanel({
     reduceOnly,
     referencePrice,
     side,
-    size: fields.sizeUsdc,
+    size: fields.size,
     state,
     takerFeeBps,
   });
@@ -777,7 +887,8 @@ export function FutureOrderFormPanel({
   const button = resolveButton({
     account,
     blocked: block !== null || onSubmit === undefined,
-    notional: units === null ? null : notional,
+    size: units === null ? null : size,
+    sizeSymbol: fields.sizeSymbol,
     hasAccount,
     hasWallet,
     isAccepted,
@@ -820,7 +931,7 @@ export function FutureOrderFormPanel({
   }
 
   const confirmation =
-    estimate === null
+    estimate === null || state === null
       ? null
       : buildFutureConfirmation({
           estimate,
@@ -829,6 +940,7 @@ export function FutureOrderFormPanel({
           position,
           reducing: reduce.reducing,
           side,
+          state,
           takerFeeBps,
         });
 
@@ -843,17 +955,16 @@ export function FutureOrderFormPanel({
       footer={
         <>
           <TicketSummary
-            contractSize={contractSize}
             estimate={estimate}
             expectedPrice={expectedPrice}
             hasAccount={hasAccount}
-            markPrice={state?.markPrice ?? null}
             maxSlippage={maxSlippage}
             onMaxSlippageChange={edited(setMaxSlippage)}
             orderType={orderType}
             position={position}
             side={side}
             slippage={slippage}
+            state={state}
             takerFeeBps={takerFeeBps}
           />
 
@@ -887,7 +998,7 @@ export function FutureOrderFormPanel({
         </>
       }
     >
-      <SideToggle onSelect={edited(setSide)} options={SIDES} selected={side} />
+      <SideToggle onSelect={edited(setSide)} options={sidesFor(state)} selected={side} />
 
       <OrderTypeTabs
         onSelect={edited(setOrderType)}
@@ -899,7 +1010,7 @@ export function FutureOrderFormPanel({
         <div className="flex items-center justify-between gap-2 px-0.5 text-[12px]">
           <span
             className="cursor-help text-[11px] text-panel-text-muted"
-            title="The account's initial margin surplus, across spot holdings and futures positions: what new positions can draw on. Profit and loss arrive as variation margin at each hourly mark."
+            title={copy.availableMargin}
           >
             Available margin
           </span>
@@ -920,12 +1031,14 @@ export function FutureOrderFormPanel({
         {orderType === "Limit" ? (
           <div className="space-y-1">
             <FormField
-              adornment={<span className="font-medium text-[12px] text-panel-text">cNGN</span>}
+              adornment={
+                <span className="font-medium text-[12px] text-panel-text">{copy.limitUnit}</span>
+              }
               id="future-limit-price"
               label="Limit price"
               onChange={edited(setLimitPrice)}
-              placeholder="0.00"
-              tooltip="cNGN per USDC"
+              placeholder={copy.limitPlaceholder}
+              tooltip={copy.limitTooltip}
               value={limitPrice}
             />
             {limitError === null ? null : (
@@ -937,14 +1050,13 @@ export function FutureOrderFormPanel({
         ) : null}
 
         <FutureSizeField
-          contractSize={contractSize}
           fields={fields}
           hasAccount={hasAccount}
-          maxNotional={maxNotional}
-          notional={notional}
+          maxSize={maxSize}
           onEdit={onEdit}
+          size={size}
+          state={state}
           ticketPrice={ticketPrice}
-          unitUsdc={unitUsdc}
           validSize={units !== null}
         />
         <FutureLeverageRow leverage={leverage.leverage} maxLeverage={leverage.maxLeverage} />

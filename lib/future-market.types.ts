@@ -2,7 +2,8 @@ import type { SpotMarket } from "@/lib/trading.types";
 
 /**
  * The future's `future` block in `/v1/markets`, as markets-service serves it. Prices are decimal
- * strings in cNGN per USDC; times are unix seconds.
+ * strings in the series' own terms (cNGN per USDC on the v1 series, USDC per base on a v2 one);
+ * times are unix seconds.
  */
 export type FutureStatePresentation = {
   expiry_timestamp?: number;
@@ -17,15 +18,41 @@ export type FutureStatePresentation = {
   /** The fill band's half-width around the index, as a fraction: 0.1 is ±10%. */
   band_width?: string;
   band_status?: string;
+  /** One contract's notional, USDC: the v1 series only. */
   contract_size_usdc?: string;
+  /** One contract in `contract_size_asset`: a v2 series, quoted in USDC per that asset. */
+  contract_size?: string;
+  contract_size_asset?: string;
   updated_at?: string;
 };
 
 /**
- * The future's live state, parsed. Prices are cNGN per USDC, the way the series is quoted and
- * shown: a long gains when the naira weakens (more cNGN per USDC).
+ * How a series is quoted and sized. `usdc`: the v1 series (`USDC-cNGN-<DDMONYY>`), quoted in cNGN
+ * per USDC, one contract a fixed 1,000 USDC, sized in USDC of notional, VM in cNGN; a long gains as
+ * the naira weakens. `american`: a v2 series (`cNGN-30NOV26`, `EURC-30NOV26`), quoted in USDC per
+ * base, one contract a fixed amount of the base, sized in the base, VM in USDC; a long is long the
+ * base, and a contract's USDC value moves with the price.
+ */
+export type FutureTerms = "usdc" | "american";
+
+/**
+ * The future's live state, parsed. Prices are in the series' own terms (`priceUnit`), the way it
+ * is quoted and shown.
  */
 export type FutureState = {
+  terms: FutureTerms;
+  /** The asset the series is a future on: cNGN on the v1 series and cNGN-30NOV26, EURC on EURC-30NOV26. */
+  baseSymbol: string;
+  /** What sizes count: USDC of notional on the v1 series, the base on a v2 one. */
+  sizeSymbol: string;
+  /** The price's unit as the ticket names it: "cNGN per USDC", "USDC per EURC". */
+  priceUnit: string;
+  /** Decimals a price is shown and typed to: 2 on the v1 series, 8 on cNGN-30NOV26, 5 on EURC-30NOV26. */
+  priceDecimals: number;
+  /** The book's price groupings, the default first. */
+  priceGroups: readonly number[];
+  /** What variation margin is paid in: cNGN on the v1 series, USDC on a v2 one. */
+  vmSymbol: string;
   markPrice: number | null;
   indexPrice: number | null;
   /** Settlement time, epoch ms. Also the series' sub id, in seconds. */
@@ -41,14 +68,14 @@ export type FutureState = {
   fillBand: { low: number; high: number } | null;
   /** The band's half-width around the index as a fraction (0.1 is ±10%); null when unserved. */
   bandWidth: number | null;
-  /** One contract's notional, USDC. */
-  contractSizeUsdc: number;
+  /** One contract, in `sizeSymbol`: 1,000 USDC on the v1 series, 1,000,000 cNGN, 1,000 EURC. */
+  contractSize: number;
   /**
-   * The venue's size unit, as USDC of notional: 1 since the venue sized the future in USDC
-   * (`amount_scale` 1e15, 0.001 contract), a whole contract before. Every amount the venue serves
-   * for the series (book, trades, orders, volume) counts these units.
+   * The venue's size unit, in `sizeSymbol`: 0.001 contract (`amount_scale` 1e15), so 1 USDC on the
+   * v1 series, 1,000 cNGN, 1 EURC; a whole contract on a venue naming no scale. Every amount the
+   * venue serves for the series (book, trades, orders, volume) counts these units.
    */
-  unitUsdc: number;
+  unitSize: number;
   /** One unit as the signed on-chain amount, the ledger counting 1e18 a contract. */
   amountScale: bigint;
 };
@@ -70,7 +97,7 @@ export type FutureMarket = SpotMarket & {
   symbol: string;
   state: FutureState;
   stack: FutureStack;
-  /** 24h volume in the venue's units (`unitUsdc` each), as it reports `stats_24h.volume`. */
+  /** 24h volume in the venue's units (`unitSize` each), as it reports `stats_24h.volume`. */
   volumeUnits24h: number | null;
 };
 
@@ -88,13 +115,13 @@ export type FutureAccount = {
   /** cNGN escrow held as collateral. */
   cngn: number;
   cngnUnits: bigint;
-  /** Variation margin accrued and not yet settled to the account, cNGN: positive owed to it. */
-  pendingVmCngn: number;
+  /** Variation margin accrued and not yet settled to the account, in the series' `vmSymbol`: positive owed to it. */
+  pendingVm: number;
   /** `getMargin(account, true)`: what is left above initial margin, USDC. Negative is under. */
   initialMarginSurplus: number;
   /** `getMargin(account, false)`: what is left above maintenance margin, USDC. */
   maintenanceMarginSurplus: number;
-  /** The engine's futures requirements, as fractions of notional: 0.25 and 0.15 at listing. */
+  /** The engine's futures requirements for the series' market, as fractions of notional. */
   imRate: number;
   mmRate: number;
 };

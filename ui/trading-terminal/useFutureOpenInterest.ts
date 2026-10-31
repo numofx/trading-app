@@ -14,20 +14,25 @@ const positionTrackingAbi = parseAbi([
 ]);
 
 /**
- * The future's open interest at its USDC notional, read from the asset's own position tracking
- * every 30 seconds; null until the first read lands, or while the chain cannot be read.
+ * The future's open interest at its USDC notional (a v2 series' at the mark), read from the asset's
+ * own position tracking every 30 seconds; null until the first read lands, or while the chain cannot be read.
  */
 export function useFutureOpenInterest(market: Pick<FutureMarket, "stack" | "state"> | null) {
   const [openInterestUsd, setOpenInterestUsd] = useState<number | null>(null);
   const asset = market?.stack.assetAddress ?? null;
   const manager = market?.stack.managerAddress ?? null;
-  const contractSizeUsdc = market?.state.contractSizeUsdc ?? null;
+  // Primitives, not the state object, which is rebuilt every server refresh.
+  const contractSize = market?.state.contractSize ?? null;
+  const markPrice = market?.state.markPrice ?? null;
+  const terms = market?.state.terms ?? null;
 
   useEffect(() => {
-    if (asset === null || manager === null || contractSizeUsdc === null) {
+    if (asset === null || manager === null || contractSize === null || terms === null) {
       setOpenInterestUsd(null);
       return;
     }
+    // Narrowed here: the closure below does not keep the guard's narrowing.
+    const quoted = { contractSize, markPrice, terms };
     let cancelled = false;
     async function load() {
       try {
@@ -38,7 +43,7 @@ export function useFutureOpenInterest(market: Pick<FutureMarket, "stack" | "stat
           functionName: "totalPosition",
         });
         if (!cancelled) {
-          setOpenInterestUsd(futureOpenInterestUsd(total, contractSizeUsdc as number));
+          setOpenInterestUsd(futureOpenInterestUsd(total, quoted));
         }
       } catch {
         // Keep the last good read rather than blanking the figure on one failed poll.
@@ -50,7 +55,7 @@ export function useFutureOpenInterest(market: Pick<FutureMarket, "stack" | "stat
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [asset, manager, contractSizeUsdc]);
+  }, [asset, manager, contractSize, markPrice, terms]);
 
   return openInterestUsd;
 }

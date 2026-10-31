@@ -6,8 +6,8 @@ export type FixedMarketId = Exclude<TerminalMarketId, "future">;
 /**
  * The one trading route, `/trade/[market]`, and the slugs it answers to, lowercase, so the URL reads
  * the same however it was typed or shared. The spot markets and the perp have fixed slugs. A future's slug is
- * its venue symbol lowercased (`USDC-cNGN-30NOV26` → `usdc-cngn-30nov26`), so a new series is a new
- * URL with no code change; whether that series is listed is the segment layout's question, asked
+ * its venue symbol lowercased (`cNGN-30NOV26` → `cngn-30nov26`, the v1 `USDC-cNGN-30NOV26` →
+ * `usdc-cngn-30nov26`), so a new series on a known base is a new URL with no code change; whether that series is listed is the segment layout's question, asked
  * of the venue. Every market renders under one persistent shell (header, wallet, trading account,
  * selector); only the market's own panels change with the slug.
  *
@@ -23,8 +23,18 @@ export const MARKET_SLUGS = {
 
 export type MarketSlug = (typeof MARKET_SLUGS)[FixedMarketId];
 
-/** `usdc-cngn-<DDMONYY>`: the venue lists each future as `USDC-cNGN-<DDMONYY>`. */
-const FUTURE_SLUG_PATTERN = /^usdc-cngn-(\d{2}[a-z]{3}\d{2})$/;
+/**
+ * `<base>-<DDMONYY>`: the venue lists each v2 series as `<base>-<DDMONYY>` (`cNGN-30NOV26`,
+ * `EURC-30NOV26`) and the v1 series as `USDC-cNGN-<DDMONYY>`.
+ */
+const FUTURE_SLUG_PATTERN = /^(usdc-cngn|cngn|eurc)-(\d{2}[a-z]{3}\d{2})$/;
+
+/** Each slug prefix's venue spelling: a slug is lowercase, the venue's symbols are not. */
+const FUTURE_SYMBOL_PREFIXES: Record<string, string> = {
+  cngn: "cNGN",
+  eurc: "EURC",
+  "usdc-cngn": "USDC-cNGN",
+};
 
 /** The URL of a spot market's or the perp's terminal. */
 export function marketPath(id: FixedMarketId): `/trade/${MarketSlug}` {
@@ -36,10 +46,18 @@ export function futurePath(symbol: string): `/trade/${string}` {
   return `/trade/${symbol.toLowerCase()}`;
 }
 
-/** The venue symbol a future slug names: `usdc-cngn-30nov26` → `USDC-cNGN-30NOV26`; null for anything else. */
+/**
+ * The venue symbol a future slug names: `cngn-30nov26` → `cNGN-30NOV26`, `usdc-cngn-30nov26` →
+ * `USDC-cNGN-30NOV26`; null for anything else.
+ */
 export function futureSymbolForSlug(slug: string): string | null {
-  const series = FUTURE_SLUG_PATTERN.exec(slug)?.[1];
-  return series === undefined ? null : `USDC-cNGN-${series.toUpperCase()}`;
+  const match = FUTURE_SLUG_PATTERN.exec(slug);
+  const prefix = match?.[1];
+  const series = match?.[2];
+  if (prefix === undefined || series === undefined) {
+    return null;
+  }
+  return `${FUTURE_SYMBOL_PREFIXES[prefix]}-${series.toUpperCase()}`;
 }
 
 /** What a canonical slug names: a spot market or the perp, or a future series by its venue symbol. */

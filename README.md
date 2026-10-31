@@ -4,9 +4,9 @@
 
 Renders the cNGN-USDC spot market through an orderbook UI, with off/on ramping via Busha and Coinbase APIs for instant USD/USDC and NGN/cNGN conversions. Integrated with `markets-service` for live books and trades.
 
-The app renders **cNGN-USDC** spot at `/trade/cngn-usdc` and the front-month **cNGN future**
-(`USDC-cNGN-<DDMONYY>`) at its lowercased symbol, e.g. `/trade/usdc-cngn-30nov26`, switched from the
-market selector in the header. **cNGN-PERP** is delisted (exchange #251): out of the selector, and
+The app renders **cNGN-USDC** spot at `/trade/cngn-usdc` and the MarginEngine v2 futures
+**cNGN-30NOV26** and **EURC-30NOV26** at their lowercased symbols (`/trade/cngn-30nov26`), switched
+from the market selector in the header. **cNGN-PERP** is delisted (exchange #251): out of the selector, and
 `/trade/cngn-perp` is a 404 unless `/v1/markets` lists it again; `/perp` no longer redirects. One route, one shell: the `/trade` layout holds the header, the
 wallet, the trading account and the selector, and a switch replaces only the market's panels under
 it (keyed by the slug, so a ticket or a book tab never carries over). The slugs live in
@@ -61,7 +61,38 @@ about it from `markets-service`, with no env of its own:
 
 The earlier dated-futures terminal was removed; the perp is a new market, not a restoration of it.
 
-## The future
+## The v2 futures
+
+**cNGN-30NOV26** and **EURC-30NOV26** are under the selector's Futures tab, at
+`/trade/cngn-30nov26` and `/trade/eurc-30nov26`: cash-settled futures on MarginEngine v2
+(`0x0705…0950`), quoted the way they trade, in **American terms**:
+
+- **Price** in USDC per base (cNGN to 8 decimals, about 0.00072; EURC to 5, about 1.117). A long is
+  long the base: it gains as cNGN or EURC strengthens against USDC.
+- **Size** in the base, in the venue's unit of 0.001 contract: 1,000 cNGN or 1 EURC (a contract is
+  1,000,000 cNGN or 1,000 EURC). The ticket also shows and takes the size's USDC value at its price.
+- **Notional, margin and fees** are the size at the price: a contract's dollar value moves with the
+  price. The fee ceiling is signed per contract at the top of the fill band, so no fill can exceed it.
+- **Variation margin** is paid in USDC (fills carry `vm_usdc`), and the account margins in USDC
+  alone: Deposit offers USDC only.
+- **Account.** Each wallet has its own account under the v2 engine, shared by both series, apart
+  from the spot account under v1; the first USDC deposit opens it (`useFutureTradingAccount`).
+
+How a series reads is parsed from its listing (`FutureState.terms`, `lib/future-market.ts`): a
+`future` block naming `contract_size` and `contract_size_asset` is American; one naming
+`contract_size_usdc` is the v1 series below. Every figure on the ticket, book, positions, history and
+header follows the state's `sizeSymbol`, `unitSize`, `priceDecimals` and `vmSymbol`; the book and
+trades are restated from venue units into the base once, in `useFutureBook`.
+
+The series are listed before their enable (`trading_open` false, with the venue's reason on the
+ticket): the book shows the makers' resting quotes and the ticket reads "Trading closed". `/` opens
+the nearest offered series the venue is matching, else spot, so it moves to cNGN-30NOV26 on its own
+once the enable lands.
+
+## The v1 future
+
+Not offered since 2026-10-31 (its maker is stopped and nothing is open on it): out of the selector
+and `/`, its URL still answering while the venue lists it.
 
 **USDC-cNGN-30NOV26** is at `/trade/usdc-cngn-30nov26`, under the selector's Futures tab: a
 cash-settled cNGN future on the venue's MarginEngine (`0xA19E…0758`), quoted the way it trades,

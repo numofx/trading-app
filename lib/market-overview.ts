@@ -1,3 +1,4 @@
+import type { FutureQuoting } from "@/lib/future-market";
 import { MARKET_LABELS } from "@/lib/market-labels";
 import type {
   MarketOverviewRow,
@@ -105,6 +106,7 @@ export function emptyOverviewRow(id: TerminalMarketId): MarketOverviewRow {
     fundingRate1h: null,
     id,
     expiryMs: null,
+    futureQuoting: null,
     indexPrice: null,
     lastTradeAtMs: null,
     markPrice: null,
@@ -125,8 +127,8 @@ export function emptyOverviewRow(id: TerminalMarketId): MarketOverviewRow {
  * pair's price and change are in its displayed terms: USDC-cNGN's the venue's turned over, cNGN per
  * USDC; EURC-USDC's as served, USDC per EURC.
  *
- * The future passes its mark and last trade time, and its volume in contracts: the venue's quote
- * volume on it is price × contracts, not money, so the USDC notional is the contracts at their size.
+ * The future passes its mark and last trade time, and its volume as USDC of notional, which the
+ * caller works out from the venue's units: the venue's quote volume on it is price × units, not money.
  */
 export function buildOverviewRow(
   id: TerminalMarketId,
@@ -138,6 +140,7 @@ export function buildOverviewRow(
   } | null,
   future: {
     expiryMs: number;
+    futureQuoting: FutureQuoting;
     indexPrice: number | null;
     lastTradeAtMs: number;
     markPrice: number | null;
@@ -145,9 +148,8 @@ export function buildOverviewRow(
     openInterestUsd: number | null;
     settled: boolean;
     symbol: string;
-    /** The venue's size unit as USDC of notional: what its volume counts. */
-    unitUsdc: number;
-    volumeUnits: number | null;
+    /** The window's volume as USDC of notional; null when the venue served none. */
+    volumeUsd: number | null;
   } | null = null
 ): MarketOverviewRow {
   const lastPrice = getVenueLastPrice(market.trades, market.candles, market.mark);
@@ -160,12 +162,13 @@ export function buildOverviewRow(
     orientation === null
       ? get24hStats(market.stats24h, lastPrice)
       : get24hStats(orientation.stats(market.stats24h), orientation.price(lastPrice));
-  const futureVolume = future?.volumeUnits == null ? null : future.volumeUnits * future.unitUsdc;
+  const futureVolume = future?.volumeUsd ?? null;
   return {
     changePercent24h: changePercent,
     fundingRate1h: perp?.uiLongFundingRate1h ?? null,
     id,
     expiryMs: future?.expiryMs ?? null,
+    futureQuoting: future?.futureQuoting ?? null,
     indexPrice: future?.indexPrice ?? null,
     lastTradeAtMs: future?.lastTradeAtMs ?? null,
     markPrice: future?.markPrice ?? null,

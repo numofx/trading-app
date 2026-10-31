@@ -43,7 +43,7 @@ type FutureAccountState = {
 const IDLE: FutureAccountState = { account: null, rows: null, status: "idle" };
 
 /**
- * One read of the account under the MarginEngine, all pinned to one block: its ledger (cash,
+ * One read of the account under the series' MarginEngine, all pinned to one block: its ledger (cash,
  * cNGN, the position in the series), its margin surplus at initial and maintenance, the variation
  * margin accrued and not yet settled, and the engine's futures rates. markets-service serves none
  * of this for the future, so it comes from chain.
@@ -121,7 +121,7 @@ async function readFutureAccount(
         initialMarginSurplus: toNumber(initial),
         maintenanceMarginSurplus: toNumber(maintenance),
         mmRate: toNumber(mmReq),
-        pendingVmCngn: toNumber(pendingVm),
+        pendingVm: toNumber(pendingVm),
         positionUnits: held(stack.assetAddress, BigInt(stack.subId)),
       };
       return { account, rows };

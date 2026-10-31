@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { parseAbi } from "viem";
 import { createBasePublicClient } from "@/lib/base-public-client";
-import { futureMarkSource, futureOpenInterestUsd, parseFutureState } from "@/lib/future-market";
+import {
+  futureMarkSource,
+  futureOpenInterestUsd,
+  futureSizeUsdc,
+  parseFutureState,
+} from "@/lib/future-market";
+import type { FutureState } from "@/lib/future-market.types";
 import { buildOverviewRow, emptyOverviewRow } from "@/lib/market-overview";
 import type { MarketOverviewResponse, TerminalMarketId } from "@/lib/market-overview.types";
 import { findPerpMarket, findSpotMarket, listLiveFutures } from "@/lib/market-pickers";
@@ -37,7 +43,7 @@ export async function GET() {
   const spot = findSpotMarket(markets);
   const eurc = findSpotMarket(markets, "EURC");
   const perp = findPerpMarket(markets);
-  // Every series not yet expired, nearest first; the first is the front month `/` opens.
+  // Every offered series not yet expired, nearest first: the v2 series, open or awaiting their enable.
   const futures = listLiveFutures(markets, Date.now());
 
   const [spotRow, eurcRow, perpRow, futureRows] = await Promise.all([
@@ -90,6 +96,12 @@ async function readRow(
   const volumeUnits = Number(
     tradesResult.status === "fulfilled" ? tradesResult.value.stats24h?.volume : Number.NaN
   );
+  const openInterestUsd =
+    futureState !== null &&
+    openInterestResult.status === "fulfilled" &&
+    openInterestResult.value !== null
+      ? futureOpenInterestUsd(openInterestResult.value, futureState)
+      : null;
   return buildOverviewRow(
     id,
     market,
@@ -102,17 +114,22 @@ async function readRow(
           lastTradeAtMs: futureState.lastTradeAtMs,
           markPrice: futureState.markPrice,
           markSource: futureMarkSource({
-            asks: depthUsdc(market.orderBookAsks, futureState.unitUsdc),
-            bids: depthUsdc(market.orderBookBids, futureState.unitUsdc),
+            asks: depthUsdc(market.orderBookAsks, futureState),
+            bids: depthUsdc(market.orderBookBids, futureState),
           }),
-          openInterestUsd:
-            openInterestResult.status === "fulfilled" && openInterestResult.value !== null
-              ? futureOpenInterestUsd(openInterestResult.value, futureState.contractSizeUsdc)
-              : null,
+          futureQuoting: {
+            baseSymbol: futureState.baseSymbol,
+            priceDecimals: futureState.priceDecimals,
+            priceUnit: futureState.priceUnit,
+            terms: futureState.terms,
+          },
+          openInterestUsd,
           settled: futureState.settled,
           symbol: presentation.market,
-          unitUsdc: futureState.unitUsdc,
-          volumeUnits: Number.isFinite(volumeUnits) ? volumeUnits : null,
+          // The venue's units at their size, valued at the mark on a v2 series.
+          volumeUsd: Number.isFinite(volumeUnits)
+            ? futureSizeUsdc(volumeUnits * futureState.unitSize, futureState.markPrice, futureState)
+            : null,
         }
   );
 }
@@ -136,7 +153,10 @@ async function readTotalPosition(presentation: MarketPresentation) {
   });
 }
 
-/** One side's resting notional in USDC: the venue's sizes count `unitUsdc` each. */
-function depthUsdc(levels: readonly { size: number }[], unitUsdc: number) {
-  return levels.reduce((sum, level) => sum + level.size, 0) * unitUsdc;
+/** One side's resting notional in USDC: the venue's sizes count `unitSize` of `sizeSymbol` each. */
+function depthUsdc(levels: readonly { price: number; size: number }[], state: FutureState) {
+  return levels.reduce(
+    (sum, level) => sum + (futureSizeUsdc(level.size * state.unitSize, level.price, state) ?? 0),
+    0
+  );
 }

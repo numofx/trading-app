@@ -12,6 +12,8 @@ export type FutureIdentity = MarketIdentity & {
   market: string;
   /** Settlement time, unix seconds; also the series' sub id. */
   expiry_timestamp?: number;
+  /** Whether the venue matches the series now. */
+  future?: { trading_open?: boolean };
 };
 
 /**
@@ -43,9 +45,11 @@ export function findSpotMarket<T extends MarketIdentity>(
 }
 
 /**
- * Every cash-settled cNGN future the venue lists and has not yet settled at `nowMs`, nearest
- * expiry first: contract_type `future`, which the venue names USDC over cNGN because it is quoted
- * cNGN per USDC.
+ * Every cash-settled future the terminal offers that the venue lists and has not yet settled at
+ * `nowMs`, nearest expiry first: the MarginEngine v2 series, quoted in USDC per base (`cNGN-30NOV26`,
+ * `EURC-30NOV26`; base the asset, quote USDC). The v1 series (`USDC-cNGN-<DDMONYY>`, base USDC,
+ * quote cNGN) is not offered since 2026-10-31: its maker is stopped and nothing is open on it. Its
+ * page stays reachable by URL while the venue lists it (`findFutureBySymbol`).
  */
 export function listLiveFutures<T extends FutureIdentity>(
   markets: readonly T[],
@@ -55,20 +59,24 @@ export function listLiveFutures<T extends FutureIdentity>(
     .filter(
       (market) =>
         market.contract_type === "future" &&
-        market.base_asset_symbol === "USDC" &&
-        market.quote_asset_symbol === "cNGN" &&
+        market.quote_asset_symbol === "USDC" &&
         market.expiry_timestamp !== undefined &&
         market.expiry_timestamp * 1000 > nowMs
     )
     .sort((left, right) => (left.expiry_timestamp ?? 0) - (right.expiry_timestamp ?? 0));
 }
 
-/** The front-month future: the nearest series that has not expired at `nowMs`, or null. */
+/**
+ * The front-month future `/` opens: the nearest offered series the venue is matching at `nowMs`, or
+ * null. A series listed before its enable is not one: `/` would land on a ticket that cannot trade.
+ */
 export function findFrontMonthFuture<T extends FutureIdentity>(
   markets: readonly T[],
   nowMs: number
 ): T | null {
-  return listLiveFutures(markets, nowMs)[0] ?? null;
+  return (
+    listLiveFutures(markets, nowMs).find((market) => market.future?.trading_open === true) ?? null
+  );
 }
 
 /**

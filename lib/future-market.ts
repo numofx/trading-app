@@ -16,21 +16,34 @@ import { tokenIcon } from "@/lib/token-icons";
 import type { ActivityRow, ActivityView, CellTone, OrderBookLevel } from "@/lib/trading.types";
 
 /**
- * The future is quoted in cNGN per USDC (about 1,390), so two decimals resolve well under a basis
- * point; the engine's own tick is 1e-18.
+ * The v1 series is quoted in cNGN per USDC (about 1,390), so two decimals resolve well under a
+ * basis point; the engine's own tick is 1e-18.
  */
-export const FUTURE_PRICE_DECIMALS = 2;
+const V1_PRICE_DECIMALS = 2;
 
 /**
- * The ladder's price groupings for the future, in cNGN per USDC, the default first: whole cNGN, a
- * level per 1.00, which spreads the maker's ladder over the grid rather than a sliver of it.
+ * The v1 ladder's price groupings, cNGN per USDC, the default first: whole cNGN, a level per 1.00,
+ * which spreads the maker's ladder over the grid rather than a sliver of it.
  */
-export const FUTURE_PRICE_GROUPS = [1, 0.1, 0.01] as const;
+const V1_PRICE_GROUPS = [1, 0.1, 0.01] as const;
+
+/**
+ * How a v2 series' price (USDC per base) is shown and typed, per base: to about a basis point. At
+ * 0.00072 USDC per cNGN a seventh decimal is 14 bps, coarser than the maker's rungs, so cNGN takes
+ * eight; EURC near 1.12 takes five, as EURC-USDC spot does. Groupings put the default first.
+ */
+const AMERICAN_QUOTING: Record<string, { decimals: number; groups: readonly number[] }> = {
+  cNGN: { decimals: 8, groups: [0.000_000_1, 0.000_000_01] },
+  EURC: { decimals: 5, groups: [0.0001, 0.000_01] },
+};
+
+/** A base the table does not name: six decimals, about a basis point at a price near 0.01. */
+const AMERICAN_QUOTING_DEFAULT = { decimals: 6, groups: [0.000_01, 0.000_001] } as const;
 
 /**
  * The fee ceiling signed into every future order, as a fraction of a contract's notional: the
  * same 30 bps spot and the perp sign against a 25 bps schedule. TradeModule compares it per
- * contract, so it is signed as USDC per contract, never scaled by the price.
+ * contract, so it is signed as USDC per contract.
  */
 const FUTURE_WORST_FEE_RATE = 0.003;
 
@@ -44,18 +57,12 @@ function signPrefix(value: number) {
   return value < 0 ? "-" : "";
 }
 
-/** A cNGN-per-USDC price, e.g. "1,386.81"; an em dash when unknown. */
-export function formatFuturePrice(value: number | null, digits = FUTURE_PRICE_DECIMALS) {
+/** A price in the series' terms to `digits` (its `priceDecimals`), e.g. "1,386.81"; an em dash when unknown. */
+export function formatFuturePrice(value: number | null, digits: number) {
   if (value === null || !Number.isFinite(value)) {
     return "—";
   }
   return formatMarketPrice(value, digits);
-}
-
-/** A cNGN-per-USDC price with its unit, where nothing else names it: "₦1,386.81". */
-export function formatNairaPrice(value: number | null) {
-  const price = formatFuturePrice(value);
-  return price === "—" ? price : `₦${price}`;
 }
 
 function decimal(value: string | undefined): number | null {
@@ -73,6 +80,7 @@ function positiveDecimal(value: string | undefined): number | null {
 
 /** The `/v1/markets` fields the future's state is read from. */
 export type FuturePresentation = {
+  base_asset_symbol?: string;
   asset_address?: string;
   sub_id?: string;
   trade_module_address?: string;
@@ -100,12 +108,11 @@ export function parseFutureState(presentation: FuturePresentation | null): Futur
   const lastTrade = future.last_trade_time ?? expiry;
   const low = positiveDecimal(presentation?.fill_band_low);
   const high = positiveDecimal(presentation?.fill_band_high);
-  const contractSizeUsdc = positiveDecimal(future.contract_size_usdc) ?? 1000;
   const amountScale = parseAmountScale(presentation?.amount_scale);
   return {
+    ...parseFutureTerms(presentation, future, amountScale),
     amountScale,
     bandWidth: positiveDecimal(future.band_width),
-    contractSizeUsdc,
     expiryMs: expiry * 1000,
     fillBand: low !== null && high !== null && low < high ? { high, low } : null,
     indexPrice: positiveDecimal(future.index_price),
@@ -115,7 +122,59 @@ export function parseFutureState(presentation: FuturePresentation | null): Futur
     settled: future.settled === true,
     tradingClosedReason: future.trading_closed_reason?.trim() || null,
     tradingOpen: future.trading_open === true,
-    unitUsdc: (contractSizeUsdc * Number(amountScale / 10n ** 12n)) / 1e6,
+  };
+}
+
+/**
+ * How the series is quoted and sized, from its listing. A v2 series names its contract in an asset
+ * (`contract_size` and `contract_size_asset`) and none in USDC; the v1 series names one in USDC.
+ */
+function parseFutureTerms(
+  presentation: FuturePresentation | null,
+  future: FutureStatePresentation,
+  amountScale: bigint
+): Pick<
+  FutureState,
+  | "baseSymbol"
+  | "contractSize"
+  | "priceDecimals"
+  | "priceGroups"
+  | "priceUnit"
+  | "sizeSymbol"
+  | "terms"
+  | "unitSize"
+  | "vmSymbol"
+> {
+  // One venue unit is `amountScale` of the ledger's 1e18 a contract.
+  const unitOf = (contractSize: number) => (contractSize * Number(amountScale)) / 1e18;
+  const assetContract = positiveDecimal(future.contract_size);
+  if (assetContract !== null && positiveDecimal(future.contract_size_usdc) === null) {
+    const base =
+      future.contract_size_asset?.trim() || presentation?.base_asset_symbol?.trim() || "base";
+    const quoting = AMERICAN_QUOTING[base] ?? AMERICAN_QUOTING_DEFAULT;
+    return {
+      baseSymbol: base,
+      contractSize: assetContract,
+      priceDecimals: quoting.decimals,
+      priceGroups: quoting.groups,
+      priceUnit: `USDC per ${base}`,
+      sizeSymbol: base,
+      terms: "american",
+      unitSize: unitOf(assetContract),
+      vmSymbol: "USDC",
+    };
+  }
+  const contractSizeUsdc = positiveDecimal(future.contract_size_usdc) ?? 1000;
+  return {
+    baseSymbol: "cNGN",
+    contractSize: contractSizeUsdc,
+    priceDecimals: V1_PRICE_DECIMALS,
+    priceGroups: V1_PRICE_GROUPS,
+    priceUnit: "cNGN per USDC",
+    sizeSymbol: "USDC",
+    terms: "usdc",
+    unitSize: unitOf(contractSizeUsdc),
+    vmSymbol: "cNGN",
   };
 }
 
@@ -156,9 +215,19 @@ export function parseFutureStack(presentation: FuturePresentation | null): Futur
   return { assetAddress, cashAddress, managerAddress, subId, tradeModuleAddress };
 }
 
-/** The signed fee ceiling per contract, 18 decimals: 3 USDC on a 1,000 USDC contract. */
-export function futureWorstFeeUnits(contractSizeUsdc: number): bigint {
-  const microUsdc = BigInt(Math.round(contractSizeUsdc * FUTURE_WORST_FEE_RATE * 1e6));
+/**
+ * The signed fee ceiling per contract, 18 decimals: 3 USDC on the v1 series' 1,000 USDC contract.
+ * A v2 contract's value moves with the price, so its ceiling is taken at `priceCeiling`, the
+ * highest price the order can fill at (the band's top): the venue charges on the fill's notional,
+ * and a ceiling at any lower price could fall under the fee of a fill above it.
+ */
+export function futureWorstFeeUnits(
+  state: Pick<FutureState, "contractSize" | "terms">,
+  priceCeiling: number
+): bigint {
+  const contractUsdc =
+    state.terms === "american" ? state.contractSize * priceCeiling : state.contractSize;
+  const microUsdc = BigInt(Math.ceil(contractUsdc * FUTURE_WORST_FEE_RATE * 1e6));
   return microUsdc * 10n ** 12n;
 }
 
@@ -188,7 +257,10 @@ export function isOutsideFillBand(price: number, band: FutureState["fillBand"]) 
   return band !== null && (price < band.low || price > band.high);
 }
 
-/** A future long is a buy: it gains when cNGN weakens, as more cNGN per USDC. */
+/**
+ * A long is a buy: on the v1 series it gains as cNGN weakens (more cNGN per USDC), on a v2 series
+ * as the base strengthens against USDC.
+ */
 export function futureOrderUiSide(side: FutureSide): "buy" | "sell" {
   return side === "long" ? "buy" : "sell";
 }
@@ -202,108 +274,135 @@ export function toContracts(units: bigint) {
   return Number(units / 10n ** 12n) / 1e6;
 }
 
-/** A position or order as USDC of notional: contracts × the contract size. */
-export function futureNotionalUsdc(contracts: number, state: FutureState) {
-  return contracts * state.contractSizeUsdc;
+/** Contracts as a size in the series' `sizeSymbol`: contracts × the contract size. */
+export function futureContractsSize(contracts: number, state: Pick<FutureState, "contractSize">) {
+  return contracts * state.contractSize;
 }
 
 /**
- * A ticket's size, USDC of notional, as the venue's whole units, or null unless it is a positive
- * whole number of them: the venue rests whole units only (1 USDC since it sized the future in USDC).
+ * A size in the series' `sizeSymbol` as USDC of notional: itself on the v1 series, size × price
+ * (USDC per base) on a v2 one, null there without a price.
  */
-export function futureOrderUnits(sizeUsdc: number, state: FutureState) {
-  if (!Number.isFinite(sizeUsdc) || sizeUsdc <= 0 || state.unitUsdc <= 0) {
+export function futureSizeUsdc(
+  size: number,
+  price: number | null,
+  state: Pick<FutureState, "terms">
+): number | null {
+  if (state.terms === "usdc") {
+    return size;
+  }
+  return price === null || !(price > 0) ? null : size * price;
+}
+
+/**
+ * A ticket's size, in `sizeSymbol`, as the venue's whole units, or null unless it is a positive
+ * whole number of them: the venue rests whole units only (1 USDC, 1,000 cNGN, 1 EURC).
+ */
+export function futureOrderUnits(size: number, state: Pick<FutureState, "unitSize">) {
+  if (!Number.isFinite(size) || size <= 0 || state.unitSize <= 0) {
     return null;
   }
-  const units = sizeUsdc / state.unitUsdc;
+  const units = size / state.unitSize;
   const whole = Math.round(units);
   return whole >= 1 && Math.abs(units - whole) < 1e-9 ? whole : null;
 }
 
+/** The account's position in the series, signed (positive long), in `sizeSymbol`. */
+export function futurePositionSize(account: FutureAccount | null, state: FutureState) {
+  return account === null ? 0 : futureContractsSize(toContracts(account.positionUnits), state);
+}
+
 /**
- * What an order of `notional` USDC does to the margin the engine checks, before it is sent: the
- * exposure it adds (a reduction adds none, and the engine checks it against maintenance margin
- * only), the initial margin that adds, and the taker fee if it crosses. `position` and `after`
- * are USDC of notional, signed: positive long.
+ * What an order of `size` (in `sizeSymbol`) does to the margin the engine checks, before it is
+ * sent: the exposure it adds (a reduction adds none, and the engine checks it against maintenance
+ * margin only), the initial margin that adds, and the taker fee if it crosses, all USDC at `price`.
+ * `position` and `after` are signed sizes in `sizeSymbol`: positive long.
  */
 export function estimateFutureOrder({
   account,
-  notional,
+  price,
   side,
+  size,
   state,
   takerFeeBps,
 }: {
   account: FutureAccount | null;
-  notional: number;
+  /** What the order trades at: a v2 series values the size at it. */
+  price: number | null;
   side: FutureSide;
+  size: number;
   state: FutureState;
   takerFeeBps: number | null;
 }) {
-  const position =
-    account === null ? 0 : futureNotionalUsdc(toContracts(account.positionUnits), state);
-  const after = position + (side === "long" ? notional : -notional);
+  const position = futurePositionSize(account, state);
+  const after = position + (side === "long" ? size : -size);
   const added = Math.max(0, Math.abs(after) - Math.abs(position));
+  const notional = futureSizeUsdc(size, price, state);
+  const addedUsdc = futureSizeUsdc(added, price, state);
   const imRate = account?.imRate ?? null;
-  const fee = takerFeeBps === null ? null : (notional * takerFeeBps) / 10_000;
-  const initialMargin = imRate === null ? null : added * imRate;
+  const fee = takerFeeBps === null || notional === null ? null : (notional * takerFeeBps) / 10_000;
+  const initialMargin = imRate === null || addedUsdc === null ? null : addedUsdc * imRate;
   const shortfall =
     account === null || initialMargin === null
       ? null
       : Math.max(0, initialMargin + (fee ?? 0) - account.initialMarginSurplus);
-  return { after, fee, initialMargin, notional, position, shortfall };
+  return { after, fee, initialMargin, notional, position, shortfall, size };
 }
 
 /**
- * The account's leverage once an order leaves the position at `afterNotional` (USDC, signed): its
- * size over the margin the engine credits the account, which is the initial margin surplus plus
- * what the open position already holds at the initial rate. The engine opens up to 1 / its initial
- * rate. There is no per-position leverage to set: the engine margins the account as a whole.
+ * The account's leverage once an order leaves the position at `afterSize` (signed, `sizeSymbol`):
+ * its USDC value at `price` over the margin the engine credits the account, which is the initial
+ * margin surplus plus what the open position already holds at the initial rate. The engine opens up
+ * to 1 / its initial rate. There is no per-position leverage to set: the engine margins the account
+ * as a whole.
  */
 export function estimateFutureLeverage({
   account,
-  afterNotional,
+  afterSize,
+  price,
   state,
 }: {
   account: FutureAccount | null;
-  afterNotional: number;
+  afterSize: number;
+  price: number | null;
   state: FutureState;
 }) {
   if (account === null || !(account.imRate > 0)) {
     return { leverage: null, maxLeverage: null };
   }
-  const held = Math.abs(futureNotionalUsdc(toContracts(account.positionUnits), state));
+  const maxLeverage = 1 / account.imRate;
+  const held = futureSizeUsdc(Math.abs(futurePositionSize(account, state)), price, state);
+  const after = futureSizeUsdc(Math.abs(afterSize), price, state);
+  if (held === null || after === null) {
+    return { leverage: null, maxLeverage };
+  }
   const credited = account.initialMarginSurplus + held * account.imRate;
-  return {
-    leverage: credited > 0 ? Math.abs(afterNotional) / credited : null,
-    maxLeverage: 1 / account.imRate,
-  };
+  return { leverage: credited > 0 ? after / credited : null, maxLeverage };
 }
 
 /**
- * A market order's fill, walked through the resting book: the average price its `notional` USDC
- * trades at, and how far that sits past the touch (the best ask for a long, the best bid for a
- * short) as a fraction. The book's sizes are the venue's units, `unitUsdc` of notional each, so
- * the walk counts notional. Null figures when the size is unset or the side cannot fill it.
+ * A market order's fill, walked through the resting book: the average price its `size` trades at,
+ * and how far that sits past the touch (the best ask for a long, the best bid for a short) as a
+ * fraction. The book's sizes are in `sizeSymbol`, as the terminal shows them. Null figures when the
+ * size is unset or the side cannot fill it.
  */
 export function estimateFutureFill({
   asks,
   bids,
-  notional,
   side,
-  state,
+  size,
 }: {
   asks: OrderBookLevel[];
   bids: OrderBookLevel[];
-  notional: number | null;
   side: FutureSide;
-  state: FutureState;
+  size: number | null;
 }): { averagePrice: number | null; slippage: number | null } {
-  if (notional === null || !(state.unitUsdc > 0)) {
+  if (size === null) {
     return { averagePrice: null, slippage: null };
   }
   const uiSide = futureOrderUiSide(side);
   const touch = (uiSide === "buy" ? asks[0]?.price : bids[0]?.price) ?? null;
-  const fill = getMarketFill(uiSide, asks, bids, notional / state.unitUsdc);
+  const fill = getMarketFill(uiSide, asks, bids, size);
   if (!fill.isFullyFilled || fill.averagePrice === null || touch === null || touch <= 0) {
     return { averagePrice: fill.averagePrice, slippage: null };
   }
@@ -312,36 +411,46 @@ export function estimateFutureFill({
 }
 
 /**
- * The variation margin a fill settles at once, in cNGN to the trader: the engine marks the new
- * position to the mark on the fill, so a long that fills above the mark (or a short below it) pays
- * the gap times the notional, and one that fills on the better side of the mark receives it.
+ * The variation margin a fill settles at once, in the series' `vmSymbol` to the trader: the engine
+ * marks the new position to the mark on the fill, so a long that fills above the mark (or a short
+ * below it) pays the gap times the size, and one that fills on the better side of the mark receives
+ * it. On the v1 series the size is USDC and the price cNGN per USDC, so it is cNGN; on a v2 series
+ * the size is the base and the price USDC per base, so it is USDC.
  */
-export function futureFillVmCngn({
+export function futureFillVm({
   markPrice,
-  notional,
   price,
   side,
+  size,
 }: {
   markPrice: number | null;
-  notional: number;
   price: number | null;
   side: FutureSide;
+  size: number;
 }) {
-  if (markPrice === null || price === null || !(notional > 0)) {
+  if (markPrice === null || price === null || !(size > 0)) {
     return null;
   }
-  return (side === "long" ? markPrice - price : price - markPrice) * notional;
+  return (side === "long" ? markPrice - price : price - markPrice) * size;
 }
 
-/** A fill's VM as the ticket and history show it: signed cNGN, with its dollar value at the mark. */
-export function formatFutureVm(vmCngn: number | null, markPrice: number | null) {
-  if (vmCngn === null || !Number.isFinite(vmCngn)) {
+/**
+ * A fill's VM as the ticket and history show it: signed cNGN with its dollar value at the mark on
+ * the v1 series, signed USDC on a v2 one.
+ */
+export function formatFutureVm(
+  vm: number | null,
+  markPrice: number | null,
+  state: Pick<FutureState, "terms">
+) {
+  if (vm === null || !Number.isFinite(vm)) {
     return "—";
   }
-  const cngn = signedCngn(vmCngn);
-  return markPrice === null || !(markPrice > 0)
-    ? cngn
-    : `${cngn} (≈ ${signedUsd(vmCngn / markPrice)})`;
+  if (state.terms === "american") {
+    return signedUsd(vm);
+  }
+  const cngn = signedCngn(vm);
+  return markPrice === null || !(markPrice > 0) ? cngn : `${cngn} (≈ ${signedUsd(vm / markPrice)})`;
 }
 
 /** A USDC amount to the cent, or to four places under a cent, so a small fee never reads as free. */
@@ -356,19 +465,20 @@ export function formatFutureUsdc(value: number | null) {
 /**
  * What Reduce Only means for this ticket: whether it is in force (the box is ticked and there is a
  * position), why the order cannot go (it is on the position's own side), the size the venue would
- * fill (no more than the position, the rest cancelled) and the most MAX offers (the position).
+ * fill (no more than the position, the rest cancelled) and the most MAX offers (the position). Sizes
+ * are in the series' `sizeSymbol`.
  */
 export function futureReduceOnlyTerms(inputs: {
-  notional: number | null;
   position: number;
   reduceOnly: boolean;
   side: FutureSide;
-  unitUsdc: number;
+  size: number | null;
+  unitSize: number;
 }) {
   const held = Math.abs(inputs.position);
   const reducing = inputs.reduceOnly && held > 1e-9;
   if (!reducing) {
-    return { error: null, filled: inputs.notional, maxNotional: null, reducing };
+    return { error: null, filled: inputs.size, maxSize: null, reducing };
   }
   const long = inputs.position > 0;
   const increases = (inputs.side === "long") === long;
@@ -376,55 +486,64 @@ export function futureReduceOnlyTerms(inputs: {
     error: increases
       ? `Reduce Only: ${long ? "Short" : "Long"} to reduce your ${long ? "long" : "short"} position.`
       : null,
-    filled: inputs.notional === null ? null : Math.min(inputs.notional, held),
-    maxNotional: inputs.unitUsdc > 0 ? Math.floor(held / inputs.unitUsdc) * inputs.unitUsdc : 0,
+    filled: inputs.size === null ? null : Math.min(inputs.size, held),
+    maxSize: inputs.unitSize > 0 ? Math.floor(held / inputs.unitSize) * inputs.unitSize : 0,
     reducing,
   };
 }
 
 /**
- * The most USDC of notional the ticket offers on one side, in whole venue units: the position it
+ * The most the ticket offers on one side, in `sizeSymbol` and whole venue units: the position it
  * can close outright (reducing is always allowed), plus what the initial margin surplus opens at
- * the engine's rate with the taker fee on top. Zero without an account or its rates.
+ * the engine's rate with the taker fee on top, at `price` on a v2 series. Zero without an account,
+ * its rates or (on a v2 series) a price.
  */
-export function maxFutureNotional({
+export function maxFutureSize({
   account,
+  price,
   side,
   state,
   takerFeeBps,
 }: {
   account: FutureAccount | null;
+  price: number | null;
   side: FutureSide;
   state: FutureState;
   takerFeeBps: number | null;
 }) {
-  if (account === null || state.unitUsdc <= 0) {
+  if (account === null || state.unitSize <= 0) {
     return 0;
   }
-  const position = futureNotionalUsdc(toContracts(account.positionUnits), state);
+  const position = futurePositionSize(account, state);
   const closable = side === "long" ? Math.max(0, -position) : Math.max(0, position);
   const perUsdc = account.imRate + (takerFeeBps ?? 0) / 10_000;
-  const opening = perUsdc > 0 ? Math.max(0, account.initialMarginSurplus) / perUsdc : 0;
-  return Math.floor((closable + opening) / state.unitUsdc) * state.unitUsdc;
+  const openingUsdc = perUsdc > 0 ? Math.max(0, account.initialMarginSurplus) / perUsdc : 0;
+  // The USDC it opens, back in the series' size: itself on v1, over the price on v2.
+  const perSize = futureSizeUsdc(1, price, state);
+  const opening = perSize === null ? 0 : openingUsdc / perSize;
+  return Math.floor((closable + opening) / state.unitSize) * state.unitSize;
 }
 
 /**
- * The venue units a market order on `side` fills at once: the size resting inside the limit it is
- * signed at, the touch through `maxSlippage` held inside the fill band. A market order is a limit
- * order that rests, so whatever the book does not hold inside that limit stays on it.
+ * The size, in `sizeSymbol`, a market order on `side` fills at once: what rests inside the limit it
+ * is signed at, the touch through `maxSlippage` held inside the fill band, in whole venue units. A
+ * market order is a limit order that rests, so whatever the book does not hold inside that limit
+ * stays on it.
  */
-export function futureMarketableUnits({
+export function futureMarketableSize({
   asks,
   band,
   bids,
   maxSlippage,
   side,
+  unitSize,
 }: {
   asks: OrderBookLevel[];
   band: FutureState["fillBand"];
   bids: OrderBookLevel[];
   maxSlippage: number;
   side: FutureSide;
+  unitSize: number;
 }) {
   const uiSide = futureOrderUiSide(side);
   const limit = getMarketableLimitPrice(
@@ -433,7 +552,7 @@ export function futureMarketableUnits({
     bids[0]?.price ?? null,
     maxSlippage
   );
-  if (limit === null) {
+  if (limit === null || !(unitSize > 0)) {
     return 0;
   }
   const banded = band === null ? limit : Math.min(band.high, Math.max(band.low, limit));
@@ -441,13 +560,15 @@ export function futureMarketableUnits({
   const reachable = levels.filter((level) =>
     uiSide === "buy" ? level.price <= banded : level.price >= banded
   );
-  return Math.floor(reachable.reduce((sum, level) => sum + level.size, 0));
+  const size = reachable.reduce((sum, level) => sum + level.size, 0);
+  // A hair under a whole unit is one: the sizes are units scaled to the display, in floating point.
+  return Math.floor(size / unitSize + 1e-9) * unitSize;
 }
 
 /**
  * The Close on a position row: a reduce-only market order on the opposite side, sized to the
  * position or to what the book fills inside the slippage, whichever is smaller, so a close never
- * leaves a remainder resting. `held` is the position in venue units, to say a close is partial.
+ * leaves a remainder resting. `held` and `units` are venue units, `held` to say a close is partial.
  */
 export function futureCloseOrder({
   account,
@@ -462,20 +583,22 @@ export function futureCloseOrder({
   maxSlippage: number;
   state: FutureState;
 }): { error: string } | { held: number; side: FutureSide; units: number } {
-  const position =
-    account === null ? 0 : futureNotionalUsdc(toContracts(account.positionUnits), state);
-  const held = state.unitUsdc > 0 ? Math.floor(Math.abs(position) / state.unitUsdc) : 0;
+  const position = futurePositionSize(account, state);
+  const held = state.unitSize > 0 ? Math.floor(Math.abs(position) / state.unitSize + 1e-9) : 0;
   if (held < 1) {
     return { error: "No position to close." };
   }
   const side: FutureSide = position > 0 ? "short" : "long";
-  const fillable = futureMarketableUnits({
-    asks,
-    band: state.fillBand,
-    bids,
-    maxSlippage,
-    side,
-  });
+  const fillable = Math.round(
+    futureMarketableSize({
+      asks,
+      band: state.fillBand,
+      bids,
+      maxSlippage,
+      side,
+      unitSize: state.unitSize,
+    }) / state.unitSize
+  );
   if (fillable < 1) {
     return {
       error: `No ${side === "long" ? "asks" : "bids"} to close against. Use a reduce-only limit order.`,
@@ -489,7 +612,7 @@ const USD_CELL = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
 });
 const CONTRACTS_CELL = new Intl.NumberFormat("en-US", { maximumFractionDigits: 3 });
-const SIZE_USDC_CELL = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
+const SIZE_CELL = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
 
 function signedUsd(value: number) {
   return `${signPrefix(value)}$${USD_CELL.format(Math.abs(value))}`;
@@ -509,9 +632,9 @@ function pnlTone(value: number): CellTone | undefined {
 /**
  * The Positions tab's columns. No entry price, uPnL or liquidation price: the engine keeps none
  * on chain and the venue serves none. What it does keep is the variation margin accrued since the
- * account last settled. VM settles in cNGN at once on every fill (the gap between the fill price
- * and the mark) and whenever the account is touched, so this is only what the hourly marks have
- * added since: "Pending", not the position's whole profit or loss.
+ * account last settled. VM settles at once on every fill (the gap between the fill price and the
+ * mark) and whenever the account is touched, so this is only what the hourly marks have added
+ * since: "Pending", not the position's whole profit or loss.
  */
 export const FUTURE_POSITIONS_COLUMNS = [
   "Market",
@@ -535,31 +658,36 @@ export function buildFuturePositionsView(
   }
   const contracts = toContracts(account.positionUnits);
   const side: FutureSide = contracts > 0 ? "long" : "short";
-  const size = Math.abs(contracts);
-  const notional = size * state.contractSizeUsdc;
-  const vmUsd = state.markPrice === null ? null : account.pendingVmCngn / state.markPrice;
+  const count = Math.abs(contracts);
+  const size = futureContractsSize(count, state);
+  // A v2 position's USDC value is its size at the mark; a v1 position's is its size.
+  const notional = futureSizeUsdc(size, state.markPrice, state);
+  const american = state.terms === "american";
+  // v1 VM is cNGN, restated in dollars at the mark; v2 VM is already USDC.
+  const vmUsd = american || state.markPrice === null ? null : account.pendingVm / state.markPrice;
   const tones: Record<number, CellTone> = { 1: sideTone(futureOrderUiSide(side)) };
-  const vmTone = pnlTone(account.pendingVmCngn);
+  const vmTone = pnlTone(account.pendingVm);
   if (vmTone !== undefined) {
     tones[4] = vmTone;
   }
-  const contractsText = `${CONTRACTS_CELL.format(size)} ${size === 1 ? "contract" : "contracts"}`;
+  const contractsText = `${CONTRACTS_CELL.format(count)} ${count === 1 ? "contract" : "contracts"}`;
+  const usd = (value: number | null) => (value === null ? "—" : `$${USD_CELL.format(value)}`);
   const row: ActivityRow = {
     badges: { 0: [{ label: futureSideLabel(side), tone: tones[1] }] },
     details:
       vmUsd === null ? { 1: contractsText } : { 1: contractsText, 4: `(≈ ${signedUsd(vmUsd)})` },
     cells: [
       label,
-      `${SIZE_USDC_CELL.format(notional)} USDC`,
-      `$${USD_CELL.format(notional)}`,
-      formatFuturePrice(state.markPrice),
-      signedCngn(account.pendingVmCngn),
-      `$${USD_CELL.format(notional * account.imRate)}`,
+      `${SIZE_CELL.format(size)} ${state.sizeSymbol}`,
+      usd(notional),
+      formatFuturePrice(state.markPrice, state.priceDecimals),
+      american ? signedUsd(account.pendingVm) : signedCngn(account.pendingVm),
+      usd(notional === null ? null : notional * account.imRate),
       signedUsd(account.maintenanceMarginSurplus),
     ],
     titles: {
-      1: `${contractsText} of ${USD_CELL.format(state.contractSizeUsdc)} USDC each`,
-      4: "Variation margin the hourly marks have accrued since the account last settled. VM settles in cNGN at once on every fill (the gap between the fill price and the mark) and whenever the account is touched, so a new position starts here at zero.",
+      1: `${contractsText} of ${USD_CELL.format(state.contractSize)} ${state.sizeSymbol} each`,
+      4: `Variation margin the hourly marks have accrued since the account last settled. VM settles in ${state.vmSymbol} at once on every fill (the gap between the fill price and the mark) and whenever the account is touched, so a new position starts here at zero.`,
     },
     tones,
   };
@@ -570,9 +698,10 @@ export function buildFuturePositionsView(
 export const FUTURE_BALANCES_COLUMNS = ["Asset", "Amount", "Price", "Value", ""];
 
 /**
- * The trading account's balances: its USDC cash, then its cNGN collateral, valued at the index
- * (cNGN per USDC, so a cNGN balance is worth balance ÷ index dollars before the engine's haircut).
- * cNGN is listed at zero until it is held, so a depositor sees where it would go.
+ * The trading account's balances: its USDC cash, then, on the v1 series, its cNGN collateral,
+ * valued at the index (cNGN per USDC, so a cNGN balance is worth balance ÷ index dollars before
+ * the engine's haircut), listed at zero until it is held, so a depositor sees where it would go. A
+ * v2 series margins in USDC alone, so its account lists only USDC.
  */
 export function buildFutureBalancesView(
   account: FutureAccount | null,
@@ -581,7 +710,7 @@ export function buildFutureBalancesView(
   if (account === null) {
     return { columns: [...FUTURE_BALANCES_COLUMNS], rows: [] };
   }
-  const index = state?.indexPrice ?? null;
+  const index = state?.terms === "usdc" ? state.indexPrice : null;
   const withIcon = (symbol: string, cells: string[]): ActivityRow => {
     const icon = tokenIcon(symbol);
     return icon === undefined ? { cells } : { cells, icons: { 0: icon } };
@@ -595,12 +724,16 @@ export function buildFutureBalancesView(
         "$1.00",
         `$${USD_CELL.format(account.cash)}`,
       ]),
-      withIcon("cNGN", [
-        "cNGN",
-        USD_CELL.format(account.cngn),
-        index === null ? "—" : `$${(1 / index).toFixed(7)}`,
-        index === null ? "—" : `$${USD_CELL.format(account.cngn / index)}`,
-      ]),
+      ...(state?.terms === "american"
+        ? []
+        : [
+            withIcon("cNGN", [
+              "cNGN",
+              USD_CELL.format(account.cngn),
+              index === null ? "—" : `$${(1 / index).toFixed(7)}`,
+              index === null ? "—" : `$${USD_CELL.format(account.cngn / index)}`,
+            ]),
+          ]),
     ],
   };
 }
@@ -609,16 +742,23 @@ function signedPercent(value: number, digits: number) {
   return `${signPrefix(value)}${Math.abs(value).toFixed(digits)}%`;
 }
 
-/**
- * The mark against the index: forward points (mark − index, cNGN per USDC) and the premium as a
- * fraction (mark / index − 1). Null without both prices or with a non-positive index.
- */
+/** How a series is quoted, for its stats: the selector's rows carry the same. */
+export type FutureQuoting = Pick<
+  FutureState,
+  "baseSymbol" | "priceDecimals" | "priceUnit" | "terms"
+>;
+
 /** What the stats bar reads of a series: the selector's rows carry the same. */
 export type FutureStatsInput = Pick<
   FutureState,
   "expiryMs" | "indexPrice" | "lastTradeAtMs" | "markPrice" | "settled"
->;
+> &
+  FutureQuoting;
 
+/**
+ * The mark against the index: forward points (mark − index, in the series' price unit) and the
+ * premium as a fraction (mark / index − 1). Null without both prices or with a non-positive index.
+ */
 export function futureBasis(state: Pick<FutureState, "indexPrice" | "markPrice"> | null) {
   const mark = state?.markPrice ?? null;
   const index = state?.indexPrice ?? null;
@@ -662,8 +802,20 @@ export function futureMarkSource(depthUsdc: { asks: number; bids: number }): Fut
     : "carry";
 }
 
-function markTooltip(source: FutureMarkSource | null) {
-  const method = `cNGN per USDC, set hourly by the forward keeper: the futures book's depth-weighted mid when each side holds ${USD_WHOLE.format(FUTURE_MARK_BOOK_DEPTH_USDC)} USDC, otherwise a model, the index carried forward at the NGN–USD rate differential. Either way it is held within 3% of that model and inside the index band. It is never the last trade. Variation margin is paid at it.`;
+/** A stablecoin's trailing "C" (EURC → EUR), to name the currency it tracks. */
+const STABLECOIN_SUFFIX = /C$/;
+
+/** The pair's rate differential as the tooltips name it: the naira's for cNGN, the base's otherwise. */
+function differentialName(quoting: FutureQuoting | null) {
+  if (quoting === null || quoting.baseSymbol === "cNGN") {
+    return "NGN–USD";
+  }
+  return `${quoting.baseSymbol.replace(STABLECOIN_SUFFIX, "")}–USD`;
+}
+
+function markTooltip(source: FutureMarkSource | null, quoting: FutureQuoting | null) {
+  const unit = quoting?.priceUnit ?? "cNGN per USDC";
+  const method = `${unit}, set hourly by the forward keeper: the futures book's depth-weighted mid when each side holds ${USD_WHOLE.format(FUTURE_MARK_BOOK_DEPTH_USDC)} USDC, otherwise a model, the index carried forward at the ${differentialName(quoting)} rate differential. Either way it is held near that model and inside the index band. It is never the last trade. Variation margin is paid at it.`;
   if (source === null) {
     return method;
   }
@@ -679,21 +831,28 @@ function toneOf(value: number | null): PerpHeaderMetric["tone"] {
   return value > 0 ? "up" : "down";
 }
 
-function formatBasis(basis: ReturnType<typeof futureBasis>) {
+function formatBasis(basis: ReturnType<typeof futureBasis>, digits: number) {
   if (basis === null) {
     return "—";
   }
-  return `${signPrefix(basis.points)}${formatFuturePrice(Math.abs(basis.points))} (${signedPercent(basis.premium * 100, 2)})`;
+  return `${signPrefix(basis.points)}${formatFuturePrice(Math.abs(basis.points), digits)} (${signedPercent(basis.premium * 100, 2)})`;
 }
 
 /**
  * Open interest at its USDC notional from the asset's `totalPosition`: the sum of every account's
  * |position| under the manager, 18 decimals a contract. That counts each contract on both its long
  * and its short side, so open interest is half of it. It spans every series of the asset under that
- * manager; one series is listed at a time.
+ * manager; each asset carries one series. A v2 contract is valued at the mark: null without one.
  */
-export function futureOpenInterestUsd(totalPosition: bigint, contractSizeUsdc: number) {
-  return (toContracts(totalPosition) / 2) * contractSizeUsdc;
+export function futureOpenInterestUsd(
+  totalPosition: bigint,
+  state: Pick<FutureState, "contractSize" | "markPrice" | "terms">
+) {
+  return futureSizeUsdc(
+    futureContractsSize(toContracts(totalPosition) / 2, state),
+    state.markPrice,
+    state
+  );
 }
 
 function formatOpenInterestUsd(value: number | null) {
@@ -705,7 +864,8 @@ function formatOpenInterestUsd(value: number | null) {
 
 /**
  * The future's header figures, in order: mark (with how it is set), index, basis in forward points
- * and percent, the basis annualized, and open interest at its USDC notional. Prices are cNGN per USDC.
+ * and percent, the basis annualized, and open interest at its USDC notional. Prices are in the
+ * series' own terms.
  */
 export function buildFutureHeaderMetrics({
   markSource,
@@ -721,30 +881,35 @@ export function buildFutureHeaderMetrics({
 }): PerpHeaderMetric[] {
   const basis = futureBasis(state);
   const apr = futureBasisApr(state, nowMs);
+  const digits = state?.priceDecimals ?? V1_PRICE_DECIMALS;
+  const american = state?.terms === "american";
   return [
     {
       label: "Mark",
       tone: null,
-      tooltip: markTooltip(markSource),
-      value: formatFuturePrice(state?.markPrice ?? null),
+      tooltip: markTooltip(markSource, state),
+      value: formatFuturePrice(state?.markPrice ?? null, digits),
     },
     {
       label: "Index",
       tone: null,
-      tooltip:
-        "The NGN/USD reference in cNGN per USDC; the series settles at its average over the last hour",
-      value: formatFuturePrice(state?.indexPrice ?? null),
+      tooltip: american
+        ? `The ${state.baseSymbol} reference in ${state.priceUnit}; the series settles at its average over the last hour`
+        : "The NGN/USD reference in cNGN per USDC; the series settles at its average over the last hour",
+      value: formatFuturePrice(state?.indexPrice ?? null, digits),
     },
     {
       label: "Basis",
       tone: toneOf(basis?.points ?? null),
       tooltip: "Mark − Index. Positive when the future trades above spot.",
-      value: formatBasis(basis),
+      value: formatBasis(basis, digits),
     },
     {
       label: "APR",
       tone: null,
-      tooltip: "Implied naira-dollar rate differential, annualized.",
+      tooltip: american
+        ? `The basis annualized: the USD interest rate less the ${differentialName(state).split("–")[0]} one, as the future implies it.`
+        : "Implied naira-dollar rate differential, annualized.",
       value: apr === null ? "—" : signedPercent(apr * 100, 2),
     },
     {
@@ -765,6 +930,8 @@ export function buildFutureHeaderMetrics({
 export function buildFutureOverviewMetrics(
   row: {
     expiryMs: number | null;
+    /** How the series is quoted; null on a row the venue is not serving. */
+    futureQuoting: FutureQuoting | null;
     indexPrice: number | null;
     lastTradeAtMs: number | null;
     markPrice: number | null;
@@ -775,9 +942,10 @@ export function buildFutureOverviewMetrics(
   nowMs: number
 ): PerpHeaderMetric[] {
   const state =
-    row.expiryMs === null || row.lastTradeAtMs === null
+    row.expiryMs === null || row.lastTradeAtMs === null || row.futureQuoting === null
       ? null
       : {
+          ...row.futureQuoting,
           expiryMs: row.expiryMs,
           indexPrice: row.indexPrice,
           lastTradeAtMs: row.lastTradeAtMs,

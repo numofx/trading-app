@@ -84,6 +84,8 @@ export type AccountFill = {
    * the other markets and on fills recorded before the venue kept it.
    */
   vm_cngn?: string;
+  /** `vm_cngn` on a v2 series (cNGN-30NOV26, EURC-30NOV26), whose variation margin is USDC. */
+  vm_usdc?: string;
 };
 
 export type FillsResponse = {

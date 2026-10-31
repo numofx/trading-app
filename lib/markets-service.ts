@@ -226,7 +226,7 @@ export async function getLiveFutureMarket(symbol: string) {
   return findFutureBySymbol((await response.json()) as MarketPresentation[], symbol);
 }
 
-/** The front-month future (the nearest unexpired series), from the minute-cached market list. */
+/** The front-month future (the nearest offered series the venue is matching), from the minute-cached market list. */
 export async function getFrontMonthFuture() {
   return findFrontMonthFuture(await getMarketsServiceMarkets(), Date.now());
 }
