@@ -74,8 +74,11 @@ The earlier dated-futures terminal was removed; the perp is a new market, not a 
   price. The fee ceiling is signed per contract at the top of the fill band, so no fill can exceed it.
 - **Variation margin** is paid in USDC (fills carry `vm_usdc`), and the account margins in USDC
   alone: Deposit offers USDC only.
-- **Account.** Each wallet has its own account under the v2 engine, shared by both series, apart
-  from the spot account under v1; the first USDC deposit opens it (`useFutureTradingAccount`).
+- **Account.** One account per wallet under the v2 engine, shared by both series and both spot
+  markets since 2026-10-31 (MarginEngine v2 step 4): the venue lists v2 as every market's
+  `margin_manager_address`, so `useFutureTradingAccount` resolves the session's account. The first
+  USDC deposit opens it. Accounts under v1 are close-only: they can close, sell and withdraw, but
+  not buy base or open a position.
 
 How a series reads is parsed from its listing (`FutureState.terms`, `lib/future-market.ts`): a
 `future` block naming `contract_size` and `contract_size_asset` is American; one naming
@@ -91,7 +94,9 @@ once the enable lands.
 ## The v1 future
 
 Not offered since 2026-10-31 (its maker is stopped and nothing is open on it): out of the selector
-and `/`, its URL still answering while the venue lists it.
+and `/`, its URL still answering while the venue lists it. The venue lists it close-only and v1's
+cap on it is 0, so it takes no new position. What follows describes it as it ran; the "one account"
+below is now the v2 account.
 
 **USDC-cNGN-30NOV26** is at `/trade/usdc-cngn-30nov26`, under the selector's Futures tab: a
 cash-settled cNGN future on the venue's MarginEngine (`0xA19E…0758`), quoted the way it trades,
@@ -125,7 +130,7 @@ from its `/v1/markets` entry (`contract_type: future`, the `future` block, `fill
 ## EURC-USDC spot
 
 A second spot market, at `/trade/eurc-usdc` under the selector's Spot tab: EURC against USDC on
-the same MarginEngine account, TradeModule and USDC cash as cNGN-USDC (numofx/exchange
+the same MarginEngine v2 account, TradeModule and USDC cash as cNGN-USDC (numofx/exchange
 `deploy-eurc-spot.s.sol`). It is shown as it trades, USDC per EURC to five decimals, sized in whole
 EURC, a buy a buy of EURC; there is no inversion and no `order_entry_spec`, so its book, orders and
 fills are read from the engine fields. Fees come from `/v1/markets` (5 bps taker, 0 maker).
@@ -255,7 +260,10 @@ the browser bundle: keep the Alchemy key domain-restricted, and rotate it there 
 Since the **unified-account cutover on 2026-10-04**, every market trades on one stack: the
 perp's TradeModule, quoted in the perp's CashAsset, with the perp's cNGN escrow as the spot asset.
 Since the **MarginEngine cutover**, a wallet's trading account for spot and the future lives under
-the MarginEngine; the perp winds down under its StandardManager (SRM). The build check fails until `/v1/markets` reports the engine as spot's
+the MarginEngine: v1 (`0xA19E…0758`) from 2026-10-14, **v2** (`0x0705…0950`) since 2026-10-31, when
+spot moved to the engine the v2 futures margin under, so one account holds both. v1 accounts are
+close-only and the app no longer resolves them. The perp winds down under its StandardManager
+(SRM). The build check fails until `/v1/markets` reports the engine as spot's
 `margin_manager_address` (markets-service `SPOT_MARGIN_MANAGER_ADDRESS`), so the venue moves
 first; markets-service's `DEPOSIT_MANAGER_ADDRESS` should move with it.
 
@@ -274,7 +282,7 @@ escrow and trade another. A production build also fails when the venue cannot be
 | `NEXT_PUBLIC_TRADE_MODULE_ADDRESS` | `0xDea968188598BA0E3F58A56C0fdfF338C74F699f` | the perp TradeModule — the one module both markets' trades go through; it trades any base asset the order names |
 | `NEXT_PUBLIC_WITHDRAWAL_MODULE_ADDRESS` | `0x0a10AE2f5D2482cE1e43bC309D430B8861C2b5aB` | WithdrawalModule — signed withdrawals from accounts Matching holds, submitted by the venue's executor |
 | `NEXT_PUBLIC_SUBACCOUNT_CREATOR_ADDRESS` | `0x568890A8D63Ba8a03b6eCbEedA1bD9f6ea014D5D` | periphery for `createAndDepositSubAccount` |
-| `NEXT_PUBLIC_USDCCNGN_MANAGER_ADDRESS` | `0xA19E296021c9DF25b90D96C2A0793CC3D0800758` | the MarginEngine — the manager the trading account spot and the future share is resolved and created under |
+| `NEXT_PUBLIC_USDCCNGN_MANAGER_ADDRESS` | `0x0705219a1594d5Fc5dC2573da4082cAf3e1B0950` | MarginEngine v2 — the manager the trading account spot and the futures share is resolved and created under (v1, `0xA19E…0758`, until 2026-10-31). Unset on Vercel: the default applies |
 | `NEXT_PUBLIC_PERP_MANAGER_ADDRESS` | `0xDE0423D0a1E15536265C9513d2e0c10DAb5835D4` | the perp SRM — where perp accounts close out and withdraw during the wind-down |
 | `NEXT_PUBLIC_SUBACCOUNTS_ADDRESS` | `0x7019244E25FA416e6Ca2ed2F3cA25277aef72843` | SubAccounts ERC-721 ledger |
 | `NEXT_PUBLIC_WRAPPED_USDC_ASSET_ADDRESS` | `0xA74E49b4Ed7cb176bc02ef4D8a1A3240C9aD4272` | the perp CashAsset — the USDC deposit escrow and the module's `quoteAsset()`, holding real USDC |
