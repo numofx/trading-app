@@ -173,7 +173,7 @@ export function getLegacySpotStack(): {
   };
 }
 
-/** The trading account's manager: the MarginEngine, which spot and the future share. */
+/** The trading account's manager: MarginEngine v2, which spot and the futures share. */
 export function getUsdcCngnManagerAddress() {
   return getAddress(
     process.env.NEXT_PUBLIC_USDCCNGN_MANAGER_ADDRESS?.trim() || getMatchingStack().manager
