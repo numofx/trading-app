@@ -15,7 +15,7 @@ import { isSpotMarketId, SPOT_PAIRS } from "@/lib/spot-pairs";
 import { formatCompactVolume, get24hStats, getVenueLastPrice } from "@/lib/ticker-stats";
 import type { SpotMarket } from "@/lib/trading.types";
 
-/** A spot pair's entry, under its display name: USDC-cNGN, EURC-USDC. */
+/** A spot pair's entry, under its display name: cNGN-USDC, EURC-USDC. */
 function spotEntry(id: SpotMarketId): TerminalMarketEntry {
   return {
     href: marketPath(id),
@@ -42,7 +42,7 @@ export function futureEntry(symbol: string): TerminalMarketEntry {
 }
 
 /**
- * The markets the selector offers, each at its own URL under `/trade`: USDC-cNGN spot, the other
+ * The markets the selector offers, each at its own URL under `/trade`: cNGN-USDC spot, the other
  * spot pairs the venue lists (`listedSpot`: EURC-USDC once it is served), and the future series it
  * lists (`futureSymbols`, nearest expiry first; empty when it lists none). The shell (header,
  * wallet, trading account, selector) persists across them; the market's panels are keyed by the
@@ -57,7 +57,7 @@ export function selectorMarkets(
 }
 
 /**
- * The spot pairs beyond USDC-cNGN to list: those the venue's overview served a row for, and the one
+ * The spot pairs beyond cNGN-USDC to list: those the venue's overview served a row for, and the one
  * on screen if it is missing, so the pill's own market is never absent from its list.
  */
 export function listedSpotMarkets(
@@ -124,8 +124,8 @@ export function emptyOverviewRow(id: TerminalMarketId): MarketOverviewRow {
  * them: the price is the book's mid (else one side, else the last trade), the change is measured
  * from the window's first trade to the last, and the volume is the window's USDC notional.
  * `markPrice` is the perp's fallback when nothing rests and nothing traded; spot has none. A spot
- * pair's price and change are in its displayed terms: USDC-cNGN's the venue's turned over, cNGN per
- * USDC; EURC-USDC's as served, USDC per EURC.
+ * pair's price and change are in its displayed terms, which for both pairs are the venue's own:
+ * USDC per base.
  *
  * The future passes its mark and last trade time, and its volume as USDC of notional, which the
  * caller works out from the venue's units: the venue's quote volume on it is price × units, not money.

@@ -5,15 +5,14 @@
  *
  * The venue identifies the markets as `cNGN-USDC` and `cNGN-PERP` (since 2026-10-08; the pre-rename
  * `USDCcNGN-SPOT` / `USDCcNGN-PERP` are deprecated aliases until 2027-01-06 that it never emits).
- * Spot is shown as **USDC-cNGN** since 2026-10-14, quoted like the future in cNGN per USDC and sized
- * in USDC (`lib/spot-orientation.ts`); the venue and the engine still trade it as cNGN-USDC. The perp
- * keeps the engine's orientation. A dated future is shown under the venue's own `USDC-cNGN-<DDMONYY>`
+ * Spot is shown as it trades, USDC per cNGN sized in cNGN (it was shown inverted, as USDC-cNGN,
+ * from 2026-10-14 to 2026-10-31). The perp keeps the engine's orientation too. A dated future is shown under the venue's own `USDC-cNGN-<DDMONYY>`
  * symbol, which changes every series, so it is not listed here. EURC-USDC is shown as the engine
  * trades it: USDC per EURC, sized in EURC.
  */
 export const MARKET_LABELS = {
   "cNGN-PERP": "cNGN-PERP",
-  "cNGN-USDC": "USDC-cNGN",
+  "cNGN-USDC": "cNGN-USDC",
   "EURC-USDC": "EURC-USDC",
 } as const satisfies Record<string, string>;
 

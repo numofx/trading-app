@@ -41,10 +41,9 @@ import { useLiveMarketBook } from "@/ui/trading-terminal/useLiveMarketBook";
 import { useSignedHistoryTabs } from "@/ui/trading-terminal/useSignedHistoryTabs";
 
 /**
- * The book in the pair's displayed terms. USDC-cNGN is quoted the way the future is: prices in
- * cNGN per USDC, sizes in USDC (switchable to cNGN). The venue serves the engine's cNGN-USDC;
- * `spot-orientation` turns it over for every panel but the ticket, which works in the engine's
- * terms underneath. EURC-USDC is shown as it trades: USDC per EURC, sized in EURC.
+ * The book in the pair's displayed terms. Both pairs are shown as they trade: USDC per base, sized
+ * in the base (switchable to USDC on the ticket). A pair marked `inverted` would be turned over by
+ * `spot-orientation` for every panel but the ticket.
  */
 function bookUnits(pair: SpotPair): BookUnits {
   return {
@@ -97,7 +96,7 @@ export function SpotTradingTerminal({
   /** The interval `candles` are bucketed at, which streamed fills are folded in at: the URL's `?interval=`. */
   candleInterval?: ChartInterval;
   spotMarket: SpotMarket;
-  /** Which spot pair this is; USDC-cNGN when omitted. */
+  /** Which spot pair this is; cNGN-USDC when omitted. */
   pair?: SpotPair;
   /**
    * Subaccount balances as numbers, the pair's base (cNGN, EURC) and USDC — the ticket sizes a

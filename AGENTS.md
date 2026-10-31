@@ -12,9 +12,8 @@ References:
 - The venue's markets are `cNGN-USDC` and `EURC-USDC` (spot) and `cNGN-PERP` (perp). Those are the values of `market`,
   `symbol` and `ticker_id` everywhere, and the keys of `lib/market-labels.ts`. The spot pairs are configured once, in
   `lib/spot-pairs.ts`.
-- Spot is **displayed** as `USDC-cNGN` (its label in `lib/market-labels.ts`), quoted in cNGN per USDC and sized in USDC
-  like the future. Turn venue data over with `lib/spot-orientation.ts`; never send the display name to the venue, and
-  keep the spot ticket's math and signing in the engine's terms (USDC per cNGN, whole cNGN).
+- `cNGN-USDC` is shown as it trades: USDC per cNGN to eight decimals, like cNGN-30NOV26, sized in whole cNGN. It was
+  displayed inverted, as `USDC-cNGN`, from 2026-10-14 to 2026-10-31; do not reintroduce that label.
 - `EURC-USDC` is shown as it trades: USDC per EURC, sized in whole EURC. It has no `order_entry_spec` and no
   `spot_contract` echo, so its rows are read from the engine fields.
 - `USDCcNGN-SPOT` and `USDCcNGN-PERP` are deprecated aliases, removed on 2027-01-06. Do not use them in new code, tests

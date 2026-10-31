@@ -91,7 +91,7 @@ const VISIBLE_BY_ID = `const visibleById = (id) =>
 const probeScript = (ctaId) => `(() => {
   ${VISIBLE_BY_ID}
   // Matched by id, not label: the CTA reads "Deposit" signed out, "Loading account…" while the
-  // subaccount resolves and "Buy USDC" once funded. Matching on text silently found nothing from
+  // subaccount resolves and "Buy cNGN" once funded. Matching on text silently found nothing from
   // 25b40bf (which relabelled the signed-out CTA) until the id landed.
   const cta = visibleById(${JSON.stringify(ctaId)});
   if (!cta) return JSON.stringify({ error: "no submit CTA found" });
@@ -226,8 +226,8 @@ const CONNECTED_PROBE = `(async () => {
   const summaryShowsBothLegs =
     /[\\d,.]+ USDC/.test(summaryText) && /[\\d,.]+ cNGN/.test(summaryText);
 
-  // A buy of 50 USDC at the fixture's ~1,400 cNGN per USDC pays ~70,000 cNGN against ~29,000 spendable.
-  setValue(amountField(), "50");
+  // A buy of 70,000 cNGN at the fixture's 1/1,400 USDC per cNGN pays ~50 USDC against ~22 spendable.
+  setValue(amountField(), "70000");
   await sleep(400);
   const shortRect = cta().getBoundingClientRect();
   const shortfallLabel = cta().textContent.trim();
@@ -372,11 +372,11 @@ for (const viewport of VIEWPORTS) {
           "the shortfall note pushed the CTA below the fold — the explanation cost the trader the button it explains",
         ],
         [
-          funded.amountAfterDeposit === "50",
+          funded.amountAfterDeposit === "70000",
           `the deposit reset the typed amount to "${funded.amountAfterDeposit}" — the order has to be re-entered`,
         ],
         [
-          funded.ctaAfterDeposit === "Buy USDC" && funded.ctaDisabledAfterDeposit === false,
+          funded.ctaAfterDeposit === "Buy cNGN" && funded.ctaDisabledAfterDeposit === false,
           `after the deposit the CTA reads "${funded.ctaAfterDeposit}" (disabled=${funded.ctaDisabledAfterDeposit}) instead of an enabled order button`,
         ],
         [

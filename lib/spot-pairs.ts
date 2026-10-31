@@ -28,7 +28,7 @@ export type SpotPair = {
   priceDecimals: number;
   /** The ladder's groupings, finest first, in displayed prices. */
   priceGroups: readonly number[];
-  /** Put before a header price: ₦ for cNGN per USDC, $ for USDC per EURC. */
+  /** Put before a header price: $ on a pair quoted in USDC. */
   pricePrefix: string;
   /** `market_id` on analytics events. */
   analyticsId: string;
@@ -37,10 +37,11 @@ export type SpotPair = {
 };
 
 /**
- * The spot markets. cNGN-USDC is shown as USDC-cNGN since 2026-10-14, quoted like the future in
- * cNGN per USDC (two decimals) and sized in USDC. EURC-USDC is shown as it trades: USDC per EURC to
- * five decimals (markets-service's `ui_price_decimals`), sized in EURC, with no `order_entry_spec`
- * and no `spot_contract` echo, so its book, orders and fills are read from the engine fields.
+ * The spot markets, both shown as they trade. cNGN-USDC is quoted in USDC per cNGN to eight
+ * decimals, like cNGN-30NOV26, and sized in whole cNGN (shown USDC-cNGN, inverted, from 2026-10-14
+ * to 2026-10-31). EURC-USDC is quoted in USDC per EURC to five decimals (markets-service's
+ * `ui_price_decimals`), sized in EURC, with no `order_entry_spec` and no `spot_contract` echo, so
+ * its book, orders and fills are read from the engine fields.
  */
 export const SPOT_PAIRS = {
   eurc: {
@@ -59,14 +60,14 @@ export const SPOT_PAIRS = {
   spot: {
     analyticsId: "cngn-usdc-spot",
     base: "cNGN",
-    displayBase: "USDC",
-    displayQuote: "cNGN",
+    displayBase: "cNGN",
+    displayQuote: "USDC",
     id: "spot",
-    inverted: true,
+    inverted: false,
     orderIdPrefix: "spot",
-    priceDecimals: 2,
-    priceGroups: [0.01, 0.1, 1, 5],
-    pricePrefix: "₦",
+    priceDecimals: 8,
+    priceGroups: [0.000_000_01, 0.000_000_1, 0.000_001],
+    pricePrefix: "$",
     symbol: "cNGN-USDC",
   },
 } as const satisfies Record<SpotMarketId, SpotPair>;

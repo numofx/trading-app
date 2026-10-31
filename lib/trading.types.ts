@@ -124,7 +124,7 @@ export type DeliveryTerm = {
   value: string;
 };
 
-/** How a cell is tinted: the buy colour for a buy of USDC (or a good outcome), the sell colour for a sell. */
+/** How a cell is tinted: the buy colour for a buy (or a good outcome), the sell colour for a sell. */
 export type CellTone = "positive" | "negative";
 
 /** A small pill after a cell's text: a position's side, its leverage. */

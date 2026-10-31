@@ -1,5 +1,5 @@
 import type { FutureQuoting } from "@/lib/future-market";
-/** The spot markets: `spot` is cNGN-USDC (shown USDC-cNGN), `eurc` is EURC-USDC. */
+/** The spot markets: `spot` is cNGN-USDC, `eurc` is EURC-USDC. */
 export type SpotMarketId = "spot" | "eurc";
 
 /** Which market's panels render under the shell; each has its own slug under `/trade`. */

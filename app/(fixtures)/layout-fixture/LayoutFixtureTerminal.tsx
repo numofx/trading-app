@@ -15,7 +15,7 @@ const OPENING_BALANCES = { cngn: 41_470.685_234, usdc: 31.028_472_772_594_67 };
  * the terminal derives the spendable balance from the book the way the venue serves it.
  */
 const CLAIMED = { cngn: 12_224, usdc: 8.927_931 };
-/** USDC per cNGN, about ₦1,400 per USDC. */
+/** USDC per cNGN, about 1,400 cNGN to the dollar. */
 const FIXTURE_PRICE = 1 / 1400;
 /**
  * The trader's own orders rest outside the band a market order is signed through (the touch
@@ -29,7 +29,7 @@ const FIXTURE_WALLET = "0x1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d";
 const FIXTURE_BUTTON_CLASSES =
   "flex h-10 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-4 font-semibold text-[14px] text-panel-text ring-1 ring-panel-border";
 
-/** The fill "Inject trade" streams in: 7,010 cNGN (about 5 USDC) at ₦1,402 per USDC, a buy of cNGN. */
+/** The fill "Inject trade" streams in: 7,010 cNGN (about 5 USDC) at 1/1,402 USDC per cNGN, a buy of cNGN. */
 const INJECTED_TRADE = { price: 1 / 1402, size: 5 * 1402 };
 
 /** What one fixture deposit adds. Large enough to clear any shortfall the check types in. */

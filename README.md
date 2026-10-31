@@ -13,13 +13,12 @@ it (keyed by the slug, so a ticket or a book tab never carries over). The slugs 
 `lib/market-routes.ts`. `/` opens the front-month future, chosen per request from `/v1/markets`, or
 spot when none is listed (`app/route.ts`, 307). A slug in another casing is redirected to lowercase
 by `proxy.ts` with its query string, and an unknown slug, or a future series the venue does not
-list, is a 404 from the segment's layout. **Spot is shown as USDC-cNGN** (since 2026-10-14), quoted
-the way the future is: prices in cNGN per USDC (about 1,362, two decimals), sizes in USDC (the book
-and the ticket can switch to cNGN), and a buy is a buy of USDC, paid in cNGN. The venue and the
-engine still trade it as cNGN-USDC; `lib/spot-orientation.ts` turns the book, tape, candles, stats,
-open orders and history over for display, and the ticket works in the engine's terms underneath
-(see "Order Contract"). The perp is shown exactly as the engine trades it: USDC per cNGN, sizes in
-cNGN, a long is long cNGN. Since 2026-10-08 the venue identifies the markets as `cNGN-USDC` and `cNGN-PERP`; the pre-rename
+list, is a 404 from the segment's layout. **Spot is shown as cNGN-USDC**, the way it trades and the
+way cNGN-30NOV26 is quoted: prices in USDC per cNGN (about 0.00072706, eight decimals), sizes in
+cNGN (the ticket can switch to USDC), and a buy is a buy of cNGN, paid in USDC. From 2026-10-14 to
+2026-10-31 it was shown inverted, as USDC-cNGN in cNGN per USDC; `lib/spot-orientation.ts` keeps
+that mapping behind `SpotPair.inverted`, which no pair sets now. The perp is shown exactly as the
+engine trades it: USDC per cNGN, sizes in cNGN, a long is long cNGN. Since 2026-10-08 the venue identifies the markets as `cNGN-USDC` and `cNGN-PERP`; the pre-rename
 `USDCcNGN-SPOT` / `USDCcNGN-PERP` are deprecated aliases until 2027-01-06 and this app no longer
 sends them. The display names live in `lib/market-labels.ts` and nowhere else. The perp is a USDC-settled perpetual on its own stack (numofx/exchange
 `deploy-cngn-perp-stack.s.sol`): its own CashAsset, SRM and TradeModule. The app reads everything
@@ -346,20 +345,11 @@ Deposit flow address semantics (naming follows the risk-core deployment artifact
 
 ## Order Contract
 
-**Spot, shown USDC-cNGN.** The ticket takes a buy or sell of USDC, a limit in cNGN per USDC and a size
-in USDC (or cNGN), and signs the engine order under the identity spec `cngn_usdc_spot_v1` below:
+**Spot** is signed exactly as entered, under the identity spec below. (While it was shown as
+USDC-cNGN, 2026-10-14 to 2026-10-31, the ticket inverted side, price and size before signing; that
+mapping is `engineLimitPrice` in `lib/spot-orientation.ts`, unused while no pair is `inverted`.)
 
-```text
-engine_side   = ui_side == BUY ? SELL : BUY         (a buy of USDC is a sell of cNGN)
-engine_price  = 1 / ui_limit, to 18 decimals         (rounded up for a buy of USDC, down for a sell,
-                                                      so the order never trades past the limit typed)
-engine_amount = floor(ui_size_usdc * ui_limit) cNGN  (a market order converts at its expected fill)
-```
-
-The rounding lives in `engineLimitPrice` (`lib/spot-orientation.ts`, tested against exact
-rationals). The venue, the matcher and the market maker are unchanged: they see a cNGN-USDC order.
-
-**The engine's own contract,** which the perp ticket shows as is and spot signs underneath, under the
+**The engine's own contract,** which the spot and perp tickets show as is, under the
 identity order-entry specs `cngn_usdc_spot_v1` and `cngn_usdc_perp_v1` (`lib/order-entry-spec.ts`):
 
 - UI price: `USDC per cNGN` (shown to seven decimals; the engine's tick is 1e-18)

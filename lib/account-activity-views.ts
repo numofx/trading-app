@@ -75,7 +75,7 @@ function formatUsdcSize(size: number) {
     : UNKNOWN_BALANCE;
 }
 
-/** A spot price as its pair shows it: cNGN per USDC to two places, USDC per EURC to five. */
+/** A spot price as its pair shows it: USDC per cNGN to eight places, USDC per EURC to five. */
 function formatSpotPrice(price: number, pair: SpotPair) {
   return Number.isFinite(price)
     ? price.toLocaleString("en-US", {
@@ -98,7 +98,7 @@ function formatSpotAmount(amount: number, symbol: string) {
 /**
  * A spot pair's Open Orders in the trader's terms (orders already turned the pair's way up by
  * `spotOrientation`): a buy or sell of the displayed base at its displayed price, its size and fill
- * in that base. On USDC-cNGN that is USDC at cNGN per USDC. Only the wallet's own.
+ * in that base, at USDC per base. Only the wallet's own.
  */
 export function buildSpotOpenOrdersActivityView(
   openOrders: SpotOpenOrder[],
@@ -132,9 +132,9 @@ export function getOwnedOpenOrders(openOrders: SpotOpenOrder[], walletAddress: s
  * Columns for the Order History tab.
  *
  * No "Type": markets-service does not record whether an order was placed as limit or market — the
- * ticket signs both as limits — so the column could only be guessed. Spot is shown USDC-cNGN:
- * "Filled" is the USDC that traded and "Avg price" what it traded at in cNGN per USDC, both from
- * the fills, so a marketable order's slippage room never reads as size.
+ * ticket signs both as limits — so the column could only be guessed. "Filled" is the base that
+ * traded and "Avg price" what it traded at in USDC per base, both from the fills, so a marketable
+ * order's slippage room never reads as size.
  */
 export const ORDER_HISTORY_COLUMNS = [
   "Time",
@@ -187,7 +187,7 @@ function formatIntentDirection(intent: IntentSide) {
   return intent.side === "buy" ? "Buy" : "Sell";
 }
 
-/** A spot intent's side the trader's way: on USDC-cNGN the engine's buy of cNGN is a sell of USDC. */
+/** A spot intent's side the trader's way: the engine's own, unless the pair is shown inverted. */
 function displayIntent(intent: IntentSide, pair: SpotPair): IntentSide {
   return intent === undefined ? undefined : { side: spotOrientation(pair).side(intent.side) };
 }
@@ -332,8 +332,8 @@ export function buildPerpOrderHistoryActivityView(
 }
 
 /**
- * What a spot order traded, in its pair's displayed base: on USDC-cNGN the USDC (or, when the venue
- * did not value the fill, the cNGN that did); on EURC-USDC the EURC.
+ * What a spot order traded, in its pair's displayed base: the cNGN or EURC; on a pair shown with
+ * USDC as its base, the USDC (or, when the venue did not value the fill, the base that did).
  */
 function formatSpotFilled(filledBase: number, averagePrice: number | null, pair: SpotPair): string {
   if (pair.displayBase !== "USDC") {
@@ -366,7 +366,7 @@ export function buildOrderHistoryActivityView(
   return {
     columns: [...ORDER_HISTORY_COLUMNS],
     rows: orders.map((order) => {
-      // The venue's intent is the engine order; USDC-cNGN is shown the other way up.
+      // The venue's intent is the engine order, shown the pair's way up.
       const engine = spotEngineIntent(
         order.spot_contract?.ui_intent,
         { price: order.limit_price, side: order.side, size: order.desired_amount },
@@ -400,8 +400,7 @@ export function buildOrderHistoryActivityView(
 /**
  * Columns for the Trade History tab: one row per fill.
  *
- * Spot is shown USDC-cNGN: "Size" is the USDC that changed hands and "Total" the cNGN, both as the
- * fill executed, so each row reconciles against the account's balances. "Fee" is what the order paid, which is nothing for a
+ * "Size" is the base that changed hands and "Total" the USDC, both as the fill executed, so each row reconciles against the account's balances. "Fee" is what the order paid, which is nothing for a
  * maker. "Role" says whether the order crossed the book or rested and was hit.
  *
  * The trailing column holds the link to the fill's settling transaction on Basescan.
@@ -532,7 +531,7 @@ export function buildTradeHistoryActivityView(
     columns: [...TRADE_HISTORY_COLUMNS],
     rows: fills.map((fill) => {
       // The fill's intent is the engine's. "Size" is the displayed base and "Total" the other leg:
-      // on USDC-cNGN a buy of USDC sized in USDC with the cNGN as its total; on EURC-USDC as it traded.
+      // sized in the displayed base with the other leg as its total.
       const engineIntent = spotEngineIntent(
         fill.spot_contract?.ui_intent,
         { price: fill.price, side: fill.side, size: fill.size },

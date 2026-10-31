@@ -49,8 +49,8 @@ const SIDES = [
 ] as const;
 
 /**
- * The units the Size field can be counted in, the displayed base first: on USDC-cNGN, USDC is what
- * a buy of USDC receives or a sell delivers and cNGN the other leg; on EURC-USDC, EURC then USDC.
+ * The units the Size field can be counted in, the displayed base first: the base a buy receives or
+ * a sell delivers (cNGN, EURC), then the USDC that pays for it.
  * Whichever it is, the engine signs and rests the pair's base.
  */
 function sizeUnits(pair: SpotPair): readonly PayCurrency[] {
@@ -67,7 +67,7 @@ function toBaseLeg(sizeBase: number) {
   return Number.isFinite(sizeBase) ? Math.floor(sizeBase) : null;
 }
 
-/** A displayed price as the ticket shows it: cNGN per USDC to two decimals, USDC per EURC to five. */
+/** A displayed price as the ticket shows it: USDC per cNGN to eight decimals, USDC per EURC to five. */
 function formatSpotPrice(price: number | null, pair: SpotPair) {
   return formatMarketPrice(price, pair.priceDecimals);
 }
@@ -129,8 +129,8 @@ function parseAmount(value: string) {
 }
 
 /**
- * Copy and rows for the submit confirmation, in the trader's terms: on USDC-cNGN a buy of USDC pays
- * cNGN for it; on EURC-USDC a buy of EURC pays USDC. In the engine's terms an engine buy always pays
+ * Copy and rows for the submit confirmation, in the trader's terms: a buy of cNGN or EURC pays
+ * USDC; on an inverted pair a buy of USDC pays the base for it. In the engine's terms an engine buy always pays
  * USDC for the base. Lives outside the component so its branching does not count against the
  * panel's cognitive complexity budget.
  */
@@ -647,7 +647,7 @@ function getOwnCrossingNote({
   if (order === null) {
     return null;
   }
-  // the resting order in the trader's terms: on USDC-cNGN an engine buy of cNGN is their sell of USDC
+  // the resting order in the trader's terms: on an inverted pair an engine buy of cNGN is their sell of USDC
   const restingSide = orientation.side(order.side);
   return `This would trade against your own resting ${restingSide} at ${formatSpotPrice(orientation.price(order.price), pair)}, which can't settle. Cancel it in Open Orders or change the price.`;
 }
@@ -801,7 +801,7 @@ export function SpotOrderFormPanel({
 }) {
   const orientation = spotOrientation(pair);
   // The trader's side: a buy or sell of the displayed base. `side` below is the engine's, which on
-  // USDC-cNGN is the other way.
+  // an inverted pair is the other way.
   const [uiSide, setUiSide] = useState<"buy" | "sell">("buy");
   const [orderType, setOrderType] = useState<SpotOrderType>("Market");
   // In the displayed quote per base. Seeded from the mid, not the last trade: a prefill past the
@@ -958,8 +958,7 @@ export function SpotOrderFormPanel({
         <>
           {/*
            * One total, not a Subtotal/Total pair: the displayed quote a buy pays or a sell receives
-           * (the cNGN on USDC-cNGN, the USDC on EURC-USDC), with the fee charged on it listed
-           * separately. Printing a fee-inclusive total as well cost the Size field its rows on a
+           * (the USDC on both pairs), with the fee charged on it listed separately. Printing a fee-inclusive total as well cost the Size field its rows on a
            * 700px screen.
            */}
           <div className="space-y-0.5">
@@ -1046,8 +1045,8 @@ export function SpotOrderFormPanel({
           adornment={
             <span className="flex items-center gap-2">
               {/*
-               * The trader's touch, on the engine side the order rests: on USDC-cNGN their best bid
-               * for USDC is the engine's best ask inverted.
+               * The trader's touch, on the engine side the order rests: on an inverted pair their
+               * best bid is the engine's best ask turned over.
                */}
               <PriceQuickFill
                 bestLabel={isBuy ? "BID" : "ASK"}
