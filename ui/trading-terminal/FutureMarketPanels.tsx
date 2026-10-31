@@ -32,6 +32,7 @@ import {
 } from "@/lib/future-market";
 import type { FutureAccount, FutureMarket, FutureState } from "@/lib/future-market.types";
 import { FUTURE_ACTIVITY_VIEWS, FUTURE_BOTTOM_TABS } from "@/lib/future-terminal-config";
+import { expectedTakerPrice, readTakerFill, slippageBps } from "@/lib/order-fill";
 import type { OrderOutcome } from "@/lib/order-settlement";
 import { isOrderFillKnown, pollOrderOutcome } from "@/lib/order-settlement";
 import { PERP_DEFAULT_MAX_SLIPPAGE } from "@/lib/perp-market";
@@ -291,6 +292,57 @@ async function readFutureOrder(orderId: string): Promise<OrderOutcome | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Properties shared by a future order's analytics events. The expected price is the touch a market
+ * order crosses, or a limit order's own price; sizes are in the base.
+ */
+function futureOrderEvent(
+  request: FutureOrderRequest,
+  market: FutureMarket,
+  price: string,
+  touch: { bestAsk: number | null; bestBid: number | null },
+  eventOrderType: string | undefined
+) {
+  const expectedPrice =
+    request.orderType === "Market"
+      ? expectedTakerPrice(futureOrderUiSide(request.side), touch)
+      : Number(price);
+  const sizeBase = request.units * market.state.unitSize;
+  return {
+    expected_price: expectedPrice,
+    limit_price: price,
+    market_id: market.symbol.toLowerCase(),
+    notional_usdc: futureSizeUsdc(sizeBase, expectedPrice ?? Number(price), market.state),
+    order_side: request.side,
+    order_type: eventOrderType ?? request.orderType,
+    size_base: sizeBase,
+  };
+}
+
+/**
+ * Records what a filled order paid (`order_filled`): its average price from the venue's trades, sizes
+ * restated from venue units into the base, and the slippage against the price expected at submission.
+ */
+async function captureFutureFill(
+  market: FutureMarket,
+  orderId: string,
+  event: { [property: string]: unknown; expected_price: number | null },
+  side: "buy" | "sell",
+  submittedAt: number
+) {
+  const fill = await readTakerFill(market.symbol, orderId);
+  if (fill === null) {
+    return;
+  }
+  posthog.capture("order_filled", {
+    ...event,
+    fill_ms: Date.now() - submittedAt,
+    fill_price: fill.averagePrice,
+    filled_base: fill.filledUnits * market.state.unitSize,
+    slippage_bps: slippageBps(side, event.expected_price, fill.averagePrice),
+  });
 }
 
 /**
@@ -644,6 +696,7 @@ function useFutureOrderActions({
   /**
    * Watches an accepted order until its fill is known, then re-reads the account at the block
    * after the fill so the position shows at once. An order the venue ends without a fill says so.
+   * True when it filled, in whole or in part.
    */
   async function followFill(orderId: string) {
     const outcome = await pollOrderOutcome(() => readFutureOrder(orderId), {
@@ -653,12 +706,15 @@ function useFutureOrderActions({
     });
     if (Number.parseFloat(outcome?.filled_amount ?? "0") > 0) {
       onAccountChanged(await blockAfterLatest());
-    } else if (outcome?.status === "cancelled" || outcome?.status === "expired") {
+      return true;
+    }
+    if (outcome?.status === "cancelled" || outcome?.status === "expired") {
       const reason = outcome.cancel_reason
         ? ` (${outcome.cancel_reason.replaceAll("_", " ")})`
         : "";
       orderStatus.settle(`Order ${outcome.status} without a fill${reason}.`);
     }
+    return false;
   }
 
   /**
@@ -682,16 +738,8 @@ function useFutureOrderActions({
       orderStatus.announce(resolved.error);
       return;
     }
-    const event = {
-      market_id: market.symbol.toLowerCase(),
-      notional_usdc: futureSizeUsdc(
-        request.units * market.state.unitSize,
-        Number(resolved.price),
-        market.state
-      ),
-      order_side: request.side,
-      order_type: options.eventOrderType ?? request.orderType,
-    };
+    const uiSide = futureOrderUiSide(request.side);
+    const event = futureOrderEvent(request, market, resolved.price, touch, options.eventOrderType);
     setIsSubmitting(true);
     try {
       const { body, ok, orderId, status } = await signAndPostFutureOrder({
@@ -700,7 +748,7 @@ function useFutureOrderActions({
         orderType: request.orderType,
         price: resolved.price,
         reduceOnly: request.reduceOnly,
-        side: futureOrderUiSide(request.side),
+        side: uiSide,
         onAwaitingSignature: () =>
           orderStatus.announce(
             options.awaitingSignature ?? `Awaiting wallet signature for account #${subaccountId}`
@@ -718,10 +766,19 @@ function useFutureOrderActions({
         orderStatus.settle(describeFutureRejection(body?.error, "Futures order submission failed"));
         return;
       }
-      posthog.capture("order_submitted", event);
+      const submittedAt = Date.now();
+      posthog.capture("order_submitted", { ...event, order_id: orderId });
       orderStatus.announce(null, { awaitFill: true });
       router.refresh();
-      await followFill(orderId);
+      if (await followFill(orderId)) {
+        void captureFutureFill(
+          market,
+          orderId,
+          { ...event, order_id: orderId },
+          uiSide,
+          submittedAt
+        );
+      }
       router.refresh();
     } catch (error) {
       posthog.captureException(error, {

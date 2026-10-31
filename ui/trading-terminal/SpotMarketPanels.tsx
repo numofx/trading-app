@@ -9,6 +9,7 @@ import { getAppChain } from "@/lib/base-public-client";
 import type { ChartInterval } from "@/lib/chart-interval";
 import { formatUsdcPrice } from "@/lib/market-formatting";
 import { MARKET_LABELS } from "@/lib/market-labels";
+import { expectedTakerPrice, readTakerFill, slippageBps } from "@/lib/order-fill";
 import type { OrderOutcome } from "@/lib/order-settlement";
 import { pollOrderOutcome } from "@/lib/order-settlement";
 import { getMarketableLimitPrice } from "@/lib/spot-market";
@@ -192,22 +193,59 @@ async function readOrderOutcome(orderId: string): Promise<OrderOutcome | null> {
   }
 }
 
-/** Properties shared by every spot order analytics event. `size` is the engine base, whole. */
+/**
+ * Properties shared by every spot order analytics event. `size` is the engine base, whole. The
+ * expected price is the touch a market order crosses in `book`, or a limit order's own price.
+ */
 function buildSpotOrderEvent(
   pair: SpotPair,
   side: "buy" | "sell",
   orderType: "Limit" | "Market",
   size: string,
-  executionPrice: string
+  executionPrice: string,
+  book: SubmittedBook
 ) {
+  const expectedPrice =
+    orderType === "Market" ? expectedTakerPrice(side, book) : Number(executionPrice);
   return {
+    expected_price: expectedPrice,
     limit_price: executionPrice,
     market_id: pair.analyticsId,
+    notional_usdc: expectedPrice === null ? null : Number(size) * expectedPrice,
     order_side: side,
     order_type: orderType,
-    // `size_cngn` predates EURC and stays its name on cNGN-USDC, so the existing insights hold.
-    ...(pair.base === "cNGN" ? { size_cngn: size } : { size_base: size }),
+    size_base: size,
+    // `size_cngn` predates EURC and stays on cNGN-USDC beside `size_base`, so the existing insights hold.
+    ...(pair.base === "cNGN" ? { size_cngn: size } : {}),
   };
+}
+
+/**
+ * Records what a filled order paid (`order_filled`): its average price from the venue's trades and
+ * the slippage against the price expected at submission. Nothing is sent when the fills cannot be read.
+ */
+async function captureSpotFill(
+  outcome: OrderOutcome | null,
+  pair: SpotPair,
+  orderId: string,
+  orderEvent: ReturnType<typeof buildSpotOrderEvent>,
+  submittedAt: number
+) {
+  if (!(Number.parseFloat(outcome?.filled_amount ?? "0") > 0)) {
+    return;
+  }
+  const fill = await readTakerFill(pair.symbol, orderId);
+  if (fill === null) {
+    return;
+  }
+  posthog.capture("order_filled", {
+    ...orderEvent,
+    fill_ms: Date.now() - submittedAt,
+    fill_price: fill.averagePrice,
+    filled_base: fill.filledUnits,
+    order_id: orderId,
+    slippage_bps: slippageBps(orderEvent.order_side, orderEvent.expected_price, fill.averagePrice),
+  });
 }
 
 /** The escrow the pair's base settles in: the id of the account's base leg. Null if unconfigured. */
@@ -343,6 +381,7 @@ export function SpotMarketPanels({
     }
 
     const { market: orderMarket, price: executionPrice } = resolved;
+    const orderEvent = buildSpotOrderEvent(pair, side, orderType, size, executionPrice, book);
 
     try {
       setIsSubmittingOrder(true);
@@ -378,15 +417,16 @@ export function SpotMarketPanels({
 
       if (!ok) {
         posthog.capture("order_rejected", {
-          ...buildSpotOrderEvent(pair, side, orderType, size, executionPrice),
+          ...orderEvent,
           error_message: body?.error ?? null,
           http_status: status,
         });
         orderStatus.settle(body?.error ?? "Spot order submission failed");
         return;
       }
+      const submittedAt = Date.now();
       posthog.capture("order_submitted", {
-        ...buildSpotOrderEvent(pair, side, orderType, size, executionPrice),
+        ...orderEvent,
         order_id: body?.order?.order_id ?? null,
       });
       orderStatus.announce("Order accepted. Checking whether it filled…", { awaitFill: true });
@@ -399,6 +439,7 @@ export function SpotMarketPanels({
         timeoutMs: ORDER_SETTLE_TIMEOUT_MS,
       });
       orderStatus.settle(describeOrderOutcome(outcome, size, executionPrice, pair.base));
+      void captureSpotFill(outcome, pair, envelope.payload.order_id, orderEvent, submittedAt);
       // Read balances after the outcome, not before it: refreshing on acceptance alone showed the
       // pre-fill account and left the strip disagreeing with the trade that had just happened.
       refreshWalletBalances();
