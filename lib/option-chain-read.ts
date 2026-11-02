@@ -74,16 +74,21 @@ async function readOptionRow(
     return buildOptionRow(presentation, { ask: null, bid: null, mark });
   }
   try {
-    const market = buildSpotMarket({
-      book: await getMarketBook(assetAddress, presentation.sub_id ?? "0"),
-      candles: [],
-      stats24h: null,
-      trades: [],
-    });
+    // Its book carries no `ui_intent`: the engine's side, premium and units are already the trader's.
+    const market = buildSpotMarket(
+      {
+        book: await getMarketBook(assetAddress, presentation.sub_id ?? "0"),
+        candles: [],
+        stats24h: null,
+        trades: [],
+      },
+      { engineFieldOrders: true }
+    );
     return buildOptionRow(presentation, {
       ask: market.orderBookAsks[0] ?? null,
       bid: market.orderBookBids[0] ?? null,
       mark,
+      openOrders: market.openOrders,
     });
   } catch {
     return buildOptionRow(presentation, { ask: null, bid: null, mark });

@@ -1,4 +1,7 @@
+import { parseFutureStack } from "@/lib/future-market";
+import type { FutureStack } from "@/lib/future-market.types";
 import type { MarketPresentation } from "@/lib/markets-service";
+import type { SpotOpenOrder } from "@/lib/trading.types";
 
 /**
  * cNGN options on MarginEngine v2, as the venue lists them: one market per strike and side
@@ -27,6 +30,13 @@ export type OptionOverviewRow = {
   /** The size resting at the best bid and ask, in base units (cNGN). */
   bidSize: number | null;
   askSize: number | null;
+  /** The signed on-chain amount of one venue unit, as the listing states it: what an order is signed with. */
+  amountScale: string | null;
+  /** Where the strike is signed and margined; null unless the venue named every part. */
+  stack: FutureStack | null;
+  takerFeeBps: number | null;
+  /** Orders resting on the book, in venue units; empty where the book was not read. */
+  openOrders: SpotOpenOrder[];
 };
 
 /** One expiry's chain: its strikes in ascending order, each with the call and put rows it lists. */
@@ -103,6 +113,7 @@ export function buildOptionRow(
     bid: { price: number; size: number } | null;
     ask: { price: number; size: number } | null;
     mark?: number | null;
+    openOrders?: SpotOpenOrder[];
   }
 ): OptionOverviewRow {
   const option = market.option ?? {};
@@ -113,6 +124,7 @@ export function buildOptionRow(
     level !== null && Number.isFinite(level.price) && level.price > 0 ? level.price : null;
   const expiry = option.expiry_timestamp ?? market.expiry_timestamp ?? 0;
   return {
+    amountScale: market.amount_scale ?? null,
     ask: price(best.ask),
     askSize: sized(best.ask),
     baseSymbol: market.base_asset_symbol ?? "",
@@ -121,10 +133,13 @@ export function buildOptionRow(
     expiryMs: expiry * 1000,
     lastTradeAtMs: option.last_trade_time === undefined ? null : option.last_trade_time * 1000,
     mark: best.mark !== null && best.mark !== undefined && best.mark > 0 ? best.mark : null,
+    openOrders: best.openOrders ?? [],
     optionType: option.option_type === "put" ? "put" : "call",
+    stack: parseFutureStack(market),
     strike: Number(option.strike),
     strikeLabel: option.strike ?? "",
     symbol: market.market,
+    takerFeeBps: market.taker_fee_bps ?? null,
     tradingOpen: option.trading_open === true,
   };
 }

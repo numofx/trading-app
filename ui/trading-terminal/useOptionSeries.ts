@@ -1,7 +1,7 @@
 "use client";
 
 import { Duration } from "effect";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { OptionSeriesPage } from "@/lib/option-chain-read";
 
 /** The chain's book and marks move every few seconds; the page re-reads them this often. */
@@ -17,8 +17,9 @@ type OptionSeriesRead = {
 };
 
 /** A series' chain, polled while the tab is visible. */
-export function useOptionSeries(series: string): OptionSeriesRead {
+export function useOptionSeries(series: string): OptionSeriesRead & { refresh: () => void } {
   const [read, setRead] = useState<OptionSeriesRead>({ failed: false, page: null, readAtMs: 0 });
+  const [request, setRequest] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,7 +53,8 @@ export function useOptionSeries(series: string): OptionSeriesRead {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [series]);
+  }, [series, request]);
 
-  return read;
+  const refresh = useCallback(() => setRequest((current) => current + 1), []);
+  return { ...read, refresh };
 }
