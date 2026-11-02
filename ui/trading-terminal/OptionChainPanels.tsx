@@ -10,6 +10,7 @@ import { impliedVol } from "@/lib/black76";
 import { cn } from "@/lib/cn";
 import type { FutureStack } from "@/lib/future-market.types";
 import { optionSeriesPath } from "@/lib/market-routes";
+import type { OwnOptionOrder } from "@/lib/option-activity";
 import type { OptionChain, OptionOverviewRow } from "@/lib/option-chain";
 import {
   formatExpiryDay,
@@ -27,6 +28,7 @@ import { buildCancelEnvelope, buildSpotOrderEnvelope } from "@/lib/spot-order-su
 import { getUsdcCngnManagerAddress } from "@/lib/subaccount-deposit-config";
 import { SmartLink } from "@/ui/SmartLink";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
+import { OptionActivityPanel } from "@/ui/trading-terminal/OptionActivityPanel";
 import { OptionBookPanel } from "@/ui/trading-terminal/OptionBookPanel";
 import type { OptionOrderRequest } from "@/ui/trading-terminal/OptionOrderFormPanel";
 import { OptionOrderFormPanel } from "@/ui/trading-terminal/OptionOrderFormPanel";
@@ -369,8 +371,7 @@ async function nextBlock() {
   }
 }
 
-/** An order of the wallet's resting on one of this chain's strikes. */
-type OwnOrder = OptionOverviewRow["openOrders"][number] & { row: OptionOverviewRow };
+type OwnOrder = OwnOptionOrder;
 
 function ownOrders(rows: OptionOverviewRow[], wallet: string | null): OwnOrder[] {
   if (wallet === null) {
@@ -386,92 +387,6 @@ function ownOrders(rows: OptionOverviewRow[], wallet: string | null): OwnOrder[]
 function chainRows(chain: OptionChain | null) {
   return (chain?.strikes ?? []).flatMap((strike) =>
     [strike.call, strike.put].filter((row): row is OptionOverviewRow => row !== null)
-  );
-}
-
-const SIZE = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
-
-/** Under the chain: what the account holds across the strikes and what it has resting. */
-function OptionActivity({
-  cancellingNonce,
-  onCancel,
-  onSelect,
-  orders,
-  positions,
-}: {
-  cancellingNonce: string | null;
-  onCancel: (order: OwnOrder) => void;
-  onSelect: (selection: OptionSelection) => void;
-  orders: OwnOrder[];
-  positions: { row: OptionOverviewRow; size: number }[];
-}) {
-  const heading = "py-2 text-[12px] text-panel-text-muted";
-  const cell = "py-1.5 text-[13px] text-panel-text tabular-nums";
-  return (
-    <section className="grid max-h-[220px] shrink-0 gap-x-6 overflow-auto bg-panel-bg-muted px-4 py-2 ring-1 ring-panel-ring md:grid-cols-2">
-      <div>
-        <h2 className="pb-1 font-medium text-[13px] text-panel-text-active">
-          Positions ({positions.length})
-        </h2>
-        {positions.length === 0 ? (
-          <p className={heading}>No option positions</p>
-        ) : (
-          positions.map(({ row, size }) => {
-            const value = row.mark === null ? null : size * row.mark;
-            return (
-              <div className="flex items-center justify-between gap-3" key={row.symbol}>
-                <span className={cn(cell, "truncate")}>{row.symbol}</span>
-                <span className={cell}>
-                  {SIZE.format(size)} {row.baseSymbol}
-                </span>
-                <span className={cell}>{value === null ? "—" : `${value.toFixed(4)} USDC`}</span>
-                <button
-                  className="cursor-pointer text-[12px] text-accent-text hover:underline"
-                  onClick={() => onSelect({ side: "sell", symbol: row.symbol })}
-                  type="button"
-                >
-                  Sell
-                </button>
-              </div>
-            );
-          })
-        )}
-      </div>
-      <div>
-        <h2 className="pb-1 font-medium text-[13px] text-panel-text-active">
-          Open orders ({orders.length})
-        </h2>
-        {orders.length === 0 ? (
-          <p className={heading}>No open orders</p>
-        ) : (
-          orders.map((order) => {
-            const unit = optionUnitBase(order.row.amountScale ?? undefined) ?? 1;
-            return (
-              <div className="flex items-center justify-between gap-3" key={order.nonce}>
-                <span className={cn(cell, "truncate")}>{order.row.symbol}</span>
-                <span
-                  className={cn(cell, order.side === "buy" ? "text-bid-text" : "text-ask-text")}
-                >
-                  {order.side === "buy" ? "Buy" : "Sell"}
-                </span>
-                <span className={cell}>{formatPremium(order.price)}</span>
-                <span className={cell}>
-                  {SIZE.format((order.size - order.filled) * unit)} {order.row.baseSymbol}
-                </span>
-                <button
-                  className="cursor-pointer text-[12px] text-accent-text hover:underline disabled:cursor-default disabled:opacity-60"
-                  disabled={cancellingNonce !== null}
-                  onClick={() => onCancel(order)}
-                  type="button"
-                >
-                  {cancellingNonce === order.nonce ? "Cancelling…" : "Cancel"}
-                </button>
-              </div>
-            );
-          })
-        )}
-      </div>
-    </section>
   );
 }
 
@@ -819,13 +734,21 @@ export function OptionChainPanels({ series }: { series: string }) {
             )}
           </div>
         </div>
-        <OptionActivity
-          cancellingNonce={actions.cancellingNonce}
-          onCancel={(order) => void actions.cancel(order)}
-          onSelect={select}
-          orders={orders}
-          positions={positions}
-        />
+        <div className="h-[260px] shrink-0 md:h-[26%] md:min-h-[190px]">
+          <OptionActivityPanel
+            cancellingNonce={actions.cancellingNonce}
+            cash={account?.cash ?? null}
+            hasAccount={subaccountId !== null}
+            onCancel={(order) => void actions.cancel(order)}
+            onDeposit={() => transfer.openDeposit("USDC")}
+            onSelect={select}
+            onWithdraw={() => transfer.openWithdraw("USDC")}
+            orders={orders}
+            positions={positions}
+            rows={rows}
+            series={series}
+          />
+        </div>
       </div>
       <div className="flex w-full shrink-0 flex-col gap-3 md:w-[320px] md:overflow-y-auto">
         {contract === null ? null : (

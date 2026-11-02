@@ -147,14 +147,18 @@ function getTradeHistoryRowAction(
   };
 }
 
+/** One market's symbol, or a test for a terminal that spans several: an option series' strikes. */
+type MarketFilter = string | ((market: string) => boolean);
+
 /** Rows the venue labelled with another market, or with none (an older service), stay out of this terminal's tabs. */
-function ofMarket<Row extends { market?: string }>(rows: Row[], market: string): Row[] {
-  return rows.filter((row) => row.market === undefined || row.market === market);
+function ofMarket<Row extends { market?: string }>(rows: Row[], market: MarketFilter): Row[] {
+  const belongs = typeof market === "string" ? (name: string) => name === market : market;
+  return rows.filter((row) => row.market === undefined || belongs(row.market));
 }
 
 function filterState<Row extends { market?: string }>(
   state: SignedHistoryState<Row>,
-  market: string
+  market: MarketFilter
 ): SignedHistoryState<Row> {
   return state.status === "ready" ? { ...state, rows: ofMarket(state.rows, market) } : state;
 }
@@ -176,8 +180,8 @@ export function useSignedHistoryTabs({
 }: {
   bottomTab: string;
   isSignedIn: boolean;
-  /** The venue's symbol for this terminal's market, as history rows carry it. */
-  market: string;
+  /** The venue's symbol for this terminal's market, as history rows carry it, or a test of it. */
+  market: MarketFilter;
   /** Builds the Order History rows from the loaded orders; spot's columns unless the terminal says otherwise. */
   orderHistoryView?: (orders: OrderHistoryOrder[]) => ActivityView;
   /** Builds the Trade History rows from the loaded fills; spot's columns unless the terminal says otherwise. */

@@ -149,7 +149,7 @@ export const ORDER_HISTORY_COLUMNS = [
 const ORDER_HISTORY_STATUS_COLUMN = ORDER_HISTORY_COLUMNS.indexOf("Status");
 const ORDER_HISTORY_DIRECTION_COLUMN = ORDER_HISTORY_COLUMNS.indexOf("Direction");
 
-const ORDER_STATUS_LABELS = {
+export const ORDER_STATUS_LABELS = {
   active: "Open",
   cancelled: "Cancelled",
   expired: "Expired",
@@ -162,7 +162,7 @@ const ORDER_STATUS_LABELS = {
  * `toLocaleString` joiner depends on the runtime's ICU data — "Sep 13, 16:51" in one, "Sep 13 at
  * 16:51" in another — so the same order would read differently from one browser to the next.
  */
-function formatOrderTime(createdAt: string, timeZone: string | undefined) {
+export function formatOrderTime(createdAt: string, timeZone: string | undefined) {
   const date = new Date(createdAt);
   if (Number.isNaN(date.getTime())) {
     return UNKNOWN_BALANCE;
