@@ -230,12 +230,12 @@ function HeaderMetrics({ publication }: { publication: TerminalHeaderPublication
 }
 
 export function TerminalHeaderBar({
-  futureSymbol = null,
+  seriesSymbol = null,
   market,
   publication,
 }: {
-  /** The series on screen when `market` is a future, from the route. */
-  futureSymbol?: string | null;
+  /** The series on screen when `market` is a future or an option, from the route. */
+  seriesSymbol?: string | null;
   /** Which market the selector shows: the route's, whatever the panels have published. */
   market: TerminalMarket;
   /** The selected market's figures and controls, or null until its panels publish them. */
@@ -284,9 +284,9 @@ export function TerminalHeaderBar({
 
       <MarketSelectDialog
         changePercent24h={publication?.changePercent24h ?? null}
-        futureSymbol={futureSymbol}
         market={market}
         price={price}
+        seriesSymbol={seriesSymbol}
       />
 
       {publication?.maxLeverage == null ? null : (

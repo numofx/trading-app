@@ -195,6 +195,18 @@ export function formatPremium(value: number | null): string {
   return value.toFixed(8);
 }
 
+/** A chain's strikes in a line: `5 strikes, 0.00062-0.00082`. */
+export function formatStrikeRange(strikes: OptionChain["strikes"]): string {
+  const first = strikes[0];
+  const last = strikes.at(-1);
+  if (first === undefined || last === undefined) {
+    return "—";
+  }
+  return first === last
+    ? `1 strike, ${first.strikeLabel}`
+    : `${strikes.length} strikes, ${first.strikeLabel}-${last.strikeLabel}`;
+}
+
 /** A vol as the chain shows it: 43.2%. */
 export function formatVol(vol: number | null): string {
   return vol === null ? "—" : `${(vol * 100).toFixed(1)}%`;

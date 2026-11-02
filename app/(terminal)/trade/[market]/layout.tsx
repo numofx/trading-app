@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { findFutureBySymbol, findPerpMarket, findSpotMarket } from "@/lib/market-pickers";
 import { resolveMarketSlug } from "@/lib/market-routes";
 import { getMarketsServiceMarkets } from "@/lib/markets-service";
+import { listLiveOptions, optionSeries } from "@/lib/option-chain";
 import { SPOT_PAIRS } from "@/lib/spot-pairs";
 
 /**
@@ -43,8 +44,19 @@ async function isListedPerp() {
   }
 }
 
+/** Whether the venue lists any strike of the option series, with the same benefit of the doubt. */
+async function isListedOptionSeries(series: string) {
+  try {
+    return listLiveOptions(await getMarketsServiceMarkets(), Date.now()).some(
+      (option) => optionSeries(option.market) === series
+    );
+  } catch {
+    return true;
+  }
+}
+
 /**
- * Answers for the slug before anything streams: a future slug, EURC-USDC's or the perp's is a 404
+ * Answers for the slug before anything streams: a future or option slug, EURC-USDC's or the perp's is a 404
  * unless the venue lists that market. The page below sits behind `loading.tsx`, so the
  * shell and its skeleton are flushed before the page runs, and a `notFound()` or `redirect()`
  * thrown there arrives after the headers as a 200 with a meta refresh. A layout renders ahead of
@@ -72,6 +84,9 @@ export default async function MarketLayout({
     redirect(resolved.redirect as Route);
   }
   if (resolved.id === "future" && !(await isListedFuture(resolved.symbol))) {
+    notFound();
+  }
+  if (resolved.id === "option" && !(await isListedOptionSeries(resolved.symbol))) {
     notFound();
   }
   if (resolved.id === "eurc" && !(await isListedEurcSpot())) {

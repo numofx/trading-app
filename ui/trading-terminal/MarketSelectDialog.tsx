@@ -2,8 +2,7 @@
 
 import { Dialog } from "@base-ui/react/dialog";
 import { Check, ChevronDown, X } from "lucide-react";
-import { Fragment, useState } from "react";
-import { impliedVol } from "@/lib/black76";
+import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { buildFutureOverviewMetrics } from "@/lib/future-market";
 import { formatPrice } from "@/lib/market-formatting";
@@ -16,6 +15,7 @@ import {
   getTerminalMarket,
   listedFutureSymbols,
   listedSpotMarkets,
+  optionEntry,
   selectorMarkets,
 } from "@/lib/market-overview";
 import type {
@@ -24,32 +24,19 @@ import type {
   TerminalMarketId,
   TerminalMarketKind,
 } from "@/lib/market-overview.types";
-import type { OptionChain, OptionOverviewRow } from "@/lib/option-chain";
-import {
-  buildOptionChains,
-  formatExpiryDay,
-  formatExpiryTab,
-  formatPremium,
-  formatTimeToExpiry,
-  formatVol,
-} from "@/lib/option-chain";
+import type { OptionChain } from "@/lib/option-chain";
+import { buildOptionChains, formatStrikeRange } from "@/lib/option-chain";
 import { isSpotMarketId, SPOT_PAIRS } from "@/lib/spot-pairs";
 import { SmartImage } from "@/ui/SmartImage";
 import { SmartLink } from "@/ui/SmartLink";
 import { useMarketOverview } from "@/ui/trading-terminal/useMarketOverview";
-
-/**
- * The dialog's tabs: the market kinds a row links to, and Options, which lists the venue's option chains.
- * Options has no terminal route yet, so its rows show the book and link nowhere.
- */
-type SelectorTab = TerminalMarketKind | "options";
 
 /** No Perp tab: the perp is winding down and reachable only at `/perp`. */
 const TABS = [
   { kind: "spot", label: "Spot" },
   { kind: "futures", label: "Futures" },
   { kind: "options", label: "Options" },
-] as const satisfies readonly { kind: SelectorTab; label: string }[];
+] as const satisfies readonly { kind: TerminalMarketKind; label: string }[];
 
 /** The tab a market lists under; the perp's page opens the selector on Spot. */
 function tabFor(kind: TerminalMarketKind): TerminalMarketKind {
@@ -64,6 +51,8 @@ function tabFor(kind: TerminalMarketKind): TerminalMarketKind {
 const GRID_CLASS = {
   futures:
     "grid-cols-[minmax(0,2.8fr)_minmax(0,1fr)_minmax(0,0.9fr)] md:grid-cols-[minmax(0,2.3fr)_minmax(0,0.9fr)_minmax(0,1.35fr)_minmax(0,0.8fr)_minmax(0,1fr)_1rem]",
+  options:
+    "grid-cols-[minmax(0,2.4fr)_minmax(0,2fr)_1rem] md:grid-cols-[minmax(0,2.2fr)_minmax(0,0.8fr)_minmax(0,1.8fr)_minmax(0,0.8fr)_1rem]",
   perp: "grid-cols-[minmax(0,2.8fr)_minmax(0,1.05fr)_minmax(0,1.15fr)_1rem] md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_1rem]",
   spot: "grid-cols-[minmax(0,2.8fr)_minmax(0,1.05fr)_minmax(0,1.15fr)_1rem] md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_1rem]",
 } satisfies Record<TerminalMarketKind, string>;
@@ -163,6 +152,22 @@ const FUTURE_COLUMN_TOOLTIPS = Object.fromEntries(
 
 function ColumnHeaders({ kind }: { kind: TerminalMarketKind }) {
   const headerClass = "truncate text-right text-[12px] text-panel-text-muted";
+  if (kind === "options") {
+    return (
+      <div
+        className={cn(
+          "grid items-center gap-2 border-panel-border border-b pb-2 md:gap-3",
+          GRID_CLASS.options
+        )}
+      >
+        <span className={cn(headerClass, "text-left")}>Market</span>
+        <span className={cn(headerClass, HIDDEN_ON_PHONE)}>Type</span>
+        <span className={headerClass}>Strikes</span>
+        <span className={cn(headerClass, HIDDEN_ON_PHONE)}>24h volume</span>
+        <span aria-hidden />
+      </div>
+    );
+  }
   if (kind === "futures") {
     return (
       <div
@@ -324,179 +329,70 @@ function MarketRow({
   );
 }
 
-/** Bid IV, bid, mark, ask, ask IV for calls, the strike, then the same five for puts. */
-const CHAIN_GRID =
-  "grid min-w-[900px] grid-cols-[0.8fr_1fr_1fr_1fr_0.8fr_88px_0.8fr_1fr_1fr_1fr_0.8fr] items-stretch gap-x-2";
-const CHAIN_FIGURE = "flex items-center text-[13px] text-panel-text tabular-nums";
-const CHAIN_HEADERS = ["Bid IV", "Bid", "Mark", "Ask", "Ask IV"] as const;
+const OPTION_ROW_CLASS =
+  "-mx-3 grid cursor-pointer items-center gap-2 px-3 py-2.5 text-panel-text-active transition-colors hover:bg-input-hover focus-visible:bg-input-hover focus-visible:outline-none md:gap-3";
 
-/**
- * A resting price. The colour is what taking it does, by the one rule for a side: a bid is hit by selling,
- * so it takes the sell colour, and an ask is lifted by buying, so it takes the buy colour.
- */
-function PriceCell({ side, value }: { side: "bid" | "ask"; value: number | null }) {
-  const premium = formatPremium(value);
-  return (
-    <span
-      className={cn(
-        "my-1 flex items-center rounded-md px-2 py-1.5 text-[13px] tabular-nums",
-        premium === "—" && "bg-input-bg text-panel-text-muted",
-        premium !== "—" && side === "bid" && "bg-ask-bg text-ask-text",
-        premium !== "—" && side === "ask" && "bg-bid-bg text-bid-text"
-      )}
-    >
-      {premium}
-    </span>
-  );
-}
-
-function OptionSideCells({
-  forward,
-  nowMs,
-  row,
+/** One row per option series: what it lists, linking to the page with its chain. */
+function OptionSeriesRow({
+  chain,
+  onSelect,
+  selected,
 }: {
-  forward: number | null;
-  nowMs: number;
-  row: OptionOverviewRow | null;
+  chain: OptionChain;
+  onSelect: () => void;
+  selected: boolean;
 }) {
-  // A side the venue does not list, or lists closed, rests nothing: only its mark means anything.
-  const open = row?.tradingOpen === true;
-  const bid = open ? (row?.bid ?? null) : null;
-  const ask = open ? (row?.ask ?? null) : null;
-  const pricing =
-    row === null || forward === null
-      ? null
-      : {
-          forward,
-          isCall: row.optionType === "call",
-          seconds: (row.expiryMs - nowMs) / 1000,
-          strike: row.strike,
-        };
-  const vol = (premium: number | null) => (pricing === null ? null : impliedVol(pricing, premium));
+  const entry = optionEntry(chain.series);
   return (
-    <>
-      <span className={CHAIN_FIGURE}>{formatVol(vol(bid))}</span>
-      <PriceCell side="bid" value={bid} />
-      <span className={CHAIN_FIGURE}>{formatPremium(row?.mark ?? null)}</span>
-      <PriceCell side="ask" value={ask} />
-      <span className={CHAIN_FIGURE}>{formatVol(vol(ask))}</span>
-    </>
-  );
-}
-
-/** The dotted rule at the forward, between the strikes either side of it. */
-function ForwardRule({ baseSymbol, forward }: { baseSymbol: string; forward: number }) {
-  return (
-    <div className="relative flex min-w-[900px] items-center justify-center py-1.5">
-      <span className="absolute inset-x-0 border-panel-text-muted border-t border-dotted" />
-      <span className="relative rounded-md bg-panel-text-active px-3 py-1 font-medium text-[12px] text-dialog-bg tabular-nums">
-        {baseSymbol} forward {formatPremium(forward)}
+    <SmartLink
+      aria-current={selected ? "page" : undefined}
+      className={cn(OPTION_ROW_CLASS, RADIUS, GRID_CLASS.options, selected && "bg-input-bg")}
+      href={entry.href}
+      onClick={onSelect}
+    >
+      <span className="flex min-w-0 items-center gap-2">
+        <MarketIdentity compact symbol={entry.symbol} />
       </span>
-    </div>
+      <span className={cn(CELL_CLASS, HIDDEN_ON_PHONE)}>Options</span>
+      <span className={CELL_CLASS}>{formatStrikeRange(chain.strikes)}</span>
+      <span className={cn(CELL_CLASS, HIDDEN_ON_PHONE, "text-panel-text-muted")}>—</span>
+      <span className="flex justify-end">
+        {selected ? (
+          <Check aria-label="Selected market" className="size-4 shrink-0 text-panel-text-muted" />
+        ) : null}
+      </span>
+    </SmartLink>
   );
 }
 
-function OptionChainTable({ chain, nowMs }: { chain: OptionChain; nowMs: number }) {
-  const { forward } = chain;
-  const headerClass = "flex items-center py-2 text-[12px] text-panel-text-muted";
-  const baseSymbol = chain.baseSymbol || "cNGN";
-  const forwardAt =
-    forward === null ? -1 : chain.strikes.filter((strike) => strike.strike < forward).length;
-  return (
-    <div className="overflow-x-auto">
-      <div className="grid min-w-[900px] grid-cols-[1fr_auto_1fr] border-panel-border border-b py-2.5 text-[13px]">
-        <span className="text-center font-medium text-panel-text-active">Calls</span>
-        <span className="text-center font-medium text-panel-text-active tabular-nums">
-          {formatExpiryDay(chain.expiryMs)}{" "}
-          <span className="font-normal text-panel-text-muted">
-            {formatTimeToExpiry(chain.expiryMs, nowMs)}
-          </span>
-        </span>
-        <span className="text-center font-medium text-panel-text-active">Puts</span>
-      </div>
-      <div className={cn(CHAIN_GRID, "border-panel-border border-b")}>
-        {CHAIN_HEADERS.map((header) => (
-          <span className={headerClass} key={`call-${header}`}>
-            {header}
-          </span>
-        ))}
-        <span className={cn(headerClass, "justify-center bg-input-bg")}>Strike</span>
-        {CHAIN_HEADERS.map((header) => (
-          <span className={headerClass} key={`put-${header}`}>
-            {header}
-          </span>
-        ))}
-      </div>
-      {chain.strikes.map((strike, index) => (
-        <Fragment key={strike.strikeLabel}>
-          {forward !== null && index === forwardAt ? (
-            <ForwardRule baseSymbol={baseSymbol} forward={forward} />
-          ) : null}
-          <div className={cn(CHAIN_GRID, "border-panel-border border-b")}>
-            <OptionSideCells forward={forward} nowMs={nowMs} row={strike.call} />
-            <span className="flex items-center justify-center bg-input-bg text-[13px] text-panel-text-active tabular-nums">
-              {strike.strikeLabel}
-            </span>
-            <OptionSideCells forward={forward} nowMs={nowMs} row={strike.put} />
-          </div>
-        </Fragment>
-      ))}
-      {forward !== null && forwardAt === chain.strikes.length ? (
-        <ForwardRule baseSymbol={baseSymbol} forward={forward} />
-      ) : null}
-    </div>
-  );
-}
-
-/** The Options tab: one chain at a time under its expiry's tab, nearest first. */
-function OptionChains({ rows }: { rows: readonly OptionOverviewRow[] }) {
-  const [selectedSeries, setSelectedSeries] = useState<string | null>(null);
-  const chains = buildOptionChains(rows);
-  const chain = chains.find((candidate) => candidate.series === selectedSeries) ?? chains[0];
-  if (chain === undefined) {
-    return (
-      <p className="py-8 text-center text-[13px] text-panel-text-muted">
-        No options listed right now
-      </p>
-    );
-  }
-  const nowMs = Date.now();
-  const manyBases = new Set(chains.map((candidate) => candidate.baseSymbol)).size > 1;
+function OptionSeriesList({
+  chains,
+  onSelect,
+  selectedHref,
+}: {
+  chains: readonly OptionChain[];
+  onSelect: () => void;
+  selectedHref: string;
+}) {
   return (
     <>
-      <div className="flex items-center gap-4 border-panel-border border-b">
-        <span className="rounded-md bg-input-bg px-3 py-1.5 font-medium text-[13px] text-panel-text-active">
-          {chain.baseSymbol || "cNGN"}
-        </span>
-        <div
-          aria-label="Expiry"
-          className="flex min-w-0 flex-1 gap-5 overflow-x-auto"
-          role="tablist"
-        >
-          {chains.map((candidate) => (
-            <button
-              aria-selected={candidate.series === chain.series}
-              className={cn(
-                "-mb-px cursor-pointer whitespace-nowrap border-b-2 py-2.5 text-[13px] transition-colors",
-                candidate.series === chain.series
-                  ? "border-panel-text-active text-panel-text-active"
-                  : "border-transparent text-panel-text-muted hover:text-panel-text"
-              )}
-              key={candidate.series}
-              onClick={() => setSelectedSeries(candidate.series)}
-              role="tab"
-              type="button"
-            >
-              {manyBases ? `${candidate.baseSymbol} ` : ""}
-              {formatExpiryTab(candidate.expiryMs, nowMs)}
-            </button>
+      <ColumnHeaders kind="options" />
+      {chains.length === 0 ? (
+        <p className="py-8 text-center text-[13px] text-panel-text-muted">
+          No options listed right now
+        </p>
+      ) : (
+        <div className="pt-1">
+          {chains.map((chain) => (
+            <OptionSeriesRow
+              chain={chain}
+              key={chain.series}
+              onSelect={onSelect}
+              selected={optionEntry(chain.series).href === selectedHref}
+            />
           ))}
         </div>
-        <span className="shrink-0 text-[12px] text-panel-text-muted">
-          USDC per {chain.baseSymbol || "cNGN"}
-        </span>
-      </div>
-      <OptionChainTable chain={chain} nowMs={nowMs} />
+      )}
     </>
   );
 }
@@ -510,20 +406,20 @@ function OptionChains({ rows }: { rows: readonly OptionOverviewRow[] }) {
  */
 export function MarketSelectDialog({
   changePercent24h,
-  futureSymbol,
+  seriesSymbol,
   market,
   price,
 }: {
   /** The header's live figures for the market on screen. */
   changePercent24h: number | null;
-  /** The series on screen when `market` is a future, from the route; null otherwise. */
-  futureSymbol: string | null;
+  /** The series on screen when `market` is a future or an option, from the route; null otherwise. */
+  seriesSymbol: string | null;
   market: TerminalMarketId;
   price: number | null;
 }) {
-  const selected = getTerminalMarket(market, futureSymbol);
+  const selected = getTerminalMarket(market, seriesSymbol);
   const [open, setOpen] = useState(false);
-  const [kind, setKind] = useState<SelectorTab>(tabFor(selected.kind));
+  const [kind, setKind] = useState<TerminalMarketKind>(tabFor(selected.kind));
   const overview = useMarketOverview(open, {
     ...emptyOverviewRow(market),
     changePercent24h,
@@ -535,7 +431,7 @@ export function MarketSelectDialog({
       ? []
       : filterTerminalMarkets(
           selectorMarkets(
-            listedFutureSymbols(overview.futures, futureSymbol),
+            listedFutureSymbols(overview.futures, market === "future" ? seriesSymbol : null),
             listedSpotMarkets(overview.rows, market)
           ),
           kind,
@@ -571,7 +467,7 @@ export function MarketSelectDialog({
         <Dialog.Popup
           className={cn(
             "md:-translate-1/2 fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] flex-col rounded-t-lg bg-dialog-bg text-foreground outline-none ring-1 ring-panel-ring transition-all data-ending-style:opacity-0 data-starting-style:opacity-0 max-md:data-ending-style:translate-y-4 max-md:data-starting-style:translate-y-4 md:inset-x-auto md:top-1/2 md:bottom-auto md:left-1/2 md:max-h-[min(80dvh,620px)] md:rounded-lg md:data-ending-style:scale-95 md:data-starting-style:scale-95",
-            kind === "options" ? "md:w-[min(96vw,1040px)]" : "md:w-[min(92vw,760px)]"
+            "md:w-[min(92vw,760px)]"
           )}
         >
           {/* No visible heading: the tabs and the table say what this is. Named for screen readers. */}
@@ -615,7 +511,11 @@ export function MarketSelectDialog({
 
           <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
             {kind === "options" ? (
-              <OptionChains rows={overview.options} />
+              <OptionSeriesList
+                chains={buildOptionChains(overview.options)}
+                onSelect={() => setOpen(false)}
+                selectedHref={selected.href}
+              />
             ) : (
               <>
                 <ColumnHeaders kind={kind} />

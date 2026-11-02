@@ -4,10 +4,10 @@ import type { OptionOverviewRow } from "@/lib/option-chain";
 export type SpotMarketId = "spot" | "eurc";
 
 /** Which market's panels render under the shell; each has its own slug under `/trade`. */
-export type TerminalMarketId = SpotMarketId | "perp" | "future";
+export type TerminalMarketId = SpotMarketId | "perp" | "future" | "option";
 
-/** The selector's tabs: one per kind of market, the dated future under Futures. */
-export type TerminalMarketKind = "spot" | "perp" | "futures";
+/** The selector's tabs: one per kind of market, the dated future under Futures, an option series under Options. */
+export type TerminalMarketKind = "spot" | "perp" | "futures" | "options";
 
 /** A market the selector offers: its route, display symbol and which tab it lists under. */
 export type TerminalMarketEntry = {

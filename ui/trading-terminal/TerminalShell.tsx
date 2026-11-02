@@ -38,13 +38,13 @@ export function TerminalShell({
   const segment = useSelectedLayoutSegment();
   const selection = resolveSegment(segment);
   const market = marketOverride ?? selection?.id ?? "spot";
-  const futureSymbol = selection?.id === "future" ? selection.symbol : null;
+  const seriesSymbol = selection !== null && "symbol" in selection ? selection.symbol : null;
 
   return (
     <TerminalHeaderSlotProvider>
       <TerminalSessionProvider>
         <main className="flex min-h-screen flex-col bg-terminal-bg text-foreground transition-colors duration-300 md:h-dvh md:overflow-hidden">
-          <ShellHeader futureSymbol={futureSymbol} market={market} />
+          <ShellHeader market={market} seriesSymbol={seriesSymbol} />
           {children}
         </main>
       </TerminalSessionProvider>
@@ -110,15 +110,15 @@ function seedFromOverview(
  * selected market, or its skeleton, until the panels publish the live set.
  */
 function ShellHeader({
-  futureSymbol,
+  seriesSymbol,
   market,
 }: {
-  futureSymbol: string | null;
+  seriesSymbol: string | null;
   market: TerminalMarketId;
 }) {
   const publication = useTerminalHeaderPublication();
   const live = publication?.market === market ? publication : null;
-  const cachedRow = useCachedOverviewRow(market, OVERVIEW_SEED_MAX_AGE_MS, futureSymbol);
+  const cachedRow = useCachedOverviewRow(market, OVERVIEW_SEED_MAX_AGE_MS, seriesSymbol);
   const unpublished = live === null;
 
   useEffect(() => {
@@ -131,9 +131,9 @@ function ShellHeader({
 
   return (
     <TerminalHeaderBar
-      futureSymbol={futureSymbol}
       market={market}
       publication={live ?? seedFromOverview(market, cachedRow)}
+      seriesSymbol={seriesSymbol}
     />
   );
 }

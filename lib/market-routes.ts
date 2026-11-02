@@ -1,7 +1,7 @@
 import type { TerminalMarketId } from "@/lib/market-overview.types";
 
 /** The markets whose slug never changes; a future's slug names its series. */
-export type FixedMarketId = Exclude<TerminalMarketId, "future">;
+export type FixedMarketId = Exclude<TerminalMarketId, "future" | "option">;
 
 /**
  * The one trading route, `/trade/[market]`, and the slugs it answers to, lowercase, so the URL reads
@@ -36,6 +36,9 @@ const FUTURE_SYMBOL_PREFIXES: Record<string, string> = {
   "usdc-cngn": "USDC-cNGN",
 };
 
+/** `<base>-<DDMONYY>-options`: an option series' page, every strike of that expiry on one chain. */
+const OPTION_SERIES_SLUG_PATTERN = /^(cngn|eurc)-(\d{2}[a-z]{3}\d{2})-options$/;
+
 /** The URL of a spot market's or the perp's terminal. */
 export function marketPath(id: FixedMarketId): `/trade/${MarketSlug}` {
   return `/trade/${MARKET_SLUGS[id]}`;
@@ -44,6 +47,22 @@ export function marketPath(id: FixedMarketId): `/trade/${MarketSlug}` {
 /** The URL of a future series' terminal, from its venue symbol. */
 export function futurePath(symbol: string): `/trade/${string}` {
   return `/trade/${symbol.toLowerCase()}`;
+}
+
+/** The URL of an option series' page, from its name: `cNGN-30NOV26` → `/trade/cngn-30nov26-options`. */
+export function optionSeriesPath(series: string): `/trade/${string}` {
+  return `/trade/${series.toLowerCase()}-options`;
+}
+
+/** The series an options slug names: `cngn-30nov26-options` → `cNGN-30NOV26`; null for anything else. */
+export function optionSeriesForSlug(slug: string): string | null {
+  const match = OPTION_SERIES_SLUG_PATTERN.exec(slug);
+  const prefix = match?.[1];
+  const series = match?.[2];
+  if (prefix === undefined || series === undefined) {
+    return null;
+  }
+  return `${FUTURE_SYMBOL_PREFIXES[prefix]}-${series.toUpperCase()}`;
 }
 
 /**
@@ -60,8 +79,11 @@ export function futureSymbolForSlug(slug: string): string | null {
   return `${FUTURE_SYMBOL_PREFIXES[prefix]}-${series.toUpperCase()}`;
 }
 
-/** What a canonical slug names: a spot market or the perp, or a future series by its venue symbol. */
-export type ResolvedMarket = { id: FixedMarketId } | { id: "future"; symbol: string };
+/** What a canonical slug names: a spot market or the perp, or a future or option series by its name. */
+export type ResolvedMarket =
+  | { id: FixedMarketId }
+  | { id: "future"; symbol: string }
+  | { id: "option"; symbol: string };
 
 /**
  * What a `[market]` segment names. A slug in any other casing is `redirect`: the canonical URL to
@@ -77,11 +99,15 @@ export function resolveMarketSlug(
     (candidate) => MARKET_SLUGS[candidate] === lowered
   );
   const futureSymbol = futureSymbolForSlug(lowered);
-  if (id === undefined && futureSymbol === null) {
+  const optionSeries = optionSeriesForSlug(lowered);
+  if (id === undefined && futureSymbol === null && optionSeries === null) {
     return null;
   }
   if (raw !== lowered) {
     return { redirect: `/trade/${lowered}${search}` };
+  }
+  if (optionSeries !== null) {
+    return { id: "option", symbol: optionSeries };
   }
   return id === undefined ? { id: "future", symbol: futureSymbol as string } : { id };
 }
