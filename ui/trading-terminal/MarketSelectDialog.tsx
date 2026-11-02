@@ -356,26 +356,20 @@ function OptionChainTable({ chain, nowMs }: { chain: OptionChain; nowMs: number 
       <div className="flex items-center gap-2 pb-2">
         <MarketIdentity compact symbol={chain.series} />
         <span className="text-[12px] text-panel-text-muted tabular-nums">
-          {formatExpiryDate(chain.expiryMs)} · {formatDaysToExpiry(chain.expiryMs, nowMs)}
+          {formatExpiryDate(chain.expiryMs)} · {formatDaysToExpiry(chain.expiryMs, nowMs)} · USDC
+          per {chain.baseSymbol || "cNGN"}
         </span>
       </div>
-      <div
-        className={cn(CHAIN_GRID, "pb-1 text-[11px] text-panel-text-muted uppercase tracking-wide")}
-      >
-        <span className="col-span-2 text-center">Calls</span>
-        <span />
-        <span className="col-span-2 text-center">Puts</span>
-      </div>
       <div className={cn(CHAIN_GRID, "border-panel-border border-b pb-2")}>
-        <span className={headerClass}>Bid</span>
-        <span className={headerClass}>Ask</span>
+        <span className={headerClass}>Call bid</span>
+        <span className={headerClass}>Call ask</span>
         <span className={cn(headerClass, "text-center")}>Strike</span>
-        <span className={headerClass}>Bid</span>
-        <span className={headerClass}>Ask</span>
+        <span className={headerClass}>Put bid</span>
+        <span className={headerClass}>Put ask</span>
       </div>
       <div className="pt-1">
         {chain.strikes.map((strike) => (
-          <div className={cn(CHAIN_GRID, "-mx-3 px-3 py-2.5", RADIUS)} key={strike.strikeLabel}>
+          <div className={cn(CHAIN_GRID, "-mx-3 px-3 py-1.5", RADIUS)} key={strike.strikeLabel}>
             <OptionSideCells row={strike.call} />
             <span className="min-w-0 truncate text-center font-semibold text-[13px] text-panel-text-active tabular-nums">
               {strike.strikeLabel}
@@ -404,9 +398,6 @@ function OptionChains({ rows }: { rows: readonly OptionOverviewRow[] }) {
       {chains.map((chain) => (
         <OptionChainTable chain={chain} key={`${chain.series}-${chain.expiryMs}`} nowMs={nowMs} />
       ))}
-      <p className="pt-3 text-[12px] text-panel-text-muted">
-        Premiums in USDC per {chains[0]?.baseSymbol || "cNGN"}. European, cash-settled at expiry.
-      </p>
     </>
   );
 }
