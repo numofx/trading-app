@@ -8,6 +8,7 @@ import {
   findPerpMarket,
   findSpotMarket,
 } from "@/lib/market-pickers";
+import type { OptionPresentation } from "@/lib/option-chain";
 import type { PerpStatePresentation } from "@/lib/perp-market";
 import type { SpotBase } from "@/lib/spot-pairs";
 
@@ -22,6 +23,8 @@ export type MarketPresentation = {
   perp?: PerpStatePresentation;
   /** The dated future's state; absent on every other market. */
   future?: FutureStatePresentation;
+  /** An option's strike, side, expiry and whether it trades; absent on every other market. */
+  option?: OptionPresentation;
   /** The prices a fill on the future may carry, cNGN per USDC; absent while the band is unreadable. */
   fill_band_low?: string;
   fill_band_high?: string;

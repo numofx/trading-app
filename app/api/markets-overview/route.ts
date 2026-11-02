@@ -13,6 +13,8 @@ import type { MarketOverviewResponse, TerminalMarketId } from "@/lib/market-over
 import { findPerpMarket, findSpotMarket, listLiveFutures } from "@/lib/market-pickers";
 import type { MarketPresentation } from "@/lib/markets-service";
 import { getMarketBook, getMarketsServiceUrl, getMarketTrades } from "@/lib/markets-service";
+import type { OptionOverviewRow } from "@/lib/option-chain";
+import { buildOptionRow, listLiveOptions } from "@/lib/option-chain";
 import { parsePerpState } from "@/lib/perp-market";
 import { buildSpotMarket } from "@/lib/spot-market";
 
@@ -45,18 +47,22 @@ export async function GET() {
   const perp = findPerpMarket(markets);
   // Every offered series not yet expired, nearest first: the v2 series, open or awaiting their enable.
   const futures = listLiveFutures(markets, Date.now());
+  // Every listed option strike and side not yet expired, with its book's best levels.
+  const options = listLiveOptions(markets, Date.now());
 
-  const [spotRow, eurcRow, perpRow, futureRows] = await Promise.all([
+  const [spotRow, eurcRow, perpRow, futureRows, optionRows] = await Promise.all([
     readRow("spot", spot ?? undefined, null),
     // Listed only once the venue serves it: the row's presence is what puts it in the selector.
     eurc === null ? Promise.resolve(null) : readRow("eurc", eurc, null),
     readRow("perp", perp ?? undefined, parsePerpState(perp?.perp)),
     Promise.all(futures.map((future) => readRow("future", future, null, parseFutureState(future)))),
+    Promise.all(options.map(readOptionRow)),
   ]);
 
   return NextResponse.json(
     {
       futures: futureRows,
+      options: optionRows,
       rows: [
         spotRow,
         ...(eurcRow === null ? [] : [eurcRow]),
@@ -159,4 +165,26 @@ function depthUsdc(levels: readonly { price: number; size: number }[], state: Fu
     (sum, level) => sum + (futureSizeUsdc(level.size * state.unitSize, level.price, state) ?? 0),
     0
   );
+}
+
+/** One option's row: its listing and its book's best bid and ask; a book that fails to read shows dashes. */
+async function readOptionRow(presentation: MarketPresentation): Promise<OptionOverviewRow> {
+  const assetAddress = presentation.asset_address;
+  if (!assetAddress) {
+    return buildOptionRow(presentation, { ask: null, bid: null });
+  }
+  try {
+    const market = buildSpotMarket({
+      book: await getMarketBook(assetAddress, presentation.sub_id ?? "0"),
+      candles: [],
+      stats24h: null,
+      trades: [],
+    });
+    return buildOptionRow(presentation, {
+      ask: market.orderBookAsks[0] ?? null,
+      bid: market.orderBookBids[0] ?? null,
+    });
+  } catch {
+    return buildOptionRow(presentation, { ask: null, bid: null });
+  }
 }

@@ -1,4 +1,5 @@
 import type { FutureQuoting } from "@/lib/future-market";
+import type { OptionOverviewRow } from "@/lib/option-chain";
 /** The spot markets: `spot` is cNGN-USDC, `eurc` is EURC-USDC. */
 export type SpotMarketId = "spot" | "eurc";
 
@@ -60,4 +61,6 @@ export type MarketOverviewResponse = {
   rows: MarketOverviewRow[];
   /** Every future series the venue lists and has not expired, nearest expiry first. */
   futures?: MarketOverviewRow[];
+  /** Every option strike and side the venue lists and has not expired, with its best resting prices. */
+  options?: OptionOverviewRow[];
 };

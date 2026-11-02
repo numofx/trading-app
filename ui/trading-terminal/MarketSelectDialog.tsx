@@ -23,16 +23,30 @@ import type {
   TerminalMarketId,
   TerminalMarketKind,
 } from "@/lib/market-overview.types";
+import type { OptionChain, OptionOverviewRow } from "@/lib/option-chain";
+import {
+  buildOptionChains,
+  formatDaysToExpiry,
+  formatExpiryDate,
+  formatPremium,
+} from "@/lib/option-chain";
 import { isSpotMarketId, SPOT_PAIRS } from "@/lib/spot-pairs";
 import { SmartImage } from "@/ui/SmartImage";
 import { SmartLink } from "@/ui/SmartLink";
 import { useMarketOverview } from "@/ui/trading-terminal/useMarketOverview";
 
+/**
+ * The dialog's tabs: the market kinds a row links to, and Options, which lists the venue's option chains.
+ * Options has no terminal route yet, so its rows show the book and link nowhere.
+ */
+type SelectorTab = TerminalMarketKind | "options";
+
 /** No Perp tab: the perp is winding down and reachable only at `/perp`. */
 const TABS = [
   { kind: "spot", label: "Spot" },
   { kind: "futures", label: "Futures" },
-] as const satisfies readonly { kind: TerminalMarketKind; label: string }[];
+  { kind: "options", label: "Options" },
+] as const satisfies readonly { kind: SelectorTab; label: string }[];
 
 /** The tab a market lists under; the perp's page opens the selector on Spot. */
 function tabFor(kind: TerminalMarketKind): TerminalMarketKind {
@@ -307,6 +321,96 @@ function MarketRow({
   );
 }
 
+/** Calls on the left, the strike between, puts on the right: each side's best bid and ask. */
+const CHAIN_GRID =
+  "grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 md:gap-3";
+
+/** A side's colour: a bid green, an ask red, nothing resting grey. */
+function premiumTone(premium: string, side: "bid" | "ask") {
+  if (premium === "—") {
+    return "text-panel-text-muted";
+  }
+  return side === "bid" ? "text-bid-text" : "text-ask-text";
+}
+
+function PremiumCell({ side, value }: { side: "bid" | "ask"; value: number | null }) {
+  const premium = formatPremium(value);
+  return <span className={cn(CELL_CLASS, premiumTone(premium, side))}>{premium}</span>;
+}
+
+function OptionSideCells({ row }: { row: OptionOverviewRow | null }) {
+  // A side the venue does not list, or lists closed, shows dashes: nothing can trade there.
+  const open = row?.tradingOpen === true;
+  return (
+    <>
+      <PremiumCell side="bid" value={open ? (row?.bid ?? null) : null} />
+      <PremiumCell side="ask" value={open ? (row?.ask ?? null) : null} />
+    </>
+  );
+}
+
+function OptionChainTable({ chain, nowMs }: { chain: OptionChain; nowMs: number }) {
+  const headerClass = "truncate text-right text-[12px] text-panel-text-muted";
+  return (
+    <section className="pt-3 first:pt-1">
+      <div className="flex items-center gap-2 pb-2">
+        <MarketIdentity compact symbol={chain.series} />
+        <span className="text-[12px] text-panel-text-muted tabular-nums">
+          {formatExpiryDate(chain.expiryMs)} · {formatDaysToExpiry(chain.expiryMs, nowMs)}
+        </span>
+      </div>
+      <div
+        className={cn(CHAIN_GRID, "pb-1 text-[11px] text-panel-text-muted uppercase tracking-wide")}
+      >
+        <span className="col-span-2 text-center">Calls</span>
+        <span />
+        <span className="col-span-2 text-center">Puts</span>
+      </div>
+      <div className={cn(CHAIN_GRID, "border-panel-border border-b pb-2")}>
+        <span className={headerClass}>Bid</span>
+        <span className={headerClass}>Ask</span>
+        <span className={cn(headerClass, "text-center")}>Strike</span>
+        <span className={headerClass}>Bid</span>
+        <span className={headerClass}>Ask</span>
+      </div>
+      <div className="pt-1">
+        {chain.strikes.map((strike) => (
+          <div className={cn(CHAIN_GRID, "-mx-3 px-3 py-2.5", RADIUS)} key={strike.strikeLabel}>
+            <OptionSideCells row={strike.call} />
+            <span className="min-w-0 truncate text-center font-semibold text-[13px] text-panel-text-active tabular-nums">
+              {strike.strikeLabel}
+            </span>
+            <OptionSideCells row={strike.put} />
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** The Options tab: every chain the venue lists, nearest expiry first, premiums in USDC per base unit. */
+function OptionChains({ rows }: { rows: readonly OptionOverviewRow[] }) {
+  const chains = buildOptionChains(rows);
+  if (chains.length === 0) {
+    return (
+      <p className="py-8 text-center text-[13px] text-panel-text-muted">
+        No options listed right now
+      </p>
+    );
+  }
+  const nowMs = Date.now();
+  return (
+    <>
+      {chains.map((chain) => (
+        <OptionChainTable chain={chain} key={`${chain.series}-${chain.expiryMs}`} nowMs={nowMs} />
+      ))}
+      <p className="pt-3 text-[12px] text-panel-text-muted">
+        Premiums in USDC per {chains[0]?.baseSymbol || "cNGN"}. European, cash-settled at expiry.
+      </p>
+    </>
+  );
+}
+
 /**
  * The header's market pill and the market dialog it opens: a Spot/Futures tab row with the close
  * control, and a table of the markets under the active tab with the venue's figures. Futures lists
@@ -329,21 +433,24 @@ export function MarketSelectDialog({
 }) {
   const selected = getTerminalMarket(market, futureSymbol);
   const [open, setOpen] = useState(false);
-  const [kind, setKind] = useState<TerminalMarketKind>(tabFor(selected.kind));
+  const [kind, setKind] = useState<SelectorTab>(tabFor(selected.kind));
   const overview = useMarketOverview(open, {
     ...emptyOverviewRow(market),
     changePercent24h,
     price,
   });
   // Every series the venue lists, nearest expiry first, and the one on screen if it is not among them.
-  const entries = filterTerminalMarkets(
-    selectorMarkets(
-      listedFutureSymbols(overview.futures, futureSymbol),
-      listedSpotMarkets(overview.rows, market)
-    ),
-    kind,
-    ""
-  );
+  const entries =
+    kind === "options"
+      ? []
+      : filterTerminalMarkets(
+          selectorMarkets(
+            listedFutureSymbols(overview.futures, futureSymbol),
+            listedSpotMarkets(overview.rows, market)
+          ),
+          kind,
+          ""
+        );
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
@@ -412,27 +519,33 @@ export function MarketSelectDialog({
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
-            <ColumnHeaders kind={kind} />
-            {entries.length === 0 ? (
-              <p className="py-8 text-center text-[13px] text-panel-text-muted">
-                {kind === "futures" ? "No futures listed right now" : "No markets found"}
-              </p>
+            {kind === "options" ? (
+              <OptionChains rows={overview.options} />
             ) : (
-              <div className="pt-1">
-                {entries.map((entry) => (
-                  <MarketRow
-                    entry={entry}
-                    key={entry.href}
-                    onSelect={() => setOpen(false)}
-                    row={
-                      entry.kind === "futures"
-                        ? overview.futureRow(entry.symbol)
-                        : overview.rowFor(entry.id)
-                    }
-                    selected={entry.href === selected.href}
-                  />
-                ))}
-              </div>
+              <>
+                <ColumnHeaders kind={kind} />
+                {entries.length === 0 ? (
+                  <p className="py-8 text-center text-[13px] text-panel-text-muted">
+                    {kind === "futures" ? "No futures listed right now" : "No markets found"}
+                  </p>
+                ) : (
+                  <div className="pt-1">
+                    {entries.map((entry) => (
+                      <MarketRow
+                        entry={entry}
+                        key={entry.href}
+                        onSelect={() => setOpen(false)}
+                        row={
+                          entry.kind === "futures"
+                            ? overview.futureRow(entry.symbol)
+                            : overview.rowFor(entry.id)
+                        }
+                        selected={entry.href === selected.href}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </Dialog.Popup>
