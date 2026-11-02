@@ -2,7 +2,8 @@
 
 import { Dialog } from "@base-ui/react/dialog";
 import { Check, ChevronDown, X } from "lucide-react";
-import { useState } from "react";
+import { Fragment, useState } from "react";
+import { impliedVol } from "@/lib/black76";
 import { cn } from "@/lib/cn";
 import { buildFutureOverviewMetrics } from "@/lib/future-market";
 import { formatPrice } from "@/lib/market-formatting";
@@ -26,9 +27,11 @@ import type {
 import type { OptionChain, OptionOverviewRow } from "@/lib/option-chain";
 import {
   buildOptionChains,
-  formatDaysToExpiry,
-  formatExpiryDate,
+  formatExpiryDay,
+  formatExpiryTab,
   formatPremium,
+  formatTimeToExpiry,
+  formatVol,
 } from "@/lib/option-chain";
 import { isSpotMarketId, SPOT_PAIRS } from "@/lib/spot-pairs";
 import { SmartImage } from "@/ui/SmartImage";
@@ -321,71 +324,136 @@ function MarketRow({
   );
 }
 
-/** Calls on the left, the strike between, puts on the right: each side's best bid and ask. */
+/** Bid IV, bid, mark, ask, ask IV for calls, the strike, then the same five for puts. */
 const CHAIN_GRID =
-  "grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 md:gap-3";
+  "grid min-w-[900px] grid-cols-[0.8fr_1fr_1fr_1fr_0.8fr_88px_0.8fr_1fr_1fr_1fr_0.8fr] items-stretch gap-x-2";
+const CHAIN_FIGURE = "flex items-center text-[13px] text-panel-text tabular-nums";
+const CHAIN_HEADERS = ["Bid IV", "Bid", "Mark", "Ask", "Ask IV"] as const;
 
-/** A side's colour: a bid green, an ask red, nothing resting grey. */
-function premiumTone(premium: string, side: "bid" | "ask") {
-  if (premium === "—") {
-    return "text-panel-text-muted";
-  }
-  return side === "bid" ? "text-bid-text" : "text-ask-text";
-}
-
-function PremiumCell({ side, value }: { side: "bid" | "ask"; value: number | null }) {
+/**
+ * A resting price. The colour is what taking it does, by the one rule for a side: a bid is hit by selling,
+ * so it takes the sell colour, and an ask is lifted by buying, so it takes the buy colour.
+ */
+function PriceCell({ side, value }: { side: "bid" | "ask"; value: number | null }) {
   const premium = formatPremium(value);
-  return <span className={cn(CELL_CLASS, premiumTone(premium, side))}>{premium}</span>;
+  return (
+    <span
+      className={cn(
+        "my-1 flex items-center rounded-md px-2 py-1.5 text-[13px] tabular-nums",
+        premium === "—" && "bg-input-bg text-panel-text-muted",
+        premium !== "—" && side === "bid" && "bg-ask-bg text-ask-text",
+        premium !== "—" && side === "ask" && "bg-bid-bg text-bid-text"
+      )}
+    >
+      {premium}
+    </span>
+  );
 }
 
-function OptionSideCells({ row }: { row: OptionOverviewRow | null }) {
-  // A side the venue does not list, or lists closed, shows dashes: nothing can trade there.
+function OptionSideCells({
+  forward,
+  nowMs,
+  row,
+}: {
+  forward: number | null;
+  nowMs: number;
+  row: OptionOverviewRow | null;
+}) {
+  // A side the venue does not list, or lists closed, rests nothing: only its mark means anything.
   const open = row?.tradingOpen === true;
+  const bid = open ? (row?.bid ?? null) : null;
+  const ask = open ? (row?.ask ?? null) : null;
+  const pricing =
+    row === null || forward === null
+      ? null
+      : {
+          forward,
+          isCall: row.optionType === "call",
+          seconds: (row.expiryMs - nowMs) / 1000,
+          strike: row.strike,
+        };
+  const vol = (premium: number | null) => (pricing === null ? null : impliedVol(pricing, premium));
   return (
     <>
-      <PremiumCell side="bid" value={open ? (row?.bid ?? null) : null} />
-      <PremiumCell side="ask" value={open ? (row?.ask ?? null) : null} />
+      <span className={CHAIN_FIGURE}>{formatVol(vol(bid))}</span>
+      <PriceCell side="bid" value={bid} />
+      <span className={CHAIN_FIGURE}>{formatPremium(row?.mark ?? null)}</span>
+      <PriceCell side="ask" value={ask} />
+      <span className={CHAIN_FIGURE}>{formatVol(vol(ask))}</span>
     </>
   );
 }
 
-function OptionChainTable({ chain, nowMs }: { chain: OptionChain; nowMs: number }) {
-  const headerClass = "truncate text-right text-[12px] text-panel-text-muted";
+/** The dotted rule at the forward, between the strikes either side of it. */
+function ForwardRule({ baseSymbol, forward }: { baseSymbol: string; forward: number }) {
   return (
-    <section className="pt-3 first:pt-1">
-      <div className="flex items-center gap-2 pb-2">
-        <MarketIdentity compact symbol={chain.series} />
-        <span className="text-[12px] text-panel-text-muted tabular-nums">
-          {formatExpiryDate(chain.expiryMs)} · {formatDaysToExpiry(chain.expiryMs, nowMs)} · USDC
-          per {chain.baseSymbol || "cNGN"}
-        </span>
-      </div>
-      <div className={cn(CHAIN_GRID, "border-panel-border border-b pb-2")}>
-        <span className={headerClass}>Call bid</span>
-        <span className={headerClass}>Call ask</span>
-        <span className={cn(headerClass, "text-center")}>Strike</span>
-        <span className={headerClass}>Put bid</span>
-        <span className={headerClass}>Put ask</span>
-      </div>
-      <div className="pt-1">
-        {chain.strikes.map((strike) => (
-          <div className={cn(CHAIN_GRID, "-mx-3 px-3 py-1.5", RADIUS)} key={strike.strikeLabel}>
-            <OptionSideCells row={strike.call} />
-            <span className="min-w-0 truncate text-center font-semibold text-[13px] text-panel-text-active tabular-nums">
-              {strike.strikeLabel}
-            </span>
-            <OptionSideCells row={strike.put} />
-          </div>
-        ))}
-      </div>
-    </section>
+    <div className="relative flex min-w-[900px] items-center justify-center py-1.5">
+      <span className="absolute inset-x-0 border-panel-text-muted border-t border-dotted" />
+      <span className="relative rounded-md bg-panel-text-active px-3 py-1 font-medium text-[12px] text-dialog-bg tabular-nums">
+        {baseSymbol} forward {formatPremium(forward)}
+      </span>
+    </div>
   );
 }
 
-/** The Options tab: every chain the venue lists, nearest expiry first, premiums in USDC per base unit. */
+function OptionChainTable({ chain, nowMs }: { chain: OptionChain; nowMs: number }) {
+  const { forward } = chain;
+  const headerClass = "flex items-center py-2 text-[12px] text-panel-text-muted";
+  const baseSymbol = chain.baseSymbol || "cNGN";
+  const forwardAt =
+    forward === null ? -1 : chain.strikes.filter((strike) => strike.strike < forward).length;
+  return (
+    <div className="overflow-x-auto">
+      <div className="grid min-w-[900px] grid-cols-[1fr_auto_1fr] border-panel-border border-b py-2.5 text-[13px]">
+        <span className="text-center font-medium text-panel-text-active">Calls</span>
+        <span className="text-center font-medium text-panel-text-active tabular-nums">
+          {formatExpiryDay(chain.expiryMs)}{" "}
+          <span className="font-normal text-panel-text-muted">
+            {formatTimeToExpiry(chain.expiryMs, nowMs)}
+          </span>
+        </span>
+        <span className="text-center font-medium text-panel-text-active">Puts</span>
+      </div>
+      <div className={cn(CHAIN_GRID, "border-panel-border border-b")}>
+        {CHAIN_HEADERS.map((header) => (
+          <span className={headerClass} key={`call-${header}`}>
+            {header}
+          </span>
+        ))}
+        <span className={cn(headerClass, "justify-center bg-input-bg")}>Strike</span>
+        {CHAIN_HEADERS.map((header) => (
+          <span className={headerClass} key={`put-${header}`}>
+            {header}
+          </span>
+        ))}
+      </div>
+      {chain.strikes.map((strike, index) => (
+        <Fragment key={strike.strikeLabel}>
+          {forward !== null && index === forwardAt ? (
+            <ForwardRule baseSymbol={baseSymbol} forward={forward} />
+          ) : null}
+          <div className={cn(CHAIN_GRID, "border-panel-border border-b")}>
+            <OptionSideCells forward={forward} nowMs={nowMs} row={strike.call} />
+            <span className="flex items-center justify-center bg-input-bg text-[13px] text-panel-text-active tabular-nums">
+              {strike.strikeLabel}
+            </span>
+            <OptionSideCells forward={forward} nowMs={nowMs} row={strike.put} />
+          </div>
+        </Fragment>
+      ))}
+      {forward !== null && forwardAt === chain.strikes.length ? (
+        <ForwardRule baseSymbol={baseSymbol} forward={forward} />
+      ) : null}
+    </div>
+  );
+}
+
+/** The Options tab: one chain at a time under its expiry's tab, nearest first. */
 function OptionChains({ rows }: { rows: readonly OptionOverviewRow[] }) {
+  const [selectedSeries, setSelectedSeries] = useState<string | null>(null);
   const chains = buildOptionChains(rows);
-  if (chains.length === 0) {
+  const chain = chains.find((candidate) => candidate.series === selectedSeries) ?? chains[0];
+  if (chain === undefined) {
     return (
       <p className="py-8 text-center text-[13px] text-panel-text-muted">
         No options listed right now
@@ -393,11 +461,42 @@ function OptionChains({ rows }: { rows: readonly OptionOverviewRow[] }) {
     );
   }
   const nowMs = Date.now();
+  const manyBases = new Set(chains.map((candidate) => candidate.baseSymbol)).size > 1;
   return (
     <>
-      {chains.map((chain) => (
-        <OptionChainTable chain={chain} key={`${chain.series}-${chain.expiryMs}`} nowMs={nowMs} />
-      ))}
+      <div className="flex items-center gap-4 border-panel-border border-b">
+        <span className="rounded-md bg-input-bg px-3 py-1.5 font-medium text-[13px] text-panel-text-active">
+          {chain.baseSymbol || "cNGN"}
+        </span>
+        <div
+          aria-label="Expiry"
+          className="flex min-w-0 flex-1 gap-5 overflow-x-auto"
+          role="tablist"
+        >
+          {chains.map((candidate) => (
+            <button
+              aria-selected={candidate.series === chain.series}
+              className={cn(
+                "-mb-px cursor-pointer whitespace-nowrap border-b-2 py-2.5 text-[13px] transition-colors",
+                candidate.series === chain.series
+                  ? "border-panel-text-active text-panel-text-active"
+                  : "border-transparent text-panel-text-muted hover:text-panel-text"
+              )}
+              key={candidate.series}
+              onClick={() => setSelectedSeries(candidate.series)}
+              role="tab"
+              type="button"
+            >
+              {manyBases ? `${candidate.baseSymbol} ` : ""}
+              {formatExpiryTab(candidate.expiryMs, nowMs)}
+            </button>
+          ))}
+        </div>
+        <span className="shrink-0 text-[12px] text-panel-text-muted">
+          USDC per {chain.baseSymbol || "cNGN"}
+        </span>
+      </div>
+      <OptionChainTable chain={chain} nowMs={nowMs} />
     </>
   );
 }
@@ -469,7 +568,12 @@ export function MarketSelectDialog({
 
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/60 transition-opacity data-ending-style:opacity-0 data-starting-style:opacity-0" />
-        <Dialog.Popup className="md:-translate-1/2 fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] flex-col rounded-t-lg bg-dialog-bg text-foreground outline-none ring-1 ring-panel-ring transition-all data-ending-style:opacity-0 data-starting-style:opacity-0 max-md:data-ending-style:translate-y-4 max-md:data-starting-style:translate-y-4 md:inset-x-auto md:top-1/2 md:bottom-auto md:left-1/2 md:max-h-[min(80dvh,620px)] md:w-[min(92vw,760px)] md:rounded-lg md:data-ending-style:scale-95 md:data-starting-style:scale-95">
+        <Dialog.Popup
+          className={cn(
+            "md:-translate-1/2 fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] flex-col rounded-t-lg bg-dialog-bg text-foreground outline-none ring-1 ring-panel-ring transition-all data-ending-style:opacity-0 data-starting-style:opacity-0 max-md:data-ending-style:translate-y-4 max-md:data-starting-style:translate-y-4 md:inset-x-auto md:top-1/2 md:bottom-auto md:left-1/2 md:max-h-[min(80dvh,620px)] md:rounded-lg md:data-ending-style:scale-95 md:data-starting-style:scale-95",
+            kind === "options" ? "md:w-[min(96vw,1040px)]" : "md:w-[min(92vw,760px)]"
+          )}
+        >
           {/* No visible heading: the tabs and the table say what this is. Named for screen readers. */}
           <Dialog.Title className="sr-only">Select a market</Dialog.Title>
 

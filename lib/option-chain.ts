@@ -22,6 +22,8 @@ export type OptionOverviewRow = {
   /** Best bid and ask, premium in USDC per base unit. */
   bid: number | null;
   ask: number | null;
+  /** The engine's own mark, in the same unit: what a position is margined at. */
+  mark: number | null;
   /** The size resting at the best bid and ask, in base units (cNGN). */
   bidSize: number | null;
   askSize: number | null;
@@ -32,6 +34,8 @@ export type OptionChain = {
   baseSymbol: string;
   expiryMs: number;
   lastTradeAtMs: number | null;
+  /** The forward the engine prices this expiry on, from its marks; null without a call and put mark. */
+  forward: number | null;
   /** The series name without strike or side: `cNGN-30NOV26`. */
   series: string;
   strikes: {
@@ -98,6 +102,7 @@ export function buildOptionRow(
   best: {
     bid: { price: number; size: number } | null;
     ask: { price: number; size: number } | null;
+    mark?: number | null;
   }
 ): OptionOverviewRow {
   const option = market.option ?? {};
@@ -115,6 +120,7 @@ export function buildOptionRow(
     bidSize: sized(best.bid),
     expiryMs: expiry * 1000,
     lastTradeAtMs: option.last_trade_time === undefined ? null : option.last_trade_time * 1000,
+    mark: best.mark !== null && best.mark !== undefined && best.mark > 0 ? best.mark : null,
     optionType: option.option_type === "put" ? "put" : "call",
     strike: Number(option.strike),
     strikeLabel: option.strike ?? "",
@@ -126,6 +132,22 @@ export function buildOptionRow(
 /** `cNGN-30NOV26-0.00072-P` → `cNGN-30NOV26`: the symbol without its strike and side. */
 export function optionSeries(symbol: string): string {
   return symbol.split("-").slice(0, -2).join("-");
+}
+
+/**
+ * The forward by put-call parity on the engine's marks: undiscounted Black-76 has call - put = forward - strike
+ * exactly, whatever the vol. Read off the strike whose two marks are largest, where rounding matters least.
+ */
+function forwardFromMarks(strikes: OptionChain["strikes"]): number | null {
+  let forward: number | null = null;
+  let weight = 0;
+  for (const { call, put, strike } of strikes) {
+    if (call?.mark && put?.mark && call.mark + put.mark > weight) {
+      forward = call.mark - put.mark + strike;
+      weight = call.mark + put.mark;
+    }
+  }
+  return forward;
 }
 
 /**
@@ -142,6 +164,7 @@ export function buildOptionChains(rows: readonly OptionOverviewRow[]): OptionCha
       chain = {
         baseSymbol: row.baseSymbol,
         expiryMs: row.expiryMs,
+        forward: null,
         lastTradeAtMs: row.lastTradeAtMs,
         series,
         strikes: [],
@@ -156,7 +179,11 @@ export function buildOptionChains(rows: readonly OptionOverviewRow[]): OptionCha
     strike[row.optionType] = row;
   }
   return [...chains.values()]
-    .map((chain) => ({ ...chain, strikes: [...chain.strikes].sort((a, b) => a.strike - b.strike) }))
+    .map((chain) => ({
+      ...chain,
+      forward: forwardFromMarks(chain.strikes),
+      strikes: [...chain.strikes].sort((a, b) => a.strike - b.strike),
+    }))
     .sort((left, right) => left.expiryMs - right.expiryMs);
 }
 
@@ -168,17 +195,30 @@ export function formatPremium(value: number | null): string {
   return value.toFixed(8);
 }
 
-/** `30 Nov 2026`, in UTC: the day the series settles, as its symbol names it. */
-export function formatExpiryDate(expiryMs: number): string {
-  return new Date(expiryMs).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    timeZone: "UTC",
-    year: "numeric",
-  });
+/** A vol as the chain shows it: 43.2%. */
+export function formatVol(vol: number | null): string {
+  return vol === null ? "—" : `${(vol * 100).toFixed(1)}%`;
 }
 
-/** Whole days to expiry, never negative: "28d". */
-export function formatDaysToExpiry(expiryMs: number, nowMs: number): string {
-  return `${Math.max(0, Math.floor((expiryMs - nowMs) / 86_400_000))}d`;
+function utcDate(expiryMs: number, options: Intl.DateTimeFormatOptions) {
+  return new Date(expiryMs).toLocaleDateString("en-US", { ...options, timeZone: "UTC" });
+}
+
+/** An expiry's tab, in UTC, as its symbol names the day: `Nov 30`, with the year once it is not this one. */
+export function formatExpiryTab(expiryMs: number, nowMs: number): string {
+  const day = utcDate(expiryMs, { day: "numeric", month: "short" });
+  const sameYear = new Date(expiryMs).getUTCFullYear() === new Date(nowMs).getUTCFullYear();
+  return sameYear ? day : `${day} ${new Date(expiryMs).getUTCFullYear()}`;
+}
+
+/** The expiry's day over the chain, in UTC: `Mon Nov 30`. */
+export function formatExpiryDay(expiryMs: number): string {
+  const weekday = utcDate(expiryMs, { weekday: "short" });
+  return `${weekday} ${utcDate(expiryMs, { day: "numeric", month: "short" })}`;
+}
+
+/** The time left to expiry, never negative: `28d 7h 12m`. */
+export function formatTimeToExpiry(expiryMs: number, nowMs: number): string {
+  const minutes = Math.max(0, Math.floor((expiryMs - nowMs) / 60_000));
+  return `${Math.floor(minutes / 1440)}d ${Math.floor(minutes / 60) % 24}h ${minutes % 60}m`;
 }
