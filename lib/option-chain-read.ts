@@ -1,7 +1,7 @@
 import { parseAbi, parseUnits } from "viem";
 import { createBasePublicClient } from "@/lib/base-public-client";
 import type { MarketPresentation } from "@/lib/markets-service";
-import { getMarketBook, getMarketsServiceMarkets } from "@/lib/markets-service";
+import { getMarketBook, getMarketsServiceMarkets, getMarketTrades } from "@/lib/markets-service";
 import type { OptionChain, OptionOverviewRow } from "@/lib/option-chain";
 import {
   buildOptionChains,
@@ -10,6 +10,7 @@ import {
   optionSeries,
 } from "@/lib/option-chain";
 import { buildSpotMarket } from "@/lib/spot-market";
+import type { SpotMarket } from "@/lib/trading.types";
 
 const optionEngineAbi = parseAbi([
   "function assetDetails(address asset) view returns ((bool isWhitelisted, uint8 assetType, uint256 marketId))",
@@ -119,5 +120,42 @@ export async function loadOptionSeries(series: string, nowMs: number): Promise<O
       expiryMs,
       series: name,
     })),
+  };
+}
+
+/** One strike's book and tape, in the venue's units. */
+export type OptionBook = Pick<
+  SpotMarket,
+  "mark" | "orderBookAsks" | "orderBookBids" | "stats24h" | "trades"
+>;
+
+/** A listed option's book and trades, or null for a symbol that is not one. A side that fails to read is empty. */
+export async function loadOptionBook(symbol: string): Promise<OptionBook | null> {
+  const listed = (await getMarketsServiceMarkets()).find(
+    (market) => market.market === symbol && market.contract_type === "option"
+  );
+  if (!listed?.asset_address) {
+    return null;
+  }
+  const subId = listed.sub_id ?? "0";
+  const [book, trades] = await Promise.allSettled([
+    getMarketBook(listed.asset_address, subId),
+    getMarketTrades(listed.asset_address, subId),
+  ]);
+  const market = buildSpotMarket(
+    {
+      book: book.status === "fulfilled" ? book.value : null,
+      candles: [],
+      stats24h: trades.status === "fulfilled" ? trades.value.stats24h : null,
+      trades: trades.status === "fulfilled" ? trades.value.trades : [],
+    },
+    { engineFieldOrders: true }
+  );
+  return {
+    mark: market.mark,
+    orderBookAsks: market.orderBookAsks,
+    orderBookBids: market.orderBookBids,
+    stats24h: market.stats24h,
+    trades: market.trades,
   };
 }

@@ -27,9 +27,11 @@ import { buildCancelEnvelope, buildSpotOrderEnvelope } from "@/lib/spot-order-su
 import { getUsdcCngnManagerAddress } from "@/lib/subaccount-deposit-config";
 import { SmartLink } from "@/ui/SmartLink";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
+import { OptionBookPanel } from "@/ui/trading-terminal/OptionBookPanel";
 import type { OptionOrderRequest } from "@/ui/trading-terminal/OptionOrderFormPanel";
 import { OptionOrderFormPanel } from "@/ui/trading-terminal/OptionOrderFormPanel";
 import { AccountSummary } from "@/ui/trading-terminal/order-form/AccountSummary";
+import type { SpotBookTab } from "@/ui/trading-terminal/SpotOrderBookPanel";
 import type { HeaderMetricItem } from "@/ui/trading-terminal/TerminalHeaderBar";
 import { usePublishTerminalHeader } from "@/ui/trading-terminal/TerminalHeaderSlot";
 import { useTerminalSession } from "@/ui/trading-terminal/TerminalSession";
@@ -42,8 +44,8 @@ import { useOrderStatus } from "@/ui/trading-terminal/useOrderStatus";
 const PREMIUM_DECIMALS = 8;
 
 /** Bid IV, bid, mark, ask, ask IV for calls, the strike, then the same five for puts. */
-const CHAIN_MIN_WIDTH = "min-w-[900px]";
-const CHAIN_GRID = `grid ${CHAIN_MIN_WIDTH} grid-cols-[0.8fr_1fr_1fr_1fr_0.8fr_88px_0.8fr_1fr_1fr_1fr_0.8fr] items-stretch gap-x-2 px-4`;
+const CHAIN_MIN_WIDTH = "min-w-[800px]";
+const CHAIN_GRID = `grid ${CHAIN_MIN_WIDTH} grid-cols-[0.6fr_1fr_1fr_1fr_0.6fr_72px_0.6fr_1fr_1fr_1fr_0.6fr] items-stretch gap-x-1 px-3`;
 const CHAIN_FIGURE = "flex items-center text-[13px] text-panel-text tabular-nums";
 const CHAIN_HEADERS = ["Bid IV", "Bid", "Mark", "Ask", "Ask IV"] as const;
 
@@ -736,6 +738,7 @@ export function OptionChainPanels({ series }: { series: string }) {
   const chain = page?.chain ?? null;
   const rows = chainRows(chain);
   const [selection, setSelection] = useState<OptionSelection | null>(null);
+  const [bookTab, setBookTab] = useState<SpotBookTab>("book");
 
   const { contract, side } = resolveSelection(rows, chain, selection);
   const stack = contract?.stack ?? null;
@@ -793,15 +796,29 @@ export function OptionChainPanels({ series }: { series: string }) {
         price={chain?.forward ?? null}
       />
       <div className="flex min-w-0 flex-1 flex-col gap-3 md:min-h-0">
-        <ChainSection
-          failed={failed}
-          nowMs={nowMs}
-          onSelect={select}
-          page={page}
-          readAtMs={readAtMs}
-          selection={contract === null ? null : { side, symbol: contract.symbol }}
-          series={series}
-        />
+        <div className="flex min-h-0 flex-1 flex-col gap-3 md:flex-row">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <ChainSection
+              failed={failed}
+              nowMs={nowMs}
+              onSelect={select}
+              page={page}
+              readAtMs={readAtMs}
+              selection={contract === null ? null : { side, symbol: contract.symbol }}
+              series={series}
+            />
+          </div>
+          <div className="w-full shrink-0 md:h-full md:w-[270px] 2xl:w-[300px]">
+            {contract === null ? null : (
+              <OptionBookPanel
+                key={contract.symbol}
+                onTabChange={setBookTab}
+                row={contract}
+                tab={bookTab}
+              />
+            )}
+          </div>
+        </div>
         <OptionActivity
           cancellingNonce={actions.cancellingNonce}
           onCancel={(order) => void actions.cancel(order)}
