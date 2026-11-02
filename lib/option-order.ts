@@ -92,12 +92,12 @@ export function optionLimitError(row: OptionOverviewRow, limit: number | null) {
     : null;
 }
 
-/** The forward at expiry where a bought option returns its premium; fees aside. */
+/** The settlement price at expiry where a bought option returns `cost` per base unit. */
 export function optionBreakeven(
   row: Pick<OptionOverviewRow, "optionType" | "strike">,
-  price: number
+  cost: number
 ) {
-  return row.optionType === "call" ? row.strike + price : row.strike - price;
+  return row.optionType === "call" ? row.strike + cost : row.strike - cost;
 }
 
 function flooredToUnit(size: number, unitBase: number) {

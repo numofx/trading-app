@@ -14,7 +14,9 @@ import {
   optionTouch,
   optionTradingBlock,
 } from "@/lib/option-order";
+import { buildOptionPayoff } from "@/lib/option-payoff";
 import { ConfirmOrderDialog } from "@/ui/trading-terminal/ConfirmOrderDialog";
+import { OptionPayoffPanel } from "@/ui/trading-terminal/OptionPayoffPanel";
 import { OrderTypeTabs } from "@/ui/trading-terminal/OrderTypeTabs";
 import { FormField } from "@/ui/trading-terminal/order-form/FormField";
 import { OrderFormShell } from "@/ui/trading-terminal/order-form/OrderFormShell";
@@ -213,8 +215,31 @@ function ticketError(inputs: {
 
 type Ticket = ReturnType<typeof deriveTicket>;
 
+/** Where a bought option returns all it cost, the taker fee included. */
 function breakevenText(row: OptionOverviewRow, price: number | null) {
-  return price === null ? "—" : formatPremium(optionBreakeven(row, price));
+  return price === null
+    ? "—"
+    : formatPremium(optionBreakeven(row, price * (1 + (row.takerFeeBps ?? 0) / 10_000)));
+}
+
+/**
+ * The payoff the panel draws: the ticket's order, or before a valid size one venue unit of it, so its shape shows
+ * before anything is typed.
+ */
+function ticketPayoff(ticket: Ticket, row: OptionOverviewRow, forward: number | null) {
+  const { base, expected, size, unitBase, units } = ticket;
+  const typed = units !== null && size !== null;
+  const shownSize = typed ? size : unitBase;
+  const cost =
+    expected === null || shownSize === null
+      ? null
+      : shownSize * expected * (1 + (row.takerFeeBps ?? 0) / 10_000);
+  return {
+    cost,
+    payoff: buildOptionPayoff({ cost, forward, row, size: shownSize }),
+    size: shownSize,
+    sizeLabel: `For ${SIZE.format(shownSize ?? 0)} ${base}`,
+  };
 }
 
 /** The confirm popup's rows: the contract and price, what it costs, and the position it leaves. */
@@ -284,7 +309,7 @@ function TicketSummary({
           />
           <SummaryRow
             label="Breakeven"
-            tooltip="The settlement price at expiry where the option returns its premium, fees aside. USDC per cNGN."
+            tooltip="The settlement price at expiry where the option returns its premium and fee. USDC per cNGN."
             value={breakevenText(row, expected)}
           />
         </>
@@ -341,6 +366,7 @@ function ContractRows({
  */
 export function OptionOrderFormPanel({
   cash,
+  forward,
   hasAccount,
   hasWallet,
   isAccepted,
@@ -361,6 +387,7 @@ export function OptionOrderFormPanel({
   surplus,
 }: {
   cash: number | null;
+  forward: number | null;
   hasAccount: boolean;
   hasWallet: boolean;
   isAccepted: boolean;
@@ -441,107 +468,120 @@ export function OptionOrderFormPanel({
   }
 
   const statusText = block ?? lastAction ?? depthNote;
+  const payoff = ticketPayoff(ticket, row, forward);
 
   return (
-    <OrderFormShell
-      footer={
-        <>
-          <TicketSummary
-            maxSlippage={maxSlippage}
-            onMaxSlippageChange={edited(setMaxSlippage)}
-            orderType={orderType}
-            position={position}
-            row={row}
-            side={side}
-            ticket={ticket}
-          />
+    <>
+      <OrderFormShell
+        footer={
+          <>
+            <TicketSummary
+              maxSlippage={maxSlippage}
+              onMaxSlippageChange={edited(setMaxSlippage)}
+              orderType={orderType}
+              position={position}
+              row={row}
+              side={side}
+              ticket={ticket}
+            />
 
-          <SubmitButton
-            busy={isSubmitting}
-            disabled={!button.enabled}
-            id="option-submit-cta"
-            onClick={handleSubmit}
-            tone={button.tone}
-          >
-            {button.label}
-          </SubmitButton>
+            <SubmitButton
+              busy={isSubmitting}
+              disabled={!button.enabled}
+              id="option-submit-cta"
+              onClick={handleSubmit}
+              tone={button.tone}
+            >
+              {button.label}
+            </SubmitButton>
 
-          <ConfirmOrderDialog
-            confirmLabel={`Confirm ${side}`}
-            directionLabel={side === "buy" ? "Buy" : "Sell"}
-            isSubmitting={isSubmitting}
-            onConfirm={() => {
-              if (pending !== null) {
-                onSubmit(pending);
-              }
-              setPending(null);
-            }}
-            onOpenChange={(open) => {
-              if (!open) {
+            <ConfirmOrderDialog
+              confirmLabel={`Confirm ${side}`}
+              directionLabel={side === "buy" ? "Buy" : "Sell"}
+              isSubmitting={isSubmitting}
+              onConfirm={() => {
+                if (pending !== null) {
+                  onSubmit(pending);
+                }
                 setPending(null);
-              }
-            }}
-            open={pending !== null}
-            orderSide={side}
-            sizeLabel={sizeLabel ?? "—"}
-            summaryRows={confirmRows(ticket, orderType, row, side)}
-            title={`Confirm ${side}`}
-          />
+              }}
+              onOpenChange={(open) => {
+                if (!open) {
+                  setPending(null);
+                }
+              }}
+              open={pending !== null}
+              orderSide={side}
+              sizeLabel={sizeLabel ?? "—"}
+              summaryRows={confirmRows(ticket, orderType, row, side)}
+              title={`Confirm ${side}`}
+            />
 
-          {statusText === null ? null : (
-            <p className="text-[11px] text-panel-text-muted leading-snug">{statusText}</p>
-          )}
-        </>
-      }
-    >
-      <SideToggle onSelect={edited(onSideChange)} options={SIDES} selected={side} />
-      <OrderTypeTabs
-        onSelect={edited(setOrderType)}
-        orderTypes={ORDER_TYPES}
-        selected={orderType}
-      />
-      <div className="space-y-2 pt-1 pb-0.5">
-        <ContractRows onDepositRequest={onDepositRequest} row={row} surplus={surplus} />
-
-        {orderType === "Limit" ? (
-          <FormField
-            adornment={<span className="font-medium text-[12px] text-panel-text">USDC</span>}
-            id="option-limit-price"
-            label="Limit price"
-            onChange={edited(setLimitInput)}
-            placeholder="0.00000000"
-            tooltip={`The premium in USDC per ${base}. A resting order runs until it fills, you cancel it, or last trade.`}
-            value={limitInput}
-          />
-        ) : null}
-
-        <OrderSizeCard
-          baseUnit={base}
-          canToggleUnit={false}
-          formatBase={(value) => SIZE.format(value)}
-          inputId="option-order-size"
-          max={estimate.maxSize}
-          maxTitle={
-            side === "buy"
-              ? "The most your cash and margin can buy at this price"
-              : "The most you can sell: what you hold, less what already rests to sell it"
-          }
-          onInput={edited(setSizeInput)}
-          onSetBase={edited((value: number) => setSizeInput(value > 0 ? String(value) : ""))}
-          onToggleUnit={() => undefined}
-          otherUnitText={formatUsdc(estimate.premium ?? 0)}
-          shown={sizeInput}
-          size={size}
-          step={unitBase ?? 1}
-          tooltip={`The size in ${base}, in steps of ${SIZE.format(unitBase ?? 1)}.`}
-          unit={base}
+            {statusText === null ? null : (
+              <p className="text-[11px] text-panel-text-muted leading-snug">{statusText}</p>
+            )}
+          </>
+        }
+      >
+        <SideToggle onSelect={edited(onSideChange)} options={SIDES} selected={side} />
+        <OrderTypeTabs
+          onSelect={edited(setOrderType)}
+          orderTypes={ORDER_TYPES}
+          selected={orderType}
         />
-        {error === null ? null : (
-          <p className="text-[11px] text-ask-text leading-snug" role="alert">
-            {error}
-          </p>
-        )}
-      </div>
-    </OrderFormShell>
+        <div className="space-y-2 pt-1 pb-0.5">
+          <ContractRows onDepositRequest={onDepositRequest} row={row} surplus={surplus} />
+
+          {orderType === "Limit" ? (
+            <FormField
+              adornment={<span className="font-medium text-[12px] text-panel-text">USDC</span>}
+              id="option-limit-price"
+              label="Limit price"
+              onChange={edited(setLimitInput)}
+              placeholder="0.00000000"
+              tooltip={`The premium in USDC per ${base}. A resting order runs until it fills, you cancel it, or last trade.`}
+              value={limitInput}
+            />
+          ) : null}
+
+          <OrderSizeCard
+            baseUnit={base}
+            canToggleUnit={false}
+            formatBase={(value) => SIZE.format(value)}
+            inputId="option-order-size"
+            max={estimate.maxSize}
+            maxTitle={
+              side === "buy"
+                ? "The most your cash and margin can buy at this price"
+                : "The most you can sell: what you hold, less what already rests to sell it"
+            }
+            onInput={edited(setSizeInput)}
+            onSetBase={edited((value: number) => setSizeInput(value > 0 ? String(value) : ""))}
+            onToggleUnit={() => undefined}
+            otherUnitText={formatUsdc(estimate.premium ?? 0)}
+            shown={sizeInput}
+            size={size}
+            step={unitBase ?? 1}
+            tooltip={`The size in ${base}, in steps of ${SIZE.format(unitBase ?? 1)}.`}
+            unit={base}
+          />
+          {error === null ? null : (
+            <p className="text-[11px] text-ask-text leading-snug" role="alert">
+              {error}
+            </p>
+          )}
+        </div>
+      </OrderFormShell>
+      <OptionPayoffPanel
+        cost={payoff.cost}
+        forward={forward}
+        isSell={side === "sell"}
+        payoff={payoff.payoff}
+        size={payoff.size}
+        sizeLabel={payoff.sizeLabel}
+        strike={row.strike}
+        type={row.optionType}
+      />
+    </>
   );
 }

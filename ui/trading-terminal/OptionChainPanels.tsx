@@ -831,6 +831,7 @@ export function OptionChainPanels({ series }: { series: string }) {
         {contract === null ? null : (
           <OptionOrderFormPanel
             cash={account?.cash ?? null}
+            forward={chain?.forward ?? null}
             hasAccount={subaccountId !== null}
             hasWallet={wallet !== null}
             isAccepted={orderStatus.isAccepted}
