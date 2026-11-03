@@ -1,7 +1,7 @@
 import type { SpotMarket } from "@/lib/trading.types";
 
 /**
- * cNGN-PERP's live state from markets-service `/v1/markets` (`perp`), parsed. Prices are the
+ * cNGN-PERP's live state from markets-service `/markets` (`perp`), parsed. Prices are the
  * engine's own orientation, USDC per cNGN, which is also what the terminal shows.
  */
 export type PerpState = {
@@ -71,7 +71,7 @@ export type PerpMarket = SpotMarket & {
   stack: PerpStack;
 };
 
-/** One position from `/v1/positions`: a long is long cNGN, as the engine holds it. */
+/** One position from `/positions`: a long is long cNGN, as the engine holds it. */
 export type PerpPosition = {
   uiSide: "long" | "short";
   /** The position in cNGN, unsigned. */

@@ -23,7 +23,7 @@ import type {
 } from "@/lib/trading.types";
 import type { WithdrawableAsset } from "@/lib/withdrawable-assets";
 
-/** The `perp` object markets-service serves on `/v1/markets` for the perpetual. */
+/** The `perp` object markets-service serves on `/markets` for the perpetual. */
 export type PerpStatePresentation = {
   mark_price_ui?: string;
   index_price_ui?: string;
@@ -499,7 +499,7 @@ type PresentedAccountPayload = {
   collateral?: PresentedCollateralBalance[];
 };
 
-/** `/v1/positions` for one account, parsed. Unreadable rows are dropped rather than zero-filled. */
+/** `/positions` for one account, parsed. Unreadable rows are dropped rather than zero-filled. */
 export function parsePositionsResponse(body: unknown): {
   positions: PerpPosition[];
   account: PerpAccountMargin | null;

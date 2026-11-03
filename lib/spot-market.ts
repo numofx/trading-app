@@ -374,7 +374,7 @@ export type LiveSpotRuntime = {
   /** markets-service's trailing-24h `stats_24h`. Null when the service did not report stats. */
   stats24h?: TradeStats24h | null;
   trades: PresentedTrade[];
-  /** The market's asset and TradeModule as `/v1/markets` serves them; see SpotMarket.orderStack. */
+  /** The market's asset and TradeModule as `/markets` serves them; see SpotMarket.orderStack. */
   orderStack?: SpotMarket["orderStack"];
 };
 

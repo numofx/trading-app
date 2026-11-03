@@ -6,7 +6,7 @@ import { getPostHogClient } from "@/lib/posthog-server";
 const ORDER_HISTORY_PARAMS = ["limit", "before"] as const;
 
 /**
- * Lists the signed-in wallet's orders in every status (`GET /v1/orders`).
+ * Lists the signed-in wallet's orders in every status (`GET /orders`).
  *
  * The browser signs the login; this only forwards its `X-Numo-Auth` header and the paging params.
  * Never cached on either side — the response is one owner's private history.
@@ -24,7 +24,7 @@ export async function GET(request: Request) {
   const auth = request.headers.get("x-numo-auth");
   const queryString = query.toString();
   const response = await fetch(
-    `${getMarketsServiceUrl()}/v1/orders${queryString === "" ? "" : `?${queryString}`}`,
+    `${getMarketsServiceUrl()}/orders${queryString === "" ? "" : `?${queryString}`}`,
     {
       cache: "no-store",
       headers: { accept: "application/json", ...(auth === null ? {} : { "x-numo-auth": auth }) },
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
   const distinctId: string =
     request.headers.get("x-posthog-distinct-id") ?? payload?.owner_address ?? "anonymous";
 
-  const response = await fetch(`${getMarketsServiceUrl()}/v1/orders`, {
+  const response = await fetch(`${getMarketsServiceUrl()}/orders`, {
     body: JSON.stringify(payload),
     method: "POST",
     headers: {

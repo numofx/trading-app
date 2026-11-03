@@ -1,4 +1,4 @@
-/** Real-time channels exposed by markets-service `GET /v1/ws`. */
+/** Real-time channels exposed by markets-service `GET /ws`. */
 export type MarketStreamChannel = "book" | "trades" | "orders";
 
 /** Client control frame sent to the server (`wsIn`). Auth fields are omitted: the public
@@ -21,7 +21,7 @@ export type MarketStreamFrame = {
   message?: string;
 };
 
-/** A resting order as presented in a `book` snapshot (same shape as REST `/v1/book`). Spot orders
+/** A resting order as presented in a `book` snapshot (same shape as REST `/book`). Spot orders
  * additionally carry a `spot_contract.ui_intent` with the human UI price/size the server computed. */
 export type StreamBookOrder = {
   order_id: string;

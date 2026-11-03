@@ -10,7 +10,7 @@ import { getPostHogClient } from "@/lib/posthog-server";
 export const maxDuration = 60;
 
 /**
- * Submits a signed withdrawal (`POST /v1/withdrawals`).
+ * Submits a signed withdrawal (`POST /withdrawals`).
  *
  * The browser signs the WithdrawalModule action; this forwards it unchanged. markets-service verifies the
  * signature and the account's recorded owner before the venue's executor submits it. Never cached: the response
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const response = await fetch(`${getMarketsServiceUrl()}/v1/withdrawals`, {
+  const response = await fetch(`${getMarketsServiceUrl()}/withdrawals`, {
     body: JSON.stringify(payload),
     cache: "no-store",
     headers: { accept: "application/json", "content-type": "application/json" },

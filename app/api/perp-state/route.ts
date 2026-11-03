@@ -5,13 +5,13 @@ import type { PerpStatePresentation } from "@/lib/perp-market";
 type MarketRow = { contract_type?: string; asset_address?: string; perp?: PerpStatePresentation };
 
 /**
- * cNGN-PERP's chain state as markets-service serves it right now (`/v1/markets`, the perp
+ * cNGN-PERP's chain state as markets-service serves it right now (`/markets`, the perp
  * entry's `perp` block), for the terminal to re-read while open. The page renders with a listing
  * cached up to a minute; `trading_enabled` flipping at launch or on a guardian pause must not wait
  * for a reload. Never cached: the point is the current answer.
  */
 export async function GET() {
-  const response = await fetch(`${getMarketsServiceUrl()}/v1/markets`, {
+  const response = await fetch(`${getMarketsServiceUrl()}/markets`, {
     cache: "no-store",
     headers: { accept: "application/json" },
   });

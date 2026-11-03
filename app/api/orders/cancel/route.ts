@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   const distinctId: string =
     request.headers.get("x-posthog-distinct-id") ?? payload?.owner_address ?? "anonymous";
 
-  const response = await fetch(`${getMarketsServiceUrl()}/v1/orders/cancel`, {
+  const response = await fetch(`${getMarketsServiceUrl()}/orders/cancel`, {
     body: JSON.stringify(payload),
     method: "POST",
     headers: {

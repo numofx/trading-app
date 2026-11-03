@@ -4,7 +4,7 @@ import type { Candle, MarketType } from "@/lib/trading.types";
 /**
  * Converts markets-service candles into the UI's display convention.
  *
- * markets-service returns raw engine values, matching `/v1/trades`. Futures show
+ * markets-service returns raw engine values, matching `/trades`. Futures show
  * those directly, and so do spot and the perp: the engine already quotes USDC per cNGN, the
  * orientation the terminal shows. Nothing is inverted, so highs stay highs.
  *

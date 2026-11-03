@@ -33,7 +33,7 @@ export async function readPerpPositions(
 }
 
 /**
- * The perp account's positions and margin from `/v1/positions`, re-read every 15 seconds: margin
+ * The perp account's positions and margin from `/positions`, re-read every 15 seconds: margin
  * moves with every mark, so a snapshot from page load would show a liquidation price that no longer
  * holds. `refresh` re-reads at once, after a fill or a deposit.
  */

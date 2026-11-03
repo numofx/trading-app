@@ -1,7 +1,7 @@
 import type { CandleInterval } from "@/lib/markets-service";
 
 /**
- * The candle intervals the price chart offers, each one markets-service serves from `/v1/candles`.
+ * The candle intervals the price chart offers, each one markets-service serves from `/candles`.
  * `1m` is left out: at the chart's 120 candles it spans two hours, too little to read on a young
  * market.
  */

@@ -216,12 +216,12 @@ function useSignedHistory<Row>(
   return { authorize, reload, state };
 }
 
-/** The connected wallet's orders in every status (`GET /v1/orders`). */
+/** The connected wallet's orders in every status (`GET /orders`). */
 export function useOrderHistory(options: HistoryOptions) {
   return useSignedHistory<OrderHistoryOrder>(ORDER_HISTORY_ENDPOINT, options);
 }
 
-/** The fills on the connected wallet's orders (`GET /v1/fills`), on the same login as order history. */
+/** The fills on the connected wallet's orders (`GET /fills`), on the same login as order history. */
 export function useTradeHistory(options: HistoryOptions) {
   return useSignedHistory<AccountFill>(TRADE_HISTORY_ENDPOINT, options);
 }

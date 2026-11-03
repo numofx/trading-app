@@ -5,13 +5,13 @@ import type { MarketPresentation } from "@/lib/markets-service";
 import { getMarketsServiceUrl } from "@/lib/markets-service";
 
 /**
- * The venue's EURC-USDC escrow (`asset_address`), read from `/v1/markets` uncached, for the deposit
+ * The venue's EURC-USDC escrow (`asset_address`), read from `/markets` uncached, for the deposit
  * check (lib/eurc-deposit-escrow.ts). `asset_address` is omitted when the venue does not list EURC-USDC;
  * a failed read is a 502 with no address. Either way the deposit is refused, never defaulted.
  */
 export async function GET() {
   try {
-    const response = await fetch(`${getMarketsServiceUrl()}/v1/markets`, {
+    const response = await fetch(`${getMarketsServiceUrl()}/markets`, {
       cache: "no-store",
       headers: { accept: "application/json" },
     });

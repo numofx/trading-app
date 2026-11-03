@@ -10,10 +10,10 @@ import { getMarketsServiceUrl } from "@/lib/markets-service";
  */
 export async function GET(_request: Request, { params }: { params: Promise<{ orderId: string }> }) {
   const { orderId } = await params;
-  const response = await fetch(
-    `${getMarketsServiceUrl()}/v1/orders/${encodeURIComponent(orderId)}`,
-    { cache: "no-store", headers: { accept: "application/json" } }
-  );
+  const response = await fetch(`${getMarketsServiceUrl()}/orders/${encodeURIComponent(orderId)}`, {
+    cache: "no-store",
+    headers: { accept: "application/json" },
+  });
 
   const responseText = await response.text();
 

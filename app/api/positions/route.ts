@@ -4,7 +4,7 @@ import { getMarketsServiceUrl } from "@/lib/markets-service";
 const SUBACCOUNT_ID_PATTERN = /^\d+$/;
 
 /**
- * One account's perp positions and margin (`GET /v1/positions`). Positions are public on chain, so
+ * One account's perp positions and margin (`GET /positions`). Positions are public on chain, so
  * this carries no auth; it only forwards a validated subaccount id. Never cached: margin moves with
  * every mark.
  */
@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   }
 
   const response = await fetch(
-    `${getMarketsServiceUrl()}/v1/positions?subaccount_id=${subaccountId}`,
+    `${getMarketsServiceUrl()}/positions?subaccount_id=${subaccountId}`,
     {
       cache: "no-store",
       headers: { accept: "application/json" },

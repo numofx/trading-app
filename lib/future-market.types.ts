@@ -1,7 +1,7 @@
 import type { SpotMarket } from "@/lib/trading.types";
 
 /**
- * The future's `future` block in `/v1/markets`, as markets-service serves it. Prices are decimal
+ * The future's `future` block in `/markets`, as markets-service serves it. Prices are decimal
  * strings in the series' own terms (cNGN per USDC on the v1 series, USDC per base on a v2 one);
  * times are unix seconds.
  */

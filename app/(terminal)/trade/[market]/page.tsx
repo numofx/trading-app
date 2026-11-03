@@ -53,7 +53,7 @@ function presentCandles(
 }
 
 /**
- * The stack `/v1/markets` serves a spot pair on, for the ticket to sign against. Both addresses or nothing:
+ * The stack `/markets` serves a spot pair on, for the ticket to sign against. Both addresses or nothing:
  * a module without its asset (or the reverse) would sign an order the venue refuses as a mismatch.
  */
 function presentOrderStack(

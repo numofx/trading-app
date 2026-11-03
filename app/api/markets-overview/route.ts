@@ -28,7 +28,7 @@ import { buildSpotMarket } from "@/lib/spot-market";
 export async function GET() {
   let markets: MarketPresentation[] = [];
   try {
-    const response = await fetch(`${getMarketsServiceUrl()}/v1/markets`, {
+    const response = await fetch(`${getMarketsServiceUrl()}/markets`, {
       cache: "no-store",
       headers: { accept: "application/json" },
     });

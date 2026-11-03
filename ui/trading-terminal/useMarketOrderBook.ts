@@ -43,7 +43,7 @@ const EMPTY_VIEW: MarketOrderBookView = { asks: [], bids: [], status: "connectin
 
 /**
  * Streams a live order book and recent trades for one market over the markets-service WebSocket
- * (`GET /v1/ws`). Seeds from the `snapshot` frame, then applies `book`/`trades` `update` deltas,
+ * (`GET /ws`). Seeds from the `snapshot` frame, then applies `book`/`trades` `update` deltas,
  * and reconnects with backoff. `isLive` marks the stream as the authoritative source: `status` is
  * already `ok` only when the book has depth and is not crossed, and a genuinely one-sided book is
  * reported as it rests. Callers fall back to the server-rendered REST snapshot otherwise.

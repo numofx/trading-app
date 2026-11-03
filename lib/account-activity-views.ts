@@ -351,7 +351,7 @@ function formatEngineSpotPrice(price: number | null, pair: SpotPair) {
 }
 
 /**
- * The connected wallet's orders in every status, newest first, as `GET /v1/orders` returns them.
+ * The connected wallet's orders in every status, newest first, as `GET /orders` returns them.
  *
  * Direction and limit are read from the order's UI intent, which under the identity contract is
  * the engine order itself (and is the engine order on EURC-USDC, which echoes none). "Filled" and
@@ -515,7 +515,7 @@ export function buildPerpTradeHistoryActivityView(
 }
 
 /**
- * The fills on the connected wallet's orders, newest first, as `GET /v1/fills` returns them.
+ * The fills on the connected wallet's orders, newest first, as `GET /fills` returns them.
  *
  * Direction, price and size are read from the fill's UI intent, which markets-service derives from
  * the wallet's own order and which under the identity contract equals the engine fill (EURC-USDC

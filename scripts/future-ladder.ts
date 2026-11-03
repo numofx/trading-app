@@ -247,7 +247,7 @@ function readContext(): Context {
 }
 
 async function readSeries(context: Context): Promise<Series> {
-  const markets = await requestJson<FutureListing[]>(`${context.baseUrl}/v1/markets`);
+  const markets = await requestJson<FutureListing[]>(`${context.baseUrl}/markets`);
   const listing = markets.body?.find((market) => market.market === context.symbol);
   if (!(markets.ok && listing)) {
     fail(`${context.symbol} is not listed on ${context.baseUrl}`);
@@ -271,7 +271,7 @@ async function readSeries(context: Context): Promise<Series> {
 
 async function readBook(context: Context, series: Series): Promise<Book> {
   const book = await requestJson<Book>(
-    `${context.baseUrl}/v1/book?asset_address=${series.asset}&sub_id=${series.subId}`
+    `${context.baseUrl}/book?asset_address=${series.asset}&sub_id=${series.subId}`
   );
   if (!(book.ok && book.body)) {
     fail(`book returned ${book.status}`);
@@ -311,7 +311,7 @@ async function statusOrCancel(context: Context, series: Series, cancel: boolean,
       primaryType: "Cancel",
       types: CANCEL_TYPES,
     });
-    const result = await requestJson<{ error?: string }>(`${context.baseUrl}/v1/orders/cancel`, {
+    const result = await requestJson<{ error?: string }>(`${context.baseUrl}/orders/cancel`, {
       body: JSON.stringify({
         expiry: expiry.toString(),
         nonce: order.nonce,
@@ -471,7 +471,7 @@ async function placeLadder(
     if (!(await verifyTypedData({ ...typed, address: signer.address, signature }))) {
       fail(`signature for ${body.limit_price} does not verify; stopping`);
     }
-    const result = await requestJson<{ error?: string }>(`${context.baseUrl}/v1/orders`, {
+    const result = await requestJson<{ error?: string }>(`${context.baseUrl}/orders`, {
       body: JSON.stringify({ ...body, signature }),
       method: "POST",
     });

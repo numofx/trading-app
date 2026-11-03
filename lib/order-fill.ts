@@ -7,7 +7,7 @@
  * execution price. A market order fills in the block it is matched in, well inside the last 100 trades.
  */
 
-/** The fields of a `/v1/trades` row this reads. Prices and sizes are in venue units, as listed. */
+/** The fields of a `/trades` row this reads. Prices and sizes are in venue units, as listed. */
 export type TakerTrade = { price: string; size: string; taker_order_id?: string };
 
 /** The order's fills as one: venue units filled and their size-weighted average price. */

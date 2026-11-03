@@ -206,7 +206,7 @@ function interpretRefusal(
 }
 
 /**
- * Reads markets-service's answer to `POST /v1/withdrawals`.
+ * Reads markets-service's answer to `POST /withdrawals`.
  *
  * The one distinction that matters to a trader is whether anything was sent: a refusal says so, and an outcome
  * the venue could not confirm tells them to check their balance rather than sign again, because a second signed

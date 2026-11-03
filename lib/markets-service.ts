@@ -55,7 +55,7 @@ export type MarketPresentation = {
   settlement_type?: string;
   sub_id?: string;
   /**
-   * The venue's fee schedule, in basis points of the quote notional. Served by /v1/markets so
+   * The venue's fee schedule, in basis points of the quote notional. Served by /markets so
    * this app never carries its own copy: a fee that lives in two repos disagrees the first time
    * one of them changes, and the trader sees the wrong number in the one place they look.
    *
@@ -69,7 +69,7 @@ export type MarketPresentation = {
 
 export type PresentedOrder = {
   created_at: string;
-  /** Identity of the resting order. `owner_address` + `nonce` is what `POST /v1/orders/cancel` takes. */
+  /** Identity of the resting order. `owner_address` + `nonce` is what `POST /orders/cancel` takes. */
   /** Unix seconds after which the engine stops matching the order. */
   expiry?: number;
   nonce?: string;
@@ -190,7 +190,7 @@ export function getMarketsServiceUrl() {
 const MARKETS_LIST_REVALIDATE_SECONDS = Duration.toSeconds("1 minute");
 
 export async function getMarketsServiceMarkets() {
-  const response = await fetch(`${getMarketsServiceUrl()}/v1/markets`, {
+  const response = await fetch(`${getMarketsServiceUrl()}/markets`, {
     next: { revalidate: MARKETS_LIST_REVALIDATE_SECONDS },
     headers: {
       accept: "application/json",
@@ -219,7 +219,7 @@ export async function getLivePerpMarket() {
  * trading gate move by the hour, and a ticket signing against a minute-old band would be refused.
  */
 export async function getLiveFutureMarket(symbol: string) {
-  const response = await fetch(`${getMarketsServiceUrl()}/v1/markets`, {
+  const response = await fetch(`${getMarketsServiceUrl()}/markets`, {
     cache: "no-store",
     headers: { accept: "application/json" },
   });
@@ -236,7 +236,7 @@ export async function getFrontMonthFuture() {
 
 export async function getMarketBook(assetAddress: string, subId: string) {
   const response = await fetch(
-    `${getMarketsServiceUrl()}/v1/book?asset_address=${assetAddress}&sub_id=${subId}`,
+    `${getMarketsServiceUrl()}/book?asset_address=${assetAddress}&sub_id=${subId}`,
     {
       cache: "no-store",
       headers: {
@@ -254,7 +254,7 @@ export async function getMarketBook(assetAddress: string, subId: string) {
 
 export async function getMarketTrades(assetAddress: string, subId: string, limit = 50) {
   const response = await fetch(
-    `${getMarketsServiceUrl()}/v1/trades?asset_address=${assetAddress}&sub_id=${subId}&limit=${limit}`,
+    `${getMarketsServiceUrl()}/trades?asset_address=${assetAddress}&sub_id=${subId}&limit=${limit}`,
     {
       cache: "no-store",
       headers: {
@@ -290,12 +290,12 @@ export type CandlesResponse = {
   interval?: string;
 };
 
-/** Candle bucket widths supported by markets-service `/v1/candles`. */
+/** Candle bucket widths supported by markets-service `/candles`. */
 export type CandleInterval = "1m" | "5m" | "15m" | "1h" | "4h" | "1d";
 
 /**
  * Real OHLCV aggregated from the venue's own fills. Prices are raw engine values —
- * the same convention as `/v1/trades` — so spot still needs the 1/price inversion
+ * the same convention as `/trades` — so spot still needs the 1/price inversion
  * applied client-side. Buckets with no trades are absent rather than zero-filled.
  */
 export async function getMarketCandles(
@@ -305,7 +305,7 @@ export async function getMarketCandles(
   limit = 200
 ) {
   const response = await fetch(
-    `${getMarketsServiceUrl()}/v1/candles?asset_address=${assetAddress}&sub_id=${subId}&interval=${interval}&limit=${limit}`,
+    `${getMarketsServiceUrl()}/candles?asset_address=${assetAddress}&sub_id=${subId}&interval=${interval}&limit=${limit}`,
     {
       cache: "no-store",
       headers: {

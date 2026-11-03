@@ -10,7 +10,7 @@ export type SpotBase = "cNGN" | "EURC";
  */
 export type SpotPair = {
   id: SpotMarketId;
-  /** The venue's symbol: what `/v1/markets`, the stream and the history rows call it. */
+  /** The venue's symbol: what `/markets`, the stream and the history rows call it. */
   symbol: "cNGN-USDC" | "EURC-USDC";
   /** The engine's base: what an order is signed and rests in, in whole units. */
   base: SpotBase;

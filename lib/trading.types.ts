@@ -46,7 +46,7 @@ export type MarketType = "spot" | "future" | "option" | "perp";
 
 /**
  * A resting order as the public book presents it. `ownerAddress` and `nonce` are the pair
- * `POST /v1/orders/cancel` cancels by, so a client can offer cancellation from the book alone.
+ * `POST /orders/cancel` cancels by, so a client can offer cancellation from the book alone.
  */
 export type SpotOpenOrder = {
   /**
@@ -89,13 +89,13 @@ export type SpotMarket = {
    */
   stats24h: Stats24h | null;
   /**
-   * The venue's taker fee, in basis points of the quote notional, straight from /v1/markets.
+   * The venue's taker fee, in basis points of the quote notional, straight from /markets.
    * Null when the markets-service did not report one — which is "unknown", not "free", so the
    * ticket falls back to showing the signed ceiling rather than inventing a rate.
    */
   takerFeeBps: number | null;
   /**
-   * The asset and TradeModule the venue serves this market on, from `/v1/markets`: what a signed
+   * The asset and TradeModule the venue serves this market on, from `/markets`: what a signed
    * order must name, so the ticket follows the venue's own stack rather than an env override that
    * can lag a cutover. Null when the venue did not report both, and the configured defaults apply.
    */

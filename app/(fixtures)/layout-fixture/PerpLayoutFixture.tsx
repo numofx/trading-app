@@ -79,7 +79,7 @@ const FIXTURE_SHORT: PerpPosition = {
   unrealizedPnl: -15.66,
 };
 
-/** Three orders as GET /v1/orders returns them: a filled long, a filled post-only long, a resting reduce-only close. */
+/** Three orders as GET /orders returns them: a filled long, a filled post-only long, a resting reduce-only close. */
 const FIXTURE_ORDERS: OrderHistoryOrder[] = [
   {
     created_at: "2026-10-07T17:01:00Z",
@@ -120,7 +120,7 @@ const FIXTURE_ORDERS: OrderHistoryOrder[] = [
   },
 ];
 
-/** The fills behind the two filled orders above, as GET /v1/fills returns them. */
+/** The fills behind the two filled orders above, as GET /fills returns them. */
 const FIXTURE_FILLS: AccountFill[] = [
   {
     created_at: "2026-10-07T17:01:02Z",

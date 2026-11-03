@@ -75,7 +75,7 @@ function formatSpotPrice(price: number | null, pair: SpotPair) {
 /** The signed ceiling as basis points, derived from the rate the order is signed with. */
 const SPOT_TAKER_FEE_BPS = Number(SPOT_TAKER_FEE_RATE) * 10_000;
 
-/** The fee the venue will actually charge, from /v1/markets. Null means the service did not say. */
+/** The fee the venue will actually charge, from /markets. Null means the service did not say. */
 function venueFee(amountUsdc: number, takerFeeBps: number | null): number | null {
   if (takerFeeBps === null || !Number.isFinite(amountUsdc)) {
     return null;
@@ -278,7 +278,7 @@ function deriveOrderEconomics({
   limitPrice: string;
   orderType: SpotOrderType;
   side: "buy" | "sell";
-  /** The venue's schedule from /v1/markets. Null when it did not report one — unknown, not free. */
+  /** The venue's schedule from /markets. Null when it did not report one — unknown, not free. */
   takerFeeBps: number | null;
 }) {
   const crossingPrice = getCrossingPrice(side, bestAsk, bestBid);
@@ -600,7 +600,7 @@ function MarketDepthNote({
 }
 
 /**
- * The fee, on one row. `charged` is what the venue takes, from its own schedule on /v1/markets.
+ * The fee, on one row. `charged` is what the venue takes, from its own schedule on /markets.
  * When the service reports no schedule the fee is unknown, not zero, so the row falls back to
  * `ceiling`, the most the order is signed to pay, as "Up to …" rather than printing a confident
  * zero. The ceiling and the order's lifetime are still stated in the confirmation before signing.
@@ -764,7 +764,7 @@ export function SpotOrderFormPanel({
   /** The spot pair the ticket trades: its base, and which way up the trader sees it. */
   pair: SpotPair;
   /**
-   * The venue's taker fee, in basis points of the quote notional, exactly as /v1/markets reports
+   * The venue's taker fee, in basis points of the quote notional, exactly as /markets reports
    * it. Null means the API did not report one — the fee is then unknown, not zero, and the ticket
    * shows only the signed ceiling. The schedule is never hardcoded here: the matcher charges what
    * this same field says, so a copy in the UI would be a second source of truth that drifts.

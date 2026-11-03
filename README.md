@@ -7,10 +7,10 @@ Renders the cNGN-USDC spot market through an orderbook UI, with off/on ramping v
 The app renders **cNGN-USDC** spot at `/trade/cngn-usdc` and the MarginEngine v2 futures
 **cNGN-30NOV26** and **EURC-30NOV26** at their lowercased symbols (`/trade/cngn-30nov26`), switched
 from the market selector in the header. **cNGN-PERP** is delisted (exchange #251): out of the selector, and
-`/trade/cngn-perp` is a 404 unless `/v1/markets` lists it again; `/perp` no longer redirects. One route, one shell: the `/trade` layout holds the header, the
+`/trade/cngn-perp` is a 404 unless `/markets` lists it again; `/perp` no longer redirects. One route, one shell: the `/trade` layout holds the header, the
 wallet, the trading account and the selector, and a switch replaces only the market's panels under
 it (keyed by the slug, so a ticket or a book tab never carries over). The slugs live in
-`lib/market-routes.ts`. `/` opens the front-month future, chosen per request from `/v1/markets`, or
+`lib/market-routes.ts`. `/` opens the front-month future, chosen per request from `/markets`, or
 spot when none is listed (`app/route.ts`, 307). A slug in another casing is redirected to lowercase
 by `proxy.ts` with its query string, and an unknown slug, or a future series the venue does not
 list, is a 404 from the segment's layout. **Spot is shown as cNGN-USDC**, the way it trades and the
@@ -24,7 +24,7 @@ sends them. The display names live in `lib/market-labels.ts` and nowhere else. T
 `deploy-cngn-perp-stack.s.sol`): its own CashAsset, SRM and TradeModule. The app reads everything
 about it from `markets-service`, with no env of its own:
 
-- `/v1/markets` lists `cNGN-PERP` (`contract_type: perpetual`) with a `perp` object: mark, index,
+- `/markets` lists `cNGN-PERP` (`contract_type: perpetual`) with a `perp` object: mark, index,
   funding, margin rates, max leverage, and the module, cash and SRM a trader signs and deposits for.
   Without that listing, `/trade/cngn-perp` is a 404 (the segment's layout asks the venue, and
   renders the not-live state only when the venue cannot be read).
@@ -40,7 +40,7 @@ about it from `markets-service`, with no env of its own:
   simulation. "Close" on a position row sends a market order on the opposite side sized in the
   engine's own cNGN contracts (`engineAmountWhole`), so the account lands on exactly zero; the venue
   has no reduce-only flag, the exact size is what keeps a close from becoming a flip.
-- `/v1/positions` (proxied at `/api/positions`) serves positions and margin, polled every 15s.
+- `/positions` (proxied at `/api/positions`) serves positions and margin, polled every 15s.
 - **cNGN as margin.** When the perp block lists `collateral_assets` (the perp stack's own cNGN
   escrow, whitelisted on the perp SRM as a base asset), "Deposit margin" offers cNGN beside USDC,
   depositing into that escrow through the same deposit machine; the Balances tab shows one row per
@@ -101,7 +101,7 @@ below is now the v2 account.
 **USDC-cNGN-30NOV26** is at `/trade/usdc-cngn-30nov26`, under the selector's Futures tab: a
 cash-settled cNGN future on the venue's MarginEngine (`0xA19E…0758`), quoted the way it trades,
 cNGN per USDC, one contract 1,000 USDC. A long gains as cNGN weakens. Everything about it is read
-from its `/v1/markets` entry (`contract_type: future`, the `future` block, `fill_band_low` /
+from its `/markets` entry (`contract_type: future`, the `future` block, `fill_band_low` /
 `fill_band_high`):
 
 - **One account for spot and the future.** Only accounts under the MarginEngine can hold the
@@ -112,7 +112,7 @@ from its `/v1/markets` entry (`contract_type: future`, the `future` block, `fill
   resolves its own account there (`NEXT_PUBLIC_PERP_MANAGER_ADDRESS`), and balances left in that
   account, perp margin and spot fills from 2026-10-04 on, withdraw from the perp's Balances tab.
 - **Routes follow the venue.** A series lives at its symbol lowercased
-  (`/trade/usdc-cngn-30nov26`); a slug of that shape is a 404 unless `/v1/markets` lists it. `/`
+  (`/trade/usdc-cngn-30nov26`); a slug of that shape is a 404 unless `/markets` lists it. `/`
   opens the front-month future (the nearest unexpired series, `app/route.ts`), else spot, and the
   selector's Futures tab lists the same series, so a roll needs no deploy.
 - **Orders** are signed for the future's asset and series (`sub_id`, the expiry) on the perp's
@@ -122,7 +122,7 @@ from its `/v1/markets` entry (`contract_type: future`, the `future` block, `fill
   against the venue's 2.5 USDC). Book, trades and history show sizes in USDC. The ticket refuses a limit outside the fill band, and a market order is held inside
   it. There is no reduce-only: the venue refuses it on the future.
 - **Position and margin** come from chain, every 15s: the ledger, `getMargin` at initial and
-  maintenance, `getPendingVM` and the engine's futures rates. `/v1/positions` covers the perp
+  maintenance, `getPendingVM` and the engine's futures rates. `/positions` covers the perp
   only. There is no entry price, uPnL or liquidation price; the engine keeps none.
 - **The series closes** for new orders at its last trade time (13:00 UTC on 30 Nov) and settles at
   14:00.
@@ -133,10 +133,10 @@ A second spot market, at `/trade/eurc-usdc` under the selector's Spot tab: EURC 
 the same MarginEngine v2 account, TradeModule and USDC cash as cNGN-USDC (numofx/exchange
 `deploy-eurc-spot.s.sol`). It is shown as it trades, USDC per EURC to five decimals, sized in whole
 EURC, a buy a buy of EURC; there is no inversion and no `order_entry_spec`, so its book, orders and
-fills are read from the engine fields. Fees come from `/v1/markets` (5 bps taker, 0 maker).
+fills are read from the engine fields. Fees come from `/markets` (5 bps taker, 0 maker).
 
 It is **dormant until the venue lists it**: like a future series, `/trade/eurc-usdc` is a 404 and
-the selector omits it until `/v1/markets` serves `EURC-USDC` (markets-service
+the selector omits it until `/markets` serves `EURC-USDC` (markets-service
 `EURC_SPOT_ASSET_ADDRESS`). Orders sign for the `asset_address` the venue serves, never a default;
 with none served the ticket refuses to sign. The escrow has no code default:
 
@@ -192,9 +192,9 @@ environment and should be treated as required production configuration rather th
 
 ## Live order book stream
 
-The spot order-book panel streams live depth and trades from `markets-service` over its WebSocket API (`GET /v1/ws`). The browser connects **directly** to the socket (no Next.js proxy), so the URL must be client-reachable:
+The spot order-book panel streams live depth and trades from `markets-service` over its WebSocket API (`GET /ws`). The browser connects **directly** to the socket (no Next.js proxy), so the URL must be client-reachable:
 
-- `NEXT_PUBLIC_MARKETS_WS_URL` — e.g. `wss://api.numofx.com/v1/ws` in production, `ws://127.0.0.1:8080/v1/ws` locally.
+- `NEXT_PUBLIC_MARKETS_WS_URL` — e.g. `wss://api.numofx.com/ws` in production, `ws://127.0.0.1:8080/ws` locally.
 
 The client subscribes to the public `book` and `trades` channels for the `cNGN-USDC` symbol, seeds from the `snapshot` frame, and applies `update` deltas. Both channels are unauthenticated; the only server-side gate is `WS_ALLOWED_ORIGINS` on the `markets-service` deployment, which **must include the frontend origin** or the browser handshake is rejected. When the socket is unreachable, still connecting, empty or crossed, the panel falls back to the server-rendered REST snapshot — also real venue data, just fetched at page render. A genuinely one-sided live book is shown as it rests rather than being replaced by the older snapshot. When neither source has depth, the ladder says so. That fallback is silent — there is no on-screen indicator of which source is rendering, so a stream that never goes live looks identical to a healthy one. (A "Live liquidity" badge used to signal this and was removed in `bf5688e`; its absence is what let the spot stream sit permanently in fallback, fixed in `c7c2f2e`.)
 
@@ -205,7 +205,7 @@ The client subscribes to the public `book` and `trades` channels for the `cNGN-U
 `markets-service` has **no seeding script, admin endpoint, or on-chain auto-discovery**. Its market
 list is a static registry in Go — `services/markets/internal/instruments/registry.go` in the
 `numofx/exchange` monorepo — defining spot plus three USDC/cNGN deliverable futures. Each market is
-served from `GET /v1/markets` only when its env var(s) are set on the `markets-service` deployment:
+served from `GET /markets` only when its env var(s) are set on the `markets-service` deployment:
 
 | Market | Expiry (UTC) | Env vars on markets-service | Live today |
 | --- | --- | --- | --- |
@@ -215,10 +215,10 @@ served from `GET /v1/markets` only when its env var(s) are set on the `markets-s
 | `USDCcNGN-MAY31-2027` | 2027-05-31 00:00 | `CNGN_MAY31_2027_FUTURE_ASSET_ADDRESS` + `CNGN_MAY31_2027_FUTURE_SUB_ID` | no |
 
 The address/sub-id pairs identify the instrument in the on-chain `Matching` contract. A market whose
-pair is unset is simply absent from `/v1/markets` — that is the only reason a registry entry does
+pair is unset is simply absent from `/markets` — that is the only reason a registry entry does
 not appear, so an empty `[]` means none of the pairs are configured on the backend deployment.
 
-> Verify the "live today" column against `GET https://api.numofx.com/v1/markets` before relying on
+> Verify the "live today" column against `GET https://api.numofx.com/markets` before relying on
 > it. Until 2026-08-08 this table described a `CNGN_JUN30_2026_*` pair that no longer exists in the
 > registry — it dated from the standalone `markets-service` repo and was never updated when the
 > service moved into `numofx/exchange`, so it sent readers looking for env vars matching nothing.
@@ -232,12 +232,12 @@ which the venue names USDC over cNGN.
 ## Spot market status
 
 Spot is **live again**. `markets-service` serves `cNGN-USDC` (`contract_type=spot`,
-`order_entry_spec=cngn_usdc_spot_v1`) from `GET /v1/markets`, gated on `CNGN_SPOT_ASSET_ADDRESS`
+`order_entry_spec=cngn_usdc_spot_v1`) from `GET /markets`, gated on `CNGN_SPOT_ASSET_ADDRESS`
 being set on that deployment. Depth, trades and candles are real, and the spot order translation
 contract below is what the engine actually expects.
 
 > An earlier revision of this section said spot had been removed in `e75d513` (May 2026). That was
-> true at the time and is no longer — verify against `GET /v1/markets` before trusting it again.
+> true at the time and is no longer — verify against `GET /markets` before trusting it again.
 
 Legacy override envs: `NEXT_PUBLIC_USDCCNGN_APR_FUTURE_ASSET_ADDRESS` / `NEXT_PUBLIC_USDCCNGN_APR_FUTURE_SUB_ID` are no longer read at all — the code that applied them went with the futures UI. Leave them unset.
 
@@ -263,11 +263,11 @@ Since the **MarginEngine cutover**, a wallet's trading account for spot and the 
 the MarginEngine: v1 (`0xA19E…0758`) from 2026-10-14, **v2** (`0x0705…0950`) since 2026-10-31, when
 spot moved to the engine the v2 futures margin under, so one account holds both. v1 accounts are
 close-only and the app no longer resolves them. The perp winds down under its StandardManager
-(SRM). The build check fails until `/v1/markets` reports the engine as spot's
+(SRM). The build check fails until `/markets` reports the engine as spot's
 `margin_manager_address` (markets-service `SPOT_MARGIN_MANAGER_ADDRESS`), so the venue moves
 first; markets-service's `DEPOSIT_MANAGER_ADDRESS` should move with it.
 
-`GET /v1/markets` is the source of truth for the stack: the ticket signs spot orders for the
+`GET /markets` is the source of truth for the stack: the ticket signs spot orders for the
 `asset_address` and `trade_module_address` the venue reports, and the perp reads its whole stack
 from the `perp` block. Deposits, withdrawals, the legacy rows and account resolution use the
 `NEXT_PUBLIC_*` envs below, which fall back to the code defaults in
@@ -336,7 +336,7 @@ Deposit flow address semantics (naming follows the risk-core deployment artifact
 
   Each escrow is verified on-chain: `wrappedAsset()` returns the paired token, `deposit(uint256,uint256)` is
   present, and none has a `wlEnabled()` gate. The live mainnet escrow is also the spot market's `asset_address`
-  from `GET /v1/markets` and the perp's collateral escrow, so cNGN deposits, cNGN orders and cNGN margin all
+  from `GET /markets` and the perp's collateral escrow, so cNGN deposits, cNGN orders and cNGN margin all
   settle against one contract; the build check enforces that the resolved address matches it. The escrow of
   the 2026-09-10 stack (`0x9d806fd040a719d27a8e5e77dc5ae0ed1e089493`) is reachable withdraw-only through the
   legacy envs.

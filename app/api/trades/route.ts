@@ -5,7 +5,7 @@ import { getMarketsServiceUrl } from "@/lib/markets-service";
 const TRADES_LIMIT = "100";
 
 /**
- * A market's newest public trades (`GET /v1/trades?symbol=`), for reading an order's own fills by
+ * A market's newest public trades (`GET /trades?symbol=`), for reading an order's own fills by
  * `taker_order_id` after it filled (`lib/order-fill.ts`). Only `symbol` is forwarded.
  */
 export async function GET(request: Request) {
@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "symbol is required" }, { status: 400 });
   }
   const query = new URLSearchParams({ limit: TRADES_LIMIT, symbol });
-  const response = await fetch(`${getMarketsServiceUrl()}/v1/trades?${query}`, {
+  const response = await fetch(`${getMarketsServiceUrl()}/trades?${query}`, {
     cache: "no-store",
     headers: { accept: "application/json" },
   });

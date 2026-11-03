@@ -78,7 +78,7 @@ function positiveDecimal(value: string | undefined): number | null {
   return parsed !== null && parsed > 0 ? parsed : null;
 }
 
-/** The `/v1/markets` fields the future's state is read from. */
+/** The `/markets` fields the future's state is read from. */
 export type FuturePresentation = {
   base_asset_symbol?: string;
   asset_address?: string;

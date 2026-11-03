@@ -18,7 +18,7 @@ const ENGINE_DECIMALS = 18;
  */
 /**
  * The CEILING signed into every order's worstFee — not the fee the venue charges. That comes from
- * /v1/markets (`taker_fee_bps`), which is the single source; this is the most the trader will
+ * /markets (`taker_fee_bps`), which is the single source; this is the most the trader will
  * tolerate before TradeModule reverts TM_FeeTooHigh.
  *
  * 30 bps against a 25 bps schedule: enough headroom that a fee change does not instantly brick
@@ -33,7 +33,7 @@ export const SPOT_TAKER_FEE_RATE = "0.0030";
  * and — because `expiry` is inside the signed action — it is also the window in which the signature
  * authorizes a fill, so a resting limit order can fill at its price until it expires or is cancelled.
  *
- * This was five minutes while `/v1/orders` was POST-only: expiry was the only way an order could
+ * This was five minutes while `/orders` was POST-only: expiry was the only way an order could
  * ever leave the book, so a long lifetime meant an order that could not be withdrawn. That reason
  * is gone — cancellation now exists (signed `Cancel`, `buildCancelEnvelope`), and a cancel frees its
  * reservation immediately (`withoutCancelledOrders`) — so the lifetime is a full trading day, long
@@ -123,7 +123,7 @@ function getTradeModuleAddress() {
 }
 
 /**
- * The spot instrument's asset (`/v1/markets` cNGN-USDC.asset_address, always sub_id 0) when
+ * The spot instrument's asset (`/markets` cNGN-USDC.asset_address, always sub_id 0) when
  * the served market is not at hand: the env, else the chain's cNGN escrow, which is the same
  * contract cNGN deposits pay into.
  */
@@ -144,7 +144,7 @@ function getSpotAssetAddress() {
  * is the cancel key, so it could never be cancelled. Silent, and worst exactly during the fast
  * quoting this scheme exists to serve.
  *
- * This is a defensive bound rather than a live requirement: `/v1/book` was checked with orders
+ * This is a defensive bound rather than a live requirement: `/book` was checked with orders
  * resting on 2026-08-17 and markets-service quotes `nonce` as a string, so today no hop rounds it.
  * It is kept because that quoting is incidental rather than principled — in one response `expiry`
  * arrives bare at the order level (`"expiry":1786983830`) and quoted inside `action_json`
@@ -163,7 +163,7 @@ let nonceSequenceSeed: bigint | null = null;
  * A nonce unique to each signed order.
  *
  * `(owner_address, nonce)` is the venue's *cancel key*, not just replay protection —
- * `POST /v1/orders/cancel` takes that pair and nothing else, and `collectOpenOrders` drops book
+ * `POST /orders/cancel` takes that pair and nothing else, and `collectOpenOrders` drops book
  * rows missing either field because they cannot be acted on. So two orders sharing a nonce are not
  * merely a rejection risk: they cannot be cancelled independently. The previous `BigInt(Date.now())`
  * collided for any two orders signed in the same millisecond — unreachable for a human clicking the
@@ -219,7 +219,7 @@ export function getNonceSignedAtMs(nonce: bigint | string) {
  * Where an order is signed for when it is not spot. The perp takes the same order shape (both are
  * cNGN at USDC per cNGN on chain) but lives on its own stack: its own asset, and its own
  * TradeModule settling in its own cash. markets-service rejects an order naming the other market's
- * module, so these must come from the perp's `/v1/markets` entry, never from spot's defaults.
+ * module, so these must come from the perp's `/markets` entry, never from spot's defaults.
  */
 export type OrderMarketOverride = {
   assetAddress: `0x${string}`;

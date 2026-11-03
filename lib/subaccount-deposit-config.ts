@@ -21,7 +21,7 @@ import type { DepositAddresses, DepositCurrency } from "@/lib/subaccount-deposit
  * every deposit and order would have been built against contracts that do not exist.
  *
  * Mainnet is the unified stack spot and the perp share since the cutover on 2026-10-04, each
- * entry read back from `GET /v1/markets` and the Base 8453 chain. Since the MarginEngine cutover
+ * entry read back from `GET /markets` and the Base 8453 chain. Since the MarginEngine cutover
  * (2026-10-13) the trading account spot and the future share lives under the engine; the perp is
  * winding down on its SRM, close-only and then withdrawals, and never moves to the engine:
  * - `matching` emits the `DepositedSubAccount` / `ModuleAllowed` events this app decodes, and is

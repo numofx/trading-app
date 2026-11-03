@@ -2,7 +2,7 @@
  * Build check: the stack this bundle resolves must be the stack the venue serves spot (and the
  * perp, for its manager) on.
  *
- * The ticket signs spot orders for the asset and module `/v1/markets` reports, but deposits,
+ * The ticket signs spot orders for the asset and module `/markets` reports, but deposits,
  * account resolution, the legacy rows and the perp fall back to `NEXT_PUBLIC_*`, and those fall
  * back to the code defaults in `lib/matching-stack-defaults.json`. A bundle whose resolved stack
  * (env if set, else default) names the old stack after a venue cutover would deposit into one
@@ -91,16 +91,16 @@ if (!url) {
 
 let markets;
 try {
-  const response = await fetch(`${url}/v1/markets`, { headers: { accept: "application/json" } });
+  const response = await fetch(`${url}/markets`, { headers: { accept: "application/json" } });
   if (!response.ok) {
-    throw new Error(`GET /v1/markets returned ${response.status}`);
+    throw new Error(`GET /markets returned ${response.status}`);
   }
   markets = await response.json();
 } catch (error) {
   if (production) {
-    fail([`could not read ${url}/v1/markets (${error.message}); the stack cannot be verified`]);
+    fail([`could not read ${url}/markets (${error.message}); the stack cannot be verified`]);
   }
-  note(`could not read ${url}/v1/markets (${error.message}); the stack was not verified`);
+  note(`could not read ${url}/markets (${error.message}); the stack was not verified`);
   process.exit(0);
 }
 

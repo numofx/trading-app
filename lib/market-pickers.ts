@@ -1,6 +1,6 @@
 import type { SpotBase } from "@/lib/spot-pairs";
 
-/** The fields of a `/v1/markets` entry that identify which terminal market it is. */
+/** The fields of a `/markets` entry that identify which terminal market it is. */
 export type MarketIdentity = {
   contract_type?: string;
   base_asset_symbol?: string;

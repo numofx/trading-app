@@ -1,5 +1,5 @@
 /**
- * The signed login `GET /v1/orders` and `GET /v1/fills` require — markets-service's `wsauth.AuthFrame`, sent as the
+ * The signed login `GET /orders` and `GET /fills` require — markets-service's `wsauth.AuthFrame`, sent as the
  * `X-Numo-Auth` header. Times are unix seconds.
  */
 export type OrderHistoryAuthFrame = {
@@ -13,7 +13,7 @@ export type OrderHistoryAuthFrame = {
 /** An order's outcome as markets-service records it. */
 export type OrderHistoryStatus = "active" | "matching" | "filled" | "cancelled" | "expired";
 
-/** One order as `GET /v1/orders` returns it: the book's order fields plus how it ended. */
+/** One order as `GET /orders` returns it: the book's order fields plus how it ended. */
 export type OrderHistoryOrder = {
   cancel_reason?: string;
   cancelled_at?: string;
@@ -54,7 +54,7 @@ export type OrderHistoryResponse = {
 /** Which side of the trade the wallet's order was on. */
 export type FillLiquidity = "maker" | "taker";
 
-/** One fill on one of the wallet's orders, as `GET /v1/fills` returns it. */
+/** One fill on one of the wallet's orders, as `GET /fills` returns it. */
 export type AccountFill = {
   created_at: string;
   display_name?: string;
