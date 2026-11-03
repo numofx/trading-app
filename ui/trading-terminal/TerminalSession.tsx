@@ -10,6 +10,7 @@ import {
   getEurcTokenAddress,
 } from "@/lib/subaccount-deposit-config";
 import { useServerRefresh } from "@/ui/trading-terminal/useServerRefresh";
+import { useSignupHandoff } from "@/ui/trading-terminal/useSignupHandoff";
 import { useTokenBalance } from "@/ui/trading-terminal/useTokenBalance";
 import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
 import { useUsdcBalance } from "@/ui/trading-terminal/useUsdcBalance";
@@ -64,6 +65,7 @@ export function TerminalSessionProvider({ children }: { children: ReactNode }) {
   const { login } = useLogin();
   const { primaryWallet: pinnedWallet, selectWallet, wallets, walletsReady } = usePrimaryWallet();
   const isSignedIn = privyReady && authenticated;
+  useSignupHandoff();
   const primaryWallet = isSignedIn ? pinnedWallet : null;
   const walletAddress = primaryWallet?.address ?? null;
   const account = useTradingSubaccount(walletAddress);
