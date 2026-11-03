@@ -6,8 +6,9 @@ import { useEffect, useEffectEvent } from "react";
 const SIGNUP_PARAM = "signup";
 
 /**
- * numofx.com/signup hands off here with `?signup=google` or `?signup=email`, since an account's session lives on this
- * domain. Opens that sign-in once, for a visitor not signed in, and drops the param so a reload does not reopen it.
+ * numofx.com/signup and /login hand off here with `?signup=email`, `wallet` or `google`, since an account's session
+ * lives on this domain. Opens that sign-in once, for a visitor not signed in, and drops the param so a reload does not
+ * reopen it.
  * Google falls back to the sign-in modal when it cannot start.
  */
 export function useSignupHandoff() {
@@ -16,8 +17,8 @@ export function useSignupHandoff() {
   const { initOAuth } = useLoginWithOAuth();
 
   const start = useEffectEvent(async (method: string | null) => {
-    if (method === "email") {
-      login({ loginMethods: ["email"] });
+    if (method === "email" || method === "wallet") {
+      login({ loginMethods: [method] });
     } else if (method === "google") {
       try {
         await initOAuth({ provider: "google" });
