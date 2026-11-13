@@ -250,9 +250,12 @@ malformed value lands on mainnet rather than quietly on a testnet whose contract
 ### RPC
 
 `NEXT_PUBLIC_BASE_RPC_URL` must be set to the venue's keyed Alchemy endpoint on every deployment.
-The code falls back to the public `https://mainnet.base.org` only so a missing env does not hard-fail
-locally — that endpoint is shared and aggressively throttled, and a rate limit there is what made
-wallet balance reads silently come back empty. Because the var is `NEXT_PUBLIC_`, the key ships in
+Reads go to it first and fall back to the chain's public endpoint (`https://mainnet.base.org`, or
+`https://sepolia.base.org`) when it fails (viem `fallback`, `lib/base-public-client.ts`), so an
+Alchemy outage or cap (2026-11-12) degrades to slow reads rather than blank balances. The public
+endpoint is never the primary: it is shared and aggressively throttled, a rate limit there is what
+once made wallet balance reads silently come back empty, and it refuses the wide `eth_getLogs`
+range a first trading-account lookup uses, so that lookup still needs the keyed endpoint. Because the var is `NEXT_PUBLIC_`, the key ships in
 the browser bundle: keep the Alchemy key domain-restricted, and rotate it there rather than in code.
 
 ### Matching stack (Base mainnet)

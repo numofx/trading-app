@@ -1,16 +1,5 @@
-import { createPublicClient, http } from "viem";
+import { createPublicClient, fallback, http } from "viem";
 import { base, baseSepolia } from "viem/chains";
-
-/**
- * Last-resort fallback only. The public endpoint is shared and aggressively throttled — a rate
- * limit there is what silently emptied the wallet balance reads — so every deployment sets
- * NEXT_PUBLIC_BASE_RPC_URL to the venue's keyed Alchemy endpoint instead.
- */
-const DEFAULT_BASE_RPC_URL = "https://mainnet.base.org";
-
-export function getBaseRpcUrl() {
-  return process.env.NEXT_PUBLIC_BASE_RPC_URL?.trim() || DEFAULT_BASE_RPC_URL;
-}
 
 /**
  * The chain every wallet interaction targets, driven by NEXT_PUBLIC_MATCHING_CHAIN_ID.
@@ -24,9 +13,35 @@ export function getAppChain() {
   return configured === baseSepolia.id ? baseSepolia : base;
 }
 
+/**
+ * The RPC URLs reads go to, in order: the keyed endpoint (NEXT_PUBLIC_BASE_RPC_URL), then the
+ * chain's public endpoint (mainnet.base.org, or sepolia.base.org).
+ *
+ * The public endpoint is shared and aggressively throttled, so it is never the primary: a rate
+ * limit there is what once silently emptied the wallet balance reads. It is the fallback because
+ * the keyed endpoint can fail as a whole: on 2026-11-12 the Alchemy plan hit its monthly cap and
+ * every read 429'd, leaving balances, the trading account and margin blank until it was raised.
+ */
+export function getBaseRpcUrls(
+  configured = process.env.NEXT_PUBLIC_BASE_RPC_URL,
+  chain = getAppChain()
+): string[] {
+  const publicUrl = chain.rpcUrls.default.http[0];
+  const keyed = configured?.trim();
+  return keyed && keyed !== publicUrl ? [keyed, publicUrl] : [publicUrl];
+}
+
+/**
+ * A read client that moves on to the next RPC URL when one fails. viem's `fallback` gives each URL
+ * no retries of its own, so a 429 moves on at once, and it throws a revert rather than asking the
+ * next URL the same question.
+ */
 export function createBasePublicClient() {
+  const chain = getAppChain();
   return createPublicClient({
-    chain: getAppChain(),
-    transport: http(getBaseRpcUrl()),
+    chain,
+    transport: fallback(
+      getBaseRpcUrls(process.env.NEXT_PUBLIC_BASE_RPC_URL, chain).map((url) => http(url))
+    ),
   });
 }
