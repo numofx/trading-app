@@ -288,13 +288,16 @@ export function TerminalHeaderBar({
     // 64px when everything fits on one line, growing rather than overflowing when it does not —
     // the wallet button's address makes the right-hand cluster's extent unknowable.
     <header className="flex min-h-16 shrink-0 flex-wrap items-center gap-3 p-3 transition-colors duration-300 md:flex-nowrap md:px-6">
-      <SmartImage<string>
-        alt="Numo"
-        className="h-7 w-24 shrink-0"
-        imgClassName="object-left"
-        priority
-        src={theme === "light" ? "/numo_logo_black.png" : "/numo_logo_white.png"}
-      />
+      {/* The logo leads to the marketing site, the venue's home, not back into the terminal. */}
+      <a aria-label="Numo home" className="shrink-0" href="https://numofx.com">
+        <SmartImage<string>
+          alt="Numo"
+          className="h-7 w-24 shrink-0"
+          imgClassName="object-left"
+          priority
+          src={theme === "light" ? "/numo_logo_black.png" : "/numo_logo_white.png"}
+        />
+      </a>
 
       <MarketSelectDialog
         changePercent24h={publication?.changePercent24h ?? null}
