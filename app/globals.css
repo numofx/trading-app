@@ -135,7 +135,7 @@
   --wallet-hover: #f2eee8;
 
   --buy: #4b6b3a;
-  --sell: #b4532a;
+  --sell: #a33a35;
 
   --ask-text: var(--sell);
   --ask-bg: color-mix(in srgb, var(--sell) 8%, transparent);
