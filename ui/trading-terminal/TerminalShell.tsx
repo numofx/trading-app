@@ -11,7 +11,7 @@ import { resolveSegment } from "@/lib/market-routes";
 import { buildPerpOverviewMetrics } from "@/lib/perp-market";
 import { buildSpotHeaderMetrics } from "@/lib/spot-orientation";
 import { isSpotMarketId, SPOT_PAIRS } from "@/lib/spot-pairs";
-import { TerminalHeaderBar } from "@/ui/trading-terminal/TerminalHeaderBar";
+import { TerminalHeaderBar, TerminalMetricsStrip } from "@/ui/trading-terminal/TerminalHeaderBar";
 import type { TerminalHeaderPublication } from "@/ui/trading-terminal/TerminalHeaderSlot";
 import {
   TerminalHeaderSlotProvider,
@@ -44,8 +44,9 @@ export function TerminalShell({
     <TerminalHeaderSlotProvider>
       <TerminalSessionProvider>
         <main className="flex min-h-screen flex-col bg-terminal-bg text-foreground transition-colors duration-300 md:h-dvh md:overflow-hidden">
-          <ShellHeader market={market} seriesSymbol={seriesSymbol} />
-          {children}
+          <ShellHeader market={market} seriesSymbol={seriesSymbol}>
+            {children}
+          </ShellHeader>
         </main>
       </TerminalSessionProvider>
     </TerminalHeaderSlotProvider>
@@ -104,20 +105,24 @@ function seedFromOverview(
 }
 
 /**
- * Its own component so a publication re-renders the header alone. The figures shown are only
+ * Its own component so a publication re-renders the header alone (the panels come in as
+ * `children`, an element made by the shell, so they are not re-rendered with it). The figures shown are only
  * ever the selected market's: another market's publication (its panels still unmounting, or a
  * stale one) reads as "not published yet", and the header shows the selector's figures for the
  * selected market, or its skeleton, until the panels publish the live set.
  */
 function ShellHeader({
+  children,
   seriesSymbol,
   market,
 }: {
+  /** The market's panels, framed under the figure strip. Passed through, so a publication never re-renders them. */
+  children: ReactNode;
   seriesSymbol: string | null;
   market: TerminalMarketId;
 }) {
-  const publication = useTerminalHeaderPublication();
-  const live = publication?.market === market ? publication : null;
+  const published = useTerminalHeaderPublication();
+  const live = published?.market === market ? published : null;
   const cachedRow = useCachedOverviewRow(market, OVERVIEW_SEED_MAX_AGE_MS, seriesSymbol);
   const unpublished = live === null;
 
@@ -129,11 +134,18 @@ function ShellHeader({
     return () => window.clearTimeout(timer);
   }, [unpublished]);
 
+  const publication = live ?? seedFromOverview(market, cachedRow);
   return (
-    <TerminalHeaderBar
-      market={market}
-      publication={live ?? seedFromOverview(market, cachedRow)}
-      seriesSymbol={seriesSymbol}
-    />
+    <>
+      <TerminalHeaderBar market={market} publication={publication} seriesSymbol={seriesSymbol} />
+      {/*
+       * One frame around the figures and the panels, inset from the page: every panel draws a
+       * 1px ring and they sit 1px apart, so neighbours share a single rule.
+       */}
+      <div className="flex min-w-0 flex-1 flex-col gap-px px-3 pb-3 md:min-h-0 md:px-6 md:pb-4">
+        <TerminalMetricsStrip publication={publication} />
+        {children}
+      </div>
+    </>
   );
 }

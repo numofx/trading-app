@@ -101,7 +101,7 @@ export function MarketIdentity({ compact, symbol }: { compact?: boolean; symbol:
       <span
         className={cn(
           "truncate font-semibold text-panel-text-active leading-none",
-          compact ? "text-[14px]" : "text-[13px]"
+          compact ? "text-[14px]" : "text-[13px] md:text-[15px]"
         )}
       >
         {symbol}
@@ -137,10 +137,10 @@ function ChangeCell({ value }: { value: number | null }) {
 }
 
 /** The Futures tab's figures, in the stats bar's order. */
-const FUTURE_COLUMNS = ["Mark", "Basis", "APR", "Open Interest"] as const;
+const FUTURE_COLUMNS = ["Mark", "Carry to expiry", "Annualised", "Open interest"] as const;
 
-/** What a phone's width holds beside the series name: the mark and the APR, short figures both. */
-const FUTURE_PHONE_COLUMNS = new Set<string>(["Mark", "APR"]);
+/** What a phone's width holds beside the series name: the mark and the annualised carry. */
+const FUTURE_PHONE_COLUMNS = new Set<string>(["Mark", "Annualised"]);
 
 /** The column tooltips: the stats bar's own, from a series with nothing served. */
 const FUTURE_COLUMN_TOOLTIPS = Object.fromEntries(
@@ -404,6 +404,14 @@ function OptionSeriesList({
  * that market's route. Escape, the backdrop and the X all close it; the body does not scroll behind
  * it. Below `md` it rises as a bottom sheet rather than a centred card.
  */
+/** The kind of market on the selector's pill, beside its symbol. */
+const KIND_BADGES = {
+  futures: "Future",
+  options: "Option",
+  perp: "Perp",
+  spot: "Spot",
+} as const satisfies Record<TerminalMarketKind, string>;
+
 export function MarketSelectDialog({
   changePercent24h,
   seriesSymbol,
@@ -450,10 +458,13 @@ export function MarketSelectDialog({
     <Dialog.Root onOpenChange={handleOpenChange} open={open}>
       {/* Stable id: auto-generated useId values can shift when async state (e.g. Privy init) races hydration. */}
       <Dialog.Trigger
-        className="flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-full bg-input-bg px-2.5 outline-none ring-1 ring-panel-border transition-colors hover:bg-input-hover focus-visible:ring-2 focus-visible:ring-panel-text-muted"
+        className="flex h-9 shrink-0 cursor-pointer items-center gap-2.5 rounded-sm bg-panel-bg px-2.5 outline-none ring-1 ring-panel-ring transition-colors hover:bg-input-hover focus-visible:ring-2 focus-visible:ring-panel-text-muted md:h-11 md:px-3"
         id="spot-ticker-market-trigger"
       >
         <MarketIdentity symbol={selected.symbol} />
+        <span className="hidden rounded-[2px] bg-accent-text/15 px-1.5 py-0.5 font-mono font-semibold text-[10px] text-accent-text uppercase tracking-[0.12em] sm:inline">
+          {KIND_BADGES[selected.kind]}
+        </span>
         <ChevronDown
           className={cn(
             "size-4 text-panel-text-muted transition-transform duration-200",

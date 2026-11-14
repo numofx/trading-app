@@ -1,12 +1,16 @@
 "use client";
 
+import { ArrowRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
 import { getFirstDepositableCurrency } from "@/lib/subaccount-deposit-config";
 import type { TransferMode } from "@/ui/trading-terminal/DepositDialog";
 import { buildDepositAccount, DepositDialog } from "@/ui/trading-terminal/DepositDialog";
-import { HEADER_ACTION_CLASSES } from "@/ui/trading-terminal/TerminalHeaderBar";
+import {
+  HEADER_ACTION_CLASSES,
+  HEADER_PRIMARY_ACTION_CLASSES,
+} from "@/ui/trading-terminal/TerminalHeaderBar";
 import { useTerminalSession } from "@/ui/trading-terminal/TerminalSession";
 
 /**
@@ -128,8 +132,9 @@ export function useAccountTransfer({
         onSelectFundingWallet={(wallet) => selectWallet(wallet.address)}
         onWithdrawn={refreshAfter}
         open={open}
-        triggerClassName={HEADER_ACTION_CLASSES}
+        triggerClassName={HEADER_PRIMARY_ACTION_CLASSES}
         triggerId="header-deposit-trigger"
+        triggerTrailing={<ArrowRight aria-hidden className="size-4" />}
         walletBalances={{
           cNGN: walletBalances.cngn,
           EURC: walletBalances.eurc,

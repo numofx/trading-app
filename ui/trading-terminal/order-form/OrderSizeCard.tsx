@@ -61,46 +61,42 @@ export function OrderSizeCard({
   const sliderValue = sliderDisabled ? 0 : Math.min(size ?? 0, sliderMax);
   const fillPercent = (sliderValue / sliderMax) * 100;
   return (
-    <div className="space-y-2 border border-panel-border px-3 py-2 focus-within:border-panel-text-muted">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex shrink-0 flex-col items-start gap-2 pt-0.5">
-          <FieldLabel htmlFor={inputId} tooltip={tooltip}>
-            Order Size
-          </FieldLabel>
-          <button
-            aria-label={`Size in ${unit}; switch to ${other ?? "the other unit"}`}
-            className="flex cursor-pointer items-center gap-1.5 border border-panel-border bg-input-bg px-2 py-1 font-semibold text-[12px] text-panel-text-active transition-colors hover:bg-input-hover disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={!canToggleUnit}
-            onClick={onToggleUnit}
-            title={
-              canToggleUnit
-                ? undefined
-                : "Needs a price: type a limit price, or wait for the market"
-            }
-            type="button"
-          >
-            <SmartImage<string>
-              alt=""
-              className="size-4 animate-none rounded-full"
-              src={TOKEN_ICONS[unit]}
-            />
-            {unit}
-            <ArrowLeftRight aria-hidden className="size-3 text-panel-text-muted" />
-          </button>
-        </div>
-        <div className="flex min-w-0 flex-1 flex-col items-end">
-          <input
-            className="w-full bg-transparent text-right font-semibold text-[22px] text-panel-text-active tabular-nums outline-none placeholder:text-panel-text-muted"
-            id={inputId}
-            inputMode="decimal"
-            // Shown grouped, handed on bare: the tickets parse the digits alone.
-            onChange={(event) => onInput(event.target.value.replace(/[^\d.]/g, ""))}
-            placeholder="0"
-            value={groupTypedDigits(shown)}
+    <div className="space-y-2 bg-input-bg px-3 py-2.5 ring-1 ring-panel-border focus-within:ring-panel-text-muted">
+      <FieldLabel htmlFor={inputId} tooltip={tooltip}>
+        Order size
+      </FieldLabel>
+      <div className="flex items-center justify-between gap-3">
+        <input
+          className="w-full min-w-0 bg-transparent font-medium font-mono text-[26px] text-panel-text-active tabular-nums leading-none outline-none placeholder:text-panel-text-muted"
+          id={inputId}
+          inputMode="decimal"
+          // Shown grouped, handed on bare: the tickets parse the digits alone.
+          onChange={(event) => onInput(event.target.value.replace(/[^\d.]/g, ""))}
+          placeholder="0"
+          value={groupTypedDigits(shown)}
+        />
+        <button
+          aria-label={`Size in ${unit}; switch to ${other ?? "the other unit"}`}
+          className="flex shrink-0 cursor-pointer items-center gap-1.5 bg-panel-bg px-2 py-1.5 font-semibold text-[12px] text-panel-text-active ring-1 ring-panel-border transition-colors hover:bg-input-hover disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={!canToggleUnit}
+          onClick={onToggleUnit}
+          title={
+            canToggleUnit ? undefined : "Needs a price: type a limit price, or wait for the market"
+          }
+          type="button"
+        >
+          <SmartImage<string>
+            alt=""
+            className="size-4 animate-none rounded-full"
+            src={TOKEN_ICONS[unit]}
           />
-          <span className="text-[12px] text-panel-text-muted tabular-nums">{otherUnitText}</span>
-        </div>
+          {unit}
+          <ArrowLeftRight aria-hidden className="size-3 text-panel-text-muted" />
+        </button>
       </div>
+      <span className="block font-mono text-[11px] text-panel-text-muted tabular-nums">
+        ≈ {otherUnitText}
+      </span>
       <div className="flex items-center gap-3">
         <div className="relative flex min-w-0 flex-1 items-center">
           {SLIDER_MARKS.map((mark) => (
@@ -121,14 +117,14 @@ export function OrderSizeCard({
             onChange={(event) => onSetBase(Number(event.target.value))}
             step={step}
             style={{
-              background: `linear-gradient(to right, var(--buy) ${fillPercent}%, var(--input-hover) ${fillPercent}%)`,
+              background: `linear-gradient(to right, var(--panel-text-active) ${fillPercent}%, var(--input-hover) ${fillPercent}%)`,
             }}
             type="range"
             value={sliderValue}
           />
         </div>
         <button
-          className="shrink-0 cursor-pointer border border-panel-border bg-input-bg px-2.5 py-1 font-semibold text-[11px] text-panel-text-active transition-colors hover:bg-input-hover disabled:cursor-not-allowed disabled:opacity-40"
+          className="shrink-0 cursor-pointer bg-panel-bg px-2.5 py-1 font-mono font-semibold text-[11px] text-panel-text-active ring-1 ring-panel-border transition-colors hover:bg-input-hover disabled:cursor-not-allowed disabled:opacity-40"
           disabled={sliderDisabled}
           onClick={() => max !== null && onSetBase(max)}
           title={maxTitle}

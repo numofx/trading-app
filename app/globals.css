@@ -51,6 +51,21 @@
   --toolbar-active-fg: #e9ebee;
   --toolbar-border: rgba(255, 255, 255, 0.06);
 
+  /* Segmented tabs: the track, and the selected segment raised out of it. */
+  --segment-bg: rgba(255, 255, 255, 0.035);
+  --segment-active-bg: #212327;
+
+  /* The primary action (Deposit, the ticket's remedy): the one filled control on screen. */
+  --primary-bg: #eceef1;
+  --primary-fg: #050506;
+  --primary-hover: #ffffff;
+
+  /* The wallet pill: the brand's light blue on dark. */
+  --wallet-bg: #9bdbf8;
+  --wallet-fg: #111111;
+  --wallet-ring: rgba(0, 0, 0, 0.1);
+  --wallet-hover: color-mix(in srgb, #9bdbf8 90%, transparent);
+
   --ask-text: var(--sell);
   --bid-text: var(--buy);
   /* The wallet button's blue, as text: the perp's funding figures. */
@@ -76,57 +91,74 @@
 }
 
 .light {
-  --background: #ffffff;
-  --foreground: #1e293b;
+  /* Warm paper: a cream page, panels a step lighter, tan rules and near-black ink. Figures are
+     set in the mono face; the one filled control on a screen is the dark primary button. */
+  --background: #fdf9f1;
+  --foreground: #2a231c;
 
-  --terminal-bg: #ffffff;
-  --panel-bg: #ffffff;
-  --panel-bg-muted: #ffffff;
-  --panel-bg-darker: #ffffff;
-  --menu-surface: #ffffff;
-  --panel-ring: rgba(15, 23, 42, 0.08);
-  --panel-border: rgba(15, 23, 42, 0.08);
-  --panel-shadow: rgba(15, 23, 42, 0.04);
+  --terminal-bg: #f2e8d8;
+  --panel-bg: #fdf9f1;
+  --panel-bg-muted: #fdf9f1;
+  --panel-bg-darker: #f5eee2;
+  --menu-surface: #fffcf6;
+  --panel-ring: #ddd0bb;
+  --panel-border: #e6dbc9;
+  --panel-shadow: rgba(60, 45, 25, 0.08);
 
-  --panel-text: #1e293b;
-  --panel-text-muted: #64748b;
-  --panel-text-active: #0f172a;
+  --panel-text: #2a231c;
+  --panel-text-muted: #6b6157;
+  --panel-text-active: #1c1712;
 
-  --dialog-bg: #ffffff;
+  --dialog-bg: #fdf9f1;
 
-  --source-badge: #2563eb;
+  --source-badge: #3d5f8f;
   --source-badge-fg: #ffffff;
 
-  --input-bg: rgba(15, 23, 42, 0.04);
-  --input-border: rgba(15, 23, 42, 0.08);
-  --input-hover: rgba(15, 23, 42, 0.07);
+  --input-bg: #f3ebde;
+  --input-border: #ddd0bb;
+  --input-hover: #ebe0cd;
 
-  --toolbar-active-bg: #e2e8f0;
-  --toolbar-active-fg: #0f172a;
-  --toolbar-border: rgba(15, 23, 42, 0.08);
+  --toolbar-active-bg: #1c1712;
+  --toolbar-active-fg: #fdf9f1;
+  --toolbar-border: #e6dbc9;
 
-  --buy: #0f9d63;
-  --sell: #d93848;
+  --segment-bg: #efe5d5;
+  --segment-active-bg: #fffdf8;
+
+  --primary-bg: #1c1712;
+  --primary-fg: #fdf9f1;
+  --primary-hover: #362d24;
+
+  --wallet-bg: #fdf9f1;
+  --wallet-fg: #1c1712;
+  --wallet-ring: #ddd0bb;
+  --wallet-hover: #f3ebde;
+
+  --buy: #4b6b3a;
+  --sell: #b4532a;
 
   --ask-text: var(--sell);
-  --ask-bg: color-mix(in srgb, var(--sell) 7%, transparent);
+  --ask-bg: color-mix(in srgb, var(--sell) 8%, transparent);
   --bid-text: var(--buy);
-  /* The wallet blue deepened to read as text on white; #9bdbf8 itself is near-invisible there. */
-  --accent-text: #1a7fb0;
-  --bid-bg: color-mix(in srgb, var(--buy) 7%, transparent);
+  /* The links' ink blue: Deposit beside the margin line, the docs links. */
+  --accent-text: #2f4f8f;
+  --bid-bg: color-mix(in srgb, var(--buy) 8%, transparent);
   --ask-label: var(--sell);
   --bid-label: var(--buy);
-  --ask-depth: color-mix(in srgb, var(--sell) 16%, transparent);
-  --bid-depth: color-mix(in srgb, var(--buy) 16%, transparent);
-  --mid-price: #1e3a8a;
-  --spread-percent: #2563eb;
+  --ask-depth: color-mix(in srgb, var(--sell) 14%, transparent);
+  --bid-depth: color-mix(in srgb, var(--buy) 12%, transparent);
+  --mid-price: #1c1712;
+  --spread-percent: #6b6157;
 
-  --chart-curve: #0f172a;
-  --chart-grid-stroke: rgba(15, 23, 42, 0.08);
-  --chart-axis-stroke: rgba(15, 23, 42, 0.25);
-  --chart-label-fill: #64748b;
-  --chart-area-stop-0: rgba(15, 23, 42, 0.12);
-  --chart-area-stop-100: rgba(15, 23, 42, 0.01);
+  --chart-curve: #1c1712;
+  --chart-grid-stroke: rgba(28, 23, 18, 0.14);
+  --chart-axis-stroke: rgba(28, 23, 18, 0.3);
+  --chart-label-fill: #3a3229;
+  --chart-area-stop-0: rgba(28, 23, 18, 0.12);
+  --chart-area-stop-100: rgba(28, 23, 18, 0.01);
+  /* Volume in one slate blue under both sides' candles; unset on dark, where it takes the side's. */
+  --chart-volume: #6c88a8;
+  --chart-volume-opacity: 1;
 }
 
 @theme inline {
@@ -154,6 +186,15 @@
   --color-toolbar-active-bg: var(--toolbar-active-bg);
   --color-toolbar-active-fg: var(--toolbar-active-fg);
   --color-toolbar-border: var(--toolbar-border);
+  --color-segment-bg: var(--segment-bg);
+  --color-segment-active-bg: var(--segment-active-bg);
+  --color-primary-bg: var(--primary-bg);
+  --color-primary-fg: var(--primary-fg);
+  --color-primary-hover: var(--primary-hover);
+  --color-wallet-bg: var(--wallet-bg);
+  --color-wallet-fg: var(--wallet-fg);
+  --color-wallet-ring: var(--wallet-ring);
+  --color-wallet-hover: var(--wallet-hover);
   --color-buy: var(--buy);
   --color-sell: var(--sell);
   --color-ask-text: var(--ask-text);
@@ -201,9 +242,7 @@ body {
 }
 
 html.light body {
-  background:
-    radial-gradient(circle at top, rgba(14, 165, 233, 0.08), transparent 50%),
-    #ffffff;
+  background: var(--terminal-bg);
 }
 
 /*

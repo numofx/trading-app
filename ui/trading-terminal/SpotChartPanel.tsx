@@ -1,5 +1,6 @@
 "use client";
 
+import { PencilLine } from "lucide-react";
 import type { MouseEvent } from "react";
 import { useRef, useState } from "react";
 import type { ChartInterval } from "@/lib/chart-interval";
@@ -141,7 +142,7 @@ function CandlestickChart({
     >
       <svg
         aria-label={`${units.pair} candlestick chart`}
-        className="size-full"
+        className="size-full font-mono"
         preserveAspectRatio="none"
         role="img"
         viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
@@ -201,9 +202,9 @@ function CandlestickChart({
                 y={bodyTop}
               />
               <rect
-                fill={color}
+                fill={`var(--chart-volume, ${color})`}
                 height={Math.max(volumeHeight, 1)}
-                opacity="0.45"
+                style={{ opacity: "var(--chart-volume-opacity, 0.45)" }}
                 width={bodyWidth}
                 x={x - bodyWidth / 2}
                 y={VOLUME_BOTTOM - Math.max(volumeHeight, 1)}
@@ -347,7 +348,7 @@ function DepthChart({
   return (
     <svg
       aria-label={`${units.pair} market depth chart`}
-      className="size-full"
+      className="size-full font-mono"
       preserveAspectRatio="none"
       role="img"
       viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
@@ -444,7 +445,7 @@ function OhlcReadout({ candle, units }: { candle: Candle | null; units: ChartUni
   const valueClass = isUp ? "text-bid-text" : "text-ask-text";
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px]">
       {units.priceLabel === undefined ? null : (
         <span
           className="text-panel-text-muted"
@@ -463,7 +464,7 @@ function OhlcReadout({ candle, units }: { candle: Candle | null; units: ChartUni
       ).map(([label, value]) => (
         <span className="flex items-center gap-1" key={label}>
           <span className="text-panel-text-muted">{label}</span>
-          <span className={cn("font-medium", valueClass)}>
+          <span className="font-medium text-panel-text-active">
             {formatPrice(value, units.priceDecimals)}
           </span>
         </span>
@@ -515,45 +516,67 @@ export function SpotChartPanel({
   const readoutCandle =
     hoveredIndex !== null ? (candles[hoveredIndex] ?? null) : (candles.at(-1) ?? null);
 
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const toolbarButton = (active: boolean) =>
+    cn(
+      "h-8 cursor-pointer px-3 font-medium text-[12px] transition-colors",
+      active
+        ? "bg-toolbar-active-bg text-toolbar-active-fg"
+        : "text-panel-text-muted hover:text-panel-text-active"
+    );
+
   return (
     <section className="flex h-full min-h-[380px] flex-col overflow-hidden bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 md:min-h-0">
       <PanelTabs
-        className="px-3"
+        className="px-3 md:px-4"
         onSelect={onChartTabChange}
         selected={chartTab}
         tabs={[
-          { id: "price", label: "Price chart" },
-          { id: "depth", label: "Depth chart" },
+          { id: "price", label: "Price" },
+          { id: "depth", label: "Depth" },
         ]}
         trailing={
           chartTab === "price" ? (
-            <div className="flex shrink-0 items-center gap-1 py-1.5">
-              {timeframes.map((timeframe) => (
-                <button
-                  className={cn(
-                    "h-7 cursor-pointer rounded-sm px-2 font-medium text-[12px] transition-colors",
-                    selectedTimeframe === timeframe
-                      ? "bg-toolbar-active-bg text-toolbar-active-fg"
-                      : "text-panel-text-muted hover:bg-input-hover hover:text-panel-text-active"
-                  )}
-                  key={timeframe}
-                  onClick={() => onTimeframeChange(timeframe)}
-                  type="button"
-                >
-                  {CHART_INTERVAL_LABELS[timeframe]}
-                </button>
-              ))}
+            <div className="flex shrink-0 items-center gap-2">
+              <div className="flex items-center bg-segment-bg p-0.5 font-mono ring-1 ring-panel-border">
+                {timeframes.map((timeframe) => (
+                  <button
+                    className={toolbarButton(selectedTimeframe === timeframe)}
+                    key={timeframe}
+                    onClick={() => onTimeframeChange(timeframe)}
+                    type="button"
+                  >
+                    {CHART_INTERVAL_LABELS[timeframe]}
+                  </button>
+                ))}
+              </div>
               <button
+                aria-pressed={indicatorsEnabled}
                 className={cn(
-                  "h-7 cursor-pointer rounded-sm px-2 font-medium text-[12px] transition-colors",
+                  "hidden h-9 cursor-pointer items-center px-3 font-medium text-[12px] ring-1 ring-panel-border transition-colors xl:flex",
                   indicatorsEnabled
                     ? "bg-toolbar-active-bg text-toolbar-active-fg"
-                    : "text-panel-text-muted hover:bg-input-hover hover:text-panel-text-active"
+                    : "bg-panel-bg text-panel-text-active hover:bg-input-hover"
                 )}
                 onClick={onIndicatorsToggle}
+                title="Moving average"
                 type="button"
               >
                 Indicators
+              </button>
+              <button
+                aria-pressed={toolsOpen}
+                className={cn(
+                  "flex h-9 cursor-pointer items-center gap-1.5 px-3 font-medium text-[12px] ring-1 ring-panel-border transition-colors",
+                  toolsOpen
+                    ? "bg-toolbar-active-bg text-toolbar-active-fg"
+                    : "bg-panel-bg text-panel-text-active hover:bg-input-hover"
+                )}
+                onClick={() => setToolsOpen(!toolsOpen)}
+                type="button"
+              >
+                <PencilLine aria-hidden className="size-3.5" />
+                Tools
               </button>
             </div>
           ) : null
@@ -561,13 +584,13 @@ export function SpotChartPanel({
       />
 
       {chartTab === "price" ? (
-        <div className="border-panel-border border-b px-3 py-1.5">
+        <div className="px-3 pb-1 md:px-4">
           <OhlcReadout candle={readoutCandle} units={units} />
         </div>
       ) : null}
 
       <div className="flex min-h-0 flex-1">
-        {chartTab === "price" ? (
+        {chartTab === "price" && toolsOpen ? (
           <div className="flex w-9 shrink-0 flex-col items-center gap-1 overflow-y-auto border-panel-border border-r px-1 py-2">
             {CHART_TOOLS.map((tool) => {
               const Icon = CHART_TOOL_ICONS[tool.id];

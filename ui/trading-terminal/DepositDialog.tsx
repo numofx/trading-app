@@ -1302,6 +1302,7 @@ export function DepositDialog({
   onOpenChange,
   open,
   triggerClassName,
+  triggerTrailing,
   onSelectFundingWallet,
   triggerId,
   walletBalances,
@@ -1350,6 +1351,8 @@ export function DepositDialog({
   onSelectFundingWallet?: (wallet: ConnectedWallet) => void;
   /** Overrides the default inline pill trigger styling, e.g. for the global header toolbar. */
   triggerClassName?: string;
+  /** Shown after the trigger's label: the header's arrow. */
+  triggerTrailing?: React.ReactNode;
   /** Stable DOM id for the trigger so SSR and client markup agree even if hydration re-renders. */
   triggerId?: string;
   /**
@@ -1398,6 +1401,7 @@ export function DepositDialog({
         id={triggerId}
       >
         {withdrawOnly ? "Withdraw" : "Deposit"}
+        {triggerTrailing}
       </Dialog.Trigger>
       <Dialog.Portal>
         {/*

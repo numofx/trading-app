@@ -21,7 +21,7 @@ export function FieldLabel({
   const Tag = htmlFor === undefined ? "span" : "label";
   return (
     <Tag
-      className={cn("text-[11px] text-panel-text-muted", tooltip && "cursor-help", className)}
+      className={cn("text-[12px] text-panel-text-muted", tooltip && "cursor-help", className)}
       htmlFor={htmlFor}
       title={tooltip}
     >

@@ -28,13 +28,13 @@ export function SubmitButton({
   return (
     <button
       className={cn(
-        "h-10 w-full font-semibold text-[13px] transition-colors",
+        "h-11 w-full font-semibold text-[14px] transition-colors",
         disabled && "cursor-not-allowed bg-input-bg text-panel-text-muted",
         !disabled && busy && "cursor-wait opacity-70",
         !(disabled || busy) && "cursor-pointer",
         !disabled && tone === "buy" && "bg-buy text-background hover:bg-buy/90",
         !disabled && tone === "sell" && "bg-sell text-white hover:bg-sell/90",
-        !disabled && tone === "neutral" && "bg-input-bg text-panel-text-active hover:bg-input-hover"
+        !disabled && tone === "neutral" && "bg-primary-bg text-primary-fg hover:bg-primary-hover"
       )}
       disabled={disabled || busy}
       id={id}

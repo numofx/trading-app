@@ -704,14 +704,14 @@ export function OptionChainPanels({ series }: { series: string }) {
   });
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-3 p-3 md:min-h-0 md:flex-row md:overflow-hidden md:px-4">
+    <div className="flex min-w-0 flex-1 flex-col gap-px md:min-h-0 md:flex-row md:overflow-hidden">
       <MarketDocumentTitle
         digits={PREMIUM_DECIMALS}
         pair={`${series} options`}
         price={chain?.forward ?? null}
       />
-      <div className="flex min-w-0 flex-1 flex-col gap-3 md:min-h-0">
-        <div className="flex min-h-0 flex-1 flex-col gap-3 md:flex-row">
+      <div className="flex min-w-0 flex-1 flex-col gap-px md:min-h-0">
+        <div className="flex min-h-0 flex-1 flex-col gap-px md:flex-row">
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <ChainSection
               failed={failed}
@@ -750,7 +750,7 @@ export function OptionChainPanels({ series }: { series: string }) {
           />
         </div>
       </div>
-      <div className="flex w-full shrink-0 flex-col gap-3 md:w-[320px] md:overflow-y-auto">
+      <div className="flex w-full shrink-0 flex-col gap-px bg-panel-bg-muted ring-1 ring-panel-ring md:w-[320px] md:overflow-y-auto">
         {contract === null ? null : (
           <OptionOrderFormPanel
             cash={account?.cash ?? null}

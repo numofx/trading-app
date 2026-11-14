@@ -33,7 +33,7 @@ const ICON_ITEM_CLASSNAME =
 
 /** The shared pill shape, so the connected menu trigger and the connect button stay identical. */
 const WALLET_PILL_CLASSNAME =
-  "inline-flex h-8 cursor-pointer items-center gap-2 rounded-sm bg-[#9BDBF8] px-3 font-medium text-[#111111] text-[13px] outline-none ring-1 ring-black/10 transition-colors hover:bg-[#9BDBF8]/90";
+  "inline-flex h-9 cursor-pointer items-center gap-2 rounded-sm bg-wallet-bg md:h-10 px-3 font-medium text-[13px] text-wallet-fg outline-none ring-1 ring-wallet-ring transition-colors hover:bg-wallet-hover";
 
 export function PrivyWalletButton() {
   const privyAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID?.trim();
@@ -195,7 +195,7 @@ export function WalletMenu({
     <Menu.Root defaultOpen={defaultOpen}>
       <Menu.Trigger className={WALLET_PILL_CLASSNAME}>
         <WalletMark wallet={primaryWallet} />
-        <span>{walletAddress ?? "Wallet Connected"}</span>
+        <span className="font-mono">{walletAddress ?? "Wallet Connected"}</span>
       </Menu.Trigger>
 
       <Menu.Portal>

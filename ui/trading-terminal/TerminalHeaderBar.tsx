@@ -1,6 +1,6 @@
 "use client";
 
-import { Moon, Sun } from "lucide-react";
+import { ArrowRight, Moon, Sun } from "lucide-react";
 import type { ReactNode } from "react";
 import { Fragment, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -32,38 +32,45 @@ function formatChangePercent(value: number | null) {
 }
 
 /**
- * One metric: a muted label over its value. Every metric is exactly these two lines tall, on both
- * markets, so every label shares one baseline and every value another across the header. Nothing
- * goes under a value: a third line (spot's price once carried ₦ per USDC) made that metric taller
- * than its neighbours, and the header's centring then lifted its label above theirs.
+ * One figure in the strip: a muted label over its value, in the mono face. Every figure is these
+ * two lines, so labels share one baseline and values another; the lead figure (the price or the
+ * mark) is set large, and its label carries the unit it is quoted in.
  */
 function HeaderMetric({
   children,
   className,
   label,
+  lead = false,
   tooltip,
+  unit,
 }: {
   children: ReactNode;
-  /** Lets a metric yield its place at narrower widths; merged over the display class. */
+  /** Lets a figure yield its place at narrower widths; merged over the display class. */
   className?: string;
   label: string;
+  lead?: boolean;
   /** A hint on the label, shown on hover like the ticket's. */
   tooltip?: string;
+  unit?: string;
 }) {
   return (
-    <div className={cn("flex flex-col gap-1", className)}>
+    <div className={cn("flex shrink-0 flex-col justify-center gap-1 px-5 first:pl-0", className)}>
       <span
         className={cn(
-          "whitespace-nowrap text-[9px] text-panel-text-muted",
+          "whitespace-nowrap text-[11px] text-panel-text-muted",
           tooltip && "cursor-help"
         )}
         data-metric-label
         title={tooltip}
       >
         {label}
+        {unit === undefined ? null : <span className="opacity-80"> · {unit}</span>}
       </span>
       <span
-        className="flex items-baseline gap-1.5 whitespace-nowrap font-medium text-[11px] text-panel-text-active"
+        className={cn(
+          "flex items-baseline gap-2 whitespace-nowrap font-mono text-panel-text-active",
+          lead ? "font-semibold text-[24px] leading-none" : "text-[13px]"
+        )}
         data-metric-value
       >
         {children}
@@ -90,11 +97,19 @@ export type HeaderMetricItem = {
   tooltip?: string;
   value: string;
   tone: "up" | "down" | "accent" | null;
+  /** The unit the figure is quoted in, shown after the label. */
+  unit?: string;
+  /** "end" sets the figure at the strip's far right. */
+  placement?: "end";
 };
 
 /** The header's Deposit and Withdraw buttons, and their placeholders, share one look. */
 export const HEADER_ACTION_CLASSES =
-  "flex h-8 cursor-pointer items-center whitespace-nowrap rounded-sm bg-input-bg px-3 font-semibold text-[13px] text-panel-text ring-1 ring-panel-border transition-colors hover:bg-input-hover hover:text-panel-text-active disabled:cursor-not-allowed disabled:opacity-60";
+  "flex h-9 cursor-pointer items-center gap-2 whitespace-nowrap rounded-sm bg-panel-bg px-3 font-semibold text-[13px] md:h-10 md:px-4 md:text-[14px] text-panel-text-active ring-1 ring-panel-ring transition-colors hover:bg-input-hover disabled:cursor-not-allowed disabled:opacity-60";
+
+/** The header's Deposit: the primary action, filled. */
+export const HEADER_PRIMARY_ACTION_CLASSES =
+  "flex h-9 cursor-pointer items-center gap-2 whitespace-nowrap rounded-sm bg-primary-bg px-3 font-semibold text-[13px] md:h-10 md:px-4 md:text-[14px] text-primary-fg transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60";
 
 /**
  * Stand-ins for the market's Deposit and Withdraw until its panels publish them, so the action
@@ -104,8 +119,9 @@ export const HEADER_ACTION_CLASSES =
 function HeaderActionPlaceholders() {
   return (
     <div aria-hidden className="flex items-center gap-2" data-placeholder="deposit-withdraw">
-      <button className={HEADER_ACTION_CLASSES} disabled tabIndex={-1} type="button">
+      <button className={HEADER_PRIMARY_ACTION_CLASSES} disabled tabIndex={-1} type="button">
         Deposit
+        <ArrowRight aria-hidden className="size-4" />
       </button>
       <button className={HEADER_ACTION_CLASSES} disabled tabIndex={-1} type="button">
         Withdraw
@@ -119,32 +135,34 @@ function HeaderMetricSkeleton({ className }: { className?: string }) {
   return (
     // The real metric's type sizes on a blank line each, so the bars sit exactly where the label
     // and value will: no header row moves when the figures arrive.
-    <div aria-hidden className={cn("flex flex-col gap-1", className)}>
-      <span className="w-10 animate-pulse rounded-sm bg-input-bg text-[9px]">{"\u00a0"}</span>
-      <span className="w-16 animate-pulse rounded-sm bg-input-bg font-medium text-[11px]">
-        {"\u00a0"}
-      </span>
+    <div aria-hidden className={cn("flex shrink-0 flex-col gap-1 px-5 first:pl-0", className)}>
+      <span className="w-12 animate-pulse rounded-sm bg-input-bg text-[11px]">{"\u00a0"}</span>
+      <span className="w-20 animate-pulse rounded-sm bg-input-bg text-[13px]">{"\u00a0"}</span>
     </div>
   );
 }
 
+/** The strip's frame: one row of figures, ruled apart, scrolling sideways rather than wrapping. */
+const STRIP_CLASSES =
+  "hidden min-h-14 shrink-0 items-stretch divide-x divide-panel-border overflow-x-auto bg-panel-bg px-4 py-2.5 ring-1 ring-panel-ring md:flex md:px-6";
+
 /**
- * The figures beside the selector: the spot set (price, volume, high, low), or the perp's own
- * list, or placeholders until the selected market's panels publish. Hidden rather than wrapped
- * below `lg`: the balances hold the right of the row at every width now, and between `md` and
- * `lg` the actions need what is left more than the figures do.
+ * The market's figures, in a strip of their own at the top of the terminal's frame: the spot set
+ * (price, volume, high, low), or the market's own list (the future's mark, carry and expiry, the
+ * perp's funding), or placeholders until the selected market's panels publish.
  */
-function HeaderMetrics({ publication }: { publication: TerminalHeaderPublication | null }) {
+export function TerminalMetricsStrip({
+  publication,
+}: {
+  publication: TerminalHeaderPublication | null;
+}) {
   if (publication === null) {
     return (
-      <div
-        aria-busy="true"
-        className="hidden h-9 min-w-0 items-start gap-6 overflow-hidden lg:flex"
-      >
+      <div aria-busy="true" className={STRIP_CLASSES}>
         <HeaderMetricSkeleton />
-        <HeaderMetricSkeleton className="hidden xl:flex" />
-        <HeaderMetricSkeleton className="hidden xl:flex" />
-        <HeaderMetricSkeleton className="hidden xl:flex" />
+        <HeaderMetricSkeleton />
+        <HeaderMetricSkeleton className="hidden sm:flex" />
+        <HeaderMetricSkeleton className="hidden sm:flex" />
       </div>
     );
   }
@@ -154,81 +172,74 @@ function HeaderMetrics({ publication }: { publication: TerminalHeaderPublication
   const provisional = seeded ? { "aria-busy": true, "data-seeded": true } : {};
   if (metrics === undefined) {
     return (
-      <div
-        className={cn(
-          // One height for both markets' rows, metrics aligned at the top, so labels and values sit
-          // at the same heights whichever market is on screen.
-          "hidden h-9 min-w-0 items-start gap-6 overflow-hidden lg:flex",
-          seeded && "opacity-50"
-        )}
-        {...provisional}
-      >
-        <HeaderMetric label="Price">
+      <div className={cn(STRIP_CLASSES, seeded && "opacity-50")} {...provisional}>
+        <HeaderMetric label="Price" lead>
           {formatDollarPrice(price)}
-          <span className={cn("text-[10px]", getChangeClassName(changePercent24h))}>
+          <span className={cn("font-normal text-[12px]", getChangeClassName(changePercent24h))}>
             {formatChangePercent(changePercent24h)}
           </span>
         </HeaderMetric>
-        {/*
-         * Volume stands down below `xl` for the same reason the extremes stand down below `2xl`:
-         * measured at 1024px, Price, volume and a claim-noted balance pair overrun the row by
-         * ~40px, and the metrics box is the one that gives — clipping "24h Volume 1" mid-figure.
-         * Price is the figure worth keeping at every width the metrics show at all.
-         */}
-        <HeaderMetric className="hidden xl:flex" label="24h Volume">
-          {publication.volume24hLabel}
-        </HeaderMetric>
-        {/*
-         * The extremes stood down below `2xl` to pay for the account balance pair that used to sit
-         * beside the deposit control — roughly 150px, more once a claim note was on it. That pair
-         * now lives in the balance summary under the order ticket, so they come back up alongside
-         * the volume metric. Gated on width alone, never on the wallet: tying header structure to
-         * `hasWallet` rearranged the row at the moment of connecting, which reads as a glitch.
-         */}
-        <HeaderMetric className="hidden xl:flex" label="24h High">
-          {formatDollarPrice(publication.high24h)}
-        </HeaderMetric>
-        <HeaderMetric className="hidden xl:flex" label="24h Low">
-          {formatDollarPrice(publication.low24h)}
-        </HeaderMetric>
+        <HeaderMetric label="24h Volume">{publication.volume24hLabel}</HeaderMetric>
+        <HeaderMetric label="24h High">{formatDollarPrice(publication.high24h)}</HeaderMetric>
+        <HeaderMetric label="24h Low">{formatDollarPrice(publication.low24h)}</HeaderMetric>
       </div>
     );
   }
+  const inline = metrics.filter((metric) => metric.placement !== "end");
+  const trailing = metrics.filter((metric) => metric.placement === "end");
   return (
-    /*
-     * As many figures as the width holds, whole: the row wraps, and the wrap is clipped to one
-     * row's height with a gap tall enough that nothing of a second row shows. Breakpoints
-     * could not say how many fit, since the wallet button's width is not knowable in advance.
-     */
-    <div
-      className={cn(
-        "hidden h-9 min-w-0 flex-wrap content-start items-start gap-x-4 gap-y-10 overflow-hidden lg:flex",
-        seeded && "opacity-50"
-      )}
-      {...provisional}
-    >
-      {metrics.map((metric) => (
+    <div className={cn(STRIP_CLASSES, "divide-x-0", seeded && "opacity-50")} {...provisional}>
+      <div className="flex items-stretch divide-x divide-panel-border">
+        {inline.map((metric, index) => (
+          <HeaderMetric
+            key={metric.label}
+            label={metric.label}
+            lead={index === 0}
+            tooltip={metric.tooltip}
+            unit={metric.unit}
+          >
+            <MetricValue metric={metric} />
+          </HeaderMetric>
+        ))}
+      </div>
+      {trailing.map((metric) => (
         <HeaderMetric
-          className="shrink-0"
+          className="ml-auto items-end pr-0"
           key={metric.label}
           label={metric.label}
           tooltip={metric.tooltip}
+          unit={metric.unit}
         >
-          <span
-            className={cn(
-              metric.tone === "up" && "text-bid-text",
-              metric.tone === "down" && "text-ask-text",
-              metric.tone === "accent" && "text-accent-text"
-            )}
-          >
-            {metric.value}
-          </span>
+          <MetricValue metric={metric} />
         </HeaderMetric>
       ))}
     </div>
   );
 }
 
+function MetricValue({ metric }: { metric: HeaderMetricItem }) {
+  return (
+    <span
+      className={cn(
+        metric.tone === "up" && "text-bid-text",
+        metric.tone === "down" && "text-ask-text",
+        metric.tone === "accent" && "text-accent-text"
+      )}
+    >
+      {metric.value}
+    </span>
+  );
+}
+
+/**
+ * The terminal's top bar: branding, the market selector and the account actions. The market's
+ * figures sit under it, in `TerminalMetricsStrip`.
+ *
+ * Rendered by the shell, above the market's panels, and never remounted by a market switch. The
+ * Deposit and Withdraw controls are the market's own, published by its panels
+ * (`usePublishTerminalHeader`); until the selected market's panels have published, the action
+ * cluster holds disabled placeholders of the same size.
+ */
 export function TerminalHeaderBar({
   seriesSymbol = null,
   market,
@@ -263,14 +274,9 @@ export function TerminalHeaderBar({
   };
 
   return (
-    // 64px when everything fits on one line (32px controls inside 24px of padding), growing
-    // rather than overflowing when it does not — the wallet button's address makes the right-hand
-    // cluster's extent unknowable, so the row cannot be sized as if it were fixed.
-    //
-    // From `lg`, where the figures show, one fixed height for every market. Sized to its content,
-    // the header once differed between markets (78px on spot, 65px on the perp) and every panel
-    // under it jumped on a switch; a fixed height keeps the grid still whatever the figures hold.
-    <header className="flex min-h-16 shrink-0 flex-wrap items-center gap-3 border-panel-border border-b px-4 py-3 transition-colors duration-300 md:flex-nowrap lg:h-20">
+    // 64px when everything fits on one line, growing rather than overflowing when it does not —
+    // the wallet button's address makes the right-hand cluster's extent unknowable.
+    <header className="flex min-h-16 shrink-0 flex-wrap items-center gap-3 p-3 transition-colors duration-300 md:flex-nowrap md:px-6">
       <SmartImage<string>
         alt="Numo"
         className="h-7 w-24 shrink-0"
@@ -278,9 +284,6 @@ export function TerminalHeaderBar({
         priority
         src={theme === "light" ? "/numo_logo_black.png" : "/numo_logo_white.png"}
       />
-
-      {/* The only rule in the bar: everything right of it belongs to the market, not the app. */}
-      <div className="w-px shrink-0 self-stretch bg-panel-border" />
 
       <MarketSelectDialog
         changePercent24h={publication?.changePercent24h ?? null}
@@ -291,7 +294,7 @@ export function TerminalHeaderBar({
 
       {publication?.maxLeverage == null ? null : (
         <span
-          className="shrink-0 rounded-lg bg-panel-text/20 px-2 py-1 font-medium text-panel-text-active text-sm leading-none"
+          className="shrink-0 rounded-sm bg-input-bg px-2 py-1 font-medium font-mono text-panel-text-active text-sm leading-none ring-1 ring-panel-border"
           title="The most leverage the venue opens a position at"
         >
           {formatLeverage(publication.maxLeverage)}
@@ -299,25 +302,12 @@ export function TerminalHeaderBar({
       )}
 
       {/*
-       * Spacing separates the metrics, not rules — the one divider above marks the app/market
-       * split, and repeating it between every figure would turn the bar into a table. Hidden
-       * rather than wrapped below `lg`: the balances hold the right of the row at every width now,
-       * and between `md` and `lg` the actions need what is left more than the figures do.
+       * Below `md` the cluster may wrap inside itself, as the header around it does on a phone.
+       * From `md` it stays on one line and never shrinks: the wallet button carries an address
+       * whose width is not knowable in advance, and a cluster that wrapped inside itself dropped
+       * that button under the others.
        */}
-      {/*
-       * `overflow-hidden` because every figure in here is `whitespace-nowrap`: squeezed by a wide
-       * balance cluster to its right, the values would otherwise paint straight over it rather
-       * than clip.
-       */}
-      <HeaderMetrics publication={publication} />
-
-      {/*
-       * Below `lg` the cluster may wrap inside itself, as the header around it does on a phone.
-       * From `lg` it stays on one line and never shrinks: the wallet button carries an address whose width is
-       * not knowable in advance, and a cluster that wrapped inside itself dropped that button under
-       * the others. The metrics beside it are what give way, since they clip rather than paint over.
-       */}
-      <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-2 lg:shrink-0 lg:flex-nowrap">
+      <div className="ml-auto flex flex-wrap items-center justify-end gap-2 md:shrink-0 md:flex-nowrap">
         {/* Keyed by market: a control published by one market never keeps its state under another. */}
         {publication?.depositControl == null ? (
           <HeaderActionPlaceholders />
@@ -326,7 +316,7 @@ export function TerminalHeaderBar({
         )}
         <button
           aria-label="Toggle theme"
-          className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full border border-panel-border bg-input-bg text-panel-text-active transition-all duration-300 hover:bg-input-hover"
+          className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-sm bg-panel-bg text-panel-text-active ring-1 ring-panel-ring transition-colors hover:bg-input-hover md:size-10"
           onClick={toggleTheme}
           type="button"
         >

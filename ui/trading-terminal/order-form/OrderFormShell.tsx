@@ -1,7 +1,6 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { PanelTitle } from "@/ui/trading-terminal/PanelTabs";
 
 /**
  * The ticket's frame, shared by spot and the perp: a panel label that only shows beside sibling
@@ -23,18 +22,16 @@ export function OrderFormShell({ children, footer }: { children: ReactNode; foot
        * within the first screenful; on a short viewport (`short`, under 760px) it is dropped too,
        * since its 37px are what the column needs to hold the whole ticket with room to spare.
        */}
-      <PanelTitle className="hidden md:block md:short:hidden">Order form</PanelTitle>
-
       {/* No scroller of its own: the column is the one scroll region, so a squeezed ticket scrolls
           the whole column rather than hiding fields inside an unmarked box. */}
-      <div className="space-y-1 px-3 py-1">{children}</div>
+      <div className="space-y-2 px-4 pt-3 pb-1.5">{children}</div>
 
       {/*
        * Summary and the submit CTA stay pinned so the primary action is never scrolled out of
        * reach: sticky to the column's scrollport, so on a viewport too short for the whole ticket
        * the CTA rides at the bottom of the column instead of sitting below the fold.
        */}
-      <div className="shrink-0 space-y-1.5 border-panel-border border-t bg-panel-bg-muted px-3 pt-1.5 pb-2 md:sticky md:bottom-0 md:z-10">
+      <div className="shrink-0 space-y-2 bg-panel-bg-muted px-4 pt-1 pb-3 md:sticky md:bottom-0 md:z-10">
         {footer}
       </div>
     </section>

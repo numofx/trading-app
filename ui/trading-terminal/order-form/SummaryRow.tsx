@@ -17,11 +17,13 @@ export function SummaryRow({
   value: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-2 text-[12px]">
-      <FieldLabel tooltip={tooltip}>{label}</FieldLabel>
+    <div className="flex items-center justify-between gap-2 border-panel-border border-b py-1.5 text-[12px] last:border-b-0">
+      <FieldLabel className="text-[12px] text-panel-text" tooltip={tooltip}>
+        {label}
+      </FieldLabel>
       <span
         className={cn(
-          "truncate tabular-nums",
+          "truncate font-mono tabular-nums",
           emphasis ? "font-semibold text-[13px] text-panel-text-active" : "text-panel-text"
         )}
       >

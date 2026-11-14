@@ -1,3 +1,4 @@
+import { Box } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import type { ActivityTab, ActivityView } from "@/lib/trading.types";
@@ -97,17 +98,35 @@ export function TradingActivityPanel({
   const gridTemplateColumns = `repeat(${columnCount}, minmax(max-content, 1fr))`;
 
   return (
-    <section className="flex h-full min-h-0 flex-col overflow-hidden bg-panel-bg/72 shadow-[0_24px_80px_var(--panel-shadow)] ring-1 ring-panel-ring transition-colors duration-300">
-      <PanelTabs className="px-4" onSelect={onTabSelect} selected={selectedTab} tabs={tabs} />
+    <section className="flex h-full min-h-0 flex-col overflow-hidden bg-panel-bg ring-1 ring-panel-ring transition-colors duration-300">
+      <PanelTabs
+        className="px-3 md:px-4"
+        onSelect={onTabSelect}
+        selected={selectedTab}
+        tabs={tabs}
+        trailing={
+          <div className="hidden shrink-0 items-center gap-4 text-[12px] lg:flex">
+            {footerLinks.map((link) => (
+              <SmartLink
+                className="text-accent-text underline underline-offset-2 transition-colors hover:text-panel-text-active"
+                href={link.href}
+                key={link.label}
+              >
+                {link.label}
+              </SmartLink>
+            ))}
+          </div>
+        }
+      />
 
-      <div className="min-h-0 flex-1 overflow-auto px-4 pt-1.5 pb-3">
+      <div className="min-h-0 flex-1 overflow-auto px-3 pt-1.5 pb-3 md:px-4">
         {/*
          * One grid for the header and every row: the rows are subgrids of it, so content-sized
          * columns resolve once and the header labels sit over their values. Only the outer
          * wrapper scrolls, as a fallback for viewports narrower than the content.
          */}
         <div className="grid gap-x-3" style={{ gridTemplateColumns }}>
-          <div className="col-span-full grid grid-cols-subgrid px-3 text-[11px] text-panel-text-muted">
+          <div className="col-span-full grid grid-cols-subgrid border-panel-border border-b px-1 pb-2 text-[12px] text-panel-text-muted">
             {activityView.columns.map((column, columnIndex) => (
               <span
                 className={cn(
@@ -122,17 +141,17 @@ export function TradingActivityPanel({
           </div>
 
           {isEmpty ? null : (
-            <div className="col-span-full mt-1.5 grid grid-cols-subgrid overflow-hidden rounded-sm bg-input-bg/50">
+            <div className="col-span-full grid grid-cols-subgrid overflow-hidden">
               {rows.map((row, rowIndex) => (
                 <div
-                  className="col-span-full grid min-h-8 grid-cols-subgrid items-center border-panel-border border-b px-3 py-1 text-[12px] last:border-b-0"
+                  className="col-span-full grid min-h-9 grid-cols-subgrid items-center border-panel-border border-b p-1 text-[12px] last:border-b-0"
                   key={`${row.cells[0]}-${rowIndex}`}
                 >
                   {row.cells.map((cell, cellIndex) => (
                     <span
                       className={cn(
                         "whitespace-nowrap text-panel-text tabular-nums",
-                        cellIndex === 0 && "font-medium text-panel-text-active",
+                        cellIndex === 0 ? "font-medium text-panel-text-active" : "font-mono",
                         isNumericColumn(activityView.columns[cellIndex] ?? "", cellIndex) &&
                           "text-right",
                         cell.startsWith("-") && "text-sell",
@@ -184,19 +203,26 @@ export function TradingActivityPanel({
          * copy stays centred in the visible area rather than in the wider scrollable width.
          */}
         {isEmpty ? (
-          <div className="sticky left-0 mt-2 flex min-h-[96px] flex-col items-center justify-center gap-4 rounded-sm bg-input-bg/50 text-center">
+          <div className="sticky left-0 flex min-h-[96px] flex-col items-center justify-center gap-3 py-4 text-center">
+            <Box
+              aria-hidden
+              className="hidden size-7 text-accent-text opacity-60 md:block"
+              strokeWidth={1.5}
+            />
             <div>
-              <div className="font-medium text-[13px] text-panel-text-active">
+              <div className="font-semibold text-[15px] text-panel-text-active md:text-[17px]">
                 {emptyStateCopy.title}
               </div>
-              <div className="mt-1 text-[11px] text-panel-text-muted">{emptyStateCopy.body}</div>
+              <div className="mx-auto mt-1 max-w-md text-[12px] text-panel-text-muted md:text-[13px]">
+                {emptyStateCopy.body}
+              </div>
             </div>
             {emptyStateCopy.action ?? null}
           </div>
         ) : null}
       </div>
 
-      <div className="flex flex-col gap-2 px-4 pb-3 text-[11px] text-panel-text-muted sm:flex-row sm:items-center sm:justify-end">
+      <div className="flex flex-col gap-2 px-4 pb-3 text-[11px] text-panel-text-muted sm:flex-row sm:items-center sm:justify-end lg:hidden">
         {footerLinks.map((link) => (
           <SmartLink
             className="transition-colors hover:text-panel-text-active"

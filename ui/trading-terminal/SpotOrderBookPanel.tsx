@@ -75,9 +75,9 @@ function LadderSelect({
     <Menu.Root>
       <Menu.Trigger
         aria-label={label}
-        className="flex cursor-pointer items-center gap-1 rounded-sm px-1.5 py-1 font-medium text-[12px] text-panel-text-active transition-colors hover:bg-input-hover"
+        className="flex h-8 min-w-0 cursor-pointer items-center gap-1.5 bg-panel-bg px-2.5 font-mono text-[12px] text-panel-text-active ring-1 ring-panel-border transition-colors hover:bg-input-hover"
       >
-        <span>{options.find((option) => option.value === value)?.label}</span>
+        <span className="truncate">{options.find((option) => option.value === value)?.label}</span>
         <ChevronDown aria-hidden className="size-3.5 shrink-0 text-panel-text-muted" />
       </Menu.Trigger>
 
@@ -119,12 +119,12 @@ function BookLevelRow({
   const width = `${Math.min(100, (row.total / maxTotal) * 100)}%`;
 
   return (
-    <div className="relative mx-2 my-px grid grid-cols-3 rounded-sm px-2 py-1 text-[12px] tabular-nums transition-colors hover:bg-input-hover">
-      {/* The bar grows from the price edge, as a rounded block the price sits inside of. */}
+    <div className="relative mx-3 my-px grid grid-cols-3 px-2 py-1 font-mono text-[12px] tabular-nums transition-colors hover:bg-input-hover">
+      {/* The bar grows from the totals edge, under the figures it measures. */}
       <div
         aria-hidden
         className={cn(
-          "absolute inset-y-0 left-0 rounded-sm",
+          "absolute inset-y-0 right-0",
           side === "ask" ? "bg-ask-depth" : "bg-bid-depth"
         )}
         style={{ width }}
@@ -154,7 +154,7 @@ function BookLevelRow({
  */
 function BookEmptyRungRow() {
   return (
-    <div aria-hidden className="mx-2 my-px px-2 py-1 text-[12px]">
+    <div aria-hidden className="mx-3 my-px px-2 py-1 font-mono text-[12px]">
       &nbsp;
     </div>
   );
@@ -279,11 +279,11 @@ function BookLadder({
        * resting side and only then to the last trade. The arrow beside it is the last trade's
        * direction, which is the one thing here that says which way the market last moved.
        */}
-      <div className="mx-2 my-1 grid grid-cols-3 items-center rounded-sm bg-input-bg px-2 py-1.5 text-[12px] tabular-nums">
+      <div className="mx-3 my-1.5 flex items-center justify-between gap-3 bg-input-bg px-3 py-2 font-mono text-[12px] tabular-nums">
         <span
           className={cn(
-            "flex items-center gap-1 font-semibold",
-            direction === null ? "text-panel-text-muted" : null,
+            "flex shrink-0 items-center gap-1 font-semibold text-[14px]",
+            direction === null ? "text-mid-price" : null,
             direction === "up" ? "text-bid-text" : null,
             direction === "down" ? "text-ask-text" : null
           )}
@@ -292,11 +292,11 @@ function BookLadder({
           {direction === "up" ? <ArrowUp aria-label="Price rose" className="size-3.5" /> : null}
           {direction === "down" ? <ArrowDown aria-label="Price fell" className="size-3.5" /> : null}
         </span>
-        <span className="text-center font-medium text-panel-text">
-          Spread{spread === null ? "" : ` ${formatPrice(spread, maxDecimals)}`}
-        </span>
-        <span className="text-right text-spread-percent">
-          {spreadBps === null ? "—" : `${(spreadBps / 100).toFixed(3)}%`}
+        <span className="flex min-w-0 flex-col items-end text-[11px] text-spread-percent leading-tight">
+          <span className="truncate">
+            spread{spread === null ? " —" : ` ${formatPrice(spread, maxDecimals)}`}
+          </span>
+          {spreadBps === null ? null : <span>{(spreadBps / 100).toFixed(3)}%</span>}
         </span>
       </div>
 
@@ -389,11 +389,11 @@ function TradeTape({ priceDecimals, trades }: { priceDecimals: number; trades: T
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto px-2 py-1">
+    <div className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto px-3 py-1">
       {trades.map((trade) => (
         <div
           className={cn(
-            "grid rounded-sm px-2 py-1 text-[12px] tabular-nums transition-colors",
+            "grid px-2 py-1 font-mono text-[12px] tabular-nums transition-colors",
             TAPE_COLUMNS,
             // Hover deepens the side's tint rather than replacing it with the neutral one.
             trade.side === "buy" ? "bg-bid-bg hover:bg-bid-depth" : "bg-ask-bg hover:bg-ask-depth"
@@ -442,53 +442,51 @@ export function SpotOrderBookPanel({
   return (
     <section className="flex h-full min-h-[380px] flex-col overflow-hidden bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 md:min-h-0">
       <PanelTabs
-        fill
+        className="px-3"
         onSelect={onTabChange}
         selected={tab}
         tabs={[
-          { id: "book", label: "Order book" },
+          { id: "book", label: "Book" },
           { id: "trades", label: "Trades" },
         ]}
+        trailing={
+          isBook ? (
+            <div className="flex min-w-0 items-center">
+              <LadderSelect
+                label="Price grouping"
+                onSelect={(value) => setTick(Number(value))}
+                options={units.priceGroups.map((group) => ({
+                  label: formatTickLabel(group, units.priceDecimals),
+                  value: String(group),
+                }))}
+                value={String(tick)}
+              />
+            </div>
+          ) : null
+        }
       />
-
-      {isBook ? (
-        <div className="flex items-center justify-between px-2 pt-2 pb-1">
-          <LadderSelect
-            label="Price grouping"
-            onSelect={(value) => setTick(Number(value))}
-            options={units.priceGroups.map((group) => ({
-              label: formatTickLabel(group, units.priceDecimals),
-              value: String(group),
-            }))}
-            value={String(tick)}
-          />
-          {/* The unit is a two-way swap, so a single button flips it rather than opening a menu. */}
-          {units.quote === null ? (
-            <span className="px-1.5 py-1 font-medium text-[12px] text-panel-text-active">
-              {units.base}
-            </span>
-          ) : (
-            <button
-              aria-label={`Amount denomination: ${unitLabel}. Switch to ${unit === "base" ? units.quote : units.base}`}
-              className="flex cursor-pointer items-center gap-1.5 rounded-sm px-1.5 py-1 font-medium text-[12px] text-panel-text-active transition-colors hover:bg-input-hover"
-              onClick={() => setUnit((current) => (current === "base" ? "quote" : "base"))}
-              type="button"
-            >
-              {unitLabel}
-              <ArrowLeftRight aria-hidden className="size-3.5 text-panel-text-muted" />
-            </button>
-          )}
-        </div>
-      ) : null}
 
       <div
         className={cn(
-          "grid whitespace-nowrap px-4 pt-1 pb-1.5 text-[11px] text-panel-text-muted",
+          "grid whitespace-nowrap px-5 pt-1 pb-2 text-[11px] text-panel-text-muted",
           isBook ? "grid-cols-3" : TAPE_COLUMNS
         )}
       >
         <span>Price {units.price}</span>
-        <span className="text-right">{isBook ? `Size ${unitLabel}` : `Size ${units.base}`}</span>
+        {/* The unit is a two-way swap, so the column's own label flips it. */}
+        {isBook && units.quote !== null ? (
+          <button
+            aria-label={`Amount denomination: ${unitLabel}. Switch to ${unit === "base" ? units.quote : units.base}`}
+            className="flex cursor-pointer items-center justify-end gap-1 text-right transition-colors hover:text-panel-text-active"
+            onClick={() => setUnit((current) => (current === "base" ? "quote" : "base"))}
+            type="button"
+          >
+            Size {unitLabel}
+            <ArrowLeftRight aria-hidden className="size-3" />
+          </button>
+        ) : (
+          <span className="text-right">{isBook ? `Size ${unitLabel}` : `Size ${units.base}`}</span>
+        )}
         <span className="text-right">{isBook ? `Total ${unitLabel}` : "Time"}</span>
       </div>
 

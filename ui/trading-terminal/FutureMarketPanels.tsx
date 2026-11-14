@@ -2,6 +2,7 @@
 
 import type { ConnectedWallet } from "@privy-io/react-auth";
 import { Duration } from "effect";
+import { ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
 import type { ReactNode } from "react";
@@ -547,7 +548,8 @@ function buildEmptyState(
   market: FutureMarket | null,
   subaccountId: string | null,
   bottomTab: FutureBottomTab,
-  signedHistoryEmptyState: { action?: ReactNode; body: string; title: string } | undefined
+  signedHistoryEmptyState: { action?: ReactNode; body: string; title: string } | undefined,
+  onDeposit: () => void
 ) {
   if (signedHistoryEmptyState !== undefined) {
     return signedHistoryEmptyState;
@@ -560,11 +562,21 @@ function buildEmptyState(
   }
   if (subaccountId === null) {
     return {
+      action: (
+        <button
+          className="flex h-10 cursor-pointer items-center gap-2 bg-primary-bg px-5 font-semibold text-[14px] text-primary-fg transition-colors hover:bg-primary-hover"
+          onClick={onDeposit}
+          type="button"
+        >
+          Deposit USDC
+          <ArrowRight aria-hidden className="size-4" />
+        </button>
+      ),
       body:
         market.state.terms === "american"
           ? `${market.symbol} trades from its own account under the futures engine, margined in USDC. Deposit USDC to open it.`
           : "Spot and the future trade from one account. Deposit USDC to open it.",
-      title: "No trading account",
+      title: "No trading account yet",
     };
   }
   if (bottomTab === "positions") {
@@ -993,7 +1005,13 @@ export function FutureMarketPanels({
               symbol,
               walletAddress: primaryWallet?.address ?? null,
             })}
-            emptyState={buildEmptyState(market, subaccountId, bottomTab, signedHistory.emptyState)}
+            emptyState={buildEmptyState(
+              market,
+              subaccountId,
+              bottomTab,
+              signedHistory.emptyState,
+              () => transfer.openDeposit("USDC")
+            )}
             footerLinks={FOOTER_LINKS}
             isSignedIn={isSignedIn}
             onTabSelect={(tab) => setBottomTab(tab as FutureBottomTab)}

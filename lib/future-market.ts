@@ -868,10 +868,46 @@ function formatOpenInterestUsd(value: number | null) {
   return value === 0 ? "$0" : formatCompactUsd(value);
 }
 
+/** Whole days left to a series' expiry, counting a part day as one; null once it has expired or settled. */
+export function futureDaysLeft(
+  state: Pick<FutureState, "expiryMs" | "settled"> | null,
+  nowMs: number
+) {
+  if (state === null || state.settled) {
+    return null;
+  }
+  const days = (state.expiryMs - nowMs) / Duration.toMillis("1 day");
+  return days > 0 ? Math.ceil(days) : null;
+}
+
+const EXPIRY_DATE = new Intl.DateTimeFormat("en-US", {
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+  year: "numeric",
+});
+
+const EXPIRY_TIME = new Intl.DateTimeFormat("en-US", {
+  day: "numeric",
+  hour: "2-digit",
+  hourCycle: "h23",
+  minute: "2-digit",
+  month: "short",
+  timeZone: "UTC",
+});
+
+/** An annualized rate to one decimal, signed only when negative ("11.1%", "-9.2%"). */
+function formatAnnualised(rate: number | null) {
+  if (rate === null || !Number.isFinite(rate)) {
+    return "—";
+  }
+  return `${(rate * 100).toFixed(1)}%`;
+}
+
 /**
- * The future's header figures, in order: mark (with how it is set), index, basis in forward points
- * and percent, the basis annualized, and open interest at its USDC notional. Prices are in the
- * series' own terms.
+ * The future's header figures, in order: mark (with how it is set), index, the carry to expiry
+ * (mark over index, as a percent), that carry annualized, the days left, open interest at its USDC
+ * notional, and the expiry date, set apart at the end. Prices are in the series' own terms.
  */
 export function buildFutureHeaderMetrics({
   markSource,
@@ -887,6 +923,7 @@ export function buildFutureHeaderMetrics({
 }): PerpHeaderMetric[] {
   const basis = futureBasis(state);
   const apr = futureBasisApr(state, nowMs);
+  const daysLeft = futureDaysLeft(state, nowMs);
   const digits = state?.priceDecimals ?? V1_PRICE_DECIMALS;
   const american = state?.terms === "american";
   return [
@@ -894,7 +931,8 @@ export function buildFutureHeaderMetrics({
       label: "Mark",
       tone: null,
       tooltip: markTooltip(markSource, state),
-      value: formatHeaderPrice(state?.markPrice ?? null, digits, american),
+      unit: state?.priceUnit,
+      value: formatFuturePrice(state?.markPrice ?? null, digits),
     },
     {
       label: "Index",
@@ -902,28 +940,47 @@ export function buildFutureHeaderMetrics({
       tooltip: american
         ? `The ${state.baseSymbol} reference in ${state.priceUnit}; the series settles at its average over the last hour`
         : "The NGN/USD reference in cNGN per USDC; the series settles at its average over the last hour",
-      value: formatHeaderPrice(state?.indexPrice ?? null, digits, american),
+      value: formatFuturePrice(state?.indexPrice ?? null, digits),
     },
     {
-      label: "Basis",
-      tone: toneOf(basis?.points ?? null),
-      tooltip: "Mark − Index. Positive when the future trades above spot.",
-      value: formatBasis(basis, digits, american),
+      label: "Carry to expiry",
+      tone: toneOf(basis?.premium ?? null),
+      tooltip:
+        basis === null
+          ? "Mark over index: positive when the future trades above spot."
+          : `Mark over index: positive when the future trades above spot. In forward points, ${formatBasis(basis, digits, american)}.`,
+      value: basis === null ? "—" : signedPercent(basis.premium * 100, 2),
     },
     {
-      label: "APR",
+      label: "Annualised",
       tone: null,
       tooltip: american
-        ? `The basis annualized: the USD interest rate less the ${differentialName(state).split("–")[0]} one, as the future implies it.`
+        ? `The carry annualized: the USD interest rate less the ${differentialName(state).split("–")[0]} one, as the future implies it.`
         : "Implied naira-dollar rate differential, annualized.",
-      value: apr === null ? "—" : signedPercent(apr * 100, 2),
+      value: formatAnnualised(apr),
     },
     {
-      label: "Open Interest",
+      label: "Days left",
+      tone: null,
+      tooltip: "Days until the series expires and settles, counting today",
+      value: daysLeft === null ? "—" : String(daysLeft),
+    },
+    {
+      label: "Open interest",
       tone: null,
       tooltip: "Contracts open, one side, at their USDC notional",
       // Nothing open is a figure, not a gap: "$0", where an unread value is a dash.
       value: formatOpenInterestUsd(openInterestUsd),
+    },
+    {
+      label: "Expires",
+      placement: "end",
+      tone: null,
+      tooltip:
+        state === null
+          ? undefined
+          : `Last trade ${EXPIRY_TIME.format(state.lastTradeAtMs)} UTC; settles ${EXPIRY_TIME.format(state.expiryMs)} UTC`,
+      value: state === null ? "—" : EXPIRY_DATE.format(state.expiryMs),
     },
   ];
 }
