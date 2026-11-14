@@ -69,7 +69,7 @@ function HeaderMetric({
       <span
         className={cn(
           "flex items-baseline gap-2 whitespace-nowrap font-mono text-panel-text-active",
-          lead ? "font-semibold text-[24px] leading-none" : "text-[13px]"
+          lead ? "font-semibold text-[18px] leading-none" : "text-[13px]"
         )}
         data-metric-value
       >
