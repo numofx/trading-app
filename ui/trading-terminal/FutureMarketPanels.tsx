@@ -574,7 +574,7 @@ function buildEmptyState(
       ),
       body:
         market.state.terms === "american"
-          ? `${market.symbol} trades from its own account under the futures engine, margined in USDC. Deposit USDC to open it.`
+          ? "Deposit USDC to open it."
           : "Spot and the future trade from one account. Deposit USDC to open it.",
       title: "No trading account yet",
     };
