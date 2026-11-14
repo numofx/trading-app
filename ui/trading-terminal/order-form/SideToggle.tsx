@@ -26,7 +26,7 @@ export function SideToggle<T extends string>({
   selected: T;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-1 bg-segment-bg p-1 ring-1 ring-panel-border">
+    <div className="grid grid-cols-2 gap-1 bg-segment-bg p-1 ring-2 ring-panel-border">
       {options.map((option) => {
         const active = option.value === selected;
         return (

@@ -142,7 +142,7 @@ function ShellHeader({
        * One frame around the figures and the panels, inset from the page: every panel draws a
        * 1px ring and they sit 1px apart, so neighbours share a single rule.
        */}
-      <div className="flex min-w-0 flex-1 flex-col gap-px px-3 pb-3 md:min-h-0 md:px-6 md:pb-4">
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5 px-3 pb-3 md:min-h-0 md:px-6 md:pb-4">
         <TerminalMetricsStrip publication={publication} />
         {children}
       </div>

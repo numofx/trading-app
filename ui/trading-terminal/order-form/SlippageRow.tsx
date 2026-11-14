@@ -57,7 +57,7 @@ export function SlippageRow({
           </>
         ) : (
           <>
-            <span className="flex items-center rounded-sm bg-input-bg px-1 ring-1 ring-panel-border">
+            <span className="flex items-center bg-input-bg px-1 ring-2 ring-panel-border">
               <input
                 aria-label="Max slippage, percent"
                 autoFocus

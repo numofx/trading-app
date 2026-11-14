@@ -526,7 +526,7 @@ export function SpotChartPanel({
     );
 
   return (
-    <section className="flex h-full min-h-[380px] flex-col overflow-hidden bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 md:min-h-0">
+    <section className="flex h-full min-h-[380px] flex-col overflow-hidden bg-panel-bg-muted ring-2 ring-panel-ring transition-colors duration-300 md:min-h-0">
       <PanelTabs
         className="px-3 md:px-4"
         onSelect={onChartTabChange}
@@ -538,7 +538,7 @@ export function SpotChartPanel({
         trailing={
           chartTab === "price" ? (
             <div className="flex shrink-0 items-center gap-2">
-              <div className="flex items-center bg-segment-bg p-0.5 font-mono ring-1 ring-panel-border">
+              <div className="flex items-center bg-segment-bg p-0.5 font-mono ring-2 ring-panel-border">
                 {timeframes.map((timeframe) => (
                   <button
                     className={toolbarButton(selectedTimeframe === timeframe)}
@@ -553,7 +553,7 @@ export function SpotChartPanel({
               <button
                 aria-pressed={indicatorsEnabled}
                 className={cn(
-                  "hidden h-9 cursor-pointer items-center px-3 font-medium text-[12px] ring-1 ring-panel-border transition-colors xl:flex",
+                  "hidden h-9 cursor-pointer items-center px-3 font-medium text-[12px] ring-2 ring-panel-border transition-colors xl:flex",
                   indicatorsEnabled
                     ? "bg-toolbar-active-bg text-toolbar-active-fg"
                     : "bg-panel-bg text-panel-text-active hover:bg-input-hover"
@@ -567,7 +567,7 @@ export function SpotChartPanel({
               <button
                 aria-pressed={toolsOpen}
                 className={cn(
-                  "flex h-9 cursor-pointer items-center gap-1.5 px-3 font-medium text-[12px] ring-1 ring-panel-border transition-colors",
+                  "flex h-9 cursor-pointer items-center gap-1.5 px-3 font-medium text-[12px] ring-2 ring-panel-border transition-colors",
                   toolsOpen
                     ? "bg-toolbar-active-bg text-toolbar-active-fg"
                     : "bg-panel-bg text-panel-text-active hover:bg-input-hover"

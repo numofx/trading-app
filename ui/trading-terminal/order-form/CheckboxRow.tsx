@@ -36,7 +36,7 @@ export function CheckboxRow({
     >
       <span
         className={cn(
-          "relative flex size-4 shrink-0 items-center justify-center rounded-[4px] ring-1 ring-panel-border",
+          "relative flex size-4 shrink-0 items-center justify-center ring-2 ring-panel-border",
           checked ? "bg-panel-text-active text-panel-bg" : "bg-input-bg"
         )}
       >

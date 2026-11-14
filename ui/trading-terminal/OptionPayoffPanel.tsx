@@ -214,7 +214,7 @@ export function OptionPayoffPanel({
 }) {
   const ready = !isSell && payoff !== null && cost !== null && size !== null;
   return (
-    <section className="flex flex-col bg-panel-bg-muted ring-1 ring-panel-ring">
+    <section className="flex flex-col bg-panel-bg-muted ring-2 ring-panel-ring">
       <PanelTitle>Payoff at expiry</PanelTitle>
       {ready ? (
         <div className="space-y-1 px-3 py-2">

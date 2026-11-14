@@ -27,7 +27,7 @@ import { cn } from "@/lib/cn";
  */
 const FRAME_CLASS = "flex min-w-0 flex-1 flex-col md:min-h-0 md:overflow-hidden";
 const GRID_CLASS =
-  "grid grid-cols-1 gap-px md:min-h-0 md:flex-1 md:grid-cols-[minmax(0,1fr)_300px] md:grid-rows-[minmax(0,5fr)_minmax(0,5fr)_minmax(0,3fr)] md:overflow-hidden lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_280px_300px] lg:grid-rows-[minmax(0,7fr)_minmax(0,3fr)] lg:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_320px_340px]";
+  "grid grid-cols-1 gap-0.5 md:min-h-0 md:flex-1 md:grid-cols-[minmax(0,1fr)_300px] md:grid-rows-[minmax(0,5fr)_minmax(0,5fr)_minmax(0,3fr)] md:overflow-hidden lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_280px_300px] lg:grid-rows-[minmax(0,7fr)_minmax(0,3fr)] lg:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_320px_340px]";
 const CHART_CELL = "md:col-start-1 md:row-start-1 md:min-h-0 md:overflow-hidden lg:row-start-1";
 const BOOK_CELL =
   "md:col-start-1 md:row-start-2 md:min-h-0 md:overflow-hidden lg:col-start-2 lg:row-start-1";
@@ -37,7 +37,7 @@ const BOOK_CELL =
  * lg grid places columns explicitly, so order resets there.
  */
 const TICKET_CELL =
-  "order-first flex min-h-[420px] flex-col gap-px bg-panel-bg-muted ring-1 ring-panel-ring md:order-0 md:col-start-2 md:row-span-3 md:row-start-1 md:min-h-0 md:overflow-y-auto lg:col-start-3 lg:row-span-2 lg:row-start-1";
+  "order-first flex min-h-[420px] flex-col gap-0.5 bg-panel-bg-muted ring-2 ring-panel-ring md:order-0 md:col-start-2 md:row-span-3 md:row-start-1 md:min-h-0 md:overflow-y-auto lg:col-start-3 lg:row-span-2 lg:row-start-1";
 const ACTIVITY_CELL =
   "min-h-[200px] md:col-start-1 md:row-start-3 md:min-h-0 lg:col-span-2 lg:col-start-1 lg:row-start-2";
 
@@ -71,7 +71,7 @@ function SkeletonPanel({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        "h-full min-h-[200px] animate-pulse bg-panel-bg-muted ring-1 ring-panel-ring md:min-h-0",
+        "h-full min-h-[200px] animate-pulse bg-panel-bg-muted ring-2 ring-panel-ring md:min-h-0",
         className
       )}
     />

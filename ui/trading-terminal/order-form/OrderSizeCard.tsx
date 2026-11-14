@@ -61,7 +61,7 @@ export function OrderSizeCard({
   const sliderValue = sliderDisabled ? 0 : Math.min(size ?? 0, sliderMax);
   const fillPercent = (sliderValue / sliderMax) * 100;
   return (
-    <div className="space-y-2 bg-input-bg px-3 py-2.5 ring-1 ring-panel-border focus-within:ring-panel-text-muted">
+    <div className="space-y-2 bg-input-bg px-3 py-2.5 ring-2 ring-panel-border focus-within:ring-panel-text-muted">
       <FieldLabel htmlFor={inputId} tooltip={tooltip}>
         Order size
       </FieldLabel>
@@ -77,7 +77,7 @@ export function OrderSizeCard({
         />
         <button
           aria-label={`Size in ${unit}; switch to ${other ?? "the other unit"}`}
-          className="flex shrink-0 cursor-pointer items-center gap-1.5 bg-panel-bg px-2 py-1.5 font-semibold text-[12px] text-panel-text-active ring-1 ring-panel-border transition-colors hover:bg-input-hover disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex shrink-0 cursor-pointer items-center gap-1.5 bg-panel-bg px-2 py-1.5 font-semibold text-[12px] text-panel-text-active ring-2 ring-panel-border transition-colors hover:bg-input-hover disabled:cursor-not-allowed disabled:opacity-50"
           disabled={!canToggleUnit}
           onClick={onToggleUnit}
           title={
@@ -124,7 +124,7 @@ export function OrderSizeCard({
           />
         </div>
         <button
-          className="shrink-0 cursor-pointer bg-panel-bg px-2.5 py-1 font-mono font-semibold text-[11px] text-panel-text-active ring-1 ring-panel-border transition-colors hover:bg-input-hover disabled:cursor-not-allowed disabled:opacity-40"
+          className="shrink-0 cursor-pointer bg-panel-bg px-2.5 py-1 font-mono font-semibold text-[11px] text-panel-text-active ring-2 ring-panel-border transition-colors hover:bg-input-hover disabled:cursor-not-allowed disabled:opacity-40"
           disabled={sliderDisabled}
           onClick={() => max !== null && onSetBase(max)}
           title={maxTitle}

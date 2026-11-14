@@ -21,7 +21,7 @@ export type AccountSummaryRow = {
 };
 
 const ROW_BUTTON_CLASSES =
-  "flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-sm bg-panel-bg text-[15px] text-panel-text-active leading-none ring-1 ring-panel-ring transition-colors hover:bg-input-hover";
+  "flex size-7 shrink-0 cursor-pointer items-center justify-center bg-panel-bg text-[15px] text-panel-text-active leading-none ring-2 ring-panel-ring transition-colors hover:bg-input-hover";
 
 /**
  * What the trading account holds, every leg at once, under the ticket where the order is being
@@ -42,7 +42,7 @@ export function AccountSummary({ rows }: { rows: readonly AccountSummaryRow[] })
   return (
     // Shares the ticket's panel chrome so the two read as one column, and `shrink-0` so a short
     // viewport takes its height out of the ticket's scroll area rather than squeezing these rows.
-    <section className="flex shrink-0 flex-col overflow-clip bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300">
+    <section className="flex shrink-0 flex-col overflow-clip bg-panel-bg-muted ring-2 ring-panel-ring transition-colors duration-300">
       {/* Dropped in the stacked layout for the reason the ticket drops its own: below `md` this
           column is the whole screen, and the label is only telling panels apart from siblings.
           Dropped on a short viewport too, where the column needs the rows more than the label. */}

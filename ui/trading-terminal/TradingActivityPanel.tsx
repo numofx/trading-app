@@ -98,7 +98,7 @@ export function TradingActivityPanel({
   const gridTemplateColumns = `repeat(${columnCount}, minmax(max-content, 1fr))`;
 
   return (
-    <section className="flex h-full min-h-0 flex-col overflow-hidden bg-panel-bg ring-1 ring-panel-ring transition-colors duration-300">
+    <section className="flex h-full min-h-0 flex-col overflow-hidden bg-panel-bg ring-2 ring-panel-ring transition-colors duration-300">
       <PanelTabs
         className="px-3 md:px-4"
         onSelect={onTabSelect}
@@ -177,7 +177,7 @@ export function TradingActivityPanel({
                             badge.tone === "positive" && "bg-buy/15 text-buy",
                             badge.tone === "negative" && "bg-sell/15 text-sell",
                             badge.tone === undefined &&
-                              "bg-input-bg text-panel-text ring-1 ring-panel-border"
+                              "bg-input-bg text-panel-text ring-2 ring-panel-border"
                           )}
                           key={badge.label}
                         >

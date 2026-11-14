@@ -75,7 +75,7 @@ function LadderSelect({
     <Menu.Root>
       <Menu.Trigger
         aria-label={label}
-        className="flex h-8 min-w-0 cursor-pointer items-center gap-1.5 bg-panel-bg px-2.5 font-mono text-[12px] text-panel-text-active ring-1 ring-panel-border transition-colors hover:bg-input-hover"
+        className="flex h-8 min-w-0 cursor-pointer items-center gap-1.5 bg-panel-bg px-2.5 font-mono text-[12px] text-panel-text-active ring-2 ring-panel-border transition-colors hover:bg-input-hover"
       >
         <span className="truncate">{options.find((option) => option.value === value)?.label}</span>
         <ChevronDown aria-hidden className="size-3.5 shrink-0 text-panel-text-muted" />
@@ -440,7 +440,7 @@ export function SpotOrderBookPanel({
   const unitLabel = unit === "quote" && units.quote !== null ? units.quote : units.base;
 
   return (
-    <section className="flex h-full min-h-[380px] flex-col overflow-hidden bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 md:min-h-0">
+    <section className="flex h-full min-h-[380px] flex-col overflow-hidden bg-panel-bg-muted ring-2 ring-panel-ring transition-colors duration-300 md:min-h-0">
       <PanelTabs
         className="px-3"
         onSelect={onTabChange}

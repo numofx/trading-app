@@ -105,11 +105,11 @@ export type HeaderMetricItem = {
 
 /** The header's Deposit and Withdraw buttons, and their placeholders, share one look. */
 export const HEADER_ACTION_CLASSES =
-  "flex h-9 cursor-pointer items-center gap-2 whitespace-nowrap rounded-sm bg-panel-bg px-3 font-semibold text-[13px] md:h-10 md:px-4 md:text-[14px] text-panel-text-active ring-1 ring-panel-ring transition-colors hover:bg-input-hover disabled:cursor-not-allowed disabled:opacity-60";
+  "flex h-9 cursor-pointer items-center gap-2 whitespace-nowrap bg-panel-bg px-3 font-semibold text-[13px] md:h-10 md:px-4 md:text-[14px] text-panel-text-active ring-2 ring-panel-ring transition-colors hover:bg-input-hover disabled:cursor-not-allowed disabled:opacity-60";
 
 /** The header's Deposit: the primary action, filled. */
 export const HEADER_PRIMARY_ACTION_CLASSES =
-  "flex h-9 cursor-pointer items-center gap-2 whitespace-nowrap rounded-sm bg-primary-bg px-3 font-semibold text-[13px] md:h-10 md:px-4 md:text-[14px] text-primary-fg transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60";
+  "flex h-9 cursor-pointer items-center gap-2 whitespace-nowrap bg-primary-bg px-3 font-semibold text-[13px] md:h-10 md:px-4 md:text-[14px] text-primary-fg transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60";
 
 /**
  * Stand-ins for the market's Deposit and Withdraw until its panels publish them, so the action
@@ -144,7 +144,7 @@ function HeaderMetricSkeleton({ className }: { className?: string }) {
 
 /** The strip's frame: one row of figures, ruled apart, scrolling sideways rather than wrapping. */
 const STRIP_CLASSES =
-  "hidden min-h-14 shrink-0 items-stretch divide-x divide-panel-border overflow-x-auto bg-panel-bg px-4 py-2.5 ring-1 ring-panel-ring md:flex md:px-6";
+  "hidden min-h-14 shrink-0 items-stretch divide-x-2 divide-panel-border overflow-x-auto bg-panel-bg px-4 py-2.5 ring-2 ring-panel-ring md:flex md:px-6";
 
 /**
  * The market's figures, in a strip of their own at the top of the terminal's frame: the spot set
@@ -189,7 +189,7 @@ export function TerminalMetricsStrip({
   const trailing = metrics.filter((metric) => metric.placement === "end");
   return (
     <div className={cn(STRIP_CLASSES, "divide-x-0", seeded && "opacity-50")} {...provisional}>
-      <div className="flex items-stretch divide-x divide-panel-border">
+      <div className="flex items-stretch divide-x-2 divide-panel-border">
         {inline.map((metric, index) => (
           <HeaderMetric
             key={metric.label}
@@ -294,7 +294,7 @@ export function TerminalHeaderBar({
 
       {publication?.maxLeverage == null ? null : (
         <span
-          className="shrink-0 rounded-sm bg-input-bg px-2 py-1 font-medium font-mono text-panel-text-active text-sm leading-none ring-1 ring-panel-border"
+          className="shrink-0 bg-input-bg px-2 py-1 font-medium font-mono text-panel-text-active text-sm leading-none ring-2 ring-panel-border"
           title="The most leverage the venue opens a position at"
         >
           {formatLeverage(publication.maxLeverage)}
@@ -316,7 +316,7 @@ export function TerminalHeaderBar({
         )}
         <button
           aria-label="Toggle theme"
-          className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-sm bg-panel-bg text-panel-text-active ring-1 ring-panel-ring transition-colors hover:bg-input-hover md:size-10"
+          className="flex size-9 shrink-0 cursor-pointer items-center justify-center bg-panel-bg text-panel-text-active ring-2 ring-panel-ring transition-colors hover:bg-input-hover md:size-10"
           onClick={toggleTheme}
           type="button"
         >

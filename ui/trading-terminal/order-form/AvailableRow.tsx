@@ -27,7 +27,7 @@ export function AvailableRow({
         <span className="truncate font-medium text-panel-text tabular-nums">{value}</span>
         <button
           aria-label={depositLabel}
-          className="flex size-4 cursor-pointer items-center justify-center rounded-full bg-input-bg text-[12px] text-panel-text-muted leading-none ring-1 ring-panel-border transition-colors hover:text-panel-text-active"
+          className="flex size-4 cursor-pointer items-center justify-center rounded-full bg-input-bg text-[12px] text-panel-text-muted leading-none ring-2 ring-panel-border transition-colors hover:text-panel-text-active"
           onClick={onDeposit}
           type="button"
         >

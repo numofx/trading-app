@@ -44,7 +44,7 @@ export function PanelTabs<T extends string>({
         className={cn(
           // Tabs give way last: a trailing control squeezed first keeps every tab on screen.
           fill ? "grid min-w-0 flex-1" : "flex min-w-0 shrink-[0.1] overflow-x-auto",
-          compact ? "gap-1" : "gap-0.5 bg-segment-bg p-0.5 ring-1 ring-panel-border"
+          compact ? "gap-1" : "gap-0.5 bg-segment-bg p-0.5 ring-2 ring-panel-border"
         )}
         style={fill ? { gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` } : undefined}
       >
@@ -57,7 +57,7 @@ export function PanelTabs<T extends string>({
                 "shrink-0 cursor-pointer whitespace-nowrap font-medium text-[13px] transition-colors",
                 compact ? "h-7 px-3" : "h-8 px-3.5",
                 active
-                  ? "bg-segment-active-bg text-panel-text-active shadow-[0_1px_2px_var(--panel-shadow)] ring-1 ring-panel-ring"
+                  ? "bg-segment-active-bg text-panel-text-active shadow-[0_1px_2px_var(--panel-shadow)] ring-2 ring-panel-ring"
                   : "text-panel-text-muted hover:text-panel-text-active"
               )}
               key={tab.id}

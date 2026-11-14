@@ -458,11 +458,11 @@ export function MarketSelectDialog({
     <Dialog.Root onOpenChange={handleOpenChange} open={open}>
       {/* Stable id: auto-generated useId values can shift when async state (e.g. Privy init) races hydration. */}
       <Dialog.Trigger
-        className="flex h-9 shrink-0 cursor-pointer items-center gap-2.5 rounded-sm bg-panel-bg px-2.5 outline-none ring-1 ring-panel-ring transition-colors hover:bg-input-hover focus-visible:ring-2 focus-visible:ring-panel-text-muted md:h-11 md:px-3"
+        className="flex h-9 shrink-0 cursor-pointer items-center gap-2.5 bg-panel-bg px-2.5 outline-none ring-2 ring-panel-ring transition-colors hover:bg-input-hover focus-visible:ring-2 focus-visible:ring-panel-text-muted md:h-11 md:px-3"
         id="spot-ticker-market-trigger"
       >
         <MarketIdentity symbol={selected.symbol} />
-        <span className="hidden rounded-[2px] bg-accent-text/15 px-1.5 py-0.5 font-mono font-semibold text-[10px] text-accent-text uppercase tracking-[0.12em] sm:inline">
+        <span className="hidden bg-accent-text/15 px-1.5 py-0.5 font-mono font-semibold text-[10px] text-accent-text uppercase tracking-[0.12em] sm:inline">
           {KIND_BADGES[selected.kind]}
         </span>
         <ChevronDown

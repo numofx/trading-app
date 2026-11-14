@@ -15,7 +15,7 @@ import type { ReactNode } from "react";
  */
 export function OrderFormShell({ children, footer }: { children: ReactNode; footer: ReactNode }) {
   return (
-    <section className="flex flex-col overflow-clip bg-panel-bg-muted ring-1 ring-panel-ring transition-colors duration-300 md:min-h-fit">
+    <section className="flex flex-col overflow-clip bg-panel-bg-muted ring-2 ring-panel-ring transition-colors duration-300 md:min-h-fit">
       {/*
        * The panel label only earns its space next to sibling panels. In the stacked sub-md layout
        * this is the only form on screen, so the row is dropped there to keep the submit button
@@ -24,7 +24,7 @@ export function OrderFormShell({ children, footer }: { children: ReactNode; foot
        */}
       {/* No scroller of its own: the column is the one scroll region, so a squeezed ticket scrolls
           the whole column rather than hiding fields inside an unmarked box. */}
-      <div className="space-y-2 px-4 pt-3 pb-1.5">{children}</div>
+      <div className="space-y-2 px-4 pt-2.5 pb-1.5">{children}</div>
 
       {/*
        * Summary and the submit CTA stay pinned so the primary action is never scrolled out of
