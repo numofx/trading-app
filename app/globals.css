@@ -91,48 +91,48 @@
 }
 
 .light {
-  /* Warm paper: a cream page, panels a step lighter, tan rules and near-black ink. Figures are
+  /* Greige paper: a muted beige page, near-white panels, taupe rules and near-black ink. Figures are
      set in the mono face; the one filled control on a screen is the dark primary button. */
-  --background: #fdf9f1;
-  --foreground: #2a231c;
+  --background: #fbfaf7;
+  --foreground: #26231f;
 
-  --terminal-bg: #f2e8d8;
-  --panel-bg: #fdf9f1;
-  --panel-bg-muted: #fdf9f1;
-  --panel-bg-darker: #f5eee2;
-  --menu-surface: #fffcf6;
-  --panel-ring: #ddd0bb;
-  --panel-border: #e6dbc9;
-  --panel-shadow: rgba(60, 45, 25, 0.08);
+  --terminal-bg: #f3efe9;
+  --panel-bg: #fbfaf7;
+  --panel-bg-muted: #fbfaf7;
+  --panel-bg-darker: #f3f0eb;
+  --menu-surface: #ffffff;
+  --panel-ring: #ddd7cd;
+  --panel-border: #e7e2da;
+  --panel-shadow: rgba(40, 36, 30, 0.07);
 
-  --panel-text: #2a231c;
-  --panel-text-muted: #6b6157;
-  --panel-text-active: #1c1712;
+  --panel-text: #26231f;
+  --panel-text-muted: #6f6a63;
+  --panel-text-active: #1a1815;
 
-  --dialog-bg: #fdf9f1;
+  --dialog-bg: #fbfaf7;
 
   --source-badge: #3d5f8f;
   --source-badge-fg: #ffffff;
 
-  --input-bg: #f3ebde;
-  --input-border: #ddd0bb;
-  --input-hover: #ebe0cd;
+  --input-bg: #f2eee8;
+  --input-border: #ddd7cd;
+  --input-hover: #ebe6de;
 
-  --toolbar-active-bg: #1c1712;
-  --toolbar-active-fg: #fdf9f1;
-  --toolbar-border: #e6dbc9;
+  --toolbar-active-bg: #1a1815;
+  --toolbar-active-fg: #fbfaf7;
+  --toolbar-border: #e7e2da;
 
-  --segment-bg: #efe5d5;
-  --segment-active-bg: #fffdf8;
+  --segment-bg: #eeeae3;
+  --segment-active-bg: #ffffff;
 
-  --primary-bg: #1c1712;
-  --primary-fg: #fdf9f1;
-  --primary-hover: #362d24;
+  --primary-bg: #1a1815;
+  --primary-fg: #fbfaf7;
+  --primary-hover: #34312c;
 
-  --wallet-bg: #fdf9f1;
-  --wallet-fg: #1c1712;
-  --wallet-ring: #ddd0bb;
-  --wallet-hover: #f3ebde;
+  --wallet-bg: #fbfaf7;
+  --wallet-fg: #1a1815;
+  --wallet-ring: #ddd7cd;
+  --wallet-hover: #f2eee8;
 
   --buy: #4b6b3a;
   --sell: #b4532a;
@@ -147,13 +147,13 @@
   --bid-label: var(--buy);
   --ask-depth: color-mix(in srgb, var(--sell) 14%, transparent);
   --bid-depth: color-mix(in srgb, var(--buy) 12%, transparent);
-  --mid-price: #1c1712;
-  --spread-percent: #6b6157;
+  --mid-price: #1a1815;
+  --spread-percent: #6f6a63;
 
-  --chart-curve: #1c1712;
+  --chart-curve: #1a1815;
   --chart-grid-stroke: rgba(28, 23, 18, 0.14);
   --chart-axis-stroke: rgba(28, 23, 18, 0.3);
-  --chart-label-fill: #3a3229;
+  --chart-label-fill: #3d3a35;
   --chart-area-stop-0: rgba(28, 23, 18, 0.12);
   --chart-area-stop-100: rgba(28, 23, 18, 0.01);
   /* Volume in one slate blue under both sides' candles; unset on dark, where it takes the side's. */
