@@ -396,13 +396,11 @@ function buildActivityView(inputs: ActivityInputs): ActivityView {
  * the plain-text message.
  */
 function buildHistorySigner(primaryWallet: ConnectedWallet | null, walletsReady: boolean) {
-  if (primaryWallet === null) {
+  // None until the wallet is ready, so the login asked for on connect waits for it.
+  if (primaryWallet === null || !walletsReady) {
     return undefined;
   }
   return async (message: string) => {
-    if (!walletsReady) {
-      throw new Error("Connect a wallet to view your order history");
-    }
     const provider = await primaryWallet.getEthereumProvider();
     const walletClient = createWalletClient({ chain: getAppChain(), transport: custom(provider) });
     return walletClient.signMessage({

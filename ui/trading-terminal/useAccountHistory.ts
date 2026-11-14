@@ -80,6 +80,37 @@ function clearStoredFrame(walletAddress: string) {
   }
 }
 
+/** Whether the wallet holds a history login that is still good to send. */
+export function hasUsableHistoryLogin(walletAddress: string) {
+  const frame = readStoredFrame(walletAddress);
+  return frame !== null && isOrderHistoryAuthUsable(frame, walletAddress, nowSeconds());
+}
+
+/**
+ * Asks the wallet to sign the history login and keeps it. One login serves every history, so a
+ * hook that is already showing has to be reloaded to pick it up. Throws when the wallet refuses.
+ */
+export async function signHistoryLogin(
+  walletAddress: string,
+  signMessage: (message: string) => Promise<string>
+) {
+  const draft = createOrderHistoryAuthDraft({
+    address: walletAddress,
+    nonce: crypto.randomUUID(),
+    nowSeconds: nowSeconds(),
+  });
+  const signature = await signMessage(
+    buildOrderHistoryAuthMessage({
+      address: draft.address,
+      domain: getMarketsAuthDomain(),
+      expiry: draft.expiry,
+      issuedAt: draft.issued_at,
+      nonce: draft.nonce,
+    })
+  );
+  writeStoredFrame(walletAddress, { ...draft, signature });
+}
+
 type FetchResult<Row> =
   | { kind: "ok"; rows: Row[] }
   | { kind: "unauthorized" }
@@ -117,8 +148,9 @@ type HistoryOptions = {
 /**
  * One of the connected wallet's private histories, loaded while its tab is open.
  *
- * markets-service wants a signed login. Signing is never started on its own: without a usable cached
- * login the state is `needs-signature` and the tab offers the prompt. The login is the same for every
+ * markets-service wants a signed login. It is asked for once a wallet connects
+ * (`useSignedHistoryTabs`); without a usable cached login the state is `needs-signature`, and the
+ * tab offers the prompt only if that request was declined. The login is the same for every
  * history, so signing on one tab unlocks the others. Every visit to the tab re-reads the list, so
  * activity since shows up without a reload.
  */
@@ -184,21 +216,7 @@ function useSignedHistory<Row>(
 
     setState({ status: "signing" });
     try {
-      const draft = createOrderHistoryAuthDraft({
-        address: walletAddress,
-        nonce: crypto.randomUUID(),
-        nowSeconds: nowSeconds(),
-      });
-      const signature = await signMessage(
-        buildOrderHistoryAuthMessage({
-          address: draft.address,
-          domain: getMarketsAuthDomain(),
-          expiry: draft.expiry,
-          issuedAt: draft.issued_at,
-          nonce: draft.nonce,
-        })
-      );
-      writeStoredFrame(walletAddress, { ...draft, signature });
+      await signHistoryLogin(walletAddress, signMessage);
       setReloadCount((count) => count + 1);
     } catch (error) {
       setState({

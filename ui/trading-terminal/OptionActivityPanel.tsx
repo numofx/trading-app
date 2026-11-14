@@ -30,13 +30,11 @@ type Session = ReturnType<typeof useTerminalSession>;
 /** Signs the history login with personal_sign, or nothing without a wallet. */
 function historySigner(session: Session) {
   const wallet = session.primaryWallet;
-  if (wallet === null) {
+  // None until the wallet is ready, so the login asked for on connect waits for it.
+  if (wallet === null || !session.walletsReady) {
     return undefined;
   }
   return async (message: string) => {
-    if (!session.walletsReady) {
-      throw new Error("Connect a wallet to view your order history");
-    }
     const provider = await wallet.getEthereumProvider();
     const client = createWalletClient({ chain: getAppChain(), transport: custom(provider) });
     return client.signMessage({ account: wallet.address as `0x${string}`, message });

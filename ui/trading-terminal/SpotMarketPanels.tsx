@@ -564,7 +564,10 @@ export function SpotMarketPanels({
         onCancelOrder={handleCancelSpot}
         onDepositRequest={transfer.openDeposit}
         onFormEdit={orderStatus.clear}
-        onSignOrderHistory={handleSignOrderHistory}
+        onSignOrderHistory={
+          // None until the wallet is ready, so the login asked for on connect waits for it.
+          walletsReady && primaryWallet !== null ? handleSignOrderHistory : undefined
+        }
         onSubmitOrder={handleSubmitSpot}
         onWithdrawRequest={transfer.openWithdraw}
         pair={pair}

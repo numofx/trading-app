@@ -380,13 +380,11 @@ async function signAndPostCancel(wallet: ConnectedWallet, nonce: string, ownerAd
 
 /** Signs the order-history login with personal_sign, or nothing without a wallet. */
 function buildHistorySigner(wallet: ConnectedWallet | null, walletsReady: boolean) {
-  if (wallet === null) {
+  // None until the wallet is ready, so the login asked for on connect waits for it.
+  if (wallet === null || !walletsReady) {
     return undefined;
   }
   return async (message: string) => {
-    if (!walletsReady) {
-      throw new Error("Connect a wallet to view your order history");
-    }
     const provider = await wallet.getEthereumProvider();
     const walletClient = createWalletClient({ chain: getAppChain(), transport: custom(provider) });
     return walletClient.signMessage({ account: wallet.address as `0x${string}`, message });

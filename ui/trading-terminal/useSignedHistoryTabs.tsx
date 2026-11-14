@@ -2,6 +2,7 @@
 
 import { ExternalLink } from "lucide-react";
 import type { ReactNode } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import {
   buildOrderHistoryActivityView,
   buildTradeHistoryActivityView,
@@ -10,7 +11,18 @@ import {
 import { getAppChain } from "@/lib/base-public-client";
 import type { AccountFill, OrderHistoryOrder, SignedHistoryState } from "@/lib/order-history.types";
 import type { ActivityView } from "@/lib/trading.types";
-import { useOrderHistory, useTradeHistory } from "@/ui/trading-terminal/useAccountHistory";
+import {
+  hasUsableHistoryLogin,
+  signHistoryLogin,
+  useOrderHistory,
+  useTradeHistory,
+} from "@/ui/trading-terminal/useAccountHistory";
+
+/**
+ * Wallets already asked for the history login in this page's life, so a market switch, which
+ * remounts the terminal's panels, never asks again, and a declined request is not repeated.
+ */
+const askedForHistoryLogin = new Set<string>();
 
 /** The empty-state copy that differs between the two signed history tabs. */
 const SIGNED_HISTORY_COPY = {
@@ -40,11 +52,20 @@ function isSignedHistoryTab(tab: string): tab is SignedHistoryTab {
  */
 function getSignedHistoryEmptyState(
   tab: SignedHistoryTab,
-  state: SignedHistoryState<unknown>
+  state: SignedHistoryState<unknown>,
+  loginPending: boolean
 ): { action: "retry" | "sign" | null; body: string; title: string } | null {
   const copy = SIGNED_HISTORY_COPY[tab];
   switch (state.status) {
     case "needs-signature":
+      if (loginPending) {
+        return {
+          action: null,
+          body: "Approve the signature request in your wallet. It costs no gas and lasts 12 hours.",
+          title: "Waiting for your wallet",
+        };
+      }
+      // Only after the request on connect was declined or failed.
       return {
         action: "sign",
         body: "Your order and trade history are private. Sign a message with your wallet to view them — it costs no gas and lasts 12 hours.",
@@ -80,13 +101,14 @@ type SignedHistoryHandle = {
  */
 function getSignedHistoryPrompt(
   tab: string,
-  histories: Record<SignedHistoryTab, SignedHistoryHandle>
+  histories: Record<SignedHistoryTab, SignedHistoryHandle>,
+  loginPending: boolean
 ) {
   if (!isSignedHistoryTab(tab)) {
     return null;
   }
   const history = histories[tab];
-  const emptyState = getSignedHistoryEmptyState(tab, history.state);
+  const emptyState = getSignedHistoryEmptyState(tab, history.state, loginPending);
   return emptyState === null ? null : { ...emptyState, history };
 }
 
@@ -147,6 +169,55 @@ function getTradeHistoryRowAction(
   };
 }
 
+/**
+ * Asks the wallet for the history login as soon as it connects, so the history tabs open without a
+ * "Sign to view" step. Once per wallet per page: a declined request falls back to the tab's prompt
+ * rather than asking again. True while the request is with the wallet.
+ */
+function useHistoryLoginOnConnect({
+  isSignedIn,
+  onSigned,
+  signMessage,
+  walletAddress,
+}: {
+  isSignedIn: boolean;
+  onSigned: () => void;
+  signMessage?: (message: string) => Promise<string>;
+  walletAddress: string | null;
+}) {
+  const [pending, setPending] = useState(false);
+  const canSign = signMessage !== undefined;
+
+  const requestLogin = useEffectEvent(async (address: string) => {
+    if (signMessage === undefined) {
+      return;
+    }
+    setPending(true);
+    try {
+      await signHistoryLogin(address, signMessage);
+      onSigned();
+    } catch {
+      // Declined or failed: the tabs offer the prompt instead.
+    } finally {
+      setPending(false);
+    }
+  });
+
+  useEffect(() => {
+    if (!(isSignedIn && canSign) || walletAddress === null) {
+      return;
+    }
+    const key = walletAddress.toLowerCase();
+    if (askedForHistoryLogin.has(key) || hasUsableHistoryLogin(walletAddress)) {
+      return;
+    }
+    askedForHistoryLogin.add(key);
+    void requestLogin(walletAddress);
+  }, [isSignedIn, canSign, walletAddress]);
+
+  return pending;
+}
+
 /** One market's symbol, or a test for a terminal that spans several: an option series' strikes. */
 type MarketFilter = string | ((market: string) => boolean);
 
@@ -200,14 +271,28 @@ export function useSignedHistoryTabs({
     signMessage,
     walletAddress,
   });
+  const loginPending = useHistoryLoginOnConnect({
+    isSignedIn,
+    onSigned: () => {
+      orderHistory.reload();
+      tradeHistory.reload();
+    },
+    signMessage,
+    walletAddress,
+  });
+
   const orderState = filterState(orderHistory.state, market);
   const tradeState = filterState(tradeHistory.state, market);
 
   // Both signed tabs share one login, so a signature from either prompt unlocks the other.
-  const prompt = getSignedHistoryPrompt(bottomTab, {
-    "order-history": { ...orderHistory, state: orderState },
-    "trade-history": { ...tradeHistory, state: tradeState },
-  });
+  const prompt = getSignedHistoryPrompt(
+    bottomTab,
+    {
+      "order-history": { ...orderHistory, state: orderState },
+      "trade-history": { ...tradeHistory, state: tradeState },
+    },
+    loginPending
+  );
 
   return {
     emptyState:
