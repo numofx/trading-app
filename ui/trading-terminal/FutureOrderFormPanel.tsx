@@ -954,20 +954,6 @@ export function FutureOrderFormPanel({
     <OrderFormShell
       footer={
         <>
-          <TicketSummary
-            estimate={estimate}
-            expectedPrice={expectedPrice}
-            hasAccount={hasAccount}
-            maxSlippage={maxSlippage}
-            onMaxSlippageChange={edited(setMaxSlippage)}
-            orderType={orderType}
-            position={position}
-            side={side}
-            slippage={slippage}
-            state={state}
-            takerFeeBps={takerFeeBps}
-          />
-
           <SubmitButton
             busy={isSubmitting}
             disabled={!button.enabled}
@@ -996,6 +982,21 @@ export function FutureOrderFormPanel({
             <p className="text-[11px] text-panel-text-muted leading-snug">{statusText}</p>
           )}
         </>
+      }
+      summary={
+        <TicketSummary
+          estimate={estimate}
+          expectedPrice={expectedPrice}
+          hasAccount={hasAccount}
+          maxSlippage={maxSlippage}
+          onMaxSlippageChange={edited(setMaxSlippage)}
+          orderType={orderType}
+          position={position}
+          side={side}
+          slippage={slippage}
+          state={state}
+          takerFeeBps={takerFeeBps}
+        />
       }
     >
       <SideToggle onSelect={edited(setSide)} options={sidesFor(state)} selected={side} />

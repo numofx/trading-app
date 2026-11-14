@@ -475,16 +475,6 @@ export function OptionOrderFormPanel({
       <OrderFormShell
         footer={
           <>
-            <TicketSummary
-              maxSlippage={maxSlippage}
-              onMaxSlippageChange={edited(setMaxSlippage)}
-              orderType={orderType}
-              position={position}
-              row={row}
-              side={side}
-              ticket={ticket}
-            />
-
             <SubmitButton
               busy={isSubmitting}
               disabled={!button.enabled}
@@ -521,6 +511,17 @@ export function OptionOrderFormPanel({
               <p className="text-[11px] text-panel-text-muted leading-snug">{statusText}</p>
             )}
           </>
+        }
+        summary={
+          <TicketSummary
+            maxSlippage={maxSlippage}
+            onMaxSlippageChange={edited(setMaxSlippage)}
+            orderType={orderType}
+            position={position}
+            row={row}
+            side={side}
+            ticket={ticket}
+          />
         }
       >
         <SideToggle onSelect={edited(onSideChange)} options={SIDES} selected={side} />

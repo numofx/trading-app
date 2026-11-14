@@ -13,7 +13,17 @@ import type { ReactNode } from "react";
  * its own content makes the *column* scroll instead. It does not grow either: stretched to the
  * column, the slack opened up as a blank band between the last field and the summary.
  */
-export function OrderFormShell({ children, footer }: { children: ReactNode; footer: ReactNode }) {
+export function OrderFormShell({
+  children,
+  footer,
+  summary,
+}: {
+  children: ReactNode;
+  /** The submit button and what belongs to it: pinned to the bottom of the column. */
+  footer: ReactNode;
+  /** The order's figures under the fields: they scroll with the fields. */
+  summary: ReactNode;
+}) {
   return (
     <section className="flex flex-col overflow-clip bg-panel-bg-muted ring-2 ring-panel-ring transition-colors duration-300 md:min-h-fit">
       {/*
@@ -26,12 +36,15 @@ export function OrderFormShell({ children, footer }: { children: ReactNode; foot
           the whole column rather than hiding fields inside an unmarked box. */}
       <div className="space-y-2 px-4 pt-2.5 pb-1.5">{children}</div>
 
+      <div className="space-y-2 px-4 pt-1 pb-1.5">{summary}</div>
+
       {/*
-       * Summary and the submit CTA stay pinned so the primary action is never scrolled out of
-       * reach: sticky to the column's scrollport, so on a viewport too short for the whole ticket
-       * the CTA rides at the bottom of the column instead of sitting below the fold.
+       * Only the submit CTA is pinned, so the primary action is never scrolled out of reach: sticky
+       * to the column's scrollport, it rides at the bottom of the column on a viewport too short
+       * for the whole ticket. The summary used to be pinned with it, and on a short window its
+       * rows covered the size slider and MAX rather than letting the column scroll to them.
        */}
-      <div className="shrink-0 space-y-2 bg-panel-bg-muted px-4 pt-1 pb-3 md:sticky md:bottom-0 md:z-10">
+      <div className="shrink-0 space-y-2 bg-panel-bg-muted px-4 pt-1.5 pb-3 md:sticky md:bottom-0 md:z-10">
         {footer}
       </div>
     </section>

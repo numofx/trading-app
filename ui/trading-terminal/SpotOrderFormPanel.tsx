@@ -957,6 +957,37 @@ export function SpotOrderFormPanel({
       footer={
         <>
           {/*
+           * Neutral once it stops being an order button, so the trader is not asked to press a
+           * green "Buy"-coloured control that will open a deposit dialog. Stable id: the label
+           * changes with wallet and submission state, so text is not an identifier.
+           */}
+          <SubmitButton
+            busy={isBusy}
+            disabled={submitBlock.disabled && !isBusy}
+            id="spot-submit-cta"
+            onClick={handleSubmit}
+            tone={getSubmitTone({ hasWallet, shortfallCurrency, side: uiSide })}
+          >
+            {submitLabel}
+          </SubmitButton>
+
+          <ConfirmOrderDialog
+            {...confirmation}
+            isSubmitting={isSubmitting}
+            onConfirm={handleConfirm}
+            onOpenChange={setConfirmOpen}
+            open={confirmOpen}
+            orderSide={uiSide}
+          />
+
+          {statusText === null ? null : (
+            <p className="text-[11px] text-panel-text-muted leading-snug">{statusText}</p>
+          )}
+        </>
+      }
+      summary={
+        <>
+          {/*
            * One total, not a Subtotal/Total pair: the displayed quote a buy pays or a sell receives
            * (the USDC on both pairs), with the fee charged on it listed separately. Printing a fee-inclusive total as well cost the Size field its rows on a
            * 700px screen.
@@ -987,34 +1018,6 @@ export function SpotOrderFormPanel({
               Needs {formatBalance(shortfall.needed, shortfall.currency)}; account holds{" "}
               {formatBalance(shortfall.held, shortfall.currency)}.
             </p>
-          )}
-
-          {/*
-           * Neutral once it stops being an order button, so the trader is not asked to press a
-           * green "Buy"-coloured control that will open a deposit dialog. Stable id: the label
-           * changes with wallet and submission state, so text is not an identifier.
-           */}
-          <SubmitButton
-            busy={isBusy}
-            disabled={submitBlock.disabled && !isBusy}
-            id="spot-submit-cta"
-            onClick={handleSubmit}
-            tone={getSubmitTone({ hasWallet, shortfallCurrency, side: uiSide })}
-          >
-            {submitLabel}
-          </SubmitButton>
-
-          <ConfirmOrderDialog
-            {...confirmation}
-            isSubmitting={isSubmitting}
-            onConfirm={handleConfirm}
-            onOpenChange={setConfirmOpen}
-            open={confirmOpen}
-            orderSide={uiSide}
-          />
-
-          {statusText === null ? null : (
-            <p className="text-[11px] text-panel-text-muted leading-snug">{statusText}</p>
           )}
         </>
       }

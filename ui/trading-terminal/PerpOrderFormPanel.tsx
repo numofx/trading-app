@@ -675,6 +675,22 @@ export function PerpOrderFormPanel({
     <OrderFormShell
       footer={
         <>
+          <SubmitButton
+            disabled={!buttonEnabled}
+            id="perp-submit-cta"
+            onClick={handleSubmitClick}
+            tone={buttonTone(buttonInputs)}
+          >
+            {submitLabel(buttonInputs)}
+          </SubmitButton>
+
+          {statusText === null ? null : (
+            <p className="text-[11px] text-panel-text-muted leading-snug">{statusText}</p>
+          )}
+        </>
+      }
+      summary={
+        <>
           <div className="space-y-0.5">
             <SummaryRow
               label="Est. Liquidation Price"
@@ -726,19 +742,6 @@ export function PerpOrderFormPanel({
               {USD.format(availableMargin ?? 0)}.
             </p>
           ) : null}
-
-          <SubmitButton
-            disabled={!buttonEnabled}
-            id="perp-submit-cta"
-            onClick={handleSubmitClick}
-            tone={buttonTone(buttonInputs)}
-          >
-            {submitLabel(buttonInputs)}
-          </SubmitButton>
-
-          {statusText === null ? null : (
-            <p className="text-[11px] text-panel-text-muted leading-snug">{statusText}</p>
-          )}
         </>
       }
     >
