@@ -118,7 +118,16 @@ export function TradingActivityPanel({
         }
       />
 
-      <div className="min-h-0 flex-1 overflow-auto px-3 pt-1.5 pb-3 md:px-4">
+      {/*
+       * Empty, the area is a column: the header row, then the empty state taking the rest of the
+       * height, so it centres in the space under the header rather than hugging it.
+       */}
+      <div
+        className={cn(
+          "min-h-0 flex-1 overflow-auto px-3 pt-1.5 pb-3 md:px-4",
+          isEmpty && "flex flex-col"
+        )}
+      >
         {/*
          * One grid for the header and every row: the rows are subgrids of it, so content-sized
          * columns resolve once and the header labels sit over their values. Only the outer
@@ -206,7 +215,7 @@ export function TradingActivityPanel({
            * One row from `md`: the panel is a short bottom track there (3/10 of the grid), and a
            * stacked logo, title, text and button ran past its bottom edge on a laptop screen.
            */
-          <div className="sticky left-0 flex flex-col items-center justify-center gap-3 py-4 text-center md:flex-row md:gap-4 md:py-2 md:text-left">
+          <div className="sticky left-0 flex min-h-0 flex-1 flex-col items-center justify-center gap-3 py-4 text-center md:flex-row md:gap-4 md:py-2 md:text-left">
             <SmartImage<string>
               alt=""
               className="hidden h-9 w-8 shrink-0 animate-none md:block"
