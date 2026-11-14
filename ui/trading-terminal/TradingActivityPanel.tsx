@@ -1,4 +1,3 @@
-import { Box } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import type { ActivityTab, ActivityView } from "@/lib/trading.types";
@@ -204,10 +203,10 @@ export function TradingActivityPanel({
          */}
         {isEmpty ? (
           <div className="sticky left-0 flex min-h-[96px] flex-col items-center justify-center gap-3 py-4 text-center">
-            <Box
-              aria-hidden
-              className="hidden size-7 text-accent-text opacity-60 md:block"
-              strokeWidth={1.5}
+            <SmartImage<string>
+              alt=""
+              className="hidden h-9 w-8 animate-none md:block"
+              src="/numo_mark.png"
             />
             <div>
               <div className="font-semibold text-[15px] text-panel-text-active md:text-[17px]">
