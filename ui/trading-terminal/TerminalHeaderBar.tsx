@@ -97,10 +97,12 @@ export type HeaderMetricItem = {
   tooltip?: string;
   value: string;
   tone: "up" | "down" | "accent" | null;
+  /** A secondary figure shown muted after the value. */
+  detail?: string;
   /** The unit the figure is quoted in, shown after the label. */
   unit?: string;
-  /** "end" sets the figure at the strip's far right. */
-  placement?: "end";
+  /** "end" sets the figure at the strip's far right; "selector" leaves it out of the strip. */
+  placement?: "end" | "selector";
 };
 
 /** The header's Deposit and Withdraw buttons, and their placeholders, share one look. */
@@ -185,7 +187,7 @@ export function TerminalMetricsStrip({
       </div>
     );
   }
-  const inline = metrics.filter((metric) => metric.placement !== "end");
+  const inline = metrics.filter((metric) => metric.placement === undefined);
   const trailing = metrics.filter((metric) => metric.placement === "end");
   return (
     <div className={cn(STRIP_CLASSES, "divide-x-0", seeded && "opacity-50")} {...provisional}>
@@ -218,7 +220,7 @@ export function TerminalMetricsStrip({
 }
 
 function MetricValue({ metric }: { metric: HeaderMetricItem }) {
-  return (
+  const value = (
     <span
       className={cn(
         metric.tone === "up" && "text-bid-text",
@@ -228,6 +230,15 @@ function MetricValue({ metric }: { metric: HeaderMetricItem }) {
     >
       {metric.value}
     </span>
+  );
+  if (metric.detail === undefined) {
+    return value;
+  }
+  return (
+    <>
+      {value}
+      <span className="text-panel-text-muted">| {metric.detail}</span>
+    </>
   );
 }
 

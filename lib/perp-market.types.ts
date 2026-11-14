@@ -110,10 +110,15 @@ export type PerpHeaderMetric = {
   value: string;
   /** Up and down colour a figure by its sign; accent is the wallet blue, for the funding figures. */
   tone: "up" | "down" | "accent" | null;
+  /** A secondary figure shown muted after the value ("+0.45% | 10.5% ann."). */
+  detail?: string;
   /** The unit the figure is quoted in, shown after the label ("Mark · USDC per cNGN"). */
   unit?: string;
-  /** "end" sets the figure at the far right of the strip, apart from the rest (a series' expiry). */
-  placement?: "end";
+  /**
+   * "end" sets the figure at the far right of the strip, apart from the rest (a series' expiry);
+   * "selector" keeps it out of the strip, for the market selector's columns alone.
+   */
+  placement?: "end" | "selector";
 };
 
 /** The account's margin on the perp stack, whether or not it holds a position. */

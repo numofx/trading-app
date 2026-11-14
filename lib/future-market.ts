@@ -943,6 +943,7 @@ export function buildFutureHeaderMetrics({
       value: formatFuturePrice(state?.indexPrice ?? null, digits),
     },
     {
+      detail: apr === null ? undefined : `${formatAnnualised(apr)} ann.`,
       label: "Carry to expiry",
       tone: toneOf(basis?.premium ?? null),
       tooltip:
@@ -953,6 +954,8 @@ export function buildFutureHeaderMetrics({
     },
     {
       label: "Annualised",
+      // Shown in the strip beside the carry; a column of its own in the selector.
+      placement: "selector",
       tone: null,
       tooltip: american
         ? `The carry annualized: the USD interest rate less the ${differentialName(state).split("–")[0]} one, as the future implies it.`
