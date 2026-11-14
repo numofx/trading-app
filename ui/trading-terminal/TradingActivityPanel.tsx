@@ -202,17 +202,21 @@ export function TradingActivityPanel({
          * copy stays centred in the visible area rather than in the wider scrollable width.
          */}
         {isEmpty ? (
-          <div className="sticky left-0 flex min-h-[96px] flex-col items-center justify-center gap-3 py-4 text-center">
+          /*
+           * One row from `md`: the panel is a short bottom track there (3/10 of the grid), and a
+           * stacked logo, title, text and button ran past its bottom edge on a laptop screen.
+           */
+          <div className="sticky left-0 flex flex-col items-center justify-center gap-3 py-4 text-center md:flex-row md:gap-4 md:py-2 md:text-left">
             <SmartImage<string>
               alt=""
-              className="hidden h-9 w-8 animate-none md:block"
+              className="hidden h-9 w-8 shrink-0 animate-none md:block"
               src="/numo_mark.png"
             />
-            <div>
-              <div className="font-semibold text-[15px] text-panel-text-active md:text-[17px]">
+            <div className="min-w-0">
+              <div className="font-semibold text-[15px] text-panel-text-active">
                 {emptyStateCopy.title}
               </div>
-              <div className="mx-auto mt-1 max-w-md text-[12px] text-panel-text-muted md:text-[13px]">
+              <div className="mt-0.5 max-w-md text-[12px] text-panel-text-muted md:text-[13px]">
                 {emptyStateCopy.body}
               </div>
             </div>
