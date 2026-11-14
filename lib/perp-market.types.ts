@@ -112,7 +112,7 @@ export type PerpHeaderMetric = {
   tone: "up" | "down" | "accent" | null;
   /** A secondary figure shown muted after the value ("+0.45% | 10.5% ann."). */
   detail?: string;
-  /** The unit the figure is quoted in, shown after the label ("Mark · USDC per cNGN"). */
+  /** The unit the figure is quoted in, shown after the label ("Mark | USDC per cNGN"). */
   unit?: string;
   /**
    * "end" sets the figure at the far right of the strip, apart from the rest (a series' expiry);

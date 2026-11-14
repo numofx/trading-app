@@ -64,7 +64,7 @@ function HeaderMetric({
         title={tooltip}
       >
         {label}
-        {unit === undefined ? null : <span className="opacity-80"> · {unit}</span>}
+        {unit === undefined ? null : <span className="opacity-80"> | {unit}</span>}
       </span>
       <span
         className={cn(
