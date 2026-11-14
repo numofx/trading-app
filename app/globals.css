@@ -164,8 +164,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-instrument-sans);
+  --font-mono: var(--font-plex-mono);
 
   --color-terminal-bg: var(--terminal-bg);
   --color-panel-bg: var(--panel-bg);
@@ -232,7 +232,7 @@ body {
     radial-gradient(circle at top, rgba(255, 255, 255, 0.04), transparent 34%),
     var(--terminal-bg);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), sans-serif;
+  font-family: var(--font-instrument-sans), sans-serif;
   /* `dvh`, not `vh`: on mobile browsers `100vh` is taller than the visible viewport, which left
      the body overflowing by the height of the URL bar and gave the page a scroll — and so a
      bounce — even where the layout fit. */
