@@ -549,15 +549,15 @@ function buildEmptyState(
   signedHistoryEmptyState: { action?: ReactNode; body: string; title: string } | undefined,
   onDeposit: () => void
 ) {
-  if (signedHistoryEmptyState !== undefined) {
-    return signedHistoryEmptyState;
-  }
   if (market === null) {
-    return { body: "The future isn't listed on the venue right now.", title: "Nothing yet" };
+    return (
+      signedHistoryEmptyState ?? {
+        body: "The future isn't listed on the venue right now.",
+        title: "Nothing yet",
+      }
+    );
   }
-  if (bottomTab === "order-history" || bottomTab === "trade-history") {
-    return undefined;
-  }
+  // Until the first deposit opens the account, every tab, history included, leads with it.
   if (subaccountId === null) {
     return {
       action: (
@@ -576,6 +576,12 @@ function buildEmptyState(
           : "Spot and the future trade from one account. Deposit USDC to open it.",
       title: "No trading account yet",
     };
+  }
+  if (signedHistoryEmptyState !== undefined) {
+    return signedHistoryEmptyState;
+  }
+  if (bottomTab === "order-history" || bottomTab === "trade-history") {
+    return undefined;
   }
   if (bottomTab === "positions") {
     return {
@@ -902,7 +908,8 @@ export function FutureMarketPanels({
 
   const signedHistory = useSignedHistoryTabs({
     bottomTab,
-    isSignedIn,
+    // No history to sign for before the first deposit opens the account.
+    isSignedIn: isSignedIn && subaccountId !== null,
     market: symbol,
     signMessage: buildHistorySigner(primaryWallet, walletsReady),
     walletAddress: primaryWallet?.address ?? null,

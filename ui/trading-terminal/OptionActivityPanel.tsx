@@ -64,17 +64,18 @@ function emptyStateFor(
   series: string,
   signed: { action?: React.ReactNode; body: string; title: string } | undefined
 ) {
-  if (signed !== undefined) {
-    return signed;
-  }
-  if (tab === "order-history" || tab === "trade-history") {
-    return undefined;
-  }
+  // Until the first deposit opens the account, every tab, history included, leads with it.
   if (!hasAccount) {
     return {
       body: `${series} options trade from your account under the futures engine, margined in USDC. Deposit USDC to open it.`,
       title: "No trading account",
     };
+  }
+  if (signed !== undefined) {
+    return signed;
+  }
+  if (tab === "order-history" || tab === "trade-history") {
+    return undefined;
   }
   return tab === "positions"
     ? {
@@ -118,7 +119,8 @@ export function OptionActivityPanel({
   const units = optionUnitsBySymbol(rows);
   const signedHistory = useSignedHistoryTabs({
     bottomTab: tab,
-    isSignedIn: session.isSignedIn,
+    // No history to sign for before the first deposit opens the account.
+    isSignedIn: session.isSignedIn && hasAccount,
     signMessage: historySigner(session),
     walletAddress: session.primaryWallet?.address ?? null,
     market: (market) => isOfOptionSeries(market, series),
