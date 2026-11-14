@@ -91,7 +91,7 @@ export function MarketIdentity({ compact, symbol }: { compact?: boolean; symbol:
             alt={mark.alt}
             className={cn(
               "animate-none rounded-full bg-input-bg p-0.5 ring-1 ring-panel-border",
-              compact ? "size-5" : "size-6"
+              "size-5"
             )}
             key={mark.alt}
             src={mark.src}
@@ -101,7 +101,7 @@ export function MarketIdentity({ compact, symbol }: { compact?: boolean; symbol:
       <span
         className={cn(
           "truncate font-semibold text-panel-text-active leading-none",
-          compact ? "text-[14px]" : "text-[13px] md:text-[15px]"
+          compact ? "text-[14px]" : "text-[13px]"
         )}
       >
         {symbol}
@@ -458,16 +458,16 @@ export function MarketSelectDialog({
     <Dialog.Root onOpenChange={handleOpenChange} open={open}>
       {/* Stable id: auto-generated useId values can shift when async state (e.g. Privy init) races hydration. */}
       <Dialog.Trigger
-        className="flex h-9 shrink-0 cursor-pointer items-center gap-2.5 bg-panel-bg px-2.5 outline-none ring-2 ring-panel-ring transition-colors hover:bg-input-hover focus-visible:ring-2 focus-visible:ring-panel-text-muted md:h-11 md:px-3"
+        className="flex h-9 shrink-0 cursor-pointer items-center gap-2 bg-panel-bg px-2.5 outline-none ring-2 ring-panel-ring transition-colors hover:bg-input-hover focus-visible:ring-2 focus-visible:ring-panel-text-muted"
         id="spot-ticker-market-trigger"
       >
         <MarketIdentity symbol={selected.symbol} />
-        <span className="hidden bg-accent-text/15 px-1.5 py-0.5 font-mono font-semibold text-[10px] text-accent-text uppercase tracking-[0.12em] sm:inline">
+        <span className="hidden bg-accent-text/15 px-1 py-px font-mono font-semibold text-[9px] text-accent-text uppercase tracking-widest sm:inline">
           {KIND_BADGES[selected.kind]}
         </span>
         <ChevronDown
           className={cn(
-            "size-4 text-panel-text-muted transition-transform duration-200",
+            "size-3.5 text-panel-text-muted transition-transform duration-200",
             open && "rotate-180"
           )}
         />
