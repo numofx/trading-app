@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useEffectEvent, useState } from "react";
@@ -86,6 +87,7 @@ export function SpotTradingTerminal({
   onSubmitOrder,
   onCancelOrder,
   onSignOrderHistory,
+  hasAccount = true,
   hasWallet = false,
   isSignedIn = false,
   isPreparingAccount = false,
@@ -141,6 +143,11 @@ export function SpotTradingTerminal({
    * wallet, so it owns this; absent when there is none to sign with.
    */
   onSignOrderHistory?: (message: string) => Promise<string>;
+  /**
+   * False once the wallet is known to have no trading account: every activity tab then leads with
+   * the deposit that opens one, history included.
+   */
+  hasAccount?: boolean;
   /** Whether a wallet is connected; gates the order ticket's submit CTA. */
   hasWallet?: boolean;
   /** Whether a wallet session is active; gates account-scoped rows in the activity panel. */
@@ -169,7 +176,8 @@ export function SpotTradingTerminal({
   const router = useRouter();
   const signedHistory = useSignedHistoryTabs({
     bottomTab,
-    isSignedIn,
+    // No history to sign for before the first deposit opens the account.
+    isSignedIn: isSignedIn && hasAccount,
     market: pair.symbol,
     signMessage: onSignOrderHistory,
     orderHistoryView: (orders) => buildOrderHistoryActivityView(orders, undefined, pair),
@@ -340,7 +348,24 @@ export function SpotTradingTerminal({
         <>
           <TradingActivityPanel
             activityView={activityView}
-            emptyState={signedHistory.emptyState}
+            emptyState={
+              hasAccount
+                ? signedHistory.emptyState
+                : {
+                    action: (
+                      <button
+                        className="flex h-10 cursor-pointer items-center gap-2 bg-primary-bg px-5 font-semibold text-[14px] text-primary-fg transition-colors hover:bg-primary-hover"
+                        onClick={() => onDepositRequest?.("USDC")}
+                        type="button"
+                      >
+                        Deposit USDC
+                        <ArrowRight aria-hidden className="size-4" />
+                      </button>
+                    ),
+                    body: "Deposit USDC to open it.",
+                    title: "No trading account yet",
+                  }
+            }
             footerLinks={FOOTER_LINKS}
             isSignedIn={isSignedIn}
             onTabSelect={setBottomTab}

@@ -536,6 +536,9 @@ export function SpotMarketPanels({
         candleInterval={candleInterval}
         candles={spotMarket.candles}
         depositControl={transfer.headerControl}
+        // True until the lookup has finished and found none, so a returning trader never sees the
+        // deposit prompt flash while their account resolves.
+        hasAccount={!(isTradingSubaccountResolved && tradingSubaccountId == null)}
         hasWallet={hasWallet}
         isPreparingAccount={isPreparingAccount}
         isSignedIn={isSignedIn}
