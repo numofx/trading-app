@@ -25,6 +25,7 @@ import {
 } from "@/lib/book-take-submission";
 import type { ChartInterval } from "@/lib/chart-interval";
 import { CHART_INTERVALS } from "@/lib/chart-interval";
+import { custodyRouting } from "@/lib/custody-routing";
 import {
   buildFutureBalancesView,
   buildFutureHeaderMetrics,
@@ -35,7 +36,12 @@ import {
   futureSizeUsdc,
   isOutsideFillBand,
 } from "@/lib/future-market";
-import type { FutureAccount, FutureMarket, FutureState } from "@/lib/future-market.types";
+import type {
+  FutureAccount,
+  FutureMarket,
+  FutureStack,
+  FutureState,
+} from "@/lib/future-market.types";
 import { FUTURE_ACTIVITY_VIEWS, FUTURE_BOTTOM_TABS } from "@/lib/future-terminal-config";
 import { expectedTakerPrice } from "@/lib/order-fill";
 import { PERP_DEFAULT_MAX_SLIPPAGE } from "@/lib/perp-market";
@@ -47,6 +53,7 @@ import { getUsdcCngnManagerAddress } from "@/lib/subaccount-deposit-config";
 import { get24hStats } from "@/lib/ticker-stats";
 import type { ActivityTab, ActivityView, TradePrint } from "@/lib/trading.types";
 import { CustodyPanel } from "@/ui/trading-terminal/CustodyPanel";
+import { useCustodyTransfer } from "@/ui/trading-terminal/CustodyTransferDialog";
 import type { FutureOrderRequest } from "@/ui/trading-terminal/FutureOrderFormPanel";
 import { FutureOrderFormPanel } from "@/ui/trading-terminal/FutureOrderFormPanel";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
@@ -685,16 +692,113 @@ async function reportTakeOutcome(
   onAccountChanged(outcome.kind === "filled" ? outcome.blockNumber + 1n : await blockAfterLatest());
 }
 
-/** The account orders trade from: the custodian's once onchain custody is set up, else the Matching account. */
-function tradingSubaccountId(
-  market: FutureMarket | null,
-  custody: ReturnType<typeof useCustodianTrading>,
-  matchingSubaccountId: string | null
-): string | null {
-  if (market === null) {
-    return null;
+/**
+ * Onchain custody (flagged) beside the Matching account: which one is in front (`custodyRouting`), its balances,
+ * and the Deposit/Withdraw every entry point opens. Once custody is in front the futures account is the
+ * custodian's and orders sign with the browser's trading key; a Matching balance left behind is withdraw-only.
+ */
+function useFutureCustody({
+  account,
+  market,
+  primaryWallet,
+  shared,
+  stack,
+}: {
+  account: ReturnType<typeof useFutureTradingAccount>["account"];
+  market: FutureMarket | null;
+  primaryWallet: ConnectedWallet | null;
+  shared: boolean;
+  stack: FutureStack | null;
+}) {
+  const custody = useCustodianTrading(primaryWallet);
+  const listed = market !== null;
+  const matchingId = listed ? account.subaccountId : null;
+  const matchingAccount = useFutureAccount(matchingId, stack);
+  const custodyAccount = useFutureAccount(
+    listed && custody.enabled ? custody.accountId : null,
+    stack
+  );
+  const routing = custodyRouting({
+    custodyAccountId: custody.accountId,
+    custodyEnabled: custody.enabled && listed,
+    matchingPositionUnits: matchingAccount.account?.positionUnits ?? null,
+    matchingSubaccountId: matchingId,
+  });
+  const custodyInFront = routing.viaCustody && custody.accountId !== null;
+  // The Matching account's own Deposit/Withdraw: in front without custody, or withdraw-only behind it.
+  const matchingTransfer = useAccountTransfer({
+    account,
+    accountRows: matchingAccount.rows,
+    depositManager: shared ? undefined : stack?.managerAddress,
+    depositPauseReasons: v2DepositPauses(market),
+    depositNotes: {
+      cNGN: "cNGN counts as margin at half its index value. Variation margin is paid from cNGN first, then USDC.",
+    },
+    onTransferred: (blockNumber) => matchingAccount.refresh(blockNumber),
+  });
+  const custodyTransfer = useCustodyTransfer({
+    accountCashUnits: custodyAccount.account?.cashUnits ?? null,
+    custody,
+    onTransferred: (blockNumber) => custodyAccount.refresh(blockNumber),
+  });
+  const leftover = custodyInFront && (matchingAccount.account?.cashUnits ?? 0n) > 0n;
+  return {
+    custody: { ...custody, inFront: custodyInFront },
+    futureAccount: custodyInFront ? custodyAccount : matchingAccount,
+    /** The Matching account kept in front by its position while custody is on, or null. */
+    heldBackBy: custody.enabled && listed && !routing.viaCustody ? matchingId : null,
+    matchingLeftover: leftover
+      ? { cash: matchingAccount.account?.cash ?? 0, subaccountId: matchingId }
+      : null,
+    matchingTransfer,
+    routing,
+    transfer: routing.viaCustody ? custodyTransfer : matchingTransfer,
+  };
+}
+
+/** The withdraw-only row for a Matching balance left behind once custody is in front. */
+function matchingLeftoverRow(
+  leftover: { cash: number; subaccountId: string | null } | null,
+  onWithdraw: () => void
+): AccountSummaryRow[] {
+  if (leftover === null) {
+    return [];
   }
-  return custody.ready ? custody.accountId : matchingSubaccountId;
+  return [
+    {
+      action: (
+        <button className={ROW_BUTTON_CLASSES} onClick={onWithdraw} type="button">
+          Withdraw
+        </button>
+      ),
+      balance: formatBalance(leftover.cash, "USDC"),
+      id: "matching-usdc",
+      note: `Matching account #${leftover.subaccountId}: withdraw only`,
+      symbol: "USDC",
+    },
+  ];
+}
+
+/**
+ * Before a take from the custody account: says where it is going, or why it cannot go (this browser has no
+ * trading key for the account). True when the take may proceed; always true off custody.
+ */
+function announceCustodyTake(
+  custody: { inFront: boolean; ready: boolean },
+  subaccountId: string,
+  orderStatus: ReturnType<typeof useOrderStatus>
+): boolean {
+  if (!custody.inFront) {
+    return true;
+  }
+  if (!custody.ready) {
+    orderStatus.announce(
+      `This browser has no trading key for account #${subaccountId}: press Enable trading under the ticket.`
+    );
+    return false;
+  }
+  orderStatus.announce(`Submitting to the onchain book from account #${subaccountId}`);
+  return true;
 }
 
 /**
@@ -715,8 +819,8 @@ function useFutureOrderActions({
 }: {
   /** The series' onchain book, from GET /book-depth; null until it has been read. */
   bookMarket: { book: string; marketId: number } | null;
-  /** Onchain custody: when ready, takes go through the custodian, signed by the trading key. */
-  custody: ReturnType<typeof useCustodianTrading>;
+  /** Onchain custody: when its account is in front, takes go through the custodian, signed by the trading key. */
+  custody: ReturnType<typeof useCustodianTrading> & { inFront: boolean };
   market: FutureMarket | null;
   onAccountChanged: (minBlock: bigint | null) => void;
   onNeedsAccount: () => void;
@@ -767,10 +871,10 @@ function useFutureOrderActions({
         side: uiSide,
         units: request.units,
       };
-      if (custody.ready) {
-        orderStatus.announce(`Submitting to the onchain book from account #${subaccountId}`);
+      if (!announceCustodyTake(custody, subaccountId, orderStatus)) {
+        return;
       }
-      const outcome = custody.ready
+      const outcome = custody.inFront
         ? await custody.take(take)
         : await signAndPostBookTake({
             ...take,
@@ -880,21 +984,17 @@ export function FutureMarketPanels({
     primaryWallet?.address ?? null,
     session.account
   );
-  // Onchain custody (flagged): once set up, the futures account is the custodian's and orders sign with the key.
-  const custody = useCustodianTrading(primaryWallet);
-  const subaccountId = tradingSubaccountId(market, custody, account.subaccountId);
-  const futureAccount = useFutureAccount(subaccountId, stack);
+  const {
+    custody,
+    futureAccount,
+    heldBackBy,
+    matchingLeftover,
+    matchingTransfer,
+    routing,
+    transfer,
+  } = useFutureCustody({ account, market, primaryWallet, shared, stack });
+  const subaccountId = routing.subaccountId;
   const orderStatus = useOrderStatus(positionSignature(futureAccount.account));
-  const transfer = useAccountTransfer({
-    account,
-    accountRows: futureAccount.rows,
-    depositManager: shared ? undefined : stack?.managerAddress,
-    depositPauseReasons: v2DepositPauses(market),
-    depositNotes: {
-      cNGN: "cNGN counts as margin at half its index value. Variation margin is paid from cNGN first, then USDC.",
-    },
-    onTransferred: (blockNumber) => futureAccount.refresh(blockNumber),
-  });
 
   const signedHistory = useSignedHistoryTabs({
     bottomTab,
@@ -1087,14 +1187,23 @@ export function FutureMarketPanels({
             />
             {/* The trading account's holdings under the ticket. */}
             <AccountSummary
-              rows={buildAccountRows(
-                futureAccount.account,
-                state,
-                transfer.openDeposit,
-                transfer.openWithdraw
-              )}
+              rows={[
+                ...buildAccountRows(
+                  futureAccount.account,
+                  state,
+                  transfer.openDeposit,
+                  transfer.openWithdraw
+                ),
+                ...matchingLeftoverRow(matchingLeftover, () =>
+                  matchingTransfer.openWithdraw("USDC")
+                ),
+              ]}
             />
-            <CustodyPanel custody={custody} />
+            <CustodyPanel custody={custody} heldBackBy={heldBackBy} />
+            {/* The Matching dialog stays mounted behind custody so its withdraw-only row can open it. */}
+            {routing.viaCustody && matchingLeftover !== null ? (
+              <div className="hidden">{matchingTransfer.headerControl}</div>
+            ) : null}
           </>
         }
       />

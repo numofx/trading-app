@@ -735,7 +735,7 @@ const ACTIVE_MODE_PILL_CLASSES = cn(MODE_PILL_CLASSES, ACTIVE_MODE_FILL);
  * Hidden once a deposit is in flight: switching away mid-approval would bury a pending on-chain
  * step behind a tab, and the step is the one thing the trader still has to act on.
  */
-function ModeTabs({
+export function ModeTabs({
   mode,
   onSelect,
 }: {

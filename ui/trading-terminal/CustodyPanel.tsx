@@ -1,73 +1,60 @@
 "use client";
 
-import { useState } from "react";
-import { parseUnits } from "viem";
 import type { useCustodianTrading } from "@/ui/trading-terminal/useCustodianTrading";
 
 const BUTTON_CLASSES =
   "cursor-pointer bg-panel-bg px-2 py-1 text-[12px] text-panel-text-active ring-2 ring-panel-ring transition-colors hover:bg-input-hover disabled:cursor-default disabled:opacity-50";
 
-function custodyStatus(custody: ReturnType<typeof useCustodianTrading>) {
-  if (custody.accountId === null) {
-    return "Not set up";
+function custodyStatus(custody: ReturnType<typeof useCustodianTrading>, heldBackBy: string | null) {
+  if (heldBackBy !== null) {
+    return `Matching account #${heldBackBy} holds a position: it stays in use until that is closed`;
   }
-  return custody.ready
+  if (custody.accountId === null) {
+    return "Your first deposit opens it";
+  }
+  return custody.hasKey
     ? `Account #${custody.accountId}: orders sign without a prompt`
-    : `Account #${custody.accountId}: set a trading key to trade`;
+    : `Account #${custody.accountId}: enable trading in this browser`;
 }
 
 /**
- * Onchain custody under the ticket (NEXT_PUBLIC_CUSTODIAN_ENABLED only): set it up (an account, a gasless USDC
- * deposit, a trading key), withdraw USDC, or move the whole account to the wallet. The wallet signs each of
- * those; orders are then signed by the trading key, with no prompt.
+ * Onchain custody under the ticket (NEXT_PUBLIC_CUSTODIAN_ENABLED only). Deposits and withdrawals go through the
+ * terminal's own Deposit and Withdraw, which route here; this says which account is in use, sets this browser's
+ * trading key, and moves the whole account to the wallet.
  */
-export function CustodyPanel({ custody }: { custody: ReturnType<typeof useCustodianTrading> }) {
-  const [amount, setAmount] = useState("");
+export function CustodyPanel({
+  custody,
+  heldBackBy,
+}: {
+  custody: ReturnType<typeof useCustodianTrading>;
+  /** The Matching account kept in front because it holds a position, or null. */
+  heldBackBy: string | null;
+}) {
   if (!custody.enabled) {
     return null;
   }
-  const usdc = () => {
-    try {
-      return parseUnits(amount.trim() || "0", 6);
-    } catch {
-      return -1n;
-    }
-  };
   const busy = custody.busy !== null;
   return (
     <section className="flex shrink-0 flex-col gap-2 bg-panel-bg-muted px-4 py-3 text-[12px] ring-2 ring-panel-ring">
-      <div className="flex items-center justify-between">
-        <span className="font-semibold text-[13px] text-panel-text-active">Onchain custody</span>
-        <span className="text-panel-text-muted">{custodyStatus(custody)}</span>
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-semibold text-[13px] text-panel-text-active">Onchain account</span>
+        <span className="text-right text-panel-text-muted">
+          {custodyStatus(custody, heldBackBy)}
+        </span>
       </div>
       <p className="text-[11px] text-panel-text-muted/80">
         Only your wallet can withdraw or move the account, and it can always take the account back.
       </p>
-      <div className="flex items-center gap-2">
-        <input
-          className="min-w-0 flex-1 bg-panel-bg px-2 py-1 font-mono text-panel-text ring-2 ring-panel-ring"
-          inputMode="decimal"
-          onChange={(event) => setAmount(event.target.value)}
-          placeholder="USDC"
-          value={amount}
-        />
+      {custody.accountId !== null && !custody.hasKey && heldBackBy === null ? (
         <button
           className={BUTTON_CLASSES}
-          disabled={busy || usdc() < 0n}
-          onClick={() => void custody.setUp(usdc())}
+          disabled={busy}
+          onClick={() => void custody.setUp(0n)}
           type="button"
         >
-          {custody.ready ? "Deposit" : "Set up"}
+          Enable trading in this browser
         </button>
-        <button
-          className={BUTTON_CLASSES}
-          disabled={busy || custody.accountId === null || usdc() <= 0n}
-          onClick={() => void custody.withdraw(usdc())}
-          type="button"
-        >
-          Withdraw
-        </button>
-      </div>
+      ) : null}
       {custody.accountId === null ? null : (
         <button
           className={BUTTON_CLASSES}

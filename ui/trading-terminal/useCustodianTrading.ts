@@ -86,12 +86,14 @@ export function useCustodianTrading(wallet: ConnectedWallet | null) {
   /**
    * Opens a custodian account if the wallet has none, deposits `usdc` (6 dp) with a USDC permit, and sets a fresh
    * trading key: three wallet signatures at most, no gas. Safe to run again: each step is skipped when done.
+   * Resolves to the deposit's block (null when nothing was deposited) once every step is done, or null on failure.
    */
-  async function setUp(usdc: bigint) {
+  function setUp(usdc: bigint): Promise<{ blockNumber: bigint | null } | null> {
     if (wallet === null) {
-      return;
+      return Promise.resolve(null);
     }
-    await step("Setting up onchain custody", async () => {
+    return step(usdc > 0n ? "Depositing" : "Setting up onchain custody", async () => {
+      let blockNumber: bigint | null = null;
       let id = accountId;
       if (id === null) {
         const opened = settled(
@@ -125,7 +127,10 @@ export function useCustodianTrading(wallet: ConnectedWallet | null) {
           account: wallet.address as `0x${string}`,
           ...deposit.typedData,
         });
-        settled(await postCustodian(deposit.body(signature)), "The deposit");
+        blockNumber = settled(
+          await postCustodian(deposit.body(signature)),
+          "The deposit"
+        ).blockNumber;
       }
       if (loadTradingKey(wallet.address) === null) {
         const fresh = newTradingKey();
@@ -139,6 +144,7 @@ export function useCustodianTrading(wallet: ConnectedWallet | null) {
         saveTradingKey(wallet.address, stored);
         setKey(stored);
       }
+      return { blockNumber };
     });
   }
 
@@ -229,6 +235,7 @@ export function useCustodianTrading(wallet: ConnectedWallet | null) {
     enabled,
     exit,
     lastError,
+    hasKey: key !== null,
     ready: enabled && accountId !== null && key !== null,
     refresh,
     setUp,
