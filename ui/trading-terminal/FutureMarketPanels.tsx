@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { createWalletClient, custom, isAddressEqual } from "viem";
+import { createWalletClient, custom, formatUnits, isAddressEqual } from "viem";
 import type { FutureUnits } from "@/lib/account-activity-views";
 import {
   buildFutureOpenOrdersActivityView,
@@ -76,6 +76,7 @@ import { useLiveMarketBook } from "@/ui/trading-terminal/useLiveMarketBook";
 import { useOrderStatus } from "@/ui/trading-terminal/useOrderStatus";
 import { useSignedHistoryTabs } from "@/ui/trading-terminal/useSignedHistoryTabs";
 import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
+import { useWalletHeldAccounts } from "@/ui/trading-terminal/useWalletHeldAccounts";
 
 type FutureBottomTab = keyof typeof FUTURE_ACTIVITY_VIEWS;
 
@@ -756,6 +757,34 @@ function useFutureCustody({
   };
 }
 
+/** A withdraw-only row for each account that left custody to the wallet and still holds USDC. */
+function walletHeldRows(held: ReturnType<typeof useWalletHeldAccounts>): AccountSummaryRow[] {
+  return held.accounts.map((account) => {
+    let note = `Account #${account.accountId} in your wallet: withdraw only, your wallet pays the gas`;
+    if (held.busy === account.accountId) {
+      note = "Withdrawing… confirm in your wallet";
+    } else if (held.lastError !== null) {
+      note = held.lastError;
+    }
+    return {
+      action: (
+        <button
+          className={ROW_BUTTON_CLASSES}
+          disabled={held.busy !== null}
+          onClick={() => void held.withdrawAll(account)}
+          type="button"
+        >
+          Withdraw all
+        </button>
+      ),
+      balance: formatBalance(Number(formatUnits(account.cashUnits, 18)), "USDC"),
+      id: `wallet-held-${account.accountId}`,
+      note,
+      symbol: "USDC",
+    };
+  });
+}
+
 /** The withdraw-only row for a Matching balance left behind once custody is in front. */
 function matchingLeftoverRow(
   leftover: { cash: number; subaccountId: string | null } | null,
@@ -993,6 +1022,7 @@ export function FutureMarketPanels({
     routing,
     transfer,
   } = useFutureCustody({ account, market, primaryWallet, shared, stack });
+  const held = useWalletHeldAccounts(primaryWallet, stack);
   const subaccountId = routing.subaccountId;
   const orderStatus = useOrderStatus(positionSignature(futureAccount.account));
 
@@ -1197,6 +1227,7 @@ export function FutureMarketPanels({
                 ...matchingLeftoverRow(matchingLeftover, () =>
                   matchingTransfer.openWithdraw("USDC")
                 ),
+                ...walletHeldRows(held),
               ]}
             />
             <CustodyPanel custody={custody} heldBackBy={heldBackBy} />

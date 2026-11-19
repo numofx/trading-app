@@ -14,8 +14,17 @@ export function getAppChain() {
 }
 
 /**
+ * Public endpoints after the chain's own. mainnet.base.org alone is not enough to fall back on: on 2026-11-19 the
+ * Alchemy plan hit its cap again, and with every read on mainnet.base.org a burst of the account panel's reads drew
+ * 429s, so a new custody balance never appeared. publicnode accepts 50,000-block log queries; base.org throttles.
+ */
+const EXTRA_PUBLIC_RPC_URLS: Record<number, string[]> = {
+  [base.id]: ["https://base-rpc.publicnode.com"],
+};
+
+/**
  * The RPC URLs reads go to, in order: the keyed endpoint (NEXT_PUBLIC_BASE_RPC_URL), then the
- * chain's public endpoint (mainnet.base.org, or sepolia.base.org).
+ * chain's public endpoint (mainnet.base.org, or sepolia.base.org), then the extra public ones.
  *
  * The public endpoint is shared and aggressively throttled, so it is never the primary: a rate
  * limit there is what once silently emptied the wallet balance reads. It is the fallback because
@@ -26,9 +35,9 @@ export function getBaseRpcUrls(
   configured = process.env.NEXT_PUBLIC_BASE_RPC_URL,
   chain = getAppChain()
 ): string[] {
-  const publicUrl = chain.rpcUrls.default.http[0];
+  const publicUrls = [chain.rpcUrls.default.http[0], ...(EXTRA_PUBLIC_RPC_URLS[chain.id] ?? [])];
   const keyed = configured?.trim();
-  return keyed && keyed !== publicUrl ? [keyed, publicUrl] : [publicUrl];
+  return keyed && !publicUrls.includes(keyed) ? [keyed, ...publicUrls] : publicUrls;
 }
 
 /**
