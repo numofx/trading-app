@@ -153,6 +153,13 @@ export function getBookTakeModuleAddress(): `0x${string}` | null {
   return configured ? getAddress(configured) : null;
 }
 
+/** BookCustodian (onchain custody for trading on the books); null where it is not deployed. */
+export function getCustodianAddress(): `0x${string}` | null {
+  const stack = getMatchingStack() as { bookCustodian?: string };
+  const configured = process.env.NEXT_PUBLIC_CUSTODIAN_ADDRESS?.trim() || stack.bookCustodian;
+  return configured ? getAddress(configured) : null;
+}
+
 export function getSubaccountCreatorAddress() {
   return getAddress(
     process.env.NEXT_PUBLIC_SUBACCOUNT_CREATOR_ADDRESS?.trim() ||

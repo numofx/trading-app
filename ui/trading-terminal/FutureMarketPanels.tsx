@@ -46,6 +46,7 @@ import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
 import { getUsdcCngnManagerAddress } from "@/lib/subaccount-deposit-config";
 import { get24hStats } from "@/lib/ticker-stats";
 import type { ActivityTab, ActivityView, TradePrint } from "@/lib/trading.types";
+import { CustodyPanel } from "@/ui/trading-terminal/CustodyPanel";
 import type { FutureOrderRequest } from "@/ui/trading-terminal/FutureOrderFormPanel";
 import { FutureOrderFormPanel } from "@/ui/trading-terminal/FutureOrderFormPanel";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
@@ -61,6 +62,7 @@ import { useTerminalSession } from "@/ui/trading-terminal/TerminalSession";
 import { TradingActivityPanel } from "@/ui/trading-terminal/TradingActivityPanel";
 import { useAccountTransfer } from "@/ui/trading-terminal/useAccountTransfer";
 import { useChartInterval } from "@/ui/trading-terminal/useChartInterval";
+import { useCustodianTrading } from "@/ui/trading-terminal/useCustodianTrading";
 import { useFutureAccount } from "@/ui/trading-terminal/useFutureAccount";
 import { useFutureOpenInterest } from "@/ui/trading-terminal/useFutureOpenInterest";
 import { useLiveMarketBook } from "@/ui/trading-terminal/useLiveMarketBook";
@@ -683,6 +685,18 @@ async function reportTakeOutcome(
   onAccountChanged(outcome.kind === "filled" ? outcome.blockNumber + 1n : await blockAfterLatest());
 }
 
+/** The account orders trade from: the custodian's once onchain custody is set up, else the Matching account. */
+function tradingSubaccountId(
+  market: FutureMarket | null,
+  custody: ReturnType<typeof useCustodianTrading>,
+  matchingSubaccountId: string | null
+): string | null {
+  if (market === null) {
+    return null;
+  }
+  return custody.ready ? custody.accountId : matchingSubaccountId;
+}
+
 /**
  * Placing and cancelling future orders: each signs with the wallet, posts to the venue and reports
  * the outcome on the ticket's status line. Without a trading account, placing opens the deposit
@@ -690,6 +704,7 @@ async function reportTakeOutcome(
  */
 function useFutureOrderActions({
   bookMarket,
+  custody,
   market,
   onAccountChanged,
   onNeedsAccount,
@@ -700,6 +715,8 @@ function useFutureOrderActions({
 }: {
   /** The series' onchain book, from GET /book-depth; null until it has been read. */
   bookMarket: { book: string; marketId: number } | null;
+  /** Onchain custody: when ready, takes go through the custodian, signed by the trading key. */
+  custody: ReturnType<typeof useCustodianTrading>;
   market: FutureMarket | null;
   onAccountChanged: (minBlock: bigint | null) => void;
   onNeedsAccount: () => void;
@@ -741,21 +758,30 @@ function useFutureOrderActions({
     const event = futureOrderEvent(request, market, resolved.price, touch, options.eventOrderType);
     setIsSubmitting(true);
     try {
-      const outcome = await signAndPostBookTake({
+      const take = {
         book: bookMarket.book,
-        marketId: bookMarket.marketId,
         market,
+        marketId: bookMarket.marketId,
         price: resolved.price,
         reduceOnly: request.reduceOnly,
         side: uiSide,
-        onAwaitingSignature: () =>
-          orderStatus.announce(
-            options.awaitingSignature ?? `Awaiting wallet signature for account #${subaccountId}`
-          ),
-        subaccountId,
         units: request.units,
-        wallet,
-      });
+      };
+      if (custody.ready) {
+        orderStatus.announce(`Submitting to the onchain book from account #${subaccountId}`);
+      }
+      const outcome = custody.ready
+        ? await custody.take(take)
+        : await signAndPostBookTake({
+            ...take,
+            onAwaitingSignature: () =>
+              orderStatus.announce(
+                options.awaitingSignature ??
+                  `Awaiting wallet signature for account #${subaccountId}`
+              ),
+            subaccountId,
+            wallet,
+          });
       await reportTakeOutcome(outcome, event, orderStatus, onAccountChanged);
       router.refresh();
     } catch (error) {
@@ -854,7 +880,9 @@ export function FutureMarketPanels({
     primaryWallet?.address ?? null,
     session.account
   );
-  const subaccountId = market === null ? null : account.subaccountId;
+  // Onchain custody (flagged): once set up, the futures account is the custodian's and orders sign with the key.
+  const custody = useCustodianTrading(primaryWallet);
+  const subaccountId = tradingSubaccountId(market, custody, account.subaccountId);
   const futureAccount = useFutureAccount(subaccountId, stack);
   const orderStatus = useOrderStatus(positionSignature(futureAccount.account));
   const transfer = useAccountTransfer({
@@ -886,6 +914,7 @@ export function FutureMarketPanels({
   );
   const actions = useFutureOrderActions({
     bookMarket: book.bookMarket,
+    custody,
     market,
     onAccountChanged: (minBlock) => futureAccount.refresh(minBlock),
     onNeedsAccount: () => transfer.openDeposit("USDC"),
@@ -1065,6 +1094,7 @@ export function FutureMarketPanels({
                 transfer.openWithdraw
               )}
             />
+            <CustodyPanel custody={custody} />
           </>
         }
       />
