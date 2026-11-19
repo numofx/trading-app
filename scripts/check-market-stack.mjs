@@ -110,9 +110,27 @@ const spot = (Array.isArray(markets) ? markets : []).find(
     market.base_asset_symbol === "cNGN" &&
     market.quote_asset_symbol === "USDC"
 );
-if (!spot) {
-  note(`${url} serves no USDC/cNGN spot market; nothing to compare against`);
+// Spot was delisted on 2026-11-19. The futures carry the same TradeModule and USDC cash, so they stand in for it;
+// only the cNGN escrow, which no futures listing reports, goes uncompared. Exiting green with nothing compared would
+// let a wrong TradeModule or cash asset ship unnoticed.
+const cngnFuture = (Array.isArray(markets) ? markets : []).find(
+  (market) =>
+    market.contract_type === "future" &&
+    market.base_asset_symbol === "cNGN" &&
+    market.quote_asset_symbol === "USDC"
+);
+const reference = spot ?? cngnFuture;
+if (!reference) {
+  if (production) {
+    fail([`${url} serves neither USDC/cNGN spot nor a cNGN future; the stack cannot be verified`]);
+  }
+  note(`${url} serves neither USDC/cNGN spot nor a cNGN future; nothing to compare against`);
   process.exit(0);
+}
+if (!spot) {
+  note(
+    `${url} lists no spot market; comparing against ${reference.market} (the cNGN escrow is not compared)`
+  );
 }
 
 const perp = markets.find(
@@ -149,7 +167,10 @@ if (eurc?.asset_address) {
 }
 
 const comparisons = [
-  ...CHECKS.map((check) => [spot, ...check]),
+  ...CHECKS.filter(([field]) => spot || field !== "asset_address").map((check) => [
+    reference,
+    ...check,
+  ]),
   ...(perp ? PERP_CHECKS.map((check) => [perp, ...check]) : []),
 ];
 for (const [market, field, envName, fallback, label] of comparisons) {

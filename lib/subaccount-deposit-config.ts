@@ -142,6 +142,17 @@ export function getWithdrawalModuleAddress() {
   );
 }
 
+/**
+ * BookTakeModule (2026-11-19): a signed take on the venue's onchain book for an account Matching holds, submitted
+ * by the venue's executor. Null on a network without one: futures orders cannot be placed there.
+ */
+export function getBookTakeModuleAddress(): `0x${string}` | null {
+  const stack = getMatchingStack() as { bookTakeModule?: string };
+  const configured =
+    process.env.NEXT_PUBLIC_BOOK_TAKE_MODULE_ADDRESS?.trim() || stack.bookTakeModule;
+  return configured ? getAddress(configured) : null;
+}
+
 export function getSubaccountCreatorAddress() {
   return getAddress(
     process.env.NEXT_PUBLIC_SUBACCOUNT_CREATOR_ADDRESS?.trim() ||

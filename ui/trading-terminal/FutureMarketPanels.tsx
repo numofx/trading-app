@@ -17,28 +17,30 @@ import {
 } from "@/lib/account-activity-views";
 import { formatBalance } from "@/lib/account-balance-display";
 import { createBasePublicClient, getAppChain } from "@/lib/base-public-client";
+import type { BookDepth, BookTakeOutcome } from "@/lib/book-take-submission";
+import {
+  buildBookTakeEnvelope,
+  depthToLevels,
+  interpretBookTakeResponse,
+} from "@/lib/book-take-submission";
 import type { ChartInterval } from "@/lib/chart-interval";
 import { CHART_INTERVALS } from "@/lib/chart-interval";
 import {
   buildFutureBalancesView,
   buildFutureHeaderMetrics,
   buildFuturePositionsView,
-  describeFutureRejection,
   futureCloseOrder,
   futureMarkSource,
   futureOrderUiSide,
   futureSizeUsdc,
-  futureWorstFeeUnits,
   isOutsideFillBand,
 } from "@/lib/future-market";
 import type { FutureAccount, FutureMarket, FutureState } from "@/lib/future-market.types";
 import { FUTURE_ACTIVITY_VIEWS, FUTURE_BOTTOM_TABS } from "@/lib/future-terminal-config";
-import { expectedTakerPrice, readTakerFill, slippageBps } from "@/lib/order-fill";
-import type { OrderOutcome } from "@/lib/order-settlement";
-import { isOrderFillKnown, pollOrderOutcome } from "@/lib/order-settlement";
+import { expectedTakerPrice } from "@/lib/order-fill";
 import { PERP_DEFAULT_MAX_SLIPPAGE } from "@/lib/perp-market";
 import { getAnchorPrice, getMarketableLimitPrice } from "@/lib/spot-market";
-import { buildCancelEnvelope, buildSpotOrderEnvelope } from "@/lib/spot-order-submission";
+import { buildCancelEnvelope, } from "@/lib/spot-order-submission";
 import { FOOTER_LINKS } from "@/lib/spot-terminal-config";
 import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
 import { getUsdcCngnManagerAddress } from "@/lib/subaccount-deposit-config";
@@ -192,25 +194,14 @@ function resolveFutureOrderPrice(
 }
 
 /**
- * How long a Close is signed for. The venue stops matching an order at its expiry and the chain
- * refuses to settle one past it, so what the book cannot fill lapses instead of resting. It covers
- * the wallet prompt, since the expiry is fixed before signing, and the settlement of every rung,
- * each waiting on its receipt.
+ * Signs a take on the series' onchain book and posts it. The take is all or nothing at `price` (the limit, or the
+ * market order's slippage bound), its fee bounded from that price; the venue's executor submits it and answers
+ * with the receipt, so the outcome is known when this returns.
  */
-const CLOSE_ORDER_LIFETIME_SECONDS = Duration.toSeconds("2 minutes");
-
-/**
- * Signs a future order for the series' asset and sub id on its TradeModule, with the fee ceiling
- * per contract, then posts it. `price` is in the series' terms; `units` the venue's whole units,
- * each signed as the market's `amountScale`. A limit order is signed to the series' last trade time, so
- * it rests until filled or cancelled; a market order keeps the day-long default unless
- * `lifetimeSeconds` shortens it.
- */
-async function signAndPostFutureOrder({
-  lifetimeSeconds,
+async function signAndPostBookTake({
+  book,
   market,
   onAwaitingSignature,
-  orderType,
   price,
   reduceOnly,
   side,
@@ -218,41 +209,30 @@ async function signAndPostFutureOrder({
   units,
   wallet,
 }: {
-  lifetimeSeconds?: number;
+  book: string;
   market: FutureMarket;
   onAwaitingSignature: () => void;
-  orderType: FutureOrderRequest["orderType"];
-  /** Ask the venue to hold the order to the account's position in the series. */
-  reduceOnly: boolean;
   price: string;
+  reduceOnly: boolean;
   side: "buy" | "sell";
   subaccountId: string;
   units: number;
   wallet: ConnectedWallet;
-}) {
+}): Promise<BookTakeOutcome> {
   const appChain = getAppChain();
   await wallet.switchChain(appChain.id);
   const provider = await wallet.getEthereumProvider();
   const walletClient = createWalletClient({ chain: appChain, transport: custom(provider) });
-  const envelope = buildSpotOrderEnvelope({
-    expiry: resolveFutureOrderExpiry(orderType, market, lifetimeSeconds),
-    market: {
-      amountScale: market.state.amountScale,
-      assetAddress: market.stack.assetAddress,
-      orderIdPrefix: "future",
-      subId: market.stack.subId,
-      tradeModuleAddress: market.stack.tradeModuleAddress,
-      // A v2 contract's fee grows with the price: ceiling it at the most the order can fill at.
-      worstFeeUnits: futureWorstFeeUnits(
-        market.state,
-        Math.max(Number(price), market.state.fillBand?.high ?? 0)
-      ),
-    },
+  const envelope = buildBookTakeEnvelope({
+    amountScale: market.state.amountScale,
+    book,
+    contractSize: BigInt(Math.round(market.state.contractSize)),
+    isBuy: side === "buy",
+    limitPrice: price,
     reduceOnly,
-    side,
     subaccountId,
-    uiPrice: price,
-    uiSize: String(units),
+    takerFeeBps: market.takerFeeBps ?? 0,
+    units,
     walletAddress: wallet.address,
   });
   onAwaitingSignature();
@@ -260,39 +240,42 @@ async function signAndPostFutureOrder({
     account: wallet.address as `0x${string}`,
     ...envelope.typedData,
   });
-  const response = await fetch("/api/orders", {
+  const response = await fetch("/api/book-takes", {
     body: JSON.stringify({ ...envelope.payload, signature }),
     headers: { "content-type": "application/json" },
     method: "POST",
   });
-  const body = (await response.json().catch(() => null)) as { error?: string } | null;
-  return { body, ok: response.ok, orderId: envelope.payload.order_id, status: response.status };
+  return interpretBookTakeResponse(response.status, await response.json().catch(() => null));
 }
 
-function resolveFutureOrderExpiry(
-  orderType: FutureOrderRequest["orderType"],
-  market: FutureMarket,
-  lifetimeSeconds: number | undefined
-) {
-  if (lifetimeSeconds !== undefined) {
-    return Math.floor(Date.now() / 1000) + lifetimeSeconds;
-  }
-  return orderType === "Limit" ? Math.floor(market.state.lastTradeAtMs / 1000) : undefined;
-}
+/** The series' onchain book depth, polled: the venue's matcher holds no futures depth since the makers moved. */
+const BOOK_DEPTH_POLL_MS = Duration.toMillis("5 seconds");
 
-const FILL_POLL_INTERVAL_MS = Duration.toMillis("1 second");
-const FILL_POLL_TIMEOUT_MS = Duration.toMillis("15 seconds");
-
-/** The order as `/api/orders/{id}` reports it; null before the matcher records it. */
-async function readFutureOrder(orderId: string): Promise<OrderOutcome | null> {
-  try {
-    const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}`, {
-      cache: "no-store",
-    });
-    return response.ok ? ((await response.json()) as OrderOutcome) : null;
-  } catch {
-    return null;
-  }
+function useBookDepth(symbol: string, enabled: boolean) {
+  const [depth, setDepth] = useState<BookDepth | null>(null);
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+    let cancelled = false;
+    const read = async () => {
+      try {
+        const response = await fetch(`/api/book-depth?symbol=${encodeURIComponent(symbol)}`);
+        if (response.ok && !cancelled) {
+          setDepth((await response.json()) as BookDepth);
+        }
+      } catch {
+        // keep the last depth; the next poll retries
+      }
+    };
+    void read();
+    const timer = setInterval(read, BOOK_DEPTH_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [symbol, enabled]);
+  return depth;
 }
 
 /**
@@ -320,30 +303,6 @@ function futureOrderEvent(
     order_type: eventOrderType ?? request.orderType,
     size_base: sizeBase,
   };
-}
-
-/**
- * Records what a filled order paid (`order_filled`): its average price from the venue's trades, sizes
- * restated from venue units into the base, and the slippage against the price expected at submission.
- */
-async function captureFutureFill(
-  market: FutureMarket,
-  orderId: string,
-  event: { [property: string]: unknown; expected_price: number | null },
-  side: "buy" | "sell",
-  submittedAt: number
-) {
-  const fill = await readTakerFill(market.symbol, orderId);
-  if (fill === null) {
-    return;
-  }
-  posthog.capture("order_filled", {
-    ...event,
-    fill_ms: Date.now() - submittedAt,
-    fill_price: fill.averagePrice,
-    filled_base: fill.filledUnits * market.state.unitSize,
-    slippage_bps: slippageBps(side, event.expected_price, fill.averagePrice),
-  });
 }
 
 /**
@@ -647,6 +606,7 @@ function inSizeSymbol<T extends { size: number }>(rows: T[], unitSize: number): 
  */
 function useFutureBook(market: FutureMarket | null, symbol: string, candleInterval: ChartInterval) {
   const unitSize = market?.state.unitSize ?? 1;
+  const depth = useBookDepth(symbol, market !== null);
   const live = useLiveMarketBook({
     candleInterval,
     candles: market?.candles ?? [],
@@ -663,10 +623,17 @@ function useFutureBook(market: FutureMarket | null, symbol: string, candleInterv
       trades: market?.trades ?? [],
     },
   });
+  // The book's levels from its quote ladder, in venue units (0.001 contract each), then restated as for the rest.
+  const unitsPerContract = market === null ? 1000 : market.state.contractSize / unitSize;
+  const asks = depth === null ? live.asks : depthToLevels(depth.asks, unitsPerContract);
+  const bids = depth === null ? live.bids : depthToLevels(depth.bids, unitsPerContract);
   const book = {
     ...live,
-    asks: inSizeSymbol(live.asks, unitSize),
-    bids: inSizeSymbol(live.bids, unitSize),
+    asks: inSizeSymbol(asks, unitSize),
+    bestAsk: asks[0]?.price ?? null,
+    bestBid: bids[0]?.price ?? null,
+    bids: inSizeSymbol(bids, unitSize),
+    bookAddress: depth?.book ?? null,
     trades: inSizeSymbol(live.trades, unitSize),
   };
   const anchor = getAnchorPrice(book.bestAsk, book.bestBid, book.lastPrice);
@@ -684,11 +651,40 @@ function useFutureBook(market: FutureMarket | null, symbol: string, candleInterv
 }
 
 /**
+ * Puts a take's outcome on the ticket's status line and in analytics, and re-reads the account at the block after a
+ * fill so the position shows at once. A refusal says nothing was traded; an unconfirmed outcome says to check.
+ */
+async function reportTakeOutcome(
+  outcome: BookTakeOutcome,
+  event: Record<string, unknown>,
+  orderStatus: ReturnType<typeof useOrderStatus>,
+  onAccountChanged: (minBlock: bigint | null) => void
+) {
+  if (outcome.kind === "rejected" || outcome.kind === "reverted") {
+    posthog.capture("order_rejected", { ...event, error_message: outcome.reason });
+    orderStatus.settle(outcome.reason);
+    return;
+  }
+  if (outcome.kind === "unknown") {
+    orderStatus.settle(outcome.reason);
+    return;
+  }
+  posthog.capture("order_filled", { ...event, tx_hash: outcome.txHash, venue: "onchain_book" });
+  orderStatus.settle(
+    outcome.kind === "filled"
+      ? "Filled on the onchain book."
+      : "Submitted to the onchain book; waiting for the receipt."
+  );
+  onAccountChanged(outcome.kind === "filled" ? outcome.blockNumber + 1n : await blockAfterLatest());
+}
+
+/**
  * Placing and cancelling future orders: each signs with the wallet, posts to the venue and reports
  * the outcome on the ticket's status line. Without a trading account, placing opens the deposit
  * that creates one instead.
  */
 function useFutureOrderActions({
+  bookAddress,
   market,
   onAccountChanged,
   onNeedsAccount,
@@ -697,6 +693,8 @@ function useFutureOrderActions({
   touch,
   wallet,
 }: {
+  /** The series' onchain book, from GET /book-depth; null until it has been read. */
+  bookAddress: string | null;
   market: FutureMarket | null;
   onAccountChanged: (minBlock: bigint | null) => void;
   onNeedsAccount: () => void;
@@ -710,43 +708,23 @@ function useFutureOrderActions({
   const [cancellingNonce, setCancellingNonce] = useState<string | null>(null);
 
   /**
-   * Watches an accepted order until its fill is known, then re-reads the account at the block
-   * after the fill so the position shows at once. An order the venue ends without a fill says so.
-   * True when it filled, in whole or in part.
-   */
-  async function followFill(orderId: string) {
-    const outcome = await pollOrderOutcome(() => readFutureOrder(orderId), {
-      intervalMs: FILL_POLL_INTERVAL_MS,
-      timeoutMs: FILL_POLL_TIMEOUT_MS,
-      until: isOrderFillKnown,
-    });
-    if (Number.parseFloat(outcome?.filled_amount ?? "0") > 0) {
-      onAccountChanged(await blockAfterLatest());
-      return true;
-    }
-    if (outcome?.status === "cancelled" || outcome?.status === "expired") {
-      const reason = outcome.cancel_reason
-        ? ` (${outcome.cancel_reason.replaceAll("_", " ")})`
-        : "";
-      orderStatus.settle(`Order ${outcome.status} without a fill${reason}.`);
-    }
-    return false;
-  }
-
-  /**
-   * `options.awaitingSignature` replaces the line shown while the wallet signs,
-   * `options.eventOrderType` the order type the analytics events carry (a Close is a market order)
-   * and `options.lifetimeSeconds` how long the order is signed for, when not the default.
+   * `options.awaitingSignature` replaces the line shown while the wallet signs, and
+   * `options.eventOrderType` the order type the analytics events carry (a Close is a market order).
+   * A take fills whole or not at all, in its own transaction: there is no resting order to follow.
    */
   async function submit(
     request: FutureOrderRequest,
-    options: { awaitingSignature?: string; eventOrderType?: string; lifetimeSeconds?: number } = {}
+    options: { awaitingSignature?: string; eventOrderType?: string } = {}
   ) {
     if (market === null || wallet === null) {
       return;
     }
     if (subaccountId === null) {
       onNeedsAccount();
+      return;
+    }
+    if (bookAddress === null) {
+      orderStatus.announce("Reading the onchain book; try again in a moment.");
       return;
     }
     const resolved = resolveFutureOrderPrice(request, market, touch);
@@ -758,10 +736,9 @@ function useFutureOrderActions({
     const event = futureOrderEvent(request, market, resolved.price, touch, options.eventOrderType);
     setIsSubmitting(true);
     try {
-      const { body, ok, orderId, status } = await signAndPostFutureOrder({
-        lifetimeSeconds: options.lifetimeSeconds,
+      const outcome = await signAndPostBookTake({
+        book: bookAddress,
         market,
-        orderType: request.orderType,
         price: resolved.price,
         reduceOnly: request.reduceOnly,
         side: uiSide,
@@ -773,28 +750,7 @@ function useFutureOrderActions({
         units: request.units,
         wallet,
       });
-      if (!ok) {
-        posthog.capture("order_rejected", {
-          ...event,
-          error_message: body?.error ?? null,
-          http_status: status,
-        });
-        orderStatus.settle(describeFutureRejection(body?.error, "Futures order submission failed"));
-        return;
-      }
-      const submittedAt = Date.now();
-      posthog.capture("order_submitted", { ...event, order_id: orderId });
-      orderStatus.announce(null, { awaitFill: true });
-      router.refresh();
-      if (await followFill(orderId)) {
-        void captureFutureFill(
-          market,
-          orderId,
-          { ...event, order_id: orderId },
-          uiSide,
-          submittedAt
-        );
-      }
+      await reportTakeOutcome(outcome, event, orderStatus, onAccountChanged);
       router.refresh();
     } catch (error) {
       posthog.captureException(error, {
@@ -923,6 +879,7 @@ export function FutureMarketPanels({
     primaryWallet?.address ?? null
   );
   const actions = useFutureOrderActions({
+    bookAddress: book.bookAddress,
     market,
     onAccountChanged: (minBlock) => futureAccount.refresh(minBlock),
     onNeedsAccount: () => transfer.openDeposit("USDC"),
@@ -974,7 +931,6 @@ export function FutureMarketPanels({
       {
         awaitingSignature: `Awaiting wallet signature to close ${part}`,
         eventOrderType: "Close",
-        lifetimeSeconds: CLOSE_ORDER_LIFETIME_SECONDS,
       }
     );
   }
