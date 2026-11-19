@@ -70,8 +70,9 @@ export function AccountSummary({ rows }: { rows: readonly AccountSummaryRow[] })
                 ) : null}
               </span>
             </span>
-            <span className="flex min-w-0 items-center gap-2">
-              <span className="truncate font-mono text-[13px] text-panel-text tabular-nums">
+            {/* Never shrinks: the amount is the point of the row; a long note truncates instead. */}
+            <span className="flex shrink-0 items-center gap-2">
+              <span className="whitespace-nowrap font-mono text-[13px] text-panel-text tabular-nums">
                 {row.balance}
               </span>
               {row.action ?? (

@@ -765,9 +765,9 @@ function useFutureCustody({
 /** A withdraw-only row for each account that left custody to the wallet and still holds USDC. */
 function walletHeldRows(held: ReturnType<typeof useWalletHeldAccounts>): AccountSummaryRow[] {
   return held.accounts.map((account) => {
-    let note = `Account #${account.accountId} in your wallet: withdraw only, your wallet pays the gas`;
+    let note = `#${account.accountId} in your wallet, withdraw only`;
     if (held.busy === account.accountId) {
-      note = "Withdrawing… confirm in your wallet";
+      note = "Withdrawing: confirm in your wallet";
     } else if (held.lastError !== null) {
       note = held.lastError;
     }
@@ -779,7 +779,7 @@ function walletHeldRows(held: ReturnType<typeof useWalletHeldAccounts>): Account
           onClick={() => void held.withdrawAll(account)}
           type="button"
         >
-          Withdraw all
+          Withdraw
         </button>
       ),
       balance: formatBalance(Number(formatUnits(account.cashUnits, 18)), "USDC"),
@@ -807,7 +807,7 @@ function matchingLeftoverRow(
       ),
       balance: formatBalance(leftover.cash, "USDC"),
       id: "matching-usdc",
-      note: `Matching account #${leftover.subaccountId}: withdraw only`,
+      note: `Matching #${leftover.subaccountId}, withdraw only`,
       symbol: "USDC",
     },
   ];
