@@ -7,7 +7,7 @@ import type {
   TerminalMarketId,
   TerminalMarketKind,
 } from "@/lib/market-overview.types";
-import { futurePath, marketPath, optionSeriesPath } from "@/lib/market-routes";
+import { futurePath, marketPath } from "@/lib/market-routes";
 import { PERP_MARKET_LABEL } from "@/lib/perp-terminal-config";
 import { getAnchorPrice, getBestPrices } from "@/lib/spot-market";
 import { spotOrientation } from "@/lib/spot-orientation";
@@ -39,16 +39,6 @@ const PERP_ENTRY = {
 /** A future series' entry, under the venue's own symbol. */
 export function futureEntry(symbol: string): TerminalMarketEntry {
   return { href: futurePath(symbol), id: "future", kind: "futures", symbol };
-}
-
-/** An option series' entry: every strike of the expiry, on one page. */
-export function optionEntry(series: string): TerminalMarketEntry {
-  return {
-    href: optionSeriesPath(series),
-    id: "option",
-    kind: "options",
-    symbol: `${series} options`,
-  };
 }
 
 /**
@@ -95,7 +85,7 @@ export function listedFutureSymbols(
   return onScreen === null || known ? symbols : [...symbols, onScreen];
 }
 
-/** The entry for the market on screen; a future or an option needs its series. */
+/** The entry for the market on screen; a future needs its series. */
 export function getTerminalMarket(
   id: TerminalMarketId,
   seriesSymbol: string | null = null
@@ -105,9 +95,6 @@ export function getTerminalMarket(
   }
   if (id === "future" && seriesSymbol !== null) {
     return futureEntry(seriesSymbol);
-  }
-  if (id === "option" && seriesSymbol !== null) {
-    return optionEntry(seriesSymbol);
   }
   return spotEntry(isSpotMarketId(id) ? id : "spot");
 }

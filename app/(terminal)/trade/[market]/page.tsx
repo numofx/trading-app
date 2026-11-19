@@ -24,7 +24,6 @@ import type { SpotPair } from "@/lib/spot-pairs";
 import { SPOT_PAIRS } from "@/lib/spot-pairs";
 import type { Candle } from "@/lib/trading.types";
 import { FutureMarketPanels } from "@/ui/trading-terminal/FutureMarketPanels";
-import { OptionChainPanels } from "@/ui/trading-terminal/OptionChainPanels";
 import { PerpMarketPanels } from "@/ui/trading-terminal/PerpMarketPanels";
 import { SpotMarketPanels } from "@/ui/trading-terminal/SpotMarketPanels";
 
@@ -206,9 +205,6 @@ async function renderSpotMarket(pair: SpotPair, interval: ChartInterval) {
 async function renderMarket(resolved: ResolvedMarket, interval: ChartInterval) {
   if (resolved.id === "perp") {
     return <PerpMarketPanels candleInterval={interval} market={await loadPerpMarket(interval)} />;
-  }
-  if (resolved.id === "option") {
-    return <OptionChainPanels series={resolved.symbol} />;
   }
   if (resolved.id === "future") {
     return (

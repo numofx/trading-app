@@ -15,7 +15,6 @@ import {
   getTerminalMarket,
   listedFutureSymbols,
   listedSpotMarkets,
-  optionEntry,
   selectorMarkets,
 } from "@/lib/market-overview";
 import type {
@@ -24,8 +23,6 @@ import type {
   TerminalMarketId,
   TerminalMarketKind,
 } from "@/lib/market-overview.types";
-import type { OptionChain } from "@/lib/option-chain";
-import { buildOptionChains, formatStrikeRange } from "@/lib/option-chain";
 import { isSpotMarketId, SPOT_PAIRS } from "@/lib/spot-pairs";
 import { SmartImage } from "@/ui/SmartImage";
 import { SmartLink } from "@/ui/SmartLink";
@@ -35,7 +32,6 @@ import { useMarketOverview } from "@/ui/trading-terminal/useMarketOverview";
 const TABS = [
   { kind: "spot", label: "Spot" },
   { kind: "futures", label: "Futures" },
-  { kind: "options", label: "Options" },
 ] as const satisfies readonly { kind: TerminalMarketKind; label: string }[];
 
 /** The tab a market lists under; the perp's page opens the selector on Spot. */
@@ -51,8 +47,6 @@ function tabFor(kind: TerminalMarketKind): TerminalMarketKind {
 const GRID_CLASS = {
   futures:
     "grid-cols-[minmax(0,2.8fr)_minmax(0,1fr)_minmax(0,0.9fr)] md:grid-cols-[minmax(0,2.3fr)_minmax(0,0.9fr)_minmax(0,1.35fr)_minmax(0,0.8fr)_minmax(0,1fr)_1rem]",
-  options:
-    "grid-cols-[minmax(0,2.4fr)_minmax(0,2fr)_1rem] md:grid-cols-[minmax(0,2.2fr)_minmax(0,0.8fr)_minmax(0,1.8fr)_minmax(0,0.8fr)_1rem]",
   perp: "grid-cols-[minmax(0,2.8fr)_minmax(0,1.05fr)_minmax(0,1.15fr)_1rem] md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_1rem]",
   spot: "grid-cols-[minmax(0,2.8fr)_minmax(0,1.05fr)_minmax(0,1.15fr)_1rem] md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_1rem]",
 } satisfies Record<TerminalMarketKind, string>;
@@ -152,22 +146,6 @@ const FUTURE_COLUMN_TOOLTIPS = Object.fromEntries(
 
 function ColumnHeaders({ kind }: { kind: TerminalMarketKind }) {
   const headerClass = "truncate text-right text-[12px] text-panel-text-muted";
-  if (kind === "options") {
-    return (
-      <div
-        className={cn(
-          "grid items-center gap-2 border-panel-border border-b pb-2 md:gap-3",
-          GRID_CLASS.options
-        )}
-      >
-        <span className={cn(headerClass, "text-left")}>Market</span>
-        <span className={cn(headerClass, HIDDEN_ON_PHONE)}>Type</span>
-        <span className={headerClass}>Strikes</span>
-        <span className={cn(headerClass, HIDDEN_ON_PHONE)}>24h volume</span>
-        <span aria-hidden />
-      </div>
-    );
-  }
   if (kind === "futures") {
     return (
       <div
@@ -329,74 +307,6 @@ function MarketRow({
   );
 }
 
-const OPTION_ROW_CLASS =
-  "-mx-3 grid cursor-pointer items-center gap-2 px-3 py-2.5 text-panel-text-active transition-colors hover:bg-input-hover focus-visible:bg-input-hover focus-visible:outline-none md:gap-3";
-
-/** One row per option series: what it lists, linking to the page with its chain. */
-function OptionSeriesRow({
-  chain,
-  onSelect,
-  selected,
-}: {
-  chain: OptionChain;
-  onSelect: () => void;
-  selected: boolean;
-}) {
-  const entry = optionEntry(chain.series);
-  return (
-    <SmartLink
-      aria-current={selected ? "page" : undefined}
-      className={cn(OPTION_ROW_CLASS, RADIUS, GRID_CLASS.options, selected && "bg-input-bg")}
-      href={entry.href}
-      onClick={onSelect}
-    >
-      <span className="flex min-w-0 items-center gap-2">
-        <MarketIdentity compact symbol={entry.symbol} />
-      </span>
-      <span className={cn(CELL_CLASS, HIDDEN_ON_PHONE)}>Options</span>
-      <span className={CELL_CLASS}>{formatStrikeRange(chain.strikes)}</span>
-      <span className={cn(CELL_CLASS, HIDDEN_ON_PHONE, "text-panel-text-muted")}>—</span>
-      <span className="flex justify-end">
-        {selected ? (
-          <Check aria-label="Selected market" className="size-4 shrink-0 text-panel-text-muted" />
-        ) : null}
-      </span>
-    </SmartLink>
-  );
-}
-
-function OptionSeriesList({
-  chains,
-  onSelect,
-  selectedHref,
-}: {
-  chains: readonly OptionChain[];
-  onSelect: () => void;
-  selectedHref: string;
-}) {
-  return (
-    <>
-      <ColumnHeaders kind="options" />
-      {chains.length === 0 ? (
-        <p className="py-8 text-center text-[13px] text-panel-text-muted">
-          No options listed right now
-        </p>
-      ) : (
-        <div className="pt-1">
-          {chains.map((chain) => (
-            <OptionSeriesRow
-              chain={chain}
-              key={chain.series}
-              onSelect={onSelect}
-              selected={optionEntry(chain.series).href === selectedHref}
-            />
-          ))}
-        </div>
-      )}
-    </>
-  );
-}
-
 /**
  * The header's market pill and the market dialog it opens: a Spot/Futures tab row with the close
  * control, and a table of the markets under the active tab with the venue's figures. Futures lists
@@ -407,7 +317,6 @@ function OptionSeriesList({
 /** The kind of market on the selector's pill, beside its symbol. */
 const KIND_BADGES = {
   futures: "Future",
-  options: "Option",
   perp: "Perp",
   spot: "Spot",
 } as const satisfies Record<TerminalMarketKind, string>;
@@ -420,7 +329,7 @@ export function MarketSelectDialog({
 }: {
   /** The header's live figures for the market on screen. */
   changePercent24h: number | null;
-  /** The series on screen when `market` is a future or an option, from the route; null otherwise. */
+  /** The series on screen when `market` is a future, from the route; null otherwise. */
   seriesSymbol: string | null;
   market: TerminalMarketId;
   price: number | null;
@@ -434,17 +343,14 @@ export function MarketSelectDialog({
     price,
   });
   // Every series the venue lists, nearest expiry first, and the one on screen if it is not among them.
-  const entries =
-    kind === "options"
-      ? []
-      : filterTerminalMarkets(
-          selectorMarkets(
-            listedFutureSymbols(overview.futures, market === "future" ? seriesSymbol : null),
-            listedSpotMarkets(overview.rows, market)
-          ),
-          kind,
-          ""
-        );
+  const entries = filterTerminalMarkets(
+    selectorMarkets(
+      listedFutureSymbols(overview.futures, market === "future" ? seriesSymbol : null),
+      listedSpotMarkets(overview.rows, market)
+    ),
+    kind,
+    ""
+  );
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
@@ -521,37 +427,27 @@ export function MarketSelectDialog({
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
-            {kind === "options" ? (
-              <OptionSeriesList
-                chains={buildOptionChains(overview.options)}
-                onSelect={() => setOpen(false)}
-                selectedHref={selected.href}
-              />
+            <ColumnHeaders kind={kind} />
+            {entries.length === 0 ? (
+              <p className="py-8 text-center text-[13px] text-panel-text-muted">
+                {kind === "futures" ? "No futures listed right now" : "No markets found"}
+              </p>
             ) : (
-              <>
-                <ColumnHeaders kind={kind} />
-                {entries.length === 0 ? (
-                  <p className="py-8 text-center text-[13px] text-panel-text-muted">
-                    {kind === "futures" ? "No futures listed right now" : "No markets found"}
-                  </p>
-                ) : (
-                  <div className="pt-1">
-                    {entries.map((entry) => (
-                      <MarketRow
-                        entry={entry}
-                        key={entry.href}
-                        onSelect={() => setOpen(false)}
-                        row={
-                          entry.kind === "futures"
-                            ? overview.futureRow(entry.symbol)
-                            : overview.rowFor(entry.id)
-                        }
-                        selected={entry.href === selected.href}
-                      />
-                    ))}
-                  </div>
-                )}
-              </>
+              <div className="pt-1">
+                {entries.map((entry) => (
+                  <MarketRow
+                    entry={entry}
+                    key={entry.href}
+                    onSelect={() => setOpen(false)}
+                    row={
+                      entry.kind === "futures"
+                        ? overview.futureRow(entry.symbol)
+                        : overview.rowFor(entry.id)
+                    }
+                    selected={entry.href === selected.href}
+                  />
+                ))}
+              </div>
             )}
           </div>
         </Dialog.Popup>

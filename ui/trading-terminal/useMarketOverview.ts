@@ -8,7 +8,6 @@ import type {
   MarketOverviewRow,
   TerminalMarketId,
 } from "@/lib/market-overview.types";
-import type { OptionOverviewRow } from "@/lib/option-chain";
 
 /**
  * A read is reused for this long: reopening the selector within it shows the same rows without
@@ -18,7 +17,6 @@ const OVERVIEW_TTL_MS = Duration.toMillis("10 seconds");
 
 type OverviewRead = {
   futures: MarketOverviewRow[];
-  options: OptionOverviewRow[];
   readAt: number;
   rows: MarketOverviewRow[];
 };
@@ -68,7 +66,6 @@ export function loadOverview(): Promise<void> {
       const body = (await response.json()) as MarketOverviewResponse;
       overviewCache = {
         futures: body.futures ?? [],
-        options: body.options ?? [],
         readAt: Date.now(),
         rows: body.rows ?? [],
       };
@@ -93,7 +90,6 @@ export function useMarketOverview(open: boolean, live: MarketOverviewRow) {
   const read = useSyncExternalStore(subscribe, readOverview, serverOverview);
   const rows = read?.rows ?? [];
   const futures = read?.futures ?? [];
-  const options = read?.options ?? [];
 
   useEffect(() => {
     if (open) {
@@ -116,8 +112,6 @@ export function useMarketOverview(open: boolean, live: MarketOverviewRow) {
   return {
     /** Every future series the venue lists, nearest expiry first. */
     futures,
-    /** Every option strike and side the venue lists, with its best resting prices. */
-    options,
     /** The rows the venue served, one per market it lists (EURC-USDC only when listed). */
     rows,
     /** A future series' row by its symbol; its figures are the venue's mark and index, not a live touch. */

@@ -1,13 +1,12 @@
 import type { FutureQuoting } from "@/lib/future-market";
-import type { OptionOverviewRow } from "@/lib/option-chain";
 /** The spot markets: `spot` is cNGN-USDC, `eurc` is EURC-USDC. */
 export type SpotMarketId = "spot" | "eurc";
 
 /** Which market's panels render under the shell; each has its own slug under `/trade`. */
-export type TerminalMarketId = SpotMarketId | "perp" | "future" | "option";
+export type TerminalMarketId = SpotMarketId | "perp" | "future";
 
-/** The selector's tabs: one per kind of market, the dated future under Futures, an option series under Options. */
-export type TerminalMarketKind = "spot" | "perp" | "futures" | "options";
+/** The selector's tabs: one per kind of market, the dated future under Futures. */
+export type TerminalMarketKind = "spot" | "perp" | "futures";
 
 /** A market the selector offers: its route, display symbol and which tab it lists under. */
 export type TerminalMarketEntry = {
@@ -61,6 +60,4 @@ export type MarketOverviewResponse = {
   rows: MarketOverviewRow[];
   /** Every future series the venue lists and has not expired, nearest expiry first. */
   futures?: MarketOverviewRow[];
-  /** Every option strike and side the venue lists and has not expired, with its best resting prices. */
-  options?: OptionOverviewRow[];
 };

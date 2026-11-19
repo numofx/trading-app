@@ -13,7 +13,6 @@ import type { MarketOverviewResponse, TerminalMarketId } from "@/lib/market-over
 import { findPerpMarket, findSpotMarket, listLiveFutures } from "@/lib/market-pickers";
 import type { MarketPresentation } from "@/lib/markets-service";
 import { getMarketBook, getMarketsServiceUrl, getMarketTrades } from "@/lib/markets-service";
-import { buildOptionRow, listLiveOptions } from "@/lib/option-chain";
 import { parsePerpState } from "@/lib/perp-market";
 import { buildSpotMarket } from "@/lib/spot-market";
 
@@ -46,8 +45,6 @@ export async function GET() {
   const perp = findPerpMarket(markets);
   // Every offered series not yet expired, nearest first: the v2 series, open or awaiting their enable.
   const futures = listLiveFutures(markets, Date.now());
-  // Every listed option strike and side not yet expired: the selector summarises each series, unpriced.
-  const options = listLiveOptions(markets, Date.now());
 
   const [spotRow, eurcRow, perpRow, futureRows] = await Promise.all([
     readRow("spot", spot ?? undefined, null),
@@ -60,7 +57,6 @@ export async function GET() {
   return NextResponse.json(
     {
       futures: futureRows,
-      options: options.map((option) => buildOptionRow(option, { ask: null, bid: null })),
       rows: [
         spotRow,
         ...(eurcRow === null ? [] : [eurcRow]),
