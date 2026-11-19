@@ -40,7 +40,7 @@ import { FUTURE_ACTIVITY_VIEWS, FUTURE_BOTTOM_TABS } from "@/lib/future-terminal
 import { expectedTakerPrice } from "@/lib/order-fill";
 import { PERP_DEFAULT_MAX_SLIPPAGE } from "@/lib/perp-market";
 import { getAnchorPrice, getMarketableLimitPrice } from "@/lib/spot-market";
-import { buildCancelEnvelope, } from "@/lib/spot-order-submission";
+import { buildCancelEnvelope } from "@/lib/spot-order-submission";
 import { FOOTER_LINKS } from "@/lib/spot-terminal-config";
 import type { DepositCurrency } from "@/lib/subaccount-deposit.types";
 import { getUsdcCngnManagerAddress } from "@/lib/subaccount-deposit-config";
@@ -201,6 +201,7 @@ function resolveFutureOrderPrice(
 async function signAndPostBookTake({
   book,
   market,
+  marketId,
   onAwaitingSignature,
   price,
   reduceOnly,
@@ -211,6 +212,8 @@ async function signAndPostBookTake({
 }: {
   book: string;
   market: FutureMarket;
+  /** The series' market on the book, from GET /book-depth. */
+  marketId: number;
   onAwaitingSignature: () => void;
   price: string;
   reduceOnly: boolean;
@@ -227,6 +230,7 @@ async function signAndPostBookTake({
     amountScale: market.state.amountScale,
     book,
     contractSize: BigInt(Math.round(market.state.contractSize)),
+    marketId,
     isBuy: side === "buy",
     limitPrice: price,
     reduceOnly,
@@ -633,7 +637,8 @@ function useFutureBook(market: FutureMarket | null, symbol: string, candleInterv
     bestAsk: asks[0]?.price ?? null,
     bestBid: bids[0]?.price ?? null,
     bids: inSizeSymbol(bids, unitSize),
-    bookAddress: depth?.book ?? null,
+    // The series' (book, market) from GET /book-depth: the next series is a later market on the same book.
+    bookMarket: depth === null ? null : { book: depth.book, marketId: depth.market_id },
     trades: inSizeSymbol(live.trades, unitSize),
   };
   const anchor = getAnchorPrice(book.bestAsk, book.bestBid, book.lastPrice);
@@ -684,7 +689,7 @@ async function reportTakeOutcome(
  * that creates one instead.
  */
 function useFutureOrderActions({
-  bookAddress,
+  bookMarket,
   market,
   onAccountChanged,
   onNeedsAccount,
@@ -694,7 +699,7 @@ function useFutureOrderActions({
   wallet,
 }: {
   /** The series' onchain book, from GET /book-depth; null until it has been read. */
-  bookAddress: string | null;
+  bookMarket: { book: string; marketId: number } | null;
   market: FutureMarket | null;
   onAccountChanged: (minBlock: bigint | null) => void;
   onNeedsAccount: () => void;
@@ -723,7 +728,7 @@ function useFutureOrderActions({
       onNeedsAccount();
       return;
     }
-    if (bookAddress === null) {
+    if (bookMarket === null) {
       orderStatus.announce("Reading the onchain book; try again in a moment.");
       return;
     }
@@ -737,7 +742,8 @@ function useFutureOrderActions({
     setIsSubmitting(true);
     try {
       const outcome = await signAndPostBookTake({
-        book: bookAddress,
+        book: bookMarket.book,
+        marketId: bookMarket.marketId,
         market,
         price: resolved.price,
         reduceOnly: request.reduceOnly,
@@ -879,7 +885,7 @@ export function FutureMarketPanels({
     primaryWallet?.address ?? null
   );
   const actions = useFutureOrderActions({
-    bookAddress: book.bookAddress,
+    bookMarket: book.bookMarket,
     market,
     onAccountChanged: (minBlock) => futureAccount.refresh(minBlock),
     onNeedsAccount: () => transfer.openDeposit("USDC"),

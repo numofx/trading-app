@@ -80,6 +80,7 @@ export function bookTakeMaxFee(
 
 export function buildBookTakeEnvelope({
   book,
+  marketId,
   contractSize,
   isBuy,
   limitPrice,
@@ -93,6 +94,8 @@ export function buildBookTakeEnvelope({
 }: {
   /** The series' OnchainBook, as GET /book-depth names it. */
   book: string;
+  /** The series' market on that book (`market_id` on GET /book-depth): a later series is a later market. */
+  marketId: number;
   /** The base per contract (`contract_multiplier`): 1,000,000 cNGN, 1,000 EURC. */
   contractSize: bigint;
   isBuy: boolean;
@@ -127,7 +130,7 @@ export function buildBookTakeEnvelope({
   const maxFee = bookTakeMaxFee(amount, price, contractSize, BigInt(Math.round(takerFeeBps)));
   const data = encodeAbiParameters(BOOK_TAKE_DATA, [
     getAddress(book),
-    1n, // the book's market id: each book carries one series
+    BigInt(marketId),
     isBuy,
     amount,
     price,
@@ -260,6 +263,7 @@ export function interpretBookTakeResponse(httpStatus: number, body: unknown): Bo
 /** GET /book-depth: what a take would fill now, each side, at a ladder of sizes (contracts). */
 export type BookDepth = {
   book: string;
+  market_id: number;
   bids: { contracts: string; filled: string; avg_price?: string }[];
   asks: { contracts: string; filled: string; avg_price?: string }[];
 };
