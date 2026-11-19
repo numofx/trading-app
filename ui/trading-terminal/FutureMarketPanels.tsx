@@ -737,9 +737,12 @@ function useFutureCustody({
     },
     onTransferred: (blockNumber) => matchingAccount.refresh(blockNumber),
   });
+  // No custody account yet: the balance on screen is the Matching account's, so Withdraw goes there.
+  const withdrawViaMatching = routing.viaCustody && !custodyInFront && matchingId !== null;
   const custodyTransfer = useCustodyTransfer({
     accountCashUnits: custodyAccount.account?.cashUnits ?? null,
     custody,
+    withdrawElsewhere: withdrawViaMatching ? () => matchingTransfer.openWithdraw("USDC") : null,
     onTransferred: (blockNumber) => custodyAccount.refresh(blockNumber),
   });
   const leftover = custodyInFront && (matchingAccount.account?.cashUnits ?? 0n) > 0n;
@@ -752,6 +755,8 @@ function useFutureCustody({
       ? { cash: matchingAccount.account?.cash ?? 0, subaccountId: matchingId }
       : null,
     matchingTransfer,
+    /** The Matching dialog is opened from behind custody: a leftover row, or Withdraw before custody has an account. */
+    mountMatchingDialog: routing.viaCustody && (leftover || withdrawViaMatching),
     routing,
     transfer: routing.viaCustody ? custodyTransfer : matchingTransfer,
   };
@@ -1019,6 +1024,7 @@ export function FutureMarketPanels({
     heldBackBy,
     matchingLeftover,
     matchingTransfer,
+    mountMatchingDialog,
     routing,
     transfer,
   } = useFutureCustody({ account, market, primaryWallet, shared, stack });
@@ -1232,7 +1238,7 @@ export function FutureMarketPanels({
             />
             <CustodyPanel custody={custody} heldBackBy={heldBackBy} />
             {/* The Matching dialog stays mounted behind custody so its withdraw-only row can open it. */}
-            {routing.viaCustody && matchingLeftover !== null ? (
+            {mountMatchingDialog ? (
               <div className="hidden">{matchingTransfer.headerControl}</div>
             ) : null}
           </>

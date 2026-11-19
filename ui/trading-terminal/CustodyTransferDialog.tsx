@@ -62,17 +62,21 @@ function CustodyTransferForm({
     setDone(isDeposit ? `Deposited ${usdc} USDC.` : `Withdrew ${usdc} USDC to your wallet.`);
   }
 
+  let description = "USDC from your onchain account to your wallet. Only your wallet can withdraw.";
+  if (isDeposit) {
+    description =
+      "USDC from your wallet into your onchain account. No gas: your wallet signs, the venue pays.";
+  } else if (custody.accountId === null) {
+    description =
+      "You have no onchain account yet. Other balances withdraw from their own rows under the ticket.";
+  }
   let submitLabel = "Withdraw to my wallet";
   if (isDeposit) {
     submitLabel = custody.accountId === null ? "Open the account and deposit" : "Deposit";
   }
   return (
     <>
-      <p className="text-[12px] text-panel-text-muted">
-        {isDeposit
-          ? "USDC from your wallet into your onchain account. No gas: your wallet signs, the venue pays."
-          : "USDC from your onchain account to your wallet. Only your wallet can withdraw."}
-      </p>
+      <p className="text-[12px] text-panel-text-muted">{description}</p>
       <label className="flex items-center gap-2 bg-panel-bg px-3 py-2 ring-2 ring-panel-ring">
         <input
           aria-label={`${isDeposit ? "Deposit" : "Withdraw"} amount in USDC`}
@@ -147,12 +151,18 @@ export function useCustodyTransfer({
   accountCashUnits,
   custody,
   onTransferred,
+  withdrawElsewhere,
 }: {
   /** The custody account's cash (18 dp), or null when it has none or it is not read yet. */
   accountCashUnits: bigint | null;
   custody: Custody;
   /** Re-reads the account at or past the transfer's block. */
   onTransferred: (blockNumber: bigint | null) => void;
+  /**
+   * Where Withdraw goes while there is no custody account to withdraw from (the Matching account's own dialog),
+   * or null to open this one.
+   */
+  withdrawElsewhere: (() => void) | null;
 }): {
   headerControl: ReactNode;
   openDeposit: (currency?: DepositCurrency) => void;
@@ -170,6 +180,9 @@ export function useCustodyTransfer({
     setOpen(true);
   }
 
+  const openWithdraw = () =>
+    withdrawElsewhere === null ? openWith("withdraw") : withdrawElsewhere();
+
   const headerControl = (
     <div className="flex items-center gap-2">
       <button
@@ -184,7 +197,7 @@ export function useCustodyTransfer({
       <button
         className={HEADER_ACTION_CLASSES}
         id="header-withdraw-trigger"
-        onClick={() => openWith("withdraw")}
+        onClick={openWithdraw}
         type="button"
       >
         Withdraw
@@ -234,6 +247,6 @@ export function useCustodyTransfer({
   return {
     headerControl,
     openDeposit: () => openWith("deposit"),
-    openWithdraw: () => openWith("withdraw"),
+    openWithdraw,
   };
 }
