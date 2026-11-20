@@ -698,6 +698,18 @@ async function reportTakeOutcome(
  * and the Deposit/Withdraw every entry point opens. Once custody is in front the futures account is the
  * custodian's and orders sign with the browser's trading key; a Matching balance left behind is withdraw-only.
  */
+const CUSTODY_DEPOSIT_NOTE =
+  "Deposits now go to your onchain account: close this and use Deposit in the header.";
+const CUSTODY_DEPOSITS_ONLY = {
+  cNGN: CUSTODY_DEPOSIT_NOTE,
+  EURC: CUSTODY_DEPOSIT_NOTE,
+  USDC: CUSTODY_DEPOSIT_NOTE,
+};
+
+function matchingDepositPauses(viaCustody: boolean, market: FutureMarket | null) {
+  return viaCustody ? CUSTODY_DEPOSITS_ONLY : v2DepositPauses(market);
+}
+
 function useFutureCustody({
   account,
   market,
@@ -731,7 +743,8 @@ function useFutureCustody({
     account,
     accountRows: matchingAccount.rows,
     depositManager: shared ? undefined : stack?.managerAddress,
-    depositPauseReasons: v2DepositPauses(market),
+    // Behind custody this dialog only withdraws: its Deposit tab would put money back into Matching.
+    depositPauseReasons: matchingDepositPauses(routing.viaCustody, market),
     depositNotes: {
       cNGN: "cNGN counts as margin at half its index value. Variation margin is paid from cNGN first, then USDC.",
     },
