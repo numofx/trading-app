@@ -59,24 +59,11 @@ function CustodyTransferForm({
     onTransferred(sent.blockNumber);
     setAmount("");
     const usdc = formatUnits(parsed, USDC_DECIMALS);
-    setDone(isDeposit ? `Deposited ${usdc} USDC.` : `Withdrew ${usdc} USDC to your wallet.`);
+    setDone(isDeposit ? `Deposited ${usdc} USDC` : `Withdrawn ${usdc} USDC`);
   }
 
-  let description = "USDC from your onchain account to your wallet. Only your wallet can withdraw.";
-  if (isDeposit) {
-    description =
-      "USDC from your wallet into your onchain account. No gas: your wallet signs, the venue pays.";
-  } else if (custody.accountId === null) {
-    description =
-      "You have no onchain account yet. Other balances withdraw from their own rows under the ticket.";
-  }
-  let submitLabel = "Withdraw to my wallet";
-  if (isDeposit) {
-    submitLabel = custody.accountId === null ? "Open the account and deposit" : "Deposit";
-  }
   return (
     <>
-      <p className="text-[12px] text-panel-text-muted">{description}</p>
       <label className="flex items-center gap-2 bg-panel-bg px-3 py-2 ring-2 ring-panel-ring">
         <input
           aria-label={`${isDeposit ? "Deposit" : "Withdraw"} amount in USDC`}
@@ -90,7 +77,7 @@ function CustodyTransferForm({
       </label>
       <div className="flex items-center justify-between text-[12px] text-panel-text-muted">
         <span>
-          {isDeposit ? "Wallet" : "Withdrawable"}:{" "}
+          {isDeposit ? "Wallet" : "Available"}{" "}
           {available === null ? "—" : `${formatUnits(available, USDC_DECIMALS)} USDC`}
         </span>
         {available !== null && available > 0n ? (
@@ -109,7 +96,7 @@ function CustodyTransferForm({
         onClick={() => void submit()}
         type="button"
       >
-        {submitLabel}
+        {isDeposit ? "Deposit" : "Withdraw"}
       </button>
       <CustodyTransferStatus custody={custody} done={done} error={error} />
     </>
@@ -129,9 +116,7 @@ function CustodyTransferStatus({
     <>
       {error ? <span className="text-[12px] text-red-400">{error}</span> : null}
       {custody.busy ? (
-        <span className="text-[12px] text-panel-text-muted">
-          {custody.busy}… check your wallet for a signature request.
-        </span>
+        <span className="text-[12px] text-panel-text-muted">Sign in wallet…</span>
       ) : null}
       {custody.lastError ? (
         <span className="text-[12px] text-red-400">{custody.lastError}</span>
@@ -227,7 +212,7 @@ export function useCustodyTransfer({
                 }}
                 type="button"
               >
-                Connect a wallet
+                Connect
               </button>
             ) : (
               <CustodyTransferForm
