@@ -75,7 +75,7 @@ async function withdrawOlder({
 }): Promise<bigint> {
   let total = 0n;
   if (matching !== null && fromMatching > 0n) {
-    setStep(`Withdrawing from Matching #${matching.subaccountId}: sign in your wallet`);
+    setStep("Sign withdrawal…");
     await withdrawFromMatching(wallet, matching, fromMatching, cashAsset);
     onMoved(fromMatching);
     total += fromMatching;
@@ -85,7 +85,7 @@ async function withdrawOlder({
     if (usdc === 0n) {
       continue;
     }
-    setStep(`Withdrawing from #${account.accountId}: confirm in your wallet (gas)`);
+    setStep("Confirm withdrawal (gas)…");
     if ((await held.withdrawAll(account)) === null) {
       throw new Error(`#${account.accountId}: the withdrawal did not go through`);
     }
@@ -150,13 +150,11 @@ export function useMoveToCustody({
         setStep,
         wallet,
       });
-      setStep("Depositing into your onchain account: sign in your wallet");
+      setStep("Sign deposit…");
       const sent = await custody.setUp(moved);
       if (sent === null) {
         // Out of the older accounts but not yet in custody: it is in the wallet, and Deposit finishes it.
-        throw new Error(
-          `${formatUnits(moved, USDC_DECIMALS)} USDC is in your wallet; the deposit did not go through, use Deposit to finish`
-        );
+        throw new Error(`${formatUnits(moved, USDC_DECIMALS)} USDC in wallet: use Deposit`);
       }
       setDone(`Moved ${formatUnits(moved, USDC_DECIMALS)} USDC into your onchain account.`);
       onMoved(sent.blockNumber);
