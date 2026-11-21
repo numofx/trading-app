@@ -35,10 +35,9 @@ import {
  * blocks since the Matching deployment take ~750 sequential calls, and Base adds ~22 more a day.
  * Until that finishes the app reports no trading account at all, offering to create a second one.
  *
- * Providers with a higher limit collapse this. Alchemy serves the entire range in one 1.1s call,
- * so set `NEXT_PUBLIC_LOG_QUERY_BLOCK_RANGE=1000000` alongside a `NEXT_PUBLIC_BASE_RPC_URL` that
- * supports it. Too large a value for the configured provider makes it reject every query, so
- * raise it only to what that endpoint allows.
+ * Providers with a higher limit collapse this: set `NEXT_PUBLIC_LOG_QUERY_BLOCK_RANGE` to what the
+ * `NEXT_PUBLIC_BASE_RPC_URL` provider allows (SolidRPC 30000, Alchemy 1000000). Too large a value
+ * for the configured provider makes it reject every query, so raise it only to that endpoint's cap.
  */
 const DEFAULT_LOG_QUERY_BLOCK_RANGE = 2000n;
 

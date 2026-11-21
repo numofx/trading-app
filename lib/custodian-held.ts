@@ -5,8 +5,8 @@ import { DUST_USDC } from "@/lib/older-balances";
 /** The block BookCustodian was deployed at on Base; nothing exits before it. Null elsewhere: no scan. */
 const CUSTODIAN_DEPLOY_BLOCK: Record<number, bigint> = { [base.id]: 59_581_388n };
 
-/** What every RPC the app reads through accepts for one eth_getLogs (publicnode's cap); Alchemy takes more. */
-export const EXIT_LOG_CHUNK_BLOCKS = 50_000n;
+/** What every RPC the app reads through accepts for one eth_getLogs: SolidRPC's cap (publicnode takes 50,000). */
+export const EXIT_LOG_CHUNK_BLOCKS = 30_000n;
 
 export function custodianDeployBlock(chainId: number): bigint | null {
   return CUSTODIAN_DEPLOY_BLOCK[chainId] ?? null;

@@ -23,6 +23,14 @@ import type { useCustodianTrading } from "@/ui/trading-terminal/useCustodianTrad
 
 type Custody = ReturnType<typeof useCustodianTrading>;
 
+/** A balance to two decimals, rounded down so it never reads more than is there; Max still fills it exactly. */
+function shortUsdc(units: bigint) {
+  return (Number(units / 10_000n) / 100).toLocaleString("en-US", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  });
+}
+
 /** The amount, its checks and the submit, for one side (deposit or withdraw). */
 function CustodyTransferForm({
   accountCashUnits,
@@ -78,7 +86,7 @@ function CustodyTransferForm({
       <div className="flex items-center justify-between text-[12px] text-panel-text-muted">
         <span>
           {isDeposit ? "Wallet" : "Available"}{" "}
-          {available === null ? "—" : `${formatUnits(available, USDC_DECIMALS)} USDC`}
+          {available === null ? "—" : `${shortUsdc(available)} USDC`}
         </span>
         {available !== null && available > 0n ? (
           <button
