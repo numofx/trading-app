@@ -5,6 +5,7 @@ import { ArrowRight, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { formatUnits } from "viem";
+import { cn } from "@/lib/cn";
 import {
   custodyAmountError,
   parseUsdcAmount,
@@ -22,6 +23,14 @@ import { useTerminalSession } from "@/ui/trading-terminal/TerminalSession";
 import type { useCustodianTrading } from "@/ui/trading-terminal/useCustodianTrading";
 
 type Custody = ReturnType<typeof useCustodianTrading>;
+
+/** The submit's word: what it does, or once it has landed, what it did. */
+function submitLabel(isDeposit: boolean, done: boolean) {
+  if (done) {
+    return isDeposit ? "Deposited" : "Withdrawn";
+  }
+  return isDeposit ? "Deposit" : "Withdraw";
+}
 
 /** A balance to two decimals, rounded down so it never reads more than is there; Max still fills it exactly. */
 function shortUsdc(units: bigint) {
@@ -45,7 +54,8 @@ function CustodyTransferForm({
 }) {
   const { refreshWalletBalances, walletBalances } = useTerminalSession();
   const [amount, setAmount] = useState("");
-  const [done, setDone] = useState<string | null>(null);
+  // Set when the transfer lands: the button reads Deposited or Withdrawn, in green, until the amount changes.
+  const [done, setDone] = useState(false);
   const isDeposit = mode === "deposit";
   const available = isDeposit
     ? (walletBalances.usdc?.units ?? null)
@@ -58,7 +68,7 @@ function CustodyTransferForm({
     if (!canSubmit || parsed === null) {
       return;
     }
-    setDone(null);
+    setDone(false);
     const sent = isDeposit ? await custody.setUp(parsed) : await custody.withdraw(parsed);
     if (sent === null) {
       return;
@@ -66,8 +76,7 @@ function CustodyTransferForm({
     refreshWalletBalances(sent.blockNumber);
     onTransferred(sent.blockNumber);
     setAmount("");
-    const usdc = formatUnits(parsed, USDC_DECIMALS);
-    setDone(isDeposit ? `Deposited ${usdc} USDC` : `Withdrawn ${usdc} USDC`);
+    setDone(true);
   }
 
   return (
@@ -77,7 +86,10 @@ function CustodyTransferForm({
           aria-label={`${isDeposit ? "Deposit" : "Withdraw"} amount in USDC`}
           className="min-w-0 flex-1 bg-transparent font-mono font-semibold text-[22px] text-panel-text-active outline-none"
           inputMode="decimal"
-          onChange={(event) => setAmount(event.target.value.replace(/[^\d.,]/g, ""))}
+          onChange={(event) => {
+            setDone(false);
+            setAmount(event.target.value.replace(/[^\d.,]/g, ""));
+          }}
           placeholder="0"
           value={amount}
         />
@@ -91,7 +103,10 @@ function CustodyTransferForm({
         {available !== null && available > 0n ? (
           <button
             className="cursor-pointer font-semibold text-panel-text-active hover:underline"
-            onClick={() => setAmount(formatUnits(available, USDC_DECIMALS))}
+            onClick={() => {
+              setDone(false);
+              setAmount(formatUnits(available, USDC_DECIMALS));
+            }}
             type="button"
           >
             Max
@@ -99,27 +114,22 @@ function CustodyTransferForm({
         ) : null}
       </div>
       <button
-        className={HEADER_PRIMARY_ACTION_CLASSES}
+        className={cn(
+          HEADER_PRIMARY_ACTION_CLASSES,
+          done && "bg-green-600 text-white hover:bg-green-600 disabled:opacity-100"
+        )}
         disabled={!canSubmit}
         onClick={() => void submit()}
         type="button"
       >
-        {isDeposit ? "Deposit" : "Withdraw"}
+        {submitLabel(isDeposit, done)}
       </button>
-      <CustodyTransferStatus custody={custody} done={done} error={error} />
+      <CustodyTransferStatus custody={custody} error={error} />
     </>
   );
 }
 
-function CustodyTransferStatus({
-  custody,
-  done,
-  error,
-}: {
-  custody: Custody;
-  done: string | null;
-  error: string | null;
-}) {
+function CustodyTransferStatus({ custody, error }: { custody: Custody; error: string | null }) {
   return (
     <>
       {error ? <span className="text-[12px] text-red-400">{error}</span> : null}
@@ -129,7 +139,6 @@ function CustodyTransferStatus({
       {custody.lastError ? (
         <span className="text-[12px] text-red-400">{custody.lastError}</span>
       ) : null}
-      {done ? <span className="text-[12px] text-green-400">{done}</span> : null}
     </>
   );
 }
