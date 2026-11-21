@@ -107,7 +107,7 @@ async function readWithdrawContext(asset: WithdrawableAsset, accountId: bigint) 
  * Matching records this wallet as the account's owner; the venue's executor then simulates it and submits it.
  * A withdrawal that would revert comes back refused, with nothing sent.
  */
-async function signAndSubmitWithdrawal({
+export async function signAndSubmitWithdrawal({
   amountUnits,
   asset,
   onSigned,

@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { createWalletClient, custom, formatUnits, isAddressEqual } from "viem";
+import { createWalletClient, custom, isAddressEqual } from "viem";
 import type { FutureUnits } from "@/lib/account-activity-views";
 import {
   buildFutureOpenOrdersActivityView,
@@ -57,6 +57,7 @@ import { useCustodyTransfer } from "@/ui/trading-terminal/CustodyTransferDialog"
 import type { FutureOrderRequest } from "@/ui/trading-terminal/FutureOrderFormPanel";
 import { FutureOrderFormPanel } from "@/ui/trading-terminal/FutureOrderFormPanel";
 import { MarketDocumentTitle } from "@/ui/trading-terminal/MarketDocumentTitle";
+import { OlderBalances } from "@/ui/trading-terminal/OlderBalances";
 import type { AccountSummaryRow } from "@/ui/trading-terminal/order-form/AccountSummary";
 import { AccountSummary } from "@/ui/trading-terminal/order-form/AccountSummary";
 import type { ChartUnits, SpotChartTab } from "@/ui/trading-terminal/SpotChartPanel";
@@ -73,6 +74,7 @@ import { useCustodianTrading } from "@/ui/trading-terminal/useCustodianTrading";
 import { useFutureAccount } from "@/ui/trading-terminal/useFutureAccount";
 import { useFutureOpenInterest } from "@/ui/trading-terminal/useFutureOpenInterest";
 import { useLiveMarketBook } from "@/ui/trading-terminal/useLiveMarketBook";
+import { useMoveToCustody } from "@/ui/trading-terminal/useMoveToCustody";
 import { useOrderStatus } from "@/ui/trading-terminal/useOrderStatus";
 import { useSignedHistoryTabs } from "@/ui/trading-terminal/useSignedHistoryTabs";
 import { useTradingSubaccount } from "@/ui/trading-terminal/useTradingSubaccount";
@@ -764,66 +766,21 @@ function useFutureCustody({
     futureAccount: custodyInFront ? custodyAccount : matchingAccount,
     /** The Matching account kept in front by its position while custody is on, or null. */
     heldBackBy: custody.enabled && listed && !routing.viaCustody ? matchingId : null,
-    matchingLeftover: leftover
-      ? { cash: matchingAccount.account?.cash ?? 0, subaccountId: matchingId }
-      : null,
+    matchingLeftover:
+      leftover && matchingId !== null && matchingAccount.account !== null
+        ? {
+            cashUnits: matchingAccount.account.cashUnits,
+            initialMarginSurplus: matchingAccount.account.initialMarginSurplus,
+            subaccountId: matchingId,
+          }
+        : null,
     matchingTransfer,
-    /** The Matching dialog is opened from behind custody: a leftover row, or Withdraw before custody has an account. */
-    mountMatchingDialog: routing.viaCustody && (leftover || withdrawViaMatching),
+    /** The Matching dialog is opened from behind custody only by Withdraw before custody has an account. */
+    mountMatchingDialog: withdrawViaMatching,
+    refreshMatching: matchingAccount.refresh,
     routing,
     transfer: routing.viaCustody ? custodyTransfer : matchingTransfer,
   };
-}
-
-/** A withdraw-only row for each account that left custody to the wallet and still holds USDC. */
-function walletHeldRows(held: ReturnType<typeof useWalletHeldAccounts>): AccountSummaryRow[] {
-  return held.accounts.map((account) => {
-    let note = `#${account.accountId} in your wallet, withdraw only`;
-    if (held.busy === account.accountId) {
-      note = "Withdrawing: confirm in your wallet";
-    } else if (held.lastError !== null) {
-      note = held.lastError;
-    }
-    return {
-      action: (
-        <button
-          className={ROW_BUTTON_CLASSES}
-          disabled={held.busy !== null}
-          onClick={() => void held.withdrawAll(account)}
-          type="button"
-        >
-          Withdraw
-        </button>
-      ),
-      balance: formatBalance(Number(formatUnits(account.cashUnits, 18)), "USDC"),
-      id: `wallet-held-${account.accountId}`,
-      note,
-      symbol: "USDC",
-    };
-  });
-}
-
-/** The withdraw-only row for a Matching balance left behind once custody is in front. */
-function matchingLeftoverRow(
-  leftover: { cash: number; subaccountId: string | null } | null,
-  onWithdraw: () => void
-): AccountSummaryRow[] {
-  if (leftover === null) {
-    return [];
-  }
-  return [
-    {
-      action: (
-        <button className={ROW_BUTTON_CLASSES} onClick={onWithdraw} type="button">
-          Withdraw
-        </button>
-      ),
-      balance: formatBalance(leftover.cash, "USDC"),
-      id: "matching-usdc",
-      note: `Matching #${leftover.subaccountId}, withdraw only`,
-      symbol: "USDC",
-    },
-  ];
 }
 
 /**
@@ -1038,10 +995,22 @@ export function FutureMarketPanels({
     matchingLeftover,
     matchingTransfer,
     mountMatchingDialog,
+    refreshMatching,
     routing,
     transfer,
   } = useFutureCustody({ account, market, primaryWallet, shared, stack });
   const held = useWalletHeldAccounts(primaryWallet, stack);
+  const moveToCustody = useMoveToCustody({
+    cashAsset: stack?.cashAddress ?? null,
+    custody,
+    held,
+    matching: matchingLeftover,
+    wallet: primaryWallet,
+    onMoved: (blockNumber) => {
+      futureAccount.refresh(blockNumber);
+      refreshMatching(blockNumber);
+    },
+  });
   const subaccountId = routing.subaccountId;
   const orderStatus = useOrderStatus(positionSignature(futureAccount.account));
 
@@ -1243,12 +1212,9 @@ export function FutureMarketPanels({
                   transfer.openDeposit,
                   transfer.openWithdraw
                 ),
-                ...matchingLeftoverRow(matchingLeftover, () =>
-                  matchingTransfer.openWithdraw("USDC")
-                ),
-                ...walletHeldRows(held),
               ]}
             />
+            <OlderBalances move={moveToCustody} />
             <CustodyPanel custody={custody} heldBackBy={heldBackBy} />
             {/* The Matching dialog stays mounted behind custody so its withdraw-only row can open it. */}
             {mountMatchingDialog ? (

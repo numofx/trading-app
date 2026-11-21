@@ -117,13 +117,14 @@ export function useWalletHeldAccounts(
     void load();
   }, [load]);
 
-  async function withdrawAll(account: WalletHeldAccount) {
+  /** Pays the account's USDC out to the wallet; resolves to the receipt's block, or null when nothing moved. */
+  async function withdrawAll(account: WalletHeldAccount): Promise<bigint | null> {
     if (wallet === null || cash === null) {
-      return;
+      return null;
     }
     const amount = withdrawableUsdc(account.cashUnits);
     if (amount === 0n) {
-      return;
+      return null;
     }
     setBusy(account.accountId);
     setLastError(null);
@@ -149,14 +150,16 @@ export function useWalletHeldAccounts(
         throw new Error("The withdrawal transaction reverted.");
       }
       await load();
+      return receipt.blockNumber;
     } catch (error) {
       setLastError(
         error instanceof Error ? error.message.split("\n")[0] : "The withdrawal failed."
       );
+      return null;
     } finally {
       setBusy(null);
     }
   }
 
-  return { accounts, busy, lastError, withdrawAll };
+  return { accounts, busy, lastError, reload: load, withdrawAll };
 }

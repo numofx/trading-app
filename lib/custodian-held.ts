@@ -1,4 +1,6 @@
 import { base } from "viem/chains";
+import { withdrawableUsdc } from "@/lib/custody-routing";
+import { DUST_USDC } from "@/lib/older-balances";
 
 /** The block BookCustodian was deployed at on Base; nothing exits before it. Null elsewhere: no scan. */
 const CUSTODIAN_DEPLOY_BLOCK: Record<number, bigint> = { [base.id]: 59_581_388n };
@@ -29,7 +31,7 @@ export type HeldAccountCandidate = {
 };
 
 /**
- * The accounts that left custody to this wallet and are still its own, under the series' manager, with cash in them:
+ * The accounts that left custody to this wallet and are still its own, under the series' manager, with a cent or more of cash:
  * once exited, an account is the wallet's like any other, and the terminal (which reads only Matching and custody
  * accounts) would otherwise not show it. Withdrawals from it are the wallet's own transactions.
  */
@@ -46,7 +48,11 @@ export function walletHeldAccounts(
         return false;
       }
       seen.add(c.accountId);
-      return same(c.owner, wallet) && same(c.manager, manager) && c.cashUnits > 0n;
+      return (
+        same(c.owner, wallet) &&
+        same(c.manager, manager) &&
+        withdrawableUsdc(c.cashUnits) >= DUST_USDC
+      );
     })
     .map((c) => ({ accountId: c.accountId.toString(), cashUnits: c.cashUnits }));
 }
