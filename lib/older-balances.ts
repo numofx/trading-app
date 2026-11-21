@@ -3,13 +3,18 @@ import { withdrawableUsdc } from "@/lib/custody-routing";
 /** Below a cent (6 dp USDC) a balance is dust: not shown, not moved. */
 export const DUST_USDC = 10_000n;
 
-/** What of the surplus above initial margin a move takes when a position elsewhere still needs some: 90%. */
-const SURPLUS_SHARE = 0.9;
+/**
+ * What a position elsewhere keeps above its initial margin once a move is done: half the requirement again, so it
+ * rides out a price move and the account is not left at the edge of initial margin.
+ */
+const KEEP_OVER_REQUIREMENT = 0.5;
 
 /**
  * How much USDC (6 dp) can leave a Matching account for custody. All of its cash when its margin surplus covers
- * the cash (no position anywhere in the engine needs it); otherwise 90% of the surplus, so the positions it still
- * holds (another series' contracts) stay above initial margin as the price moves. Zero below a cent.
+ * the cash (no position anywhere in the engine needs it). Otherwise what leaves the positions it still holds
+ * (another series' contracts) 1.5x their initial margin: the requirement is the cash the surplus does not cover.
+ * Once moved, the same account offers nothing more, rather than a shrinking share of what is left each time.
+ * Zero below a cent.
  */
 export function matchingMovableUsdc(account: {
   cashUnits: bigint;
@@ -21,8 +26,9 @@ export function matchingMovableUsdc(account: {
   const cashUsdc = Number(cash) / 1e6;
   let movable = cash;
   if (!(Number.isFinite(surplus) && surplus >= cashUsdc)) {
-    const share = Number.isFinite(surplus) && surplus > 0 ? surplus * SURPLUS_SHARE : 0;
-    const capped = BigInt(Math.floor(share * 1e6));
+    const requirement = Number.isFinite(surplus) ? cashUsdc - surplus : cashUsdc;
+    const spare = Number.isFinite(surplus) ? surplus - requirement * KEEP_OVER_REQUIREMENT : 0;
+    const capped = spare > 0 ? BigInt(Math.floor(spare * 1e6)) : 0n;
     movable = capped < cash ? capped : cash;
   }
   return movable < DUST_USDC ? 0n : movable;
